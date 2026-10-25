@@ -1,54 +1,9 @@
 import SwiftUI
 
-/// من يُطلب إضافته مع «طلب إضافة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٢٤ «اذا يبي يسوي طلبات اضافة؟»):
-/// الابن يُضاف تلقائياً عند القبول (`newMemberName`)، والابنة والزوجة مكانهما شجرة النساء فتُضيفهما الإدارة
-/// يدوياً ثم تقبل الطلب — نفس طلب «طلب إضافة» في شجرة النساء
-enum TreeAddKind: String, CaseIterable, Identifiable {
-    case son, daughter, wife
-    var id: String { rawValue }
-
-    /// اسم المربّع في «طلب إضافة»
-    var tileTitle: String {
-        switch self {
-        case .son: return L10n.t("ابن", "Son")
-        case .daughter: return L10n.t("ابنة", "Daughter")
-        case .wife: return L10n.t("زوجة", "Wife")
-        }
-    }
-    var icon: String {
-        switch self {
-        case .son: return "person.badge.plus"
-        // "figure.dress" ليس رمزاً في SF Symbols
-        case .daughter: return "figure.stand.dress"
-        case .wife: return "heart.fill"
-        }
-    }
-    /// عنوان النموذج
-    var requestTitle: String {
-        switch self {
-        case .son: return L10n.t("طلب إضافة ابن", "Add Son Request")
-        case .daughter: return L10n.t("طلب إضافة ابنة", "Add Daughter Request")
-        case .wife: return L10n.t("طلب إضافة زوجة", "Add Wife Request")
-        }
-    }
-    var fieldLabel: String {
-        switch self {
-        case .son: return L10n.t("اسم الابن الجديد", "New Son Name")
-        case .daughter: return L10n.t("اسم الابنة", "Daughter's Name")
-        case .wife: return L10n.t("اسم الزوجة", "Wife's Name")
-        }
-    }
-    var placeholder: String {
-        switch self {
-        case .son: return L10n.t("اكتب اسم الابن...", "Enter son's name...")
-        case .daughter: return L10n.t("اكتب اسم الابنة...", "Enter daughter's name...")
-        case .wife: return L10n.t("اكتب اسم الزوجة الكامل...", "Enter wife's full name...")
-        }
-    }
-}
-
 /// شاشة طلب تعديل الشجرة — تستقبل عضو + إجراء محددين مسبقاً.
-/// تدعم: إضافة ابن أو ابنة أو زوجة / تعديل اسم / تعديل رقم / تسجيل وفاة / حذف.
+/// تدعم: إضافة ابن (أو أكثر) / تعديل اسم / تعديل رقم / تسجيل وفاة / حذف.
+/// «ابن» هنا أبناء ذكور فقط — كل ما يخص الإناث (البنت، الزوجة، الأخت، الأم) في شجرة النساء
+/// (طلب المالك ٢٠٢٦-١٠-٢٥ «اي شي يخص الاناث يكون بشجرة النساء»)
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Environment(\.dismiss) private var dismiss
@@ -58,9 +13,12 @@ struct TreeEditRequestView: View {
 
     let member: FamilyMember
     let action: TreeEditAction
-    /// مع `.add`: ابن (افتراضياً) أو ابنة أو زوجة
-    var addKind: TreeAddKind = .son
 
+    /// مع `.add`: ابن أو أكثر، لكل ابن «متوفّى» — طلب لكل ابن (طلب المالك ٢٠٢٦-١٠-٢٥)
+    @State private var sons: [DSAddEntry] = [DSAddEntry()]
+    @State private var isSendingSons = false
+    /// كم طلباً أُرسل — لرسالة النجاح
+    @State private var sentCount = 0
     @State private var primaryText: String = ""
     @State private var notes: String = ""
     @State private var deathDate: Date = Date()
@@ -89,7 +47,7 @@ struct TreeEditRequestView: View {
 
     private var screenTitle: String {
         switch action {
-        case .add: return addKind.requestTitle
+        case .add: return L10n.t("طلب إضافة ابن", "Add Son Request")
         case .editName: return L10n.t("طلب تعديل اسم", "Edit Name Request")
         case .editPhone: return L10n.t("طلب تعديل رقم", "Edit Phone Request")
         case .editBirth: return L10n.t("طلب تعديل تاريخ الميلاد", "Edit Birth Date Request")
@@ -101,10 +59,15 @@ struct TreeEditRequestView: View {
         }
     }
 
+    /// الأبناء المكتوبة أسماؤهم (الصفّ الفارغ لا يُرسل)
+    private var namedSons: [DSAddEntry] { sons.filter { !$0.trimmedName.isEmpty } }
+
     private var canSubmit: Bool {
-        guard !adminRequestVM.isLoading, !isUploadingPhoto else { return false }
+        guard !adminRequestVM.isLoading, !isUploadingPhoto, !isSendingSons else { return false }
         switch action {
-        case .add, .editName:
+        case .add:
+            return !namedSons.isEmpty
+        case .editName:
             return !primaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .editPhone:
             return KuwaitPhone.normalizedForStorage(country: phoneCountry, rawLocalDigits: localPhoneDigits) != nil
@@ -137,25 +100,39 @@ struct TreeEditRequestView: View {
             subtitle: member.displayFullName,
             icon: action.iconName,
             tint: headerTint,
-            actionTitle: L10n.t("إرسال الطلب", "Submit Request"),
+            actionTitle: submitTitle,
             actionIcon: "paperplane.fill",
             canSubmit: canSubmit,
-            isBusy: adminRequestVM.isLoading || isUploadingPhoto,
-            note: L10n.t("يصل الطلب للإدارة لمراجعته", "Sent to the admins for review"),
+            isBusy: adminRequestVM.isLoading || isUploadingPhoto || isSendingSons,
+            note: action == .add ? L10n.t("لكل ابن طلب يُراجَع وحده", "One request per son, each reviewed on its own")
+                                 : L10n.t("يصل الطلب للإدارة لمراجعته", "Sent to the admins for review"),
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: { submit() },
             onCancel: { dismiss() }
         ) {
             // قسم واحد بلغة مربّعات العمل («أسلوب واحد»): رأسه نوع الطلب بلونه، ثم العضو، ثم الحقل، ثم الملاحظات
             requestSection
+            if action == .add {
+                // «ابن» — اسم أو أكثر، ولكل ابن «متوفّى» (ذكور فقط: البنات والزوجات في شجرة النساء)
+                DSAddEntriesSection(entries: $sons, title: L10n.t("الأبناء", "Sons"), icon: "person.badge.plus",
+                                    tint: actionColor, index: 1,
+                                    rowLabel: { _ in L10n.t("ابن", "Son") },
+                                    placeholder: L10n.t("اسم الابن الأول", "Son's first name"),
+                                    newGender: "male")
+                DSComposerSection(title: L10n.t("ملاحظات", "Notes"), icon: "note.text",
+                                  tint: DS.Color.primary, index: 2) {
+                    notesField
+                }
+            }
         }
             .dsAlert(L10n.t("تم الإرسال", "Request Sent"), isPresented: $showSuccessAlert, moment: .sentForApproval) {
                 Button(L10n.t("حسناً", "OK")) { dismiss() }
             } message: {
-                Text(L10n.t(
-                    "تم إرسال طلبك للإدارة وسيتم مراجعته قريباً.",
-                    "Your request has been sent to admin for review."
-                ))
+                Text(sentCount > 1
+                     ? L10n.t("وصلت طلباتك (\(sentCount)) للإدارة — كلٌّ يُراجَع وحده، ويُضاف الابن عند قبول طلبه.",
+                              "Your \(sentCount) requests reached the admins — each is reviewed on its own.")
+                     : L10n.t("تم إرسال طلبك للإدارة وسيتم مراجعته قريباً.",
+                              "Your request has been sent to admin for review."))
             }
             .dsAlert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
                 Button(L10n.t("حسناً", "OK")) {}
@@ -194,10 +171,18 @@ struct TreeEditRequestView: View {
         )
     }
 
-    /// نص أو تاريخ أو رقم أو صورة تختلف عمّا فُتح عليه المربّع — «إلغاء» يسأل قبل التجاهل
+    /// نص أو تاريخ أو رقم أو صورة أو ابن مكتوب تختلف عمّا فُتح عليه المربّع — «إلغاء» يسأل قبل التجاهل
     private var hasUnsavedChanges: Bool {
         guard let startDraft else { return false }
         return selectedPhoto != nil || currentDraft != startDraft
+            || sons.contains { !$0.isBlank } || sons.count > 1
+    }
+
+    /// «إرسال الطلب»، ومع أكثر من ابن «إرسال ٣ طلبات»
+    private var submitTitle: String {
+        let n = namedSons.count
+        return action == .add && n > 1 ? L10n.t("إرسال ", "Send ") + DSRequestCount.text(n)
+                                       : L10n.t("إرسال الطلب", "Submit Request")
     }
 
     // MARK: - القسم
@@ -207,9 +192,13 @@ struct TreeEditRequestView: View {
     private var requestSection: some View {
         DSComposerSection(title: L10n.t(action.arabicLabel, action.englishLabel),
                           icon: action.iconName, tint: actionColor, index: 0) {
-            DSRow(icon: "person.fill", tint: actionColor, title: member.displayFullName)
+            // مع «ابن»: سطر «لمن» تحت العضو (طلب المالك ٢٠٢٦-١٠-٢٥ «حط توضيح»)، والأسماء والملاحظات في قسميهما
+            DSRow(icon: "person.fill", tint: actionColor, title: member.displayFullName,
+                  subtitle: action == .add ? L10n.t("ابن أو أكثر لـ«\(member.firstName)»",
+                                                    "One or more sons of «\(member.firstName)»")
+                                           : nil) { EmptyView() }
             primaryField
-            notesField
+            if action != .add { notesField }
         }
     }
 
@@ -219,9 +208,8 @@ struct TreeEditRequestView: View {
     private var primaryField: some View {
         switch action {
         case .add:
-            DSComposerField(icon: addKind.icon, label: addKind.fieldLabel,
-                            placeholder: addKind.placeholder,
-                            text: $primaryText, tint: actionColor)
+            // الأسماء في قسم «الأبناء» (`DSAddEntriesSection`)
+            EmptyView()
         case .editName:
             DSComposerField(icon: "pencil", label: L10n.t("الاسم الجديد", "New Name"),
                             placeholder: L10n.t("اكتب الاسم الجديد...", "Enter new name..."),
@@ -335,35 +323,9 @@ struct TreeEditRequestView: View {
         let payload: TreeEditPayload
 
         switch action {
-        case .add where addKind != .son:
-            // الابنة والزوجة: الاسم في الملاحظات (بلا `newMemberName` فلا يُنشئ القبول ابناً) — تُضيفها الإدارة
-            // في شجرة النساء ثم تقبل الطلب، بنفس صيغة «طلب إضافة» في شجرة النساء
-            let name = primaryText.trimmingCharacters(in: .whitespacesAndNewlines)
-            var lines = [L10n.t("شجرة النساء — ", "Women's tree — ") + addKind.requestTitle,
-                         L10n.t("الاسم: ", "Name: ") + name,
-                         L10n.t("لـ: ", "For: ") + member.displayFullName]
-            if !cleanNotes.isEmpty { lines.append(L10n.t("ملاحظات: ", "Notes: ") + cleanNotes) }
-            lines.append(L10n.t("التنفيذ يدوي: تُضاف من شجرة النساء (تفاصيل العضو ← الإدارة) ثم يُقبل الطلب.",
-                                "Manual: add it from the women's tree (member details → Manage), then approve."))
-            payload = TreeEditPayload.make(
-                action: .add,
-                targetMemberId: member.id.uuidString,
-                targetMemberName: member.fullName,
-                parentMemberId: member.id.uuidString,
-                parentMemberName: member.fullName,
-                notes: lines.joined(separator: "\n")
-            )
-
         case .add:
-            payload = TreeEditPayload.make(
-                action: .add,
-                targetMemberId: member.id.uuidString,
-                targetMemberName: member.fullName,
-                parentMemberId: member.id.uuidString,
-                parentMemberName: member.fullName,
-                newMemberName: primaryText.trimmingCharacters(in: .whitespacesAndNewlines),
-                notes: cleanNotes.isEmpty ? nil : cleanNotes
-            )
+            submitSons(namedSons, notes: cleanNotes)
+            return
 
         case .editName:
             payload = TreeEditPayload.make(
@@ -475,6 +437,50 @@ struct TreeEditRequestView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
                 showErrorAlert = true
             }
+        }
+    }
+
+    /// «ابن» أو أكثر — طلب لكل ابن بمسار الطلبات نفسه (`newMemberName`: يُضاف تلقائياً عند قبول طلبه). القبول لا يكتب
+    /// الوفاة، فالمتوفّى يُكتب في ملاحظة طلبه بوضوح لتسجّل الإدارة وفاته بعد القبول. ما يُرسل يخرج من المربّع —
+    /// إن تعذّر طلب بقي هو وما بعده ولا يتكرّر ما أُرسل
+    private func submitSons(_ list: [DSAddEntry], notes: String) {
+        guard !list.isEmpty, !isSendingSons else { return }
+        isSendingSons = true
+        Task {
+            var sent = 0
+            for son in list {
+                var lines: [String] = []
+                if son.deceased {
+                    lines.append(L10n.t("الحالة: متوفّى — بعد القبول سجّل وفاته من تفاصيله.",
+                                        "Status: deceased — after approval, record his death from his details."))
+                }
+                if !notes.isEmpty { lines.append(notes) }
+                let payload = TreeEditPayload.make(
+                    action: .add,
+                    targetMemberId: member.id.uuidString,
+                    targetMemberName: member.fullName,
+                    parentMemberId: member.id.uuidString,
+                    parentMemberName: member.fullName,
+                    newMemberName: son.trimmedName,
+                    notes: lines.isEmpty ? nil : lines.joined(separator: "\n")
+                )
+                guard await adminRequestVM.submitTreeEditRequest(payload: payload) else {
+                    isSendingSons = false
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    errorMessage = sent > 0
+                        ? L10n.t("أُرسل \(sent) وتعذّر الباقي — حاول إرسالهم مرة أخرى.",
+                                 "\(sent) sent, the rest failed — try sending them again.")
+                        : nil
+                    showErrorAlert = true
+                    return
+                }
+                sent += 1
+                withAnimation(DS.Anim.snappy) { sons.removeAll { $0.id == son.id } }
+            }
+            isSendingSons = false
+            sentCount = sent
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            showSuccessAlert = true
         }
     }
 }

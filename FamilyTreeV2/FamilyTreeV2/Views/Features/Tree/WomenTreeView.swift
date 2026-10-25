@@ -233,13 +233,13 @@ struct WomanDetailSheet: View {
     @State private var wifeSearch = ""
 
     enum AddKind: Int, Identifiable {
-        /// ابن أو ابنة — إجراء واحد والجنس يُختار داخل المربّع (طلب المالك ٢٠٢٦-١٠-٠٧)
-        /// `sister` = «إضافة أخت» للعضو على عقدة أبيه (add_or_link_self_relative)
+        /// «ابن» — إجراء واحد وكل اسم داخله ذكر أو أنثى (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن وداخل المربع
+        /// في اختيار ذكر او انثى»)، وأكثر من اسم في المرّة. `sister` = «إضافة أخت» للعضو على عقدة أبيه
         case child, wife, mother, sister
         var id: Int { rawValue }
         var title: String {
             switch self {
-            case .child: return L10n.t("إضافة ابن أو ابنة", "Add son or daughter")
+            case .child: return L10n.t("إضافة ابن", "Add son")
             case .wife: return L10n.t("إضافة زوجة", "Add wife")
             case .mother: return L10n.t("إضافة أم", "Add mother")
             case .sister: return L10n.t("إضافة أخت", "Add sister")
@@ -248,7 +248,7 @@ struct WomanDetailSheet: View {
         /// عنوان مربّع «طلب إضافة» (لمن لا يضيف مباشرة)
         var requestTitle: String {
             switch self {
-            case .child: return L10n.t("طلب إضافة ابن أو ابنة", "Request a son or daughter")
+            case .child: return L10n.t("طلب إضافة ابن", "Request a son")
             case .wife: return L10n.t("طلب إضافة زوجة", "Request a wife")
             case .mother: return L10n.t("طلب إضافة أم", "Request a mother")
             case .sister: return L10n.t("إضافة أخت", "Add sister")
@@ -257,12 +257,32 @@ struct WomanDetailSheet: View {
         /// سطر «لمن» في بطاقة السياق أعلى المربّع
         var contextLabel: String {
             switch self {
-            case .child: return L10n.t("إضافة ابن أو ابنة لـ", "Adding a child to")
-            case .wife: return L10n.t("إضافة زوجة لـ", "Adding a wife to")
-            case .mother: return L10n.t("إضافة أم لـ", "Adding a mother to")
-            case .sister: return L10n.t("إضافة بنت لأبيك", "Adding a daughter to your father")
+            case .child: return L10n.t("ابن أو ابنة لـ", "A son or daughter of")
+            case .wife: return L10n.t("زوجة لـ", "A wife of")
+            case .mother: return L10n.t("أم لـ", "The mother of")
+            case .sister: return L10n.t("أختك — بنت أبيك", "Your sister — your father's daughter")
             }
         }
+        /// عنوان قسم الأسماء
+        var entriesTitle: String {
+            switch self {
+            case .child: return L10n.t("الأبناء", "Children")
+            case .wife: return L10n.t("الزوجة", "Wife")
+            case .mother: return L10n.t("الأم", "Mother")
+            case .sister: return L10n.t("الأخوات", "Sisters")
+            }
+        }
+        /// اسم الصفّ بجنسه («ابن ١»، «ابنة ٢»…)
+        func rowLabel(_ entry: DSAddEntry) -> String {
+            switch self {
+            case .child: return entry.isFemale ? L10n.t("ابنة", "Daughter") : L10n.t("ابن", "Son")
+            case .wife: return L10n.t("اسم الزوجة", "Wife's name")
+            case .mother: return L10n.t("اسم الأم", "Mother's name")
+            case .sister: return L10n.t("أخت", "Sister")
+            }
+        }
+        /// الابن والأخت أكثر من اسم في المرّة (طلب المالك ٢٠٢٦-١٠-٢٥)
+        var allowsMultiple: Bool { self == .child || self == .sister }
         /// أيقونة رأس مربّع الإضافة
         var icon: String {
             switch self {
@@ -989,6 +1009,23 @@ struct WomanDetailSheet: View {
         }
     }
 
+    /// سطر «لمن» تحت كل بطاقة (طلب المالك ٢٠٢٦-١٠-٢٥ «حط توضيح مثلا اضافة اخت لعضو المختار او ابنة لعضو
+    /// المختار») — من اسم صاحب العقدة
+    private func tileSubtitle(_ id: String) -> String? {
+        let who = "«" + shortName(woman) + "»"
+        switch id {
+        case "child": return L10n.t("ابن أو ابنة لـ", "Son or daughter of ") + who
+        case "sister": return L10n.t("أختك — بنت ", "Your sister — daughter of ") + who
+        case "wife": return L10n.t("زوجة لـ", "Wife of ") + who
+        case "husband": return L10n.t("زوج لـ", "Husband of ") + who
+        case "mother": return L10n.t("من زوجات أبي ", "From the wives of the father of ") + who
+        case "addMother": return L10n.t("أم جديدة لـ", "A new mother of ") + who
+        case "reorder": return L10n.t("أبناء ", "Children of ") + who
+        case "edit": return L10n.t("بيانات ", "Details of ") + who
+        default: return nil
+        }
+    }
+
     /// الإجراءات حسب الآلية (`mode`): الإضافة ثم الربط، ثم (للإدارة) الترتيب والتعديل — والحذف في الشريط
     private var adminActions: [AdminAction] {
         switch mode {
@@ -1001,18 +1038,19 @@ struct WomanDetailSheet: View {
 
     /// المالك/المدير/المراقب — كتابة مباشرة
     private var directActions: [AdminAction] {
+        // بطاقات الإضافة بأسماء قصيرة (ابن · أخت · زوجة · أم) وسطر «لمن» تحتها (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن»)
         var list: [AdminAction] = [
-            AdminAction(id: "child", title: L10n.t("إضافة ابن أو ابنة", "Add son or daughter"),
+            AdminAction(id: "child", title: L10n.t("ابن", "Son"),
                         icon: "person.badge.plus") { startAdd(.child) }
         ]
         // على عقدة أبيه هو: «إضافة أخت» للإدارة أيضاً (طلب المالك ٢٠٢٦-١٠-٢٤)
         if isMyFatherNode {
-            list.append(AdminAction(id: "sister", title: L10n.t("إضافة أخت", "Add sister"),
+            list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
                                     icon: "figure.stand.dress") { startAdd(.sister) })
         }
         if !woman.isFemale {
             // «إضافة زوجة» الواحدة: من العائلة (ربط أو إضافة تحت أبيها) أو من خارجها
-            list.append(AdminAction(id: "wife", title: L10n.t("إضافة زوجة", "Add wife"),
+            list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
                                     icon: "heart.fill") { openWifeFlow() })
         } else {
             list.append(AdminAction(id: "husband",
@@ -1028,7 +1066,7 @@ struct WomanDetailSheet: View {
         }
         // الأم الجديدة زوجةٌ للأب — بلا أب في الشجرة كانت تظهر جذراً مستقلاً
         if mother == nil, woman.fatherId != nil {
-            list.append(AdminAction(id: "addMother", title: L10n.t("إضافة أم", "Add mother"),
+            list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
                                     icon: "figure.stand.dress") { startAdd(.mother) })
         }
         if !children.isEmpty {
@@ -1045,11 +1083,11 @@ struct WomanDetailSheet: View {
     /// العضو على عقدته — دوال السيرفر الذاتية (زوجته، أبناؤه، أمّه)
     private var selfActions: [AdminAction] {
         var list: [AdminAction] = [
-            AdminAction(id: "child", title: L10n.t("إضافة ابن أو ابنة", "Add son or daughter"),
+            AdminAction(id: "child", title: L10n.t("ابن", "Son"),
                         icon: "person.badge.plus") { startAdd(.child) }
         ]
         if !woman.isFemale {
-            list.append(AdminAction(id: "wife", title: L10n.t("إضافة زوجة", "Add wife"),
+            list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
                                     icon: "heart.fill") { openWifeFlow() })
         }
         if !fatherWives.isEmpty {
@@ -1059,30 +1097,30 @@ struct WomanDetailSheet: View {
             })
         }
         if mother == nil {
-            list.append(AdminAction(id: "addMother", title: L10n.t("إضافة أم", "Add mother"),
+            list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
                                     icon: "figure.stand.dress") { startAdd(.mother) })
         }
         return list
     }
 
-    /// غيره — «طلب إضافة» للإدارة، و«إضافة أخت» مباشرة على عقدة أبيه
+    /// غيره — «طلب إضافة» للإدارة (عنوان المربّع وملاحظته تقولان إنها طلبات)، و«أخت» مباشرة على عقدة أبيه
     private var requestActions: [AdminAction] {
         var list: [AdminAction] = []
         if isMyFatherNode {
-            list.append(AdminAction(id: "sister", title: L10n.t("إضافة أخت", "Add sister"),
+            list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
                                     icon: "figure.stand.dress") { startAdd(.sister) })
         }
-        list.append(AdminAction(id: "child", title: L10n.t("طلب ابن أو ابنة", "Request a child"),
+        list.append(AdminAction(id: "child", title: L10n.t("ابن", "Son"),
                                 icon: "person.badge.plus") { startAdd(.child) })
         if !woman.isFemale {
-            list.append(AdminAction(id: "wife", title: L10n.t("طلب إضافة زوجة", "Request a wife"),
+            list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
                                     icon: "heart.fill") { openWifeFlow() })
         } else if woman.husbandId == nil {
-            list.append(AdminAction(id: "husband", title: L10n.t("طلب ربط زوج", "Request husband link"),
+            list.append(AdminAction(id: "husband", title: L10n.t("ربط زوج", "Link husband"),
                                     icon: "link") { openHusbandPicker() })
         }
         if mother == nil {
-            list.append(AdminAction(id: "addMother", title: L10n.t("طلب إضافة أم", "Request a mother"),
+            list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
                                     icon: "figure.stand.dress") { startAdd(.mother) })
         }
         return list
@@ -1170,8 +1208,8 @@ struct WomanDetailSheet: View {
                         // بطاقات الإجراءات — اثنتان في السطر، تدخل تباعاً (طلب المالك ٢٠٢٦-١٠-٢٥ «تصميم جديد مرتب»)
                         DSActionTileGrid {
                             ForEach(Array(tiles.enumerated()), id: \.element.id) { i, action in
-                                DSActionTile(action.title, icon: action.icon, tint: groupTint(action.group),
-                                             action: action.run)
+                                DSActionTile(action.title, subtitle: tileSubtitle(action.id), icon: action.icon,
+                                             tint: groupTint(action.group), action: action.run)
                                     .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
                                                 y: DSMotion.rise, scale: DSMotion.riseScale)
                             }
@@ -1543,43 +1581,52 @@ struct WomanDetailSheet: View {
         )
     }
 
-    // MARK: - مربّع الإضافة — نفس «إضافة ابن» في شجرة العائلة (`AddSonByAdminSheet`)
+    // MARK: - مربّع الإضافة — أكثر من اسم في المرّة (طلب المالك ٢٠٢٦-١٠-٢٥)
 
-    private func startAdd(_ kind: AddKind, name: String = "") {
-        draft.addName = name
+    private func startAdd(_ kind: AddKind) {
         draft.addNotes = ""
-        draft.addGender = "male"
-        draft.addHasBirth = false
-        draft.addBirth = Date()
-        draft.addMarried = false
+        // الابن يبدأ ذكراً (وكل اسم يُبدَّل داخل المربّع)، والأخت والزوجة والأم أنثى دائماً
+        draft.addEntries = [DSAddEntry(gender: kind == .child ? "male" : "female")]
         draft.addKind = kind
     }
-
-    /// للابن والابنة إجراء واحد بمبدّل الجنس؛ الزوجة والأم أنثى دائماً
-    private func addIsFemale(_ kind: AddKind) -> Bool { kind == .child ? draft.addGender == "female" : true }
 
     /// الإضافة طلبٌ للإدارة (لا كتابة) — «إضافة أخت» مباشرة دائماً
     private func addIsRequest(_ kind: AddKind) -> Bool { mode == .request && kind != .sister }
 
-    private var addSubtitle: String { L10n.t("يُضاف للشجرة فوراً", "Added to the tree right away") }
+    /// المتوفّاة طلبٌ لا كتابة: الزوجة والأم من «عائلتي»، والأخت لغير الإدارة (دوالها لا تحمل الوفاة)
+    private func deceasedGoesToRequest(_ kind: AddKind) -> Bool {
+        switch kind {
+        case .wife, .mother: return mode == .selfFamily
+        case .sister: return mode != .direct
+        case .child: return false
+        }
+    }
+
+    /// الأسماء المكتوبة (الصفّ الفارغ لا يُرسل)
+    private var filledEntries: [DSAddEntry] { draft.addEntries.filter { !$0.trimmedName.isEmpty } }
 
     private func addBox(_ kind: AddKind) -> some View {
-        let isChild = kind == .child
-        let female = addIsFemale(kind)
         let request = addIsRequest(kind)
+        let count = filledEntries.count
         // دوال «عائلتي» للزوجة والأم والأخت تأخذ الاسم وحده — بلا ميلاد ولا «متزوجة» لا تُحفظ
         let showsBirth = mode == .direct || request || kind == .child
+        let action: String = {
+            if request {
+                return count > 1 ? L10n.t("إرسال ", "Send ") + DSRequestCount.text(count) : L10n.t("إرسال الطلب", "Send request")
+            }
+            return count > 1 ? L10n.t("إضافة \(count)", "Add \(count)") : L10n.t("إضافة", "Add")
+        }()
         return DSComposer(
             title: request ? kind.requestTitle : kind.title,
-            subtitle: request ? L10n.t("يُرسل للإدارة للمراجعة", "Sent to the administration for review")
-                              : addSubtitle,
+            subtitle: request ? L10n.t("كل اسم طلب يُراجَع وحده", "Each name is a request reviewed on its own")
+                              : L10n.t("يُضاف للشجرة فوراً", "Added to the tree right away"),
             icon: request ? "paperplane.fill" : kind.icon,
             tint: DS.Color.actionNavy,
-            actionTitle: request ? L10n.t("إرسال الطلب", "Send request") : L10n.t("إضافة", "Add"),
+            actionTitle: action,
             actionIcon: request ? "paperplane.fill" : "plus",
-            canSubmit: !draft.addName.trimmingCharacters(in: .whitespaces).isEmpty,
+            canSubmit: count > 0,
             isBusy: draft.busy,
-            hasUnsavedChanges: addFormHasChanges(kind),
+            hasUnsavedChanges: addFormHasChanges,
             onSubmit: { performAdd(kind) },
             onCancel: { draft.addKind = nil }
         ) {
@@ -1590,30 +1637,30 @@ struct WomanDetailSheet: View {
                 existingSistersCard.dsStaggerIn(1)
             }
 
-            DSFormCard(L10n.t("البيانات الأساسية", "Basic Info"),
-                       icon: "person.text.rectangle.fill", color: chromeInk) {
-                DSFieldBox(isChild ? L10n.t("الاسم الأول", "First Name") : L10n.t("الاسم", "Name")) {
-                    TextField(isChild ? L10n.t("الاسم الأول", "First name") : L10n.t("الاسم", "Name"),
-                              text: $draft.addName)
-                }
-                if isChild {
-                    DSGenderPicker(selection: $draft.addGender)
-                }
-            }
-            .dsStaggerIn(1)
+            // الأسماء: لكل اسم حقله و«متوفّى/متوفّاة»، وللابن ذكر/أنثى، و«إضافة اسم آخر» للابن والأخت
+            DSAddEntriesSection(entries: $draft.addEntries,
+                                title: kind.entriesTitle,
+                                icon: kind == .child ? "person.2.fill" : kind.icon,
+                                tint: kind == .child ? chromeInk : DS.Color.female,
+                                index: kind == .sister ? 2 : 1,
+                                rowLabel: { kind.rowLabel($0) },
+                                // الابن والأخت بالاسم الأول (يُكمَل باسم الأب)، والزوجة والأم باسمها كاملاً
+                                placeholder: kind.allowsMultiple ? L10n.t("الاسم الأول", "First name")
+                                                                 : L10n.t("اسمها كاملاً", "Her full name"),
+                                showsGender: kind == .child,
+                                allowsMultiple: kind.allowsMultiple,
+                                showsBirth: showsBirth,
+                                // «متزوجة» تُكتب في الكتابة المباشرة وحدها — والزوجة والأم متزوجتان بالرابط
+                                showsMarried: mode == .direct && (kind == .child || kind == .sister),
+                                newGender: kind == .child ? "male" : "female")
 
-            if showsBirth {
-                DSFormCard(L10n.t("تاريخ الميلاد", "Birth Date"), icon: "calendar", color: DS.Color.palm) {
-                    // الإضافة لا تُسجّل وفاة (كما كانت) — الميلاد وحده
-                    DSLifeDatesBox(hasBirthDate: $draft.addHasBirth, birthDate: $draft.addBirth,
-                                   isDeceased: .constant(false),
-                                   hasDeathDate: .constant(false), deathDate: .constant(Date()),
-                                   showsDeceased: false)
-                }
-                .dsStaggerIn(2)
+            // دوال «عائلتي» لا تحمل الوفاة للزوجة والأم والأخت — المتوفّاة تُرسل طلباً (يقال قبل الضغط)
+            if deceasedGoesToRequest(kind), draft.addEntries.contains(where: \.deceased) {
+                maritalNote(L10n.t("المتوفّاة تصل للإدارة طلباً، وتُضاف متوفّاة بعد مراجعته.",
+                                   "A deceased entry goes to the administration as a request, added after review."))
             }
 
-            // ملاحظة للإدارة مع الطلب (اختيارية)
+            // ملاحظة للإدارة مع الطلبات (اختيارية — تُرفق بكل طلب)
             if request {
                 DSFormCard(L10n.t("ملاحظات للإدارة", "Notes for the administration"),
                            icon: "note.text", color: chromeInk) {
@@ -1623,17 +1670,6 @@ struct WomanDetailSheet: View {
                             .lineLimit(1...4)
                             .padding(.vertical, DS.Spacing.sm)
                     }
-                }
-                .dsStaggerIn(3)
-            }
-
-            // «متزوجة» تُكتب في الكتابة المباشرة وحدها
-            if female && mode == .direct {
-                DSFormCard(L10n.t("الحالة الاجتماعية", "Marital Status"),
-                           icon: "heart.fill", color: chromeInk) {
-                    DSToggleBox(title: L10n.t("متزوجة", "Married"), isOn: $draft.addMarried, tint: chromeInk)
-                    maritalNote(L10n.t("المتزوجة لا تظهر في قائمة اختيار الزوجة.",
-                                       "A married woman is hidden from wife candidates."))
                 }
                 .dsStaggerIn(3)
             }
@@ -1662,7 +1698,7 @@ struct WomanDetailSheet: View {
         }
     }
 
-    /// لمن الإضافة — نفس بطاقة السياق أعلى «إضافة ابن»
+    /// لمن الإضافة — بطاقة السياق أعلى المربّع («ابن أو ابنة لـ» + الاسم)
     private func addContext(_ kind: AddKind) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             // قرص الحالة المجسّم (زخرفة — النص بجانبه يكفي)
@@ -1683,13 +1719,10 @@ struct WomanDetailSheet: View {
         .dsCard(padding: DS.Spacing.md)
     }
 
-    /// الإضافة تبدأ فارغة: أي اسم أو تاريخ أو «متزوجة» أو «أنثى» = إدخال لم يُحفظ
-    private func addFormHasChanges(_ kind: AddKind) -> Bool {
-        !draft.addName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// الإضافة تبدأ فارغة: أي اسم أو تاريخ أو «متوفّى» أو «متزوجة» أو صفّ زائد أو ملاحظة = إدخال لم يُحفظ
+    private var addFormHasChanges: Bool {
+        draft.addEntries.contains { !$0.isBlank } || draft.addEntries.count > 1
             || !draft.addNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || draft.addHasBirth
-            || (addIsFemale(kind) && draft.addMarried)
-            || (kind == .child && draft.addGender != "male")
     }
 
     // MARK: - «إضافة زوجة» الواحدة — المربّع والكتابة حسب الآلية
@@ -1826,105 +1859,194 @@ struct WomanDetailSheet: View {
 
     private var nextSort: Int { (children.map(\.sortOrder).max() ?? -1) + 1 }
 
-    /// الإضافة حسب الآلية: كتابة مباشرة للإدارة، دوال «عائلتي» للعضو على عقدته، وطلب للإدارة لغيره
+    /// الإضافة حسب الآلية، اسماً اسماً (طلب المالك ٢٠٢٦-١٠-٢٥ «اكثر من ابنة او ابن … اكثر من اخت»): كتابة مباشرة
+    /// للإدارة، دوال «عائلتي» للعضو على عقدته، وطلب لكل اسم لغيره. ما يُكتب يخرج من المربّع — إن فشل اسم بقي هو
+    /// وما بعده، ولا يتكرّر ما كُتب عند إعادة المحاولة
     private func performAdd(_ kind: AddKind) {
-        let name = draft.addName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { return }
-        let birth = draft.addHasBirth ? Self.dayKey(draft.addBirth) : nil
-        let gender = kind == .child ? draft.addGender : "female"
-        if kind == .sister { performSisterAdd(name); return }
+        let list = filledEntries
+        guard !list.isEmpty else { return }
+        if kind == .sister { performSisterAdds(list); return }
         switch mode {
-        case .direct: performDirectAdd(kind, name: name, gender: gender, birth: birth, married: draft.addMarried)
-        case .selfFamily: performSelfAdd(kind, name: name, gender: gender, birth: birth)
-        case .request: submitAddRequest(kind, name: name, gender: gender, birth: birth)
+        case .direct: performDirectAdds(kind, list)
+        case .selfFamily: performSelfAdds(kind, list)
+        case .request: submitAddRequests(kind, list)
         case .viewOnly: return
         }
     }
 
-    /// الإدارة — الخطأ يُعرض والمربّع يبقى بما كُتب فيه (م-٢ فحص ٢٠٢٦-١٠-٠٧)
-    private func performDirectAdd(_ kind: AddKind, name: String, gender: String, birth: String?, married: Bool) {
+    /// اسم كُتب أو طُلب — يخرج من مربّع الأسماء
+    private static func written(_ entry: DSAddEntry, in draft: WomanAdminDraft) async {
+        await MainActor.run { draft.addEntries.removeAll { $0.id == entry.id } }
+    }
+
+    /// الإدارة — الخطأ يُعرض والمربّع يبقى بما لم يُكتب بعد (م-٢ فحص ٢٠٢٦-١٠-٠٧)
+    private func performDirectAdds(_ kind: AddKind, _ list: [DSAddEntry]) {
         // ابن/ابنة امرأة زوجها في الشجرة: الأب زوجها والأم هي (كان الأب = المرأة فيتكرّر الفرع تحتها)
         let viaHusband: FamilyMember? = (kind == .child && woman.isFemale) ? husband : nil
         let parentId = viaHusband?.id ?? woman.id
         let parentFull = viaHusband?.fullName ?? woman.fullName
         let motherId: UUID? = viaHusband == nil ? nil : woman.id
-        let sort = (allWomen.filter { $0.fatherId == parentId }.map(\.sortOrder).max() ?? -1) + 1
+        let firstSort = (allWomen.filter { $0.fatherId == parentId }.map(\.sortOrder).max() ?? -1) + 1
         // أبٌ من الشجرة العامة → الابن عبر السيرفر (الذكر يُكتب في profiles فيظهر في شجرة العائلة أيضاً —
         // كان يُكتب هنا وحدها، والمزامنة باتجاه واحد)
         let viaServer = kind == .child && profileIds.contains(parentId)
         let womanId = woman.id
         let fatherId = woman.fatherId
         let vm = memberVM
+        let draft = self.draft
         runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
-            switch kind {
-            case .child where viaServer:
-                let newId = try await WomenStore.addFamilyChild(parentId: parentId, name: name, gender: gender,
-                                                                birthDate: birth, sortOrder: sort,
-                                                                parentFullName: parentFull)
-                if let motherId { try await WomenStore.setMotherId(childId: newId, motherId: motherId) }
-                if gender == "female", married { try await WomenStore.setMarried(id: newId, true) }
-                // الذكر دخل شجرة العائلة — حدّثها الآن
-                if gender != "female" { await vm.fetchAllMembers(force: true) }
-            case .child:
-                try await WomenStore.addChild(parentId: parentId, name: name, sortOrder: sort, gender: gender,
-                                              parentFullName: parentFull, birthDate: birth,
-                                              isMarried: gender == "female" && married, motherId: motherId)
-            case .wife:
-                try await WomenStore.addWife(husbandId: womanId, name: name, birthDate: birth, isMarried: married)
-            case .mother:
-                // الأم زوجةٌ للأب — وإلا ظهرت جذراً مستقلاً أعلى الشجرة
-                try await WomenStore.addMother(childId: womanId, name: name, husbandId: fatherId,
-                                               birthDate: birth, isMarried: married)
-            case .sister:
-                break
+            var addedSon = false
+            for (i, e) in list.enumerated() {
+                let birth = e.hasBirth ? Self.dayKey(e.birth) : nil
+                switch kind {
+                case .child where viaServer:
+                    let newId = try await WomenStore.addFamilyChild(parentId: parentId, name: e.trimmedName,
+                                                                    gender: e.gender, birthDate: birth,
+                                                                    sortOrder: firstSort + i, parentFullName: parentFull,
+                                                                    isDeceased: e.deceased)
+                    if let motherId { try await WomenStore.setMotherId(childId: newId, motherId: motherId) }
+                    if e.isFemale, e.married { try await WomenStore.setMarried(id: newId, true) }
+                    if !e.isFemale { addedSon = true }
+                case .child:
+                    try await WomenStore.addChild(parentId: parentId, name: e.trimmedName, sortOrder: firstSort + i,
+                                                  gender: e.gender, parentFullName: parentFull, birthDate: birth,
+                                                  isDeceased: e.deceased, isMarried: e.isFemale && e.married,
+                                                  motherId: motherId)
+                case .wife:
+                    // الزوجة متزوجة بالرابط نفسه
+                    try await WomenStore.addWife(husbandId: womanId, name: e.trimmedName, birthDate: birth,
+                                                 isDeceased: e.deceased, isMarried: true)
+                case .mother:
+                    // الأم زوجةٌ للأب — وإلا ظهرت جذراً مستقلاً أعلى الشجرة
+                    try await WomenStore.addMother(childId: womanId, name: e.trimmedName, husbandId: fatherId,
+                                                   birthDate: birth, isDeceased: e.deceased)
+                case .sister:
+                    break
+                }
+                await Self.written(e, in: draft)
             }
+            // الذكر دخل شجرة العائلة — حدّثها الآن
+            if addedSon { await vm.fetchAllMembers(force: true) }
         }
     }
 
-    /// العضو على عقدته — دوال السيرفر الذاتية (مقيّدة على عقدته هو)
-    private func performSelfAdd(_ kind: AddKind, name: String, gender: String, birth: String?) {
+    /// العضو على عقدته — دوال السيرفر الذاتية (مقيّدة على عقدته هو). دالتا الزوجة والأم لا تحملان الوفاة —
+    /// المتوفّاة تُرسل طلباً للإدارة بوصفها في الملاحظات (تضيفها الإدارة متوفّاة)
+    private func performSelfAdds(_ kind: AddKind, _ list: [DSAddEntry]) {
         guard let meId = me?.id else { return }
         let parentFull = woman.fullName
-        let sort = nextSort
+        let firstSort = nextSort
         let vm = memberVM
+        let requests = adminRequestVM
         // الابن من «عائلتي» ينتظر اعتماد الإدارة (طلب «إضافة ابن» نفسه) — إلا من مجال المراجعة
-        let pendingSon = kind == .child && gender != "female" && !canModerate
+        let staff = canModerate
+        let draft = self.draft
+        let tally = WomanAddTally()
+        // طلبات المتوفّيات تُبنى هنا (تقرأ العقدة) — والإرسال داخل الكتابة
+        var deceasedRequests: [UUID: TreeEditPayload] = [:]
+        if kind == .wife || kind == .mother {
+            for e in list where e.deceased { deceasedRequests[e.id] = addRequestPayload(kind, e) }
+        }
         runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add"), {
-            switch kind {
-            case .child where gender == "female":
-                try await WomenStore.addFamilyChild(parentId: meId, name: name, gender: "female",
-                                                    birthDate: birth, sortOrder: sort, parentFullName: parentFull)
-            case .child:
-                // نفس مسار «إضافة ابن» في «عائلتي»: يُكتب في الشجرة العامة ويُرسل طلبه للإدارة
-                let newId = await vm.addChild(firstNameOnly: name, phoneNumber: "", birthDate: birth,
-                                              fatherId: meId, isDeceased: false, deathDate: nil, gender: "male")
-                if newId == nil {
-                    let msg = await MainActor.run { vm.errorMessage }
-                    throw WomenWriteFailure(message: msg ?? L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.",
-                                                                    "Couldn't add the son. Try again."))
+            for (i, e) in list.enumerated() {
+                let birth = e.hasBirth ? Self.dayKey(e.birth) : nil
+                switch kind {
+                case .child where e.isFemale:
+                    try await WomenStore.addFamilyChild(parentId: meId, name: e.trimmedName, gender: "female",
+                                                        birthDate: birth, sortOrder: firstSort + i,
+                                                        parentFullName: parentFull, isDeceased: e.deceased)
+                    tally.added += 1
+                case .child:
+                    // نفس مسار «إضافة ابن» في «عائلتي»: يُكتب في الشجرة العامة ويُرسل طلبه للإدارة
+                    let newId = await vm.addChild(firstNameOnly: e.trimmedName, phoneNumber: "", birthDate: birth,
+                                                  fatherId: meId, isDeceased: e.deceased, deathDate: nil, gender: "male")
+                    if newId == nil {
+                        let msg = await MainActor.run { vm.errorMessage }
+                        throw WomenWriteFailure(message: msg ?? L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.",
+                                                                        "Couldn't add the son. Try again."))
+                    }
+                    if staff { tally.added += 1 } else { tally.pending += 1 }
+                case .wife, .mother:
+                    if let payload = deceasedRequests[e.id] {
+                        try await Self.submit(payload, via: requests)
+                        tally.requested += 1
+                    } else if kind == .wife {
+                        try await WomenStore.addSelfWife(name: e.trimmedName)
+                        tally.added += 1
+                    } else {
+                        try await WomenStore.addSelfMother(name: e.trimmedName)
+                        tally.added += 1
+                    }
+                case .sister:
+                    break
                 }
-            case .wife:
-                try await WomenStore.addSelfWife(name: name)
-            case .mother:
-                try await WomenStore.addSelfMother(name: name)
-            case .sister:
-                break
+                await Self.written(e, in: draft)
             }
-        }, onSuccess: {
-            guard pendingSon else { dismiss(); return }
-            draft.notice = WomanWriteError(
-                title: L10n.t("أُضيف الابن", "Son added"),
-                message: L10n.t("يظهر في الشجرة، وينتظر اعتماد الإدارة.",
-                                "He shows in the tree and awaits the administration's approval."))
-        })
+        }, onSuccess: { finishAdds(tally) })
     }
 
-    /// «إضافة أخت» على عقدة أبيه — بنت جديدة تحت أبيه (add_or_link_self_relative)
-    private func performSisterAdd(_ name: String) {
+    /// «إضافة أخت» على عقدة أبيه — بنات جديدات تحته. الإدارة بإدراج مباشر (يحمل الوفاة والميلاد و«متزوجة»)،
+    /// والعضو بدالة «إضافة أخت» (add_or_link_self_relative) — والمتوفّاة طلباً للإدارة (الدالة لا تحمل الوفاة)
+    private func performSisterAdds(_ list: [DSAddEntry]) {
         let fatherId = woman.id
-        runWrite(failTitle: L10n.t("تعذّرت إضافة الأخت", "Couldn't add the sister")) {
-            try await WomenStore.addSelfSister(fatherId: fatherId, name: name)
+        let fatherFull = woman.fullName
+        let firstSort = nextSort
+        let direct = mode == .direct
+        let requests = adminRequestVM
+        let draft = self.draft
+        let tally = WomanAddTally()
+        var deceasedRequests: [UUID: TreeEditPayload] = [:]
+        if !direct {
+            for e in list where e.deceased { deceasedRequests[e.id] = addRequestPayload(.sister, e) }
         }
+        runWrite(failTitle: L10n.t("تعذّرت إضافة الأخت", "Couldn't add the sister"), {
+            for (i, e) in list.enumerated() {
+                if direct {
+                    try await WomenStore.addChild(parentId: fatherId, name: e.trimmedName, sortOrder: firstSort + i,
+                                                  gender: "female", parentFullName: fatherFull,
+                                                  birthDate: e.hasBirth ? Self.dayKey(e.birth) : nil,
+                                                  isDeceased: e.deceased, isMarried: e.married)
+                    tally.added += 1
+                } else if let payload = deceasedRequests[e.id] {
+                    try await Self.submit(payload, via: requests)
+                    tally.requested += 1
+                } else {
+                    try await WomenStore.addSelfSister(fatherId: fatherId, name: e.trimmedName)
+                    tally.added += 1
+                }
+                await Self.written(e, in: draft)
+            }
+        }, onSuccess: { finishAdds(tally) })
+    }
+
+    /// بعد دفعة الأسماء: كلها كُتبت → تُغلق التفاصيل؛ وما ينتظر الإدارة (ابن «عائلتي»، طلب) → رسالة بالأعداد
+    private func finishAdds(_ t: WomanAddTally) {
+        let waiting = t.pending + t.requested
+        guard waiting > 0 else { dismiss(); return }
+        let title: String
+        let message: String
+        if t.added == 0 && t.pending == 0 {
+            title = t.requested > 1 ? L10n.t("تم إرسال ", "Sent ") + DSRequestCount.text(t.requested)
+                                    : L10n.t("تم إرسال الطلب", "Request sent")
+            message = t.requested > 1
+                ? L10n.t("وصلت طلباتك للإدارة — كلٌّ يُراجَع وحده، ويصلك إشعار عند البتّ فيه.",
+                         "The administration got your requests — each is reviewed on its own; you'll be notified.")
+                : L10n.t("وصل طلبك للإدارة، ويصلك إشعار عند البتّ فيه.",
+                         "The administration got your request — you'll be notified of the decision.")
+        } else if t.added == 0 && t.requested == 0 {
+            title = t.pending > 1 ? L10n.t("أُضيف الأبناء", "Sons added") : L10n.t("أُضيف الابن", "Son added")
+            message = t.pending > 1
+                ? L10n.t("يظهرون في الشجرة، وينتظرون اعتماد الإدارة.", "They show in the tree and await the administration's approval.")
+                : L10n.t("يظهر في الشجرة، وينتظر اعتماد الإدارة.", "He shows in the tree and awaits the administration's approval.")
+        } else {
+            title = L10n.t("تمت الإضافة", "Added")
+            var parts: [String] = []
+            if t.added > 0 { parts.append(L10n.t("أُضيف \(t.added) للشجرة", "\(t.added) added to the tree")) }
+            if t.pending > 0 { parts.append(L10n.t("\(t.pending) يظهر وينتظر اعتماد الإدارة", "\(t.pending) shown, awaiting approval")) }
+            if t.requested > 0 { parts.append(L10n.t("\(t.requested) أُرسل طلباً للإدارة", "\(t.requested) sent to the administration")) }
+            message = parts.joined(separator: L10n.t("، و", ", ")) + "."
+        }
+        draft.notice = WomanWriteError(title: title, message: message)
     }
 
     // MARK: - «طلب إضافة» — طلب «تعديل الشجرة» (tree_edit) للإدارة
@@ -1932,7 +2054,8 @@ struct WomanDetailSheet: View {
     // السيرفر (trg_guard_admin_request_insert) يقبل لغير الإدارة «إضافة» parentMemberId = member_id، وmember_id
     // سجلّ في الشجرة العامة (profiles). سجلّات شجرة النساء ليست منها، فيُعلَّق الطلب على أقرب سجلّ منها
     // (العقدة نفسها، أو زوجها/أبوها، وإلا مقدّم الطلب)، والتفاصيل في الملاحظات. قبول «إضافة» باسم جديد يُنشئ
-    // ابناً ذكراً تحت الأب في الشجرة العامة — فالاسم يُرسل للابن الذكر تحت أبيه فقط، وغيره تنفّذه الإدارة يدوياً.
+    // ابناً ذكراً تحت الأب في الشجرة العامة (حيّاً — القبول لا يكتب الوفاة) — فالاسم يُرسل للابن الذكر تحت أبيه
+    // فقط، وغيره تنفّذه الإدارة يدوياً. لكل اسم طلب يُراجَع وحده.
 
     /// السجل الذي يُعلَّق عليه الطلب
     private func requestAnchor(preferHusband: Bool) -> UUID? {
@@ -1963,20 +2086,47 @@ struct WomanDetailSheet: View {
                                     notes: lines.joined(separator: "\n"))
     }
 
-    private func submitAddRequest(_ kind: AddKind, name: String, gender: String, birth: String?) {
+    /// طلب «إضافة» لاسم واحد: الجنس والميلاد و«متوفّى/متوفّاة» بوضوح في الملاحظات — القبول لا يكتب الوفاة، فالابن
+    /// المتوفّى يُضاف تلقائياً ثم تُسجَّل وفاته من تفاصيله، والبقية تضيفها الإدارة كما وُصفت
+    private func addRequestPayload(_ kind: AddKind, _ e: DSAddEntry) -> TreeEditPayload? {
         let childOfWoman = kind == .child && woman.isFemale
-        guard let anchor = requestAnchor(preferHusband: childOfWoman) else { return }
+        guard let anchor = requestAnchor(preferHusband: childOfWoman) else { return nil }
         // أبو الابن: الرجل نفسه، أو زوج المرأة
         let father: UUID? = woman.isFemale ? woman.husbandId : woman.id
-        let createsSon = kind == .child && gender != "female" && anchor == father
+        let createsSon = kind == .child && !e.isFemale && anchor == father
         var details: [String] = []
         if kind == .child {
-            details.append(L10n.t("الجنس: ", "Gender: ")
-                           + (gender == "female" ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male")))
+            details.append(L10n.t("الجنس: ", "Gender: ") + (e.isFemale ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male")))
         }
-        if let birth { details.append(L10n.t("تاريخ الميلاد: ", "Birth date: ") + birth) }
-        sendRequest(requestPayload(title: kind.requestTitle, name: name, details: details,
-                                   createsSon: createsSon, anchor: anchor))
+        if e.hasBirth { details.append(L10n.t("تاريخ الميلاد: ", "Birth date: ") + Self.dayKey(e.birth)) }
+        if e.deceased {
+            details.append(createsSon
+                ? L10n.t("الحالة: متوفّى — بعد القبول سجّل وفاته من تفاصيله.",
+                         "Status: deceased — after approval, record his death from his details.")
+                : (e.isFemale ? L10n.t("الحالة: متوفّاة — تُضاف متوفّاة.", "Status: deceased — add her as deceased.")
+                              : L10n.t("الحالة: متوفّى — يُضاف متوفّى.", "Status: deceased — add him as deceased.")))
+        }
+        // الأخت: بنت لصاحب العقدة (أبي مقدّم الطلب)
+        let title = kind == .sister ? L10n.t("بنت (أخت مقدّم الطلب)", "Daughter (the requester's sister)")
+                                    : kind.requestTitle
+        return requestPayload(title: title, name: e.trimmedName, details: details,
+                              createsSon: createsSon, anchor: anchor)
+    }
+
+    /// طلب لكل اسم (يُراجَع كلٌّ وحده)
+    private func submitAddRequests(_ kind: AddKind, _ list: [DSAddEntry]) {
+        let items = list.compactMap { e in addRequestPayload(kind, e).map { (e, $0) } }
+        guard !items.isEmpty else { return }
+        let requests = adminRequestVM
+        let draft = self.draft
+        let tally = WomanAddTally()
+        runWrite(failTitle: L10n.t("تعذّر إرسال الطلب", "Couldn't send the request"), {
+            for (e, payload) in items {
+                try await Self.submit(payload, via: requests)
+                tally.requested += 1
+                await Self.written(e, in: draft)
+            }
+        }, onSuccess: { finishAdds(tally) })
     }
 
     private func submitLinkRequest(title: String, picked: FamilyMember, details: [String] = []) {
@@ -1985,20 +2135,23 @@ struct WomanDetailSheet: View {
                                    createsSon: false, anchor: anchor))
     }
 
+    /// طلب واحد (ربط زوج/زوجة، زوجة من العائلة) بنفس الكتابة والرسالة
     private func sendRequest(_ payload: TreeEditPayload) {
         let vm = adminRequestVM
+        let tally = WomanAddTally()
         runWrite(failTitle: L10n.t("تعذّر إرسال الطلب", "Couldn't send the request"), {
-            let sent = await vm.submitTreeEditRequest(payload: payload)
-            if !sent {
-                throw WomenWriteFailure(message: L10n.t("لم يُرسل الطلب. تحقّق من الاتصال وحاول مرة أخرى.",
-                                                        "The request wasn't sent. Check your connection and try again."))
-            }
-        }, onSuccess: {
-            draft.notice = WomanWriteError(
-                title: L10n.t("تم إرسال الطلب", "Request sent"),
-                message: L10n.t("وصل طلبك للإدارة، ويصلك إشعار عند البتّ فيه.",
-                                "The administration got your request — you'll be notified of the decision."))
-        })
+            try await Self.submit(payload, via: vm)
+            tally.requested += 1
+        }, onSuccess: { finishAdds(tally) })
+    }
+
+    /// إرسال طلب واحد بمسار الطلبات الموجود — عدم الوصول خطأ يُعرض
+    private static func submit(_ payload: TreeEditPayload, via vm: AdminRequestViewModel) async throws {
+        let sent = await vm.submitTreeEditRequest(payload: payload)
+        if !sent {
+            throw WomenWriteFailure(message: L10n.t("لم يُرسل الطلب. تحقّق من الاتصال وحاول مرة أخرى.",
+                                                    "The request wasn't sent. Check your connection and try again."))
+        }
     }
 
     /// «حفظ» في «إدارة السجل» ومربّعي الوفاة والترتيب — نفس كتابة «تعديل البيانات» و«تسجيل وفاة»
@@ -2195,11 +2348,8 @@ private final class WomanAdminDraft: ObservableObject {
     @Published var married = false
     @Published var ordered: [FamilyMember] = []
     @Published var sorting = false
-    @Published var addName = ""
-    @Published var addGender = "male"
-    @Published var addHasBirth = false
-    @Published var addBirth = Date()
-    @Published var addMarried = false
+    /// أسماء مربّع الإضافة — اسم أو أكثر (`DSAddEntriesSection`)
+    @Published var addEntries: [DSAddEntry] = [DSAddEntry()]
     /// ملاحظة «طلب إضافة» للإدارة
     @Published var addNotes = ""
     // ما يُفتح فوق مربّع الإجراءات
@@ -2233,6 +2383,16 @@ private final class WomanAdminDraft: ObservableObject {
 }
 
 /// خطأ كتابة في شجرة النساء: عنوان الرسالة + نص السيرفر (أو النص العام) — م-٢ فحص ٢٠٢٦-١٠-٠٧
+/// أعداد دفعة الأسماء — تُعدّ داخل الكتابة وتُقرأ بعد نجاحها لرسالة واحدة بالنتيجة
+private final class WomanAddTally {
+    /// كُتب في الشجرة فوراً
+    var added = 0
+    /// ابن «عائلتي» — ظاهر وينتظر اعتماد الإدارة
+    var pending = 0
+    /// أُرسل طلباً للإدارة
+    var requested = 0
+}
+
 private struct WomanWriteError {
     let title: String
     let message: String

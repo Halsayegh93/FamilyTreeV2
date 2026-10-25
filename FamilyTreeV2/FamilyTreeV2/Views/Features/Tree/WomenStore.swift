@@ -142,14 +142,15 @@ enum WomenStore {
     @discardableResult
     static func addFamilyChild(parentId: UUID, name: String, gender: String,
                                birthDate: String?, sortOrder: Int,
-                               parentFullName: String) async throws -> UUID {
-        // مفاتيح فارغة تُرسل null صريحة — وإلا نقص توقيع الدالة على السيرفر
+                               parentFullName: String, isDeceased: Bool = false) async throws -> UUID {
+        // مفاتيح فارغة تُرسل null صريحة — وإلا نقص توقيع الدالة على السيرفر.
+        // «متوفّى/متوفّاة» من مربّع الأسماء (الدالة تقبلها أصلاً — بلا تاريخ وفاة)
         let params: [String: AnyEncodable] = [
             "p_parent_id": AnyEncodable(parentId.uuidString),
             "p_name": AnyEncodable(name),
             "p_gender": AnyEncodable(gender),
             "p_birth": AnyEncodable(birthDate),
-            "p_deceased": AnyEncodable(false),
+            "p_deceased": AnyEncodable(isDeceased),
             "p_death": AnyEncodable(Optional<String>.none),
             "p_sort": AnyEncodable(sortOrder),
             "p_parent_full_name": AnyEncodable(parentFullName)
