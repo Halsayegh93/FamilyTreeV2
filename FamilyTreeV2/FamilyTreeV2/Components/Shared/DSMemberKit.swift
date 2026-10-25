@@ -312,6 +312,8 @@ struct DSActionTile: View {
     let icon: String
     let tint: Color
     let action: () -> Void
+    /// فوق سطر ملوّن (`dsActionTileBand`): المربّع أبيض ليبرز على خلفية سطره
+    @Environment(\.dsTileOnBand) private var onBand
 
     init(_ title: String, icon: String, tint: Color, action: @escaping () -> Void) {
         self.title = title
@@ -330,15 +332,15 @@ struct DSActionTile: View {
             // ملمومة وأصغر (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة يم بعض وحجمهم أصغر»): قرص ٣٢ وحشوة ٤
             VStack(spacing: DS.Spacing.xs) {
                 // قرص ممتلئ بلون المجموعة ورمز أبيض (مثل أيقونات الإعدادات في الآيفون) — التعبئة الثابتة
-                // (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
+                // (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين؛ على السطر الملوّن أصغر (٤ في السطر)
                 Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.md)
+                    .dsGlyph(onBand ? DS.Glyph.sm : DS.Glyph.md)
                     .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .frame(width: onBand ? DS.Icon.discSmall : DS.Icon.row, height: onBand ? DS.Icon.discSmall : DS.Icon.row)
                     .background(Circle().fill(tint.dsSolidFill))
                     .accessibilityHidden(true)
                 Text(title)
-                    .dsFieldFont(.chip)
+                    .dsFieldFont(onBand ? .caption : .chip)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -347,7 +349,7 @@ struct DSActionTile: View {
             .padding(.vertical, DS.Spacing.sm)
             .padding(.horizontal, DS.Spacing.xs)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
+            .background(shape.fill(onBand ? DS.Color.surface : tint.opacity(DS.Opacity.tintFillSoft)))
             .overlay(shape.strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
             .contentShape(shape)
         }
@@ -359,12 +361,14 @@ struct DSActionTile: View {
 /// شبكة مربّعات جاهزة: ٣ في السطر (و٢ مع خطوط إمكانية الوصول) — ملمومة: فاصل ٤ وارتفاع المربّع على قدر
 /// محتواه (لا مربّع كامل) فتقصر الشبكة
 struct DSActionTileGrid<Content: View>: View {
+    /// عدد المربّعات في السطر (٣، أو ٤ للمربّعات الصغيرة) — ويقلّ واحداً مع خطوط إمكانية الوصول
+    var columns: Int = 3
     @ViewBuilder let content: () -> Content
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let large = typeSize.isAccessibilitySize
-        DSTileGridLayout(columns: large ? 2 : 3, spacing: DS.Spacing.xs, square: false) {
+        DSTileGridLayout(columns: large ? max(2, columns - 2) : columns, spacing: DS.Spacing.xs, square: false) {
             content()
         }
     }
@@ -437,5 +441,28 @@ struct DSPhoneCountryBadge: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(L10n.t("رقم من \(origin.name)", "Phone from \(origin.name)"))
         }
+    }
+}
+
+// MARK: - سطر مربّعات بخلفية لونه
+
+private struct DSTileOnBandKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// مربّعات الإجراءات فوق سطر ملوّن — تُرسم بيضاء
+    var dsTileOnBand: Bool {
+        get { self[DSTileOnBandKey.self] }
+        set { self[DSTileOnBandKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// كل سطر مربّعات بخلفية لون مجموعته الخفيف (طلب المالك ٢٠٢٦-١٠-٢٥ «خلفية عند كل سطر») —
+    /// والمربّعات فوقه بيضاء بإطار لونها
+    func dsActionTileBand(_ tint: Color) -> some View {
+        environment(\.dsTileOnBand, true)
+            .padding(DS.Spacing.xs)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                .fill(tint.opacity(DS.Opacity.tintFill)))
     }
 }

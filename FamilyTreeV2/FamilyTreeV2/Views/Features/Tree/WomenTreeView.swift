@@ -1209,19 +1209,22 @@ struct WomanDetailSheet: View {
                 onSubmit: {},
                 onCancel: { showAdminBox = false }
             ) {
-                let groups = ActionGroup.allCases.filter { g in g != .danger && actions.contains { $0.group == g } }
-                ForEach(Array(groups.enumerated()), id: \.element) { index, group in
-                    let tint = groupTint(group)
-                    DSComposerSection(title: group.title, icon: group.icon, tint: tint,
-                                      trailing: group.hint, index: index) {
-                        DSActionTileGrid {
-                            ForEach(actions.filter { $0.group == group }) { action in
-                                DSActionTile(action.title, icon: action.icon, tint: tint, action: action.run)
+                // مجموعة واحدة (طلب المالك ٢٠٢٦-١٠-٢٥ «اشيل المجموعات… بمجموعة وحدة بس منفصلين المربعات»): كل
+                // الإجراءات مربّعات منفصلة صغيرة ملمومة على خلفية واحدة — ترتيبها إضافة ← ربط ← السجل، وكل مربّع
+                // بلون نوعه
+                let tiles = ActionGroup.allCases.filter { $0 != .danger }
+                    .flatMap { g in actions.filter { $0.group == g } }
+                if !tiles.isEmpty {
+                    DSComposerSection(title: L10n.t("الإجراءات", "Actions"), icon: "square.grid.2x2.fill",
+                                      tint: DS.Color.actionNavy, index: 0) {
+                        DSActionTileGrid(columns: 4) {
+                            ForEach(tiles) { action in
+                                DSActionTile(action.title, icon: action.icon, tint: groupTint(action.group),
+                                             action: action.run)
                             }
                         }
+                        .dsActionTileBand(DS.Color.actionNavy)
                     }
-                    // عنوان القسم بلون مجموعته (لا بلون المربّع)
-                    .environment(\.dsBoxTint, nil)
                     .disabled(draft.busy)
                 }
                 ForEach(actions.filter { $0.group == .danger }) { action in
