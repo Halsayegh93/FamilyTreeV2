@@ -63,14 +63,13 @@ enum WifeCandidateRules {
     static let fatherMinAgeKey = "father_candidate_min_age"
     static var fatherMinimumAge: Int { AppConfigValues.shared.int(fatherMinAgeKey, default: 30) }
 
-    /// يصلح أباً؟ المتوفّى يظهر دائماً. الحيّ: لا يظهر إن عُرف عمره وكان دون الحد، ولا إن كان «مضافاً حديثاً»
-    /// بلا تاريخ ميلاد تحت أب (نفس قاعدة البنت الجديدة). `childBorn`: ميلاد صاحب العقدة في مسار الأم —
+    /// يصلح أباً؟ المتوفّى يظهر دائماً. الحيّ: لا يظهر إلا إن عُرف ميلاده وكان دون الحد — بلا ميلاد أو مضاف حديثاً
+    /// يظهر (المالك ٢٠٢٦-١٠-٢٥ «بس ما يكون مولود»). `childBorn`: ميلاد صاحب العقدة في مسار الأم —
     /// أبو الأم أكبر منه بالحد على الأقل حين يُعرف الميلادان
     static func canBeFather(_ m: FamilyMember, childBorn: Date? = nil, now: Date = Date()) -> Bool {
         if m.isDeceased == true { return true }
         let minAge = fatherMinimumAge
         if let years = age(m, now: now), years < minAge { return false }
-        if isRecentNewborn(m, now: now) { return false }
         if let childBorn, let born = birthDay(m.birthDate),
            let gap = calendar.dateComponents([.year], from: born, to: childBorn).year, gap < minAge { return false }
         return true
