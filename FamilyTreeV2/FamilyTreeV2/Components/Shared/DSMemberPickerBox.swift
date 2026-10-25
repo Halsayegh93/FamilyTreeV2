@@ -145,10 +145,18 @@ struct DSMemberPickerBox: View {
         return Button { onPick(m) } label: {
             HStack(spacing: DS.Spacing.sm) {
                 avatar(m)
-                Text(shownName)
-                    .dsFieldFont(.memberName)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .multilineTextAlignment(.leading)
+                    .saturation(m.isDeceased == true ? 0 : 1)   // المتوفّى: صورة بلا ألوان
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(shownName)
+                        .dsFieldFont(.memberName)
+                        .foregroundColor(DS.Color.fieldValue)
+                        .multilineTextAlignment(.leading)
+                    // «متوفى» بنفس شارة بحث الشجرة (طلب المالك ٢٠٢٦-١٠-٢٥ «إذا كان متوفي حط شكل إنه متوفي»)
+                    if m.isDeceased == true {
+                        DSStatusChip(text: m.isFemale ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
+                                     tint: DS.Color.deceased, size: .mini)
+                    }
+                }
                 Spacer(minLength: 0)
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
@@ -169,7 +177,7 @@ struct DSMemberPickerBox: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         // القارئ الصوتي: الاسم وحده (الصورة والسهم زخرفة)
-        .accessibilityLabel(shownName)
+        .accessibilityLabel(m.isDeceased == true ? shownName + "، " + L10n.t("متوفى", "deceased") : shownName)
         .accessibilityHint(rowHint ?? "")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
