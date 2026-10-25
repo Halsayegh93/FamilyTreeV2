@@ -1915,43 +1915,10 @@ class MemberViewModel: ObservableObject {
                 }
             }()
 
-            // 3. إشعار المدراء بتغيير الرتبة (push + داخلي مع تفاصيل قبل/بعد)
-            let oldRoleLabel: String = {
-                guard let current = currentRole else { return L10n.t("غير محدد", "Unknown") }
-                switch current {
-                case .admin, .owner: return L10n.t("مدير", "Admin")
-                case .monitor: return L10n.t("مراقب", "Monitor")
-                case .supervisor: return L10n.t("مشرف", "Supervisor")
-                case .pending: return L10n.t("قيد المراجعة", "Pending")
-                default: return L10n.t("عضو", "Member")
-                }
-            }()
+            // 3. لا إشعار للإدارة بتغيير الرتبة (طلب المالك ٢٠٢٦-١٠-٢٥ «ما يظهر بالإشعارات بس للعضو الى تغير
+            // صلاحيته») — كان يصل للمدراء push وداخلياً مع قبل/بعد
 
-            if memberId != currentUser?.id {
-                await notificationVM?.notifyAdminsWithChangesAndPush(
-                    title: L10n.t("تغيير الصلاحية", "Role Change"),
-                    body: L10n.t(
-                        "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
-                        "«\(memberName)»'s role changed to: «\(roleName)»"
-                    ),
-                    kind: NotificationKind.adminEditRole.rawValue,
-                    changes: [.init(field: "role", before: oldRoleLabel, after: roleName)],
-                    subjectMemberId: memberId
-                )
-            } else {
-                // المالك يحدّث رتبته الخاصة (نادر) — أبقِ خلف الكواليس بدون details
-                await notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("تغيير الصلاحية", "Role Change"),
-                    body: L10n.t(
-                        "تم تغيير صلاحية «\(memberName)» إلى: «\(roleName)»",
-                        "«\(memberName)»'s role changed to: «\(roleName)»"
-                    ),
-                    kind: "role_change",
-                    subjectMemberId: memberId
-                )
-            }
-
-            // 4. إشعار العضو نفسه بتغيير رتبته
+            // 4. إشعار العضو نفسه بتغيير رتبته — وحده
             if authVM?.notificationsFeatureAvailable == true {
                 let personalPayload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
