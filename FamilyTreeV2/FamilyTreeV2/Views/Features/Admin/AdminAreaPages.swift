@@ -423,6 +423,11 @@ struct AdminSearchView: View {
     @State private var query = ""
     /// ورقة العضو (نفس ورقة «العائلة») على نتائج البحث
     @State private var sheet: AdminMemberSheetContext?
+    /// «النساء»: البحث في إناث شجرة النساء وحدهنّ — للإدارة (طلب المالك ٢٠٢٦-١٠-٢٥ «بحث عن الإناث بس بالإدارة»)
+    @State private var womenOnly = false
+    @State private var women: [FamilyMember] = WomenStore.cache
+    @State private var womenLoading = false
+    @State private var selectedWoman: FamilyMember?
 
     private var q: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -446,6 +451,62 @@ struct AdminSearchView: View {
         }.prefix(20))
     }
 
+    /// إناث شجرة النساء المطابقات (الإدارة ترى المخفيّات أيضاً)
+    private var womenResults: [FamilyMember] {
+        guard womenOnly, !q.isEmpty else { return [] }
+        return Array(NameSearch.filter(women.filter(\.isFemale), query: q, fromFirstName: true) { w in   // من الاسم الأول — «م» = مريم لا «… موسى»
+            w.fullName.isEmpty ? w.firstName : w.fullName
+        }.prefix(30))
+    }
+
+    private func loadWomen() async {
+        guard !womenLoading else { return }
+        womenLoading = true
+        defer { womenLoading = false }
+        if let fresh = try? await WomenStore.fetch(), !fresh.isEmpty { women = fresh }
+    }
+
+    /// «الكل» / «النساء» تحت حقل البحث — للإدارة وحدها
+    private var scopePicker: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSChipButton(L10n.t("الكل", "All"), icon: "magnifyingglass", isSelected: !womenOnly, size: .small) {
+                womenOnly = false
+            }
+            DSChipButton(L10n.t("النساء", "Women"), icon: "figure.stand.dress", isSelected: womenOnly, size: .small) {
+                womenOnly = true
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder private var womenSection: some View {
+        if q.isEmpty {
+            DSNoteCard(L10n.t("اكتب اسمها — البحث في إناث شجرة النساء فقط.",
+                              "Type her name — searches only the women in the women's tree."),
+                       icon: "figure.stand.dress")
+        } else if womenLoading && women.isEmpty {
+            DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
+        } else if womenResults.isEmpty {
+            DSEmptyView(L10n.t("لا نتائج", "No results"),
+                        message: L10n.t("جرّب كلمة أخرى", "Try another word"), style: .card)
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                AdminCardHeader(title: L10n.t("النساء", "Women"), badge: womenResults.count, badgeTint: DS.Color.female)
+                ForEach(Array(womenResults.enumerated()), id: \.element.id) { index, w in
+                    if index > 0 { AdminRowDivider() }
+                    Button { selectedWoman = w } label: {
+                        AdminListRow(icon: w.isDeceased == true ? "person.fill.xmark" : "figure.stand.dress",
+                                     tint: DS.Color.female, title: w.fullName.isEmpty ? w.firstName : w.fullName,
+                                     subtitle: w.isDeceased == true ? L10n.t("متوفاة", "Deceased")
+                                         : (w.isHiddenFromTree ? L10n.t("مخفية من الشجرة", "Hidden from the tree") : nil))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .adminCard()
+        }
+    }
+
     var body: some View {
         AdminHubPage {
             AdminBandHeader(title: L10n.t("بحث", "Search"),
@@ -456,7 +517,10 @@ struct AdminSearchView: View {
                     .padding(.top, DS.Spacing.md)
             }
         } content: {
-            if q.isEmpty {
+            if authVM.canEditMembers { scopePicker }
+            if womenOnly {
+                womenSection
+            } else if q.isEmpty {
                 DSNoteCard(L10n.t("اكتب اسم عضو أو رقمه، أو اسم أداة مثل «الأجهزة» أو «وضع الصيانة».",
                                   "Type a member's name or number, or a tool like “Devices” or “Maintenance mode”."),
                            icon: "magnifyingglass")
@@ -503,6 +567,26 @@ struct AdminSearchView: View {
         .dsTallBox(item: $sheet) { context in
             AdminMemberSheet(ids: context.ids, start: context.start)
         }
+        .task(id: womenOnly) { if womenOnly { await loadWomen() } }
+        // تفاصيل المرأة — نفس مربّع شجرة النساء
+        .fullScreenCover(item: $selectedWoman) { w in
+            WomanDetailSheet(
+                woman: w,
+                allWomen: women,
+                me: authVM.currentUser,
+                canEdit: authVM.canEditMembers,
+                canDelete: authVM.canDeleteMembers,
+                canAnnounceDeath: authVM.isAdmin,
+                canModerate: authVM.canModerate,
+                onChanged: { await loadWomen() },
+                onOpenMember: { id in
+                    selectedWoman = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { selectedWoman = women.first { $0.id == id } }
+                }
+            )
+            .background(ClearPresentationBackground())
+        }
+        .transaction { t in if selectedWoman != nil { t.disablesAnimations = true } }
     }
 }
 
