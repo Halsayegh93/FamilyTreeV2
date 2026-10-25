@@ -13,10 +13,17 @@ import Supabase
 
 /// من تظهر في قوائم اختيار الزوجة — القواعد الواحدة لكل القوائم
 enum WifeCandidateRules {
+    // الرقمان من السيرفر (`app_config`، موافقة المالك ٢٠٢٦-١٠-٢٥ — يتغيّران بلا بناء تطبيق):
+    //   • wife_candidate_min_age (عدد صحيح ١٢–٣٠، افتراضي ١٨): أقل عمر يظهر حين يُعرف تاريخ الميلاد
+    //   • wife_candidate_recent_months (٠–٦٠، افتراضي ١٢): «المضافة حديثاً» خلال هذه الأشهر — ٠ = بلا هذه القاعدة
+    // مفتاح غائب أو جلب فاشل = الافتراضي. الجلب يبدأ حين يُفتح مربّع الزوجة (`AppConfigValues`).
+    static let minAgeKey = "wife_candidate_min_age"
+    static let recentMonthsKey = "wife_candidate_recent_months"
+
     /// أقل عمر يظهر حين يُعرف تاريخ الميلاد
-    static let minimumAge = 18
-    /// «المضافة حديثاً» = خلال آخر ١٢ شهراً
-    static let recentMonths = 12
+    static var minimumAge: Int { AppConfigValues.shared.int(minAgeKey, default: 18) }
+    /// «المضافة حديثاً» = خلال آخر هذه الأشهر (٠ = لا تُستبعد)
+    static var recentMonths: Int { AppConfigValues.shared.int(recentMonthsKey, default: 12) }
 
     /// تظهر مرشّحةً زوجةً؟
     /// ١) ليست متزوجة: لا زوج مرتبط بها، ولا «متزوجة» معلَّمة
@@ -36,9 +43,10 @@ enum WifeCandidateRules {
     }
 
     static func isRecentNewborn(_ w: FamilyMember, now: Date) -> Bool {
-        guard birthDay(w.birthDate) == nil, w.fatherId != nil || w.motherId != nil,
+        let months = recentMonths
+        guard months > 0, birthDay(w.birthDate) == nil, w.fatherId != nil || w.motherId != nil,
               let added = timestamp(w.createdAt),
-              let cutoff = calendar.date(byAdding: .month, value: -recentMonths, to: now) else { return false }
+              let cutoff = calendar.date(byAdding: .month, value: -months, to: now) else { return false }
         return added > cutoff
     }
 
@@ -176,6 +184,8 @@ struct DSWifeFlowBox: View {
     @State private var selectedId: UUID? = nil
     @State private var addingNew = false
     @State private var newName = ""
+    /// القوائم تُعاد حين تصل أرقام السيرفر
+    @ObservedObject private var config = AppConfigValues.shared
 
     init(mode: Mode, husbandId: UUID, husbandName: String, subtitle: String? = nil, people: [FamilyMember],
          isLoading: Bool = false, showsHidden: Bool = false, startsAtFather: Bool = false,
@@ -201,12 +211,16 @@ struct DSWifeFlowBox: View {
     }
 
     var body: some View {
-        // كل خطوة مربّع كامل بحدود `AnyView` — لا يتراكم عمق الأنواع فوق التفاصيل (مكدس الآيفون)
-        switch step {
-        case .choice: AnyView(choiceStep)
-        case .father: AnyView(fatherStep)
-        case .daughters(let id): AnyView(daughtersStep(fatherId: id))
+        Group {
+            // كل خطوة مربّع كامل بحدود `AnyView` — لا يتراكم عمق الأنواع فوق التفاصيل (مكدس الآيفون)
+            switch step {
+            case .choice: AnyView(choiceStep)
+            case .father: AnyView(fatherStep)
+            case .daughters(let id): AnyView(daughtersStep(fatherId: id))
+            }
         }
+        // رقما القواعد من السيرفر (أقل عمر، «المضافة حديثاً») — جلب مرة كل ٥ دقائق على الأكثر
+        .task { await config.refresh() }
     }
 
     // MARK: النصوص
@@ -359,8 +373,7 @@ struct DSWifeFlowBox: View {
                         Image(systemName: "eye.slash")
                             .dsGlyph(DS.Glyph.xs, weight: .semibold)
                             .accessibilityHidden(true)
-                        Text(L10n.t("لا تظهر \(list.hidden): المتزوجة، ومن عمرها أقل من \(WifeCandidateRules.minimumAge)، والمضافة حديثاً بلا تاريخ ميلاد",
-                                    "\(list.hidden) not shown: married, under \(WifeCandidateRules.minimumAge), or newly added without a birth date"))
+                        Text(hiddenNote(list.hidden))
                             .dsFont(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -374,6 +387,16 @@ struct DSWifeFlowBox: View {
                 }
             }
         }
+    }
+
+    /// «لا تظهر N: …» بالقواعد المفعّلة الآن (رقما السيرفر — «المضافة حديثاً» تُذكر ما دامت قاعدتها مفعّلة)
+    private func hiddenNote(_ n: Int) -> String {
+        let age = WifeCandidateRules.minimumAge
+        return WifeCandidateRules.recentMonths > 0
+            ? L10n.t("لا تظهر \(n): المتزوجة، ومن عمرها أقل من \(age)، والمضافة حديثاً بلا تاريخ ميلاد",
+                     "\(n) not shown: married, under \(age), or newly added without a birth date")
+            : L10n.t("لا تظهر \(n): المتزوجة، ومن عمرها أقل من \(age)",
+                     "\(n) not shown: married or under \(age)")
     }
 
     /// اسمها — بنت جديدة لأبيها ثم زوجة (الاسم الأول؛ يُكمَل باسم أبيها)
