@@ -1018,8 +1018,13 @@ struct WomanDetailSheet: View {
         case "sister": return L10n.t("أختك — بنت ", "Your sister — daughter of ") + who
         case "wife": return L10n.t("زوجة لـ", "Wife of ") + who
         case "husband": return L10n.t("زوج لـ", "Husband of ") + who
-        case "mother": return L10n.t("من زوجات أبي ", "From the wives of the father of ") + who
-        case "addMother": return L10n.t("أم لـ", "Mother of ") + who
+        // الأم: اسم أب العضو في السطر الثاني (طلب المالك ٢٠٢٦-١٠-٢٥) — الأم زوجة أبيه؛ بلا أب في الشجرة كما كان
+        case "mother":
+            if let f = father { return L10n.t("من زوجات «", "From the wives of «") + shortName(f) + "»" }
+            return L10n.t("من زوجات أبي ", "From the wives of the father of ") + who
+        case "addMother":
+            if let f = father { return L10n.t("زوجة «", "Wife of «") + shortName(f) + "»" }
+            return L10n.t("أم لـ", "Mother of ") + who
         case "reorder": return L10n.t("أبناء ", "Children of ") + who
         case "edit": return L10n.t("بيانات ", "Details of ") + who
         default: return nil
