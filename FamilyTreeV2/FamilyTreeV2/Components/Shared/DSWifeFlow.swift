@@ -101,6 +101,12 @@ enum WifeCandidateRules {
         return blocked
     }
 
+    /// رجل فعلاً: الجنس «ذكر» صراحةً ولا زوج له (سجلّ أنثى محفوظ «ذكر» خطأً بزوج — «فاطمة» ٢٠٢٦-١٠-٢٥ — لا يظهر أباً،
+    /// طلب المالك «ما يظهرون الإناث لي قائمة الأب»)
+    static func isMan(_ m: FamilyMember) -> Bool {
+        (m.gender ?? "").lowercased() == "male" && m.husbandId == nil
+    }
+
     /// قائمتا الآباء محسوبتان مرة لكل (الشخص، العلاقة، عدد السجلات، الحد) — كانت تُحسب لآلاف الرجال مع كل حرف بحث
     @MainActor private static var fathersMemo: [String: [FamilyMember]] = [:]
     @MainActor static func cachedFathers(_ relation: DSWifeFlowBox.Relation, for personId: UUID, in people: [FamilyMember],
@@ -119,7 +125,7 @@ enum WifeCandidateRules {
         let blocked = blockedFathers(for: husbandId, in: people)
         return people
             .filter { m in
-                !m.isFemale && !blocked.contains(m.id) && canBeFather(m)
+                isMan(m) && !blocked.contains(m.id) && canBeFather(m)
                     && (showsHidden || !m.isHiddenFromTree)
                     && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
             }
@@ -145,7 +151,7 @@ enum WifeCandidateRules {
         let personBorn = person.flatMap { birthDay($0.birthDate) }
         return people
             .filter { m in
-                !m.isFemale && m.id != personId && m.id != personFather && canBeFather(m, childBorn: personBorn)
+                isMan(m) && m.id != personId && m.id != personFather && canBeFather(m, childBorn: personBorn)
                     && (showsHidden || !m.isHiddenFromTree)
                     && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
             }
@@ -388,12 +394,14 @@ struct DSWifeFlowBox: View {
             searchLabel: L10n.t("اسم الأب", "Father's name"),
             searchPlaceholder: L10n.t("اكتب اسم أبيها", "Type her father's name"),
             hintTitle: L10n.t("اكتب اسم أبيها", "Type her father's name"),
-            hintMessage: L10n.t("تظهر الأسماء بعد الكتابة — كل كلمة تطابق بداية اسم بالترتيب.",
-                                "Names appear as you type — each word matches the start of a name, in order."),
+            hintMessage: L10n.t("ابدأ باسمه الأول ثم اسم أبيه — مثل «علي حسين».",
+                                "Start with his first name, then his father's — e.g. «Ali Hussain»."),
             emptyTitle: L10n.t("لا رجال في الشجرة بعد", "No men in the tree yet"),
             noMatchTitle: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
             rowHint: L10n.t("عرض بناته", "Show his daughters"),
             missingTitle: onFatherMissing == nil ? nil : L10n.t("الأب غير موجود؟ اطلب من الإدارة", "Father missing? Ask the admins"),
+            // البحث من الاسم الأول: «علي» = من اسمه علي، «علي حسين» = علي بن حسين (طلب المالك «الأسماء راح تقل»)
+            matchesFromFirstName: true,
             onMissing: onFatherMissing,
             onPick: { go(.daughters($0.id)) },
             onCancel: onCancel

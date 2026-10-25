@@ -70,12 +70,18 @@ enum NameSearch {
         return 1 + pos * 2 + (exactAtPos ? 0 : 1)
     }
 
-    /// يصفّي ويرتّب: المطابق فقط، الاسم الأول التام أولاً ثم الأبكر (والترتيب الأصلي عند التساوي)
-    static func filter<T>(_ items: [T], query: String, text: (T) -> String) -> [T] {
+    /// يصفّي ويرتّب: المطابق فقط، الاسم الأول التام أولاً ثم الأبكر (والترتيب الأصلي عند التساوي).
+    /// `fromFirstName`: الكلمة الأولى من البحث = بداية الاسم الأول نفسه («علي حسين» = علي بن حسين — لا أبناؤه
+    /// ولا أحفاده الذين في أسمائهم «علي»)؛ لمنتقيات الشخص مثل «أبوها» (طلب المالك ٢٠٢٦-١٠-٢٥ «الأسماء راح تقل»)
+    static func filter<T>(_ items: [T], query: String, fromFirstName: Bool = false, text: (T) -> String) -> [T] {
         let q = words(query)
         guard !q.isEmpty else { return items }
         return items.enumerated()
-            .compactMap { i, item in score(queryWords: q, candidateWords: words(text(item))).map { (i, $0, item) } }
+            .compactMap { i, item -> (Int, Int, T)? in
+                let c = words(text(item))
+                if fromFirstName, !(c.first?.hasPrefix(q[0]) ?? false) { return nil }
+                return score(queryWords: q, candidateWords: c).map { (i, $0, item) }
+            }
             .sorted { $0.1 != $1.1 ? $0.1 < $1.1 : $0.0 < $1.0 }
             .map(\.2)
     }

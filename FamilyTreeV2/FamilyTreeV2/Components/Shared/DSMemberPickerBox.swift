@@ -51,6 +51,8 @@ struct DSMemberPickerBox: View {
     var onRemove: (() -> Void)? = nil
     /// زرّ صغير تحت النتائج بعد الكتابة («الأب غير موجود؟») — يرسل المكتوب للمضيف (طلب المالك ٢٠٢٦-١٠-٢٥)
     var missingTitle: String? = nil
+    /// البحث يبدأ من الاسم الأول (`NameSearch.filter(fromFirstName:)`) — منتقي «أبوها»
+    var matchesFromFirstName: Bool = false
     var onMissing: ((String) -> Void)? = nil
     let onPick: (FamilyMember) -> Void
     let onCancel: () -> Void
@@ -70,10 +72,10 @@ struct DSMemberPickerBox: View {
         // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
         let list: [FamilyMember] = {
             if requiresSpecificQuery {
-                return queryIsSpecific ? NameSearch.filter(candidates, query: query) { $0.fullName } : []
+                return queryIsSpecific ? NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName } : []
             }
             guard !query.isEmpty else { return listsAllWhenEmpty ? candidates : [] }
-            return NameSearch.filter(candidates, query: query) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
+            return NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
         }()
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
