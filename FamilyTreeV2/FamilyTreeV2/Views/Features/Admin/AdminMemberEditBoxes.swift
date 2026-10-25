@@ -49,7 +49,9 @@ struct LinkFatherSheet: View {
             }
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty { return potentialFathers }
-        return potentialFathers.filter { $0.fullName.localizedCaseInsensitiveContains(query) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
+        return NameSearch.filter(potentialFathers, query: query) { $0.fullName }
     }
 
     var body: some View {

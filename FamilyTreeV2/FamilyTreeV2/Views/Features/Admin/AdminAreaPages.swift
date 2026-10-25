@@ -428,20 +428,21 @@ struct AdminSearchView: View {
 
     private var tools: [AdminTool] {
         guard !q.isEmpty else { return [] }
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
         return AdminToolCatalog.tools(authVM: authVM, adminRequestVM: adminRequestVM).filter { tool in
-            ([tool.title, tool.subtitle, tool.place ?? tool.area.title] + tool.keywords)
-                .contains { ArabicTextNormalizer.normalizeForSearch($0).contains(needle) }
+            NameSearch.matches(query: q, any: [tool.title, tool.subtitle, tool.place ?? tool.area.title] + tool.keywords)
         }
     }
 
     private var members: [FamilyMember] {
         guard authVM.canEditMembers, q.count >= 2 else { return [] }
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
-        let digits = q.filter(\.isNumber)
-        return Array(memberVM.allMembers.filter { m in
-            ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName).contains(needle)
-                || (digits.count >= 3 && (m.phoneNumber ?? "").contains(digits))
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب — الاسم الأول التام أولاً؛ والرقم أرقاماً فقط
+        if NameSearch.isPhoneQuery(q) {
+            return Array(memberVM.allMembers.filter { NameSearch.phoneMatches(query: q, phone: $0.phoneNumber) }.prefix(20))
+        }
+        return Array(NameSearch.filter(memberVM.allMembers, query: q) { m in
+            m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName
         }.prefix(20))
     }
 

@@ -140,8 +140,12 @@ struct DeathDatesCampaignPage: View {
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var visible: [DeathDatesEntry] {
-        let needle = trimmedQuery.isEmpty ? nil : ArabicTextNormalizer.normalizeForSearch(trimmedQuery)
-        return entries.filter { e in filter.matches(e) && (needle.map { e.needle.contains($0) } ?? true) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
+        let q = NameSearch.words(trimmedQuery)
+        return entries.filter { e in
+            filter.matches(e) && (q.isEmpty || NameSearch.matchPosition(queryWords: q, candidateWords: NameSearch.words(e.needle)) != nil)
+        }
     }
 
     private var content: some View {

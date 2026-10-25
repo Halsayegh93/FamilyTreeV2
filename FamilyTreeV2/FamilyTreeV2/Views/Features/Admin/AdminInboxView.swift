@@ -80,13 +80,12 @@ struct AdminInboxView: View {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return sorted }
         // نفس مطابقة بحث الطلبات: الاسم أو النص بلا تشكيل/همزات، أو الرقم (٣ أرقام فأكثر)
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
-        let digits = AdminMemberFacts.asciiDigits(q)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب (والرقم أرقاماً فقط)
+        if NameSearch.isPhoneQuery(q) {
+            return sorted.filter { NameSearch.phoneMatches(query: q, phone: $0.member?.phoneNumber) }
+        }
         return sorted.filter { msg in
-            let name = ArabicTextNormalizer.normalizeForSearch(msg.member?.fullName ?? "")
-            let preview = ArabicTextNormalizer.normalizeForSearch(ContactParser.message(from: msg))
-            if name.contains(needle) || preview.contains(needle) { return true }
-            return digits.count >= 3 && (msg.member?.phoneNumber ?? "").filter(\.isNumber).contains(digits)
+            NameSearch.matches(query: q, any: [msg.member?.fullName ?? "", ContactParser.message(from: msg)])
         }
     }
 

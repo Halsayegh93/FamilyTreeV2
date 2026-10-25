@@ -330,12 +330,12 @@ struct TreeSearchOverlay: View {
         members: [FamilyMember],
         lookup: [UUID: FamilyMember]
     ) async -> [SearchResult] {
-        let normalizedQuery = ArabicTextNormalizer.normalizeForSearch(raw)
-        let searchWords = normalizedQuery.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب — لا تطابق جزئي داخل الكلمة
+        let searchWords = NameSearch.words(raw)
         if searchWords.isEmpty { return [] }
 
-        let isDigitSearch = raw.allSatisfy { $0.isNumber || $0 == "+" }
-        let searchDigits = raw.filter(\.isNumber)
+        let isDigitSearch = NameSearch.isPhoneQuery(raw)
+        let searchDigits = NameSearch.digits(raw)
         var results: [SearchResult] = []
 
         for member in members {
@@ -343,90 +343,23 @@ struct TreeSearchOverlay: View {
             var score: Double = 0
             var matchContext: String?
 
-            let normalizedFirst = ArabicTextNormalizer.normalizeForSearch(member.firstName)
-
             if isDigitSearch && searchDigits.count >= 4 {
                 // احترام الهاتف المخفي — لا يُطابَق بالرقم
-                if let phone = member.phoneNumber, member.isPhoneHidden != true {
-                    let phoneSuffix = String(phone.filter(\.isNumber).suffix(8))
-                    if phoneSuffix.contains(searchDigits) || searchDigits.contains(phoneSuffix) {
-                        score += 90
-                        matchContext = L10n.t("تطابق الهاتف", "Phone match")
-                    }
+                if member.isPhoneHidden != true, NameSearch.phoneMatches(query: searchDigits, phone: member.phoneNumber) {
+                    score += 90
+                    matchContext = L10n.t("تطابق الهاتف", "Phone match")
                 }
             } else {
-                // البحث يشمل العائلة المختارة كآخر اسم
-                let normalizedFull = ArabicTextNormalizer.normalizeForSearch(member.nameWordsWithFamily.joined(separator: " "))
-                let fullWords = normalizedFull.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                // تطابق بالبادئة (أولوية عالية) أو تطابق جزئي substring (طبقة احتياطية)
-                let allMatchPrefix = searchWords.allSatisfy { sw in fullWords.contains { $0.hasPrefix(sw) } }
-                let allMatchPartial = searchWords.allSatisfy { sw in fullWords.contains { $0.contains(sw) } }
-
-                if searchWords.count == 1 {
-                    let sw = searchWords[0]
-                    // كلمة وحدة — البادئة أولاً، ثم تطابق جزئي
-                    if normalizedFirst == sw {
-                        score += 100
-                    } else if normalizedFirst.hasPrefix(sw) {
-                        score += 80
-                    } else if allMatchPrefix {
-                        score += 50
-                    } else if fullWords.contains(where: { $0.contains(sw) }) {
-                        score += 35
-                        matchContext = L10n.t("تطابق جزئي", "Partial match")
-                    }
-                } else {
-                    // أكثر من كلمة — كل الكلمات لازم تطابق (بادئة أو جزئياً)
-                    if allMatchPrefix || allMatchPartial {
-                        // نقاط أساسية
-                        if normalizedFirst == searchWords[0] {
-                            score += 100
-                        } else if normalizedFirst.hasPrefix(searchWords[0]) {
-                            score += 80
-                        } else {
-                            score += 50
-                        }
-
-                        // أفضلية قوية للاسم الذي يبدأ بنفس عبارة البحث
-                        if normalizedFull == normalizedQuery {
-                            score += 260
-                        } else if normalizedFull.hasPrefix(normalizedQuery) {
-                            score += 220
-                        }
-
-                        // نقاط إضافية لكل كلمة تطابق بالترتيب (بادئة)
-                        var matchedInOrder = 0
-                        var wordIdx = 0
-                        for sw in searchWords {
-                            while wordIdx < fullWords.count {
-                                if fullWords[wordIdx].hasPrefix(sw) {
-                                    matchedInOrder += 1
-                                    wordIdx += 1
-                                    break
-                                }
-                                wordIdx += 1
-                            }
-                        }
-                        score += Double(matchedInOrder) * 30.0
-
-                        // تطابق جزئي فقط (بدون بادئة) → نقاط أقل + سياق
-                        if !allMatchPrefix {
-                            score = max(score - 45, 20)
-                            matchContext = L10n.t("تطابق جزئي", "Partial match")
-                        }
-                    }
-                }
-
-                // بحث في السيرة فقط إذا ما طابق الاسم
-                if score == 0 {
-                    if let bio = member.bio, !bio.isEmpty {
-                        let bioText = ArabicTextNormalizer.normalizeForSearch(
-                            bio.map { "\($0.title) \($0.details)" }.joined(separator: " ")
-                        )
-                        if searchWords.allSatisfy({ bioText.contains($0) }) {
-                            score += 20
-                            matchContext = L10n.t("في السيرة", "In bio")
-                        }
+                // البحث يشمل العائلة المختارة كآخر اسم — الاسم الأول التام أولاً ثم الأبكر مطابقةً
+                let fullWords = NameSearch.words(member.nameWordsWithFamily.joined(separator: " "))
+                if let rank = NameSearch.score(queryWords: searchWords, candidateWords: fullWords) {
+                    score = 1000 - Double(rank)
+                } else if let bio = member.bio, !bio.isEmpty {
+                    // السيرة إذا ما طابق الاسم — بنفس القاعدة
+                    let bioWords = NameSearch.words(bio.map { "\($0.title) \($0.details)" }.joined(separator: " "))
+                    if NameSearch.matchPosition(queryWords: searchWords, candidateWords: bioWords) != nil {
+                        score = 20
+                        matchContext = L10n.t("في السيرة", "In bio")
                     }
                 }
             }

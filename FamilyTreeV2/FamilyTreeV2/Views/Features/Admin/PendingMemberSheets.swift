@@ -46,7 +46,9 @@ struct LinkToExistingMemberSheet: View {
             let suggestedIds = Set(suggested.map(\.id))
             return all.filter { !suggestedIds.contains($0.id) }
         }
-        return all.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
+        return NameSearch.filter(all, query: searchText) { $0.fullName }
     }
 
     /// المقترحون الأحياء غير المعلّقين فقط
