@@ -2,8 +2,9 @@ import SwiftUI
 
 // MARK: - صفحة «إدارة تواريخ الوفاة» (طلب المالك ٢٠٢٦-١٠-٢٤)
 //
-// الرأس: العنوان والوصف، البحث بالاسم، وشرائح الكل · السنة فقط · بلا تاريخ ← أول بطاقة تصعد فوقه: الحلقة نفسها التي في
-// «اليوم» وحال الحملة (وللمالك: إبرازها في «اليوم» وآخر يوم — `app_config`) ← «حسب الفرع | حسب العقد» ← بطاقة لكل فرع
+// الرأس: العنوان والوصف، البحث بالاسم، وشرائح الكل · السنة فقط · بلا تاريخ ← أول بطاقة تصعد فوقه: الحلقة وحال الحملة
+// (وللمالك: إيقافها وآخر يوم — `app_config` — يظهران فقط حين يكون مفتاحا الحملة في السيرفر؛ قبلها لا أزرار معطّلة: طلب
+// المالك ٢٠٢٦-١٠-٢٥ «في ازرار مو شغال بالداخل») ← «حسب الفرع | حسب العقد» ← بطاقة لكل فرع
 // أو عقد، كل صفّ متوفى بحاله («السنة فقط: 1995» / «بدون تاريخ») وزرّ «أدخل التاريخ» يفتح مربّع الاستكمال الموجود
 // (`DeceasedDateBox` — عجلة اليوم والشهر والسنة) ← «أُكملت مؤخراً»: من أكمل ومتى. ما يكتمل يخرج من القائمة فوراً
 // (تحديث محلي) مع لحظة «اكتمل». البطاقات أنواع مستقلة خلف `AnyView` (حارس المكدس).
@@ -292,7 +293,8 @@ struct DeathDatesRow: View {
 
 // MARK: - أول بطاقة: الحلقة وحال الحملة
 
-/// الحلقة نفسها التي في «اليوم»، ثم حال الحملة — وللمالك: إبرازها في «اليوم» وآخر يوم
+/// الحلقة وحال الحملة — وللمالك: إيقافها وآخر يوم، فقط حين يكون مفتاحا الحملة في السيرفر (`serverReady`)؛ قبلها تبقى ظاهرة
+/// في «اليوم» ما دام في التواريخ ناقص، بلا أزرار لا تعمل
 struct DeathDatesProgressCard: View {
     let stats: DeathDatesStats?
     @EnvironmentObject private var authVM: AuthViewModel
@@ -304,7 +306,7 @@ struct DeathDatesProgressCard: View {
             AdminRowDivider()
             AdminInfoRow(icon: statusIcon, tint: active ? DS.Color.sadu : DS.Color.textTertiary,
                          title: statusTitle, subtitle: statusDetail)
-            if authVM.isOwner {
+            if authVM.isOwner && store.serverReady {
                 AnyView(DeathDatesOwnerControls())
             }
         }
@@ -317,7 +319,7 @@ struct DeathDatesProgressCard: View {
     private var statusIcon: String { active ? "megaphone.fill" : "moon.stars.fill" }
 
     private var statusTitle: String {
-        if active { return L10n.t("بارزة في «اليوم» الآن", "Featured on Today now") }
+        if active { return L10n.t("ظاهرة في «اليوم» تحت الأقسام", "Shown on Today under the sections") }
         if let s = stats, s.incomplete == 0 { return L10n.t("اكتملت التواريخ", "The dates are complete") }
         return L10n.t("انتهت الحملة", "The campaign has ended")
     }
@@ -333,7 +335,8 @@ struct DeathDatesProgressCard: View {
     }
 }
 
-/// للمالك: «إبرازها في «اليوم»» وآخر يوم — `set_app_config` (قبل إضافة المفتاحين في السيرفر: معطّلة بملاحظة)
+/// للمالك: «إبرازها في «اليوم»» وآخر يوم — `set_app_config`. تُرسم فقط بعد إضافة المفتاحين في السيرفر (ترحيل بانتظار
+/// موافقة المالك) — لا أزرار معطّلة قبلها
 private struct DeathDatesOwnerControls: View {
     @ObservedObject private var store = DeathDatesCampaignStore.shared
     @State private var failure: String?
@@ -355,14 +358,6 @@ private struct DeathDatesOwnerControls: View {
                             subtitle: store.until == nil ? L10n.t("تبقى حتى تكتمل التواريخ", "Stays until the dates are complete")
                                                          : L10n.t("بعده يرجع مكانها «ذكرى الراحلين»", "Memorials return after it"),
                             control: AnyView(untilControl))
-            if !store.serverReady {
-                Text(L10n.t("الإيقاف وآخر يوم يعملان بعد إضافة مفتاحي الحملة في السيرفر (ترحيل بانتظار موافقتك).",
-                            "Stopping and the last day work once the campaign keys are on the server (a migration awaits your approval)."))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, DS.Spacing.xs)
-            }
             if let failure {
                 Text(failure)
                     .dsFont(.footnote)
@@ -371,8 +366,7 @@ private struct DeathDatesOwnerControls: View {
                     .padding(.top, DS.Spacing.xs)
             }
         }
-        .disabled(!store.serverReady || store.isSaving)
-        .opacity(store.serverReady ? 1 : DS.Opacity.disabled)
+        .disabled(store.isSaving)
     }
 
     /// آخر يوم: قائمة أصلية بمدد جاهزة (أسبوعان · شهر · شهران · ٣ أشهر) و«بلا نهاية» — الشريحة تعرض الحالي

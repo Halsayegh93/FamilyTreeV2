@@ -14,7 +14,7 @@ import Supabase
 // الإشعارات على السيرفر كما هو. تعديل المجدول (من «الإشعارات المجدولة») = نفس الشاشة بالمسودّة → `updateScheduledNotification`.
 // الصلاحية `canSendNotifications` (المالك والمدير)، وحارس السيرفر يبقى الحَكَم.
 
-/// زرّ مكبّر الصوت الزجاجي في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
+/// زرّ مكبّر الصوت في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
 struct AdminAnnounceLauncher: View {
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var newsVM: NewsViewModel
@@ -26,9 +26,10 @@ struct AdminAnnounceLauncher: View {
             AdminCreateWindow.open(.announcement, authVM: authVM, newsVM: newsVM, notificationVM: notificationVM,
                                    memberVM: memberVM)
         } label: {
-            AdminGlassCircle(symbol: "megaphone")
+            // زرّ عارٍ كأزرار رؤوس التبويبات (رأس «اليوم» = `MainHeaderView`، ٢٠٢٦-١٠-٢٥)
+            AdminHeaderIcon(symbol: "megaphone")
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(BounceButtonStyle())
         .accessibilityLabel(L10n.t("إرسال إشعار", "Send a push"))
         .accessibilityHint(L10n.t("إشعار للأعضاء", "Notify members"))
     }

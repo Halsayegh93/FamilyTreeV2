@@ -15,15 +15,16 @@ enum AdminTileMetrics {
     static let icon: CGFloat = 44
     static let iconRadius: CGFloat = 13
     static let glyph: CGFloat = DS.Glyph.xxl
-    /// حشوة المربّع: فوق الأيقونة أوسع قليلاً من تحت الاسم (توازن بصري)، والجانبان أضيق (الاسم يتّسع)
-    static let paddingTop: CGFloat = DS.Spacing.lg
-    static let paddingBottom: CGFloat = DS.Spacing.md
+    /// حشوة المربّع: فوق الأيقونة أوسع قليلاً من تحت الاسم (توازن بصري)، والجانبان أضيق (الاسم يتّسع). أضيق من قبل
+    /// (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة قراب من بعض» — كانت ١٦ و١٢)
+    static let paddingTop: CGFloat = DS.Spacing.md
+    static let paddingBottom: CGFloat = DS.Spacing.sm + DS.Spacing.xxs
     static let paddingSide: CGFloat = DS.Spacing.sm
     /// أسطر الاسم: بالحجم الافتراضي، ومع خط الجهاز الأكبر
     static let titleLines = 2
     static let titleLinesLarge = 3
     /// بين الأيقونة والاسم، وبين الاسم وسطر الرقم
-    static let gap: CGFloat = DS.Spacing.sm + DS.Spacing.xxs
+    static let gap: CGFloat = DS.Spacing.sm
     static let captionGap: CGFloat = DS.Spacing.xxs
     static var radius: CGFloat { DS.Hub.tileRadius }
     /// شارة العدد على ركن الأيقونة: ارتفاعها الأدنى وكم تخرج من الركن
@@ -72,7 +73,8 @@ struct AdminTileGrid<Content: View>: View {
 
 // MARK: الشارة
 
-/// شارة على ركن أيقونة المربّع: عدد (بانتظار القرار…) أو علامة تنبيه — بحلقة بلون السطح تفصلها عن الأيقونة
+/// شارة على ركن أيقونة المربّع: عدد (بانتظار القرار…) أو علامة تنبيه — بحلقة بلون السطح تفصلها عن الأيقونة. الشارة
+/// الحمراء نفسها على جرس رأس «اليوم» (حلقتها بلون الرأس)
 struct AdminTileBadge: View {
     enum Kind: Equatable {
         case count(Int)
@@ -80,8 +82,10 @@ struct AdminTileBadge: View {
     }
 
     let kind: Kind
-    /// تعبئة ثابتة تحت نص أبيض (`errorFill` للعدد، `warningFill` للتنبيه)
+    /// تعبئة ثابتة تحت نص أبيض — أحمر واحد للعدد و«!» (طلب المالك ٢٠٢٦-١٠-٢٥ «شارة حمرة»)
     var fill: Color = DS.Color.errorFill
+    /// الحلقة حولها: لون ما تحتها (سطح المربّع، أو الرأس الكحلي)
+    var ring: Color = DS.Color.surface
 
     var body: some View {
         Group {
@@ -101,7 +105,7 @@ struct AdminTileBadge: View {
         .padding(.horizontal, DS.Spacing.xsm)
         .frame(minWidth: AdminTileMetrics.badge, minHeight: AdminTileMetrics.badge)
         .background(Capsule().fill(fill))
-        .overlay(Capsule().strokeBorder(DS.Color.surface, lineWidth: DS.Border.widthBold))
+        .overlay(Capsule().strokeBorder(ring, lineWidth: DS.Border.widthBold))
         .accessibilityHidden(true)
     }
 
@@ -292,7 +296,8 @@ private struct AdminTileIcon: View {
 
 // MARK: مربّع أداة (صفحات الأقسام)
 
-/// مربّع أداة من فهرس الأدوات — يفتح صفحتها كما يفتحها صفّها (`AdminToolRow`)، أو ينفّذ إجراءها
+/// مربّع أداة من فهرس الأدوات — يفتح صفحتها كما يفتحها صفّها (`AdminToolRow`)، أو ينفّذ إجراءها. التحذير شارة «!» حمراء
+/// (نفس شارة الأقسام في «اليوم» — طلب المالك ٢٠٢٦-١٠-٢٥ «شارة حمرة»)
 struct AdminToolTile: View {
     let tool: AdminTool
     var caption: String? = nil
@@ -315,7 +320,7 @@ struct AdminToolTile: View {
     private var face: AdminHubTile {
         AdminHubTile(icon: tool.icon, fill: tool.tint.dsSolidFill, title: tool.title, caption: caption,
                      captionTint: warn ? DS.Color.warning : DS.Color.textTertiary,
-                     reservesCaption: reservesCaption, badge: warn ? .alert : nil, badgeFill: DS.Color.warningFill,
+                     reservesCaption: reservesCaption, badge: warn ? .alert : nil,
                      index: index, hint: tool.subtitle)
     }
 }
