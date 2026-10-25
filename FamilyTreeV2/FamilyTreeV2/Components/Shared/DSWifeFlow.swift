@@ -59,9 +59,11 @@ enum WifeCandidateRules {
     // MARK: الآباء والبنات
 
     /// أقل عمر للأب في قائمة «أبوها» (طلب المالك ٢٠٢٦-١٠-٢٥ «لازم تراعي عمر الأب… المولود حديثاً شلون يكون أب؟»).
-    /// من السيرفر إن وُجد المفتاح `father_candidate_min_age`، وإلا ٣٠
+    /// من السيرفر إن وُجد المفتاح `father_candidate_min_age`، وإلا ٥٠ (المالك ٢٠٢٦-١٠-٢٥ «خل عمر الأب فوق ٥٠»)
     static let fatherMinAgeKey = "father_candidate_min_age"
-    static var fatherMinimumAge: Int { AppConfigValues.shared.int(fatherMinAgeKey, default: 30) }
+    static var fatherMinimumAge: Int { AppConfigValues.shared.int(fatherMinAgeKey, default: 50) }
+    /// أبو الأم أكبر من صاحب العقدة بهذا على الأقل (جدّه) — ٣٠
+    static let motherFatherGap = 30
 
     /// يصلح أباً؟ المتوفّى يظهر دائماً. الحيّ: لا يظهر إلا إن عُرف ميلاده وكان دون الحد — بلا ميلاد أو مضاف حديثاً
     /// يظهر (المالك ٢٠٢٦-١٠-٢٥ «بس ما يكون مولود»). `childBorn`: ميلاد صاحب العقدة في مسار الأم —
@@ -71,7 +73,7 @@ enum WifeCandidateRules {
         let minAge = fatherMinimumAge
         if let years = age(m, now: now), years < minAge { return false }
         if let childBorn, let born = birthDay(m.birthDate),
-           let gap = calendar.dateComponents([.year], from: born, to: childBorn).year, gap < minAge { return false }
+           let gap = calendar.dateComponents([.year], from: born, to: childBorn).year, gap < motherFatherGap { return false }
         return true
     }
 
