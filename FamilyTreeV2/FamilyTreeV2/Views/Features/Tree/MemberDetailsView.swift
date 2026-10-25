@@ -385,7 +385,7 @@ struct MemberDetailsView: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — الزرّ نفسه في الشجرتين (`DSDetailsToggle`، طلب المالك ٢٠٢٦-١٠-٢٤
     /// «شنو سويت عرض التفاصيل؟»): زرّ واضح بسهم يدور مع التوسيع — والسحب لأعلى/لأسفل يفعل الشيء نفسه
     private var detailsToggleButton: some View {
-        DSDetailsToggle(isExpanded: detent == .large) { setDetailsOpen(detent != .large) }
+        DSDetailsToggle(isExpanded: detent == .large, tile: true) { setDetailsOpen(detent != .large) }
     }
 
     /// التوسيع والتصغير بنابض ارتفاع المربّع نفسه — «تقليل الحركة»: مباشرة
@@ -1158,14 +1158,14 @@ struct MemberDetailsView: View {
         if authVM.canEditMembers && !member.isDeleted {
             DSLiveButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil",
                          tint: DSMemberKit.directTint, motion: .write,
-                         hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), size: .compact) {
+                         hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), tile: true) {
                 showAdminControl = true
             }
         } else if showsRequestAdd {
             DSLiveButton(L10n.t("طلب إضافة", "Request addition"), icon: "person.badge.plus",
                          tint: DSMemberKit.addTint, motion: .pop,
                          hint: L10n.t("ابن أو ابنة أو زوجة — يصل الطلب للإدارة",
-                                      "A son, daughter or wife — the request goes to the admins"), size: .compact) {
+                                      "A son, daughter or wife — the request goes to the admins"), tile: true) {
                 showAddActions = true
             }
         }

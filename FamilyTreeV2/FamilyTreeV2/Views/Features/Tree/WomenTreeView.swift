@@ -591,7 +591,7 @@ struct WomanDetailSheet: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — الزرّ نفسه في الشجرتين (`DSDetailsToggle`، طلب المالك ٢٠٢٦-١٠-٢٤
     /// «شنو سويت عرض التفاصيل؟»): زرّ واضح بسهم يدور مع التوسيع
     private var detailsToggleButton: some View {
-        DSDetailsToggle(isExpanded: isExpanded) { setExpanded(!isExpanded) }
+        DSDetailsToggle(isExpanded: isExpanded, tile: true) { setExpanded(!isExpanded) }
     }
 
     /// التوسيع والتصغير بنابض ارتفاع المربّع نفسه — «تقليل الحركة»: مباشرة
@@ -1210,20 +1210,20 @@ struct WomanDetailSheet: View {
                 onCancel: { showAdminBox = false }
             ) {
                 // مجموعة واحدة (طلب المالك ٢٠٢٦-١٠-٢٥ «اشيل المجموعات… بمجموعة وحدة بس منفصلين المربعات»): كل
-                // الإجراءات مربّعات منفصلة صغيرة ملمومة على خلفية واحدة — ترتيبها إضافة ← ربط ← السجل، وكل مربّع
-                // بلون نوعه
+                // الإجراءات مربّعات منفصلة صغيرة — ترتيبها إضافة ← ربط ← السجل، وكل مربّع بلون نوعه
                 let tiles = ActionGroup.allCases.filter { $0 != .danger }
                     .flatMap { g in actions.filter { $0.group == g } }
                 if !tiles.isEmpty {
                     DSComposerSection(title: L10n.t("الإجراءات", "Actions"), icon: "square.grid.2x2.fill",
                                       tint: DS.Color.actionNavy, index: 0) {
-                        DSActionTileGrid(columns: 4) {
+                        // بلا خلفية للمجموعة، والمربّعات متباعدة قليلاً (طلب المالك ٢٠٢٦-١٠-٢٥)
+                        DSActionTileGrid(columns: 4, spacing: DS.Spacing.sm) {
                             ForEach(tiles) { action in
                                 DSActionTile(action.title, icon: action.icon, tint: groupTint(action.group),
                                              action: action.run)
                             }
                         }
-                        .dsActionTileBand(DS.Color.actionNavy)
+                        .environment(\.dsTileSmall, true)
                     }
                     .disabled(draft.busy)
                 }

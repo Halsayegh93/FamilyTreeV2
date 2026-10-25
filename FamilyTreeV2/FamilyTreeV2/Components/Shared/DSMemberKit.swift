@@ -49,6 +49,13 @@ enum DSMemberKit {
     static let swipeDistance: CGFloat = 36
     static let swipeMinimum: CGFloat = 12
 
+    // MARK: المستطيل الصغير — أزرار رأس التفاصيل (طلب المالك ٢٠٢٦-١٠-٢٥ «اصغر» ثم «مستطيل مو مربع»):
+    // رمز فوق واسم صغير تحته بزوايا دائرية، بتعبئة لون الدور — ٩٢×٥٠ (أكبر من حدّ اللمس ٤٤)
+    static let tileWidth: CGFloat = 92
+    static let tileHeight: CGFloat = 50
+    static let tileRadius: CGFloat = 14
+    static var tileShape: RoundedRectangle { RoundedRectangle(cornerRadius: tileRadius, style: .continuous) }
+
     // MARK: علم دولة الرقم
     /// تعبئة الشارة فوق الرأس الملوّن (أبيض خفيف) وإطارها
     static let flagFill: Double = 0.16
@@ -70,13 +77,15 @@ struct DSLiveButton: View {
     var isLoading: Bool = false
     /// ما يفعله الزرّ للقارئ الصوتي
     var hint: String? = nil
-    /// `.compact` = بعرض نصّه وشكل أصغر (رأس تفاصيل العضو)، و`.regular` = بعرض السطر (شريط الأزرار)
+    /// `.compact` = بعرض نصّه وشكل أصغر، و`.regular` = بعرض السطر (شريط الأزرار)
     var size: DSButtonSize = .regular
+    /// مستطيل صغير بزوايا دائرية: الرمز فوق والاسم تحته (رأس تفاصيل العضو)
+    var tile: Bool = false
     let action: () -> Void
 
     init(_ title: String, icon: String, tint: Color? = nil, motion: Motion = .pop,
          isLoading: Bool = false, hint: String? = nil, size: DSButtonSize = .regular,
-         action: @escaping () -> Void) {
+         tile: Bool = false, action: @escaping () -> Void) {
         self.title = title
         self.icon = icon
         self.tint = tint
@@ -84,6 +93,7 @@ struct DSLiveButton: View {
         self.isLoading = isLoading
         self.hint = hint
         self.size = size
+        self.tile = tile
         self.action = action
     }
 
@@ -93,11 +103,49 @@ struct DSLiveButton: View {
     @State private var sweep: CGFloat = 0
 
     var body: some View {
-        Button {
-            guard TapDebouncer.shared.canFire("DSLiveButton_\(title)") else { return }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            action()
-        } label: {
+        if tile { tileBody } else { pillBody }
+    }
+
+    private func fire() {
+        guard TapDebouncer.shared.canFire("DSLiveButton_\(title)") else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        action()
+    }
+
+    /// المستطيل الصغير: الرمز بحركته فوق، والاسم بسطر صغير تحته، بتعبئة لون الدور ونصّ أبيض
+    private var tileBody: some View {
+        Button(action: fire) {
+            VStack(spacing: DS.Spacing.xs) {
+                if isLoading {
+                    ProgressView().tint(DS.Color.textOnPrimary).scaleEffect(DS.Spinner.buttonScale)
+                } else {
+                    Image(dsSymbol: icon)
+                        .dsGlyph(DS.Glyph.md)
+                        .rotationEffect(.degrees(iconAngle), anchor: .bottomLeading)
+                        .scaleEffect(iconScale)
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                    .dsFont(.micro)
+                    .lineLimit(1)
+                    .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            }
+            .foregroundColor(DS.Color.textOnPrimary)
+            .padding(.horizontal, DS.Spacing.xs)
+            .frame(width: DSMemberKit.tileWidth, height: DSMemberKit.tileHeight)
+            .background(DSMemberKit.tileShape.fill((tint ?? DS.Color.actionNavy).dsSolidFill))
+            .overlay { shine.clipShape(DSMemberKit.tileShape) }
+            .contentShape(DSMemberKit.tileShape)
+        }
+        .buttonStyle(DSPressStyle())
+        .allowsHitTesting(!isLoading)
+        .accessibilityLabel(title)
+        .accessibilityHint(hint ?? "")
+        .onAppear(perform: play)
+    }
+
+    private var pillBody: some View {
+        Button(action: fire) {
             HStack(spacing: DSBox.buttonSpacing) {
                 if isLoading {
                     ProgressView()
@@ -171,6 +219,8 @@ struct DSLiveButton: View {
 /// الشجرتين — والسحب لأعلى على المربّع (ولأسفل على رأسه) يفعل الشيء نفسه (`dsDetailsSwipe`).
 struct DSDetailsToggle: View {
     let isExpanded: Bool
+    /// مستطيل صغير بجانب زرّ الدور (رأس تفاصيل العضو) — السهم فوق والاسم تحته
+    var tile: Bool = false
     let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var nudge: CGFloat = 0
@@ -182,28 +232,7 @@ struct DSDetailsToggle: View {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             action()
         } label: {
-            HStack(spacing: DSBox.buttonSpacing) {
-                Text(isExpanded ? L10n.t("إخفاء التفاصيل", "Hide details") : L10n.t("عرض التفاصيل", "Show details"))
-                    .font(DSBox.buttonFontCompact)
-                    .dsButtonLabelFit()
-                    .id(isExpanded)
-                    .transition(.opacity)
-                Image(systemName: "chevron.down")
-                    .dsGlyph(DS.Glyph.xs)
-                    .foregroundColor(ink.dsSolidFill)
-                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                    .frame(width: DS.Icon.section, height: DS.Icon.section)
-                    .background(Circle().fill(DS.Color.textOnPrimary))
-                    .offset(y: nudge)
-                    .accessibilityHidden(true)
-            }
-            .foregroundColor(DS.Color.textOnPrimary)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(minHeight: DSBox.buttonHeightCompact)
-            .background(DSBox.buttonShape.fill(ink.dsSolidFill))
-            // مساحة لمس ٤٤ رغم الشكل الأصغر (حدّ أبل)
-            .padding(.vertical, DSButtonSize.compact.hitInset)
-            .contentShape(Rectangle())
+            if tile { tileLabel(ink) } else { pillLabel(ink) }
         }
         .buttonStyle(DSPressStyle())
         .animation(reduceMotion ? nil : DS.Anim.smooth, value: isExpanded)
@@ -211,6 +240,55 @@ struct DSDetailsToggle: View {
         .accessibilityHint(isExpanded ? L10n.t("يصغّر المربّع", "Collapses the box")
                                       : L10n.t("يعرض المعلومات والعائلة", "Shows the info and family"))
         .onAppear(perform: playNudge)
+    }
+
+    /// السهم في قرص أبيض فوق، و«التفاصيل» تحته — مستطيل صغير ممتلئ بلون المعلومة
+    private func tileLabel(_ ink: Color) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "chevron.down")
+                .dsGlyph(DS.Glyph.xs)
+                .foregroundColor(ink.dsSolidFill)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .frame(width: DS.Icon.section, height: DS.Icon.section)
+                .background(Circle().fill(DS.Color.textOnPrimary))
+                .offset(y: nudge)
+                .accessibilityHidden(true)
+            Text(isExpanded ? L10n.t("إخفاء", "Hide") : L10n.t("التفاصيل", "Details"))
+                .dsFont(.micro)
+                .lineLimit(1)
+                .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                .id(isExpanded)
+                .transition(.opacity)
+        }
+        .foregroundColor(DS.Color.textOnPrimary)
+        .frame(width: DSMemberKit.tileWidth, height: DSMemberKit.tileHeight)
+        .background(DSMemberKit.tileShape.fill(ink.dsSolidFill))
+        .contentShape(DSMemberKit.tileShape)
+    }
+
+    private func pillLabel(_ ink: Color) -> some View {
+        HStack(spacing: DSBox.buttonSpacing) {
+            Text(isExpanded ? L10n.t("إخفاء التفاصيل", "Hide details") : L10n.t("عرض التفاصيل", "Show details"))
+                .font(DSBox.buttonFontCompact)
+                .dsButtonLabelFit()
+                .id(isExpanded)
+                .transition(.opacity)
+            Image(systemName: "chevron.down")
+                .dsGlyph(DS.Glyph.xs)
+                .foregroundColor(ink.dsSolidFill)
+                .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                .frame(width: DS.Icon.section, height: DS.Icon.section)
+                .background(Circle().fill(DS.Color.textOnPrimary))
+                .offset(y: nudge)
+                .accessibilityHidden(true)
+        }
+        .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(minHeight: DSBox.buttonHeightCompact)
+        .background(DSBox.buttonShape.fill(ink.dsSolidFill))
+        // مساحة لمس ٤٤ رغم الشكل الأصغر (حدّ أبل)
+        .padding(.vertical, DSButtonSize.compact.hitInset)
+        .contentShape(Rectangle())
     }
 
     /// إيماءة واحدة للأسفل ثم رجوع — مرة عند الظهور فقط
@@ -312,8 +390,8 @@ struct DSActionTile: View {
     let icon: String
     let tint: Color
     let action: () -> Void
-    /// فوق سطر ملوّن (`dsActionTileBand`): المربّع أبيض ليبرز على خلفية سطره
-    @Environment(\.dsTileOnBand) private var onBand
+    /// المربّعات الصغيرة (٤ في السطر — مربّع إدارة شجرة النساء): قرص ٣٠ وخط التعليق
+    @Environment(\.dsTileSmall) private var small
 
     init(_ title: String, icon: String, tint: Color, action: @escaping () -> Void) {
         self.title = title
@@ -332,15 +410,15 @@ struct DSActionTile: View {
             // ملمومة وأصغر (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة يم بعض وحجمهم أصغر»): قرص ٣٢ وحشوة ٤
             VStack(spacing: DS.Spacing.xs) {
                 // قرص ممتلئ بلون المجموعة ورمز أبيض (مثل أيقونات الإعدادات في الآيفون) — التعبئة الثابتة
-                // (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين؛ على السطر الملوّن أصغر (٤ في السطر)
+                // (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين؛ الصغيرة أصغر قرصاً (٤ في السطر)
                 Image(dsSymbol: icon)
-                    .dsGlyph(onBand ? DS.Glyph.sm : DS.Glyph.md)
+                    .dsGlyph(small ? DS.Glyph.sm : DS.Glyph.md)
                     .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: onBand ? DS.Icon.discSmall : DS.Icon.row, height: onBand ? DS.Icon.discSmall : DS.Icon.row)
+                    .frame(width: small ? DS.Icon.discSmall : DS.Icon.row, height: small ? DS.Icon.discSmall : DS.Icon.row)
                     .background(Circle().fill(tint.dsSolidFill))
                     .accessibilityHidden(true)
                 Text(title)
-                    .dsFieldFont(onBand ? .caption : .chip)
+                    .dsFieldFont(small ? .caption : .chip)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -349,7 +427,7 @@ struct DSActionTile: View {
             .padding(.vertical, DS.Spacing.sm)
             .padding(.horizontal, DS.Spacing.xs)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(shape.fill(onBand ? DS.Color.surface : tint.opacity(DS.Opacity.tintFillSoft)))
+            .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
             .overlay(shape.strokeBorder(tint.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
             .contentShape(shape)
         }
@@ -361,14 +439,16 @@ struct DSActionTile: View {
 /// شبكة مربّعات جاهزة: ٣ في السطر (و٢ مع خطوط إمكانية الوصول) — ملمومة: فاصل ٤ وارتفاع المربّع على قدر
 /// محتواه (لا مربّع كامل) فتقصر الشبكة
 struct DSActionTileGrid<Content: View>: View {
-    /// عدد المربّعات في السطر (٣، أو ٤ للمربّعات الصغيرة) — ويقلّ واحداً مع خطوط إمكانية الوصول
+    /// عدد المربّعات في السطر (٣، أو ٤ للمربّعات الصغيرة) — ويقلّ مع خطوط إمكانية الوصول
     var columns: Int = 3
+    /// الفاصل بين المربّعات
+    var spacing: CGFloat = DS.Spacing.xs
     @ViewBuilder let content: () -> Content
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let large = typeSize.isAccessibilitySize
-        DSTileGridLayout(columns: large ? max(2, columns - 2) : columns, spacing: DS.Spacing.xs, square: false) {
+        DSTileGridLayout(columns: large ? max(2, columns - 2) : columns, spacing: spacing, square: false) {
             content()
         }
     }
@@ -444,25 +524,14 @@ struct DSPhoneCountryBadge: View {
     }
 }
 
-// MARK: - سطر مربّعات بخلفية لونه
+// MARK: - المربّعات الصغيرة
 
-private struct DSTileOnBandKey: EnvironmentKey { static let defaultValue = false }
+private struct DSTileSmallKey: EnvironmentKey { static let defaultValue = false }
 
 extension EnvironmentValues {
-    /// مربّعات الإجراءات فوق سطر ملوّن — تُرسم بيضاء
-    var dsTileOnBand: Bool {
-        get { self[DSTileOnBandKey.self] }
-        set { self[DSTileOnBandKey.self] = newValue }
-    }
-}
-
-extension View {
-    /// كل سطر مربّعات بخلفية لون مجموعته الخفيف (طلب المالك ٢٠٢٦-١٠-٢٥ «خلفية عند كل سطر») —
-    /// والمربّعات فوقه بيضاء بإطار لونها
-    func dsActionTileBand(_ tint: Color) -> some View {
-        environment(\.dsTileOnBand, true)
-            .padding(DS.Spacing.xs)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                .fill(tint.opacity(DS.Opacity.tintFill)))
+    /// مربّعات الإجراءات الصغيرة (قرص ٣٠، خط التعليق) — مربّع إدارة شجرة النساء
+    var dsTileSmall: Bool {
+        get { self[DSTileSmallKey.self] }
+        set { self[DSTileSmallKey.self] = newValue }
     }
 }
