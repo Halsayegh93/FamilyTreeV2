@@ -305,6 +305,10 @@ struct ProfileView: View {
                 if let me = user {
                     ProfileWifeFamilyBox(
                         memberVM: memberVM, me: me,
+                        onFatherMissing: { typed in
+                            showWifeFamily = false
+                            requestMissingFather(typed, me: me, relation: .wife)
+                        },
                         onDone: { message in
                             showWifeFamily = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { treeDaughterDoneMessage = message }
@@ -318,6 +322,10 @@ struct ProfileView: View {
                 if let me = user {
                     ProfileWifeFamilyBox(
                         memberVM: memberVM, me: me, relation: .mother,
+                        onFatherMissing: { typed in
+                            showMotherFamily = false
+                            requestMissingFather(typed, me: me, relation: .mother)
+                        },
                         onDone: { message in
                             showMotherFamily = false
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { treeDaughterDoneMessage = message }
@@ -1971,6 +1979,24 @@ private struct WifeSourceCard: View {
     }
 }
 
+// MARK: - «الأب غير موجود؟» من مربّع الزوجة/الأم — طلب للإدارة (طلب المالك ٢٠٢٦-١٠-٢٥)
+extension ProfileView {
+    func requestMissingFather(_ typed: String, me: FamilyMember, relation: DSWifeFlowBox.Relation) {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        let payload = WifeCandidateRules.missingFatherPayload(typed: typed, memberId: me.id,
+                                                              memberName: me.displayFullName, relation: relation)
+        Task {
+            let sent = await adminRequestVM.submitTreeEditRequest(payload: payload)
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            treeDaughterDoneMessage = sent
+                ? L10n.t("وصل طلبك للإدارة — يضيفون الأب أو يصلحون بياناته ثم يكملون الربط.",
+                         "Sent to the admins — they'll add or fix the father, then complete the link.")
+                : L10n.t("لم يُرسل الطلب. تحقّق من الاتصال وحاول مرة أخرى.",
+                         "The request wasn't sent. Check your connection and try again.")
+        }
+    }
+}
+
 // MARK: - «إضافة زوجة» من العائلة في «حسابي» (طلب المالك ٢٠٢٦-١٠-٢٥ «حتى في الملف الشخصي»)
 
 /// نفس مربّع شجرة النساء (`DSWifeFlowBox`) بآلية «عائلتي»: أبوها من الشجرة ← بناته المتاحات (قواعد
@@ -1981,6 +2007,8 @@ private struct ProfileWifeFamilyBox: View {
     let me: FamilyMember
     /// زوجتك أو أمك — المربّع نفسه ودالة السيرفر نفسها بنوعها
     var relation: DSWifeFlowBox.Relation = .wife
+    /// «الأب غير موجود؟» — المضيف يرسل الطلب للإدارة
+    var onFatherMissing: ((String) -> Void)? = nil
     let onDone: (String) -> Void
     let onCancel: () -> Void
 
@@ -1998,6 +2026,7 @@ private struct ProfileWifeFamilyBox: View {
                       isBusy: busy, error: error,
                       onLink: { daughter, father in write(father: father, womanId: daughter.id, name: nil) },
                       onAddUnderFather: { name, father in write(father: father, womanId: nil, name: name) },
+                      onFatherMissing: onFatherMissing,
                       onCancel: onCancel)
             // شجرة النساء طازجة (الآباء والبنات) — جلب فارغ أو فاشل يُبقي آخر نسخة
             .task {

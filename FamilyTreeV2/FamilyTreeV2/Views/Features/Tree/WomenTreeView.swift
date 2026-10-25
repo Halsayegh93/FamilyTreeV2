@@ -1776,6 +1776,13 @@ struct WomanDetailSheet: View {
             onAddUnderFather: { name, father in
                 if mother { addMotherUnderFather(name, father: father) } else { addWifeUnderFather(name, father: father) }
             },
+            // الإدارة تصلح بنفسها — غيرها يطلب
+            onFatherMissing: mode == .direct ? nil : { typed in
+                draft.showWifeFlow = false
+                sendRequest(WifeCandidateRules.missingFatherPayload(typed: typed, memberId: woman.id,
+                                                                    memberName: displayName(woman),
+                                                                    relation: draft.flowRelation))
+            },
             onCancel: { draft.showWifeFlow = false }
         )
     }

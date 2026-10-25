@@ -101,6 +101,19 @@ enum WifeCandidateRules {
         return blocked
     }
 
+    /// قائمتا الآباء محسوبتان مرة لكل (الشخص، العلاقة، عدد السجلات، الحد) — كانت تُحسب لآلاف الرجال مع كل حرف بحث
+    @MainActor private static var fathersMemo: [String: [FamilyMember]] = [:]
+    @MainActor static func cachedFathers(_ relation: DSWifeFlowBox.Relation, for personId: UUID, in people: [FamilyMember],
+                                         showsHidden: Bool) -> [FamilyMember] {
+        let key = "\(relation == .mother ? "m" : "w")-\(personId)-\(people.count)-\(showsHidden)-\(fatherMinimumAge)"
+        if let hit = fathersMemo[key] { return hit }
+        let list = relation == .mother ? motherFathers(for: personId, in: people, showsHidden: showsHidden)
+                                       : fathers(for: personId, in: people, showsHidden: showsHidden)
+        if fathersMemo.count > 8 { fathersMemo.removeAll() }
+        fathersMemo[key] = list
+        return list
+    }
+
     /// قائمة الآباء: رجال الشجرة بنسخهم في شجرة النساء (شرط دالة السيرفر وجدول البنات)، بلا محارم الزوج، بالاسم
     static func fathers(for husbandId: UUID, in people: [FamilyMember], showsHidden: Bool) -> [FamilyMember] {
         let blocked = blockedFathers(for: husbandId, in: people)
@@ -150,6 +163,21 @@ enum WifeCandidateRules {
         let eligible = all.filter { $0.husbandId == nil || ($0.husbandId != nil && $0.husbandId == personFatherId) }
             .sorted { $0.sortOrder < $1.sortOrder }
         return (eligible, all.count - eligible.count)
+    }
+
+    /// طلب «الأب غير موجود» للإدارة: الاسم المكتوب ولمن (طلب المالك ٢٠٢٦-١٠-٢٥ «زر صغير إذا الأب غير موجود… تعديل
+    /// عن طريق الإدارة») — الإدارة تضيفه أو تصلح ميلاده ثم تكمل الربط
+    static func missingFatherPayload(typed: String, memberId: UUID, memberName: String,
+                                     relation: DSWifeFlowBox.Relation) -> TreeEditPayload {
+        let what = relation == .mother ? L10n.t("أم", "mother") : L10n.t("زوجة", "wife")
+        let lines = [
+            L10n.t("الأب غير موجود في قائمة «أبوها» (إضافة ", "Father not in the list (adding a ") + what + ")",
+            L10n.t("الاسم المكتوب: ", "Typed name: ") + typed,
+            L10n.t("لـ: ", "For: ") + memberName,
+            L10n.t("المطلوب: إضافة الأب في الشجرة أو تصحيح بياناته (الميلاد)، ثم ربط ال", "Needed: add the father or fix his birth date, then link the ") + what
+        ]
+        return TreeEditPayload.make(action: .other, targetMemberId: memberId.uuidString, targetMemberName: memberName,
+                                    notes: lines.joined(separator: "\n"))
     }
 
     /// رسالة خطأ الكتابة في مسار الزوجة (رموز `add_or_link_self_relative`)، وإلا الرسالة العامة
@@ -229,6 +257,8 @@ struct DSWifeFlowBox: View {
     var onOutside: (() -> Void)? = nil
     let onLink: (_ daughter: FamilyMember, _ father: FamilyMember) -> Void
     let onAddUnderFather: (_ name: String, _ father: FamilyMember) -> Void
+    /// «الأب غير موجود؟» — طلب للإدارة بالاسم المكتوب (nil = لا زرّ، مثل الإدارة التي تصلح بنفسها)
+    var onFatherMissing: ((String) -> Void)? = nil
     let onCancel: () -> Void
 
     @State private var step: Step
@@ -245,7 +275,9 @@ struct DSWifeFlowBox: View {
          isBusy: Bool = false, error: String? = nil, onOutside: (() -> Void)? = nil,
          onLink: @escaping (_ daughter: FamilyMember, _ father: FamilyMember) -> Void,
          onAddUnderFather: @escaping (_ name: String, _ father: FamilyMember) -> Void,
+         onFatherMissing: ((String) -> Void)? = nil,
          onCancel: @escaping () -> Void) {
+        self.onFatherMissing = onFatherMissing
         self.mode = mode
         self.relation = relation
         self.husbandId = husbandId
@@ -348,8 +380,7 @@ struct DSWifeFlowBox: View {
             title: L10n.t("أبوها في الشجرة", "Her father in the tree"),
             subtitle: L10n.t("اختر أباها، ثم اخترها من بناته", "Pick her father, then pick her from his daughters"),
             icon: "tree.fill",
-            candidates: isMother ? WifeCandidateRules.motherFathers(for: husbandId, in: people, showsHidden: showsHidden)
-                                 : WifeCandidateRules.fathers(for: husbandId, in: people, showsHidden: showsHidden),
+            candidates: WifeCandidateRules.cachedFathers(relation, for: husbandId, in: people, showsHidden: showsHidden),
             search: $search,
             isLoading: isLoading,
             // لا أسماء قبل الكتابة (طلب المالك ٢٠٢٦-١٠-٢٥) — والمطابقة دقيقة (`NameSearch`)
@@ -362,6 +393,8 @@ struct DSWifeFlowBox: View {
             emptyTitle: L10n.t("لا رجال في الشجرة بعد", "No men in the tree yet"),
             noMatchTitle: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
             rowHint: L10n.t("عرض بناته", "Show his daughters"),
+            missingTitle: onFatherMissing == nil ? nil : L10n.t("الأب غير موجود؟ اطلب من الإدارة", "Father missing? Ask the admins"),
+            onMissing: onFatherMissing,
             onPick: { go(.daughters($0.id)) },
             onCancel: onCancel
         )

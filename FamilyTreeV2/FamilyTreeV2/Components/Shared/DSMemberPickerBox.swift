@@ -49,6 +49,9 @@ struct DSMemberPickerBox: View {
     /// إجراء بديل بالأحمر في شريط المربّع (مثل «إزالة الأم») — nil = بلا
     var removeTitle: String? = nil
     var onRemove: (() -> Void)? = nil
+    /// زرّ صغير تحت النتائج بعد الكتابة («الأب غير موجود؟») — يرسل المكتوب للمضيف (طلب المالك ٢٠٢٦-١٠-٢٥)
+    var missingTitle: String? = nil
+    var onMissing: ((String) -> Void)? = nil
     let onPick: (FamilyMember) -> Void
     let onCancel: () -> Void
 
@@ -126,6 +129,11 @@ struct DSMemberPickerBox: View {
                         ForEach(list) { row($0) }
                     }
                 }
+            }
+            if let missingTitle, let onMissing, !query.isEmpty, !isLoading {
+                DSChipButton(missingTitle, icon: "exclamationmark.bubble.fill", tint: DS.Color.textSecondary,
+                             size: .small) { onMissing(query) }
+                    .frame(maxWidth: .infinity)
             }
         }
     }

@@ -8,8 +8,20 @@ import Foundation
 /// الترتيب: الاسم الأول المطابق تماماً أولاً، ثم الأبكر مطابقةً. الهاتف: أرقام فقط بعد توحيد الأرقام العربية.
 enum NameSearch {
 
+    /// ذاكرة الكلمات لكل نص — البحث يعيد تطبيع آلاف الأسماء مع كل حرف (كان سبب البطء في «أبوها»)؛ NSCache آمن بين الخيوط
+    private static let wordsCache: NSCache<NSString, NSArray> = {
+        let c = NSCache<NSString, NSArray>(); c.countLimit = 20_000; return c
+    }()
+
     /// كلمات النص للبحث — موحّدة، بلا رموز، و«عبد» ملصقة بما بعدها
     static func words(_ text: String) -> [String] {
+        if let hit = wordsCache.object(forKey: text as NSString) as? [String] { return hit }
+        let out = computeWords(text)
+        wordsCache.setObject(out as NSArray, forKey: text as NSString)
+        return out
+    }
+
+    private static func computeWords(_ text: String) -> [String] {
         let normalized = ArabicTextNormalizer.normalizeForSearch(text)
         let parts = normalized
             .components(separatedBy: CharacterSet.letters.union(.decimalDigits).inverted)
