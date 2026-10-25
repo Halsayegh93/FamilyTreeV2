@@ -178,7 +178,7 @@ enum WifeCandidateRules {
         let what = relation == .mother ? L10n.t("أم", "mother") : L10n.t("زوجة", "wife")
         let lines = [
             L10n.t("الأب غير موجود في قائمة «أبوها» (إضافة ", "Father not in the list (adding a ") + what + ")",
-            L10n.t("الاسم المكتوب: ", "Typed name: ") + typed,
+            L10n.t("الاسم المكتوب: ", "Typed name: ") + (typed.isEmpty ? L10n.t("(لم يُكتب)", "(none)") : typed),
             L10n.t("لـ: ", "For: ") + memberName,
             L10n.t("المطلوب: إضافة الأب في الشجرة أو تصحيح بياناته (الميلاد)، ثم ربط ال", "Needed: add the father or fix his birth date, then link the ") + what
         ]

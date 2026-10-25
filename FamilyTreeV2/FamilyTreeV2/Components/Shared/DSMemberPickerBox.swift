@@ -132,7 +132,7 @@ struct DSMemberPickerBox: View {
                     }
                 }
             }
-            if let missingTitle, let onMissing, !query.isEmpty, !isLoading {
+            if let missingTitle, let onMissing, !isLoading {   // ظاهر من البداية (طلب المالك) — قبل الكتابة وبعدها
                 DSChipButton(missingTitle, icon: "exclamationmark.bubble.fill", tint: DS.Color.textSecondary,
                              size: .small) { onMissing(query) }
                     .frame(maxWidth: .infinity)
