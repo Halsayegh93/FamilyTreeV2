@@ -77,6 +77,9 @@ struct WomenClassicTreeView: View {
     @State private var initedRoot: UUID? = nil
     @State private var fittedRoot: UUID? = nil
     @State private var userInteracted = false
+    /// «موقعي»: العقدة المميّزة («أنت هنا» + إطار) لمدة `TreeConst.highlightDuration` — نفس شجرة العائلة
+    @State private var meHighlight: UUID? = nil
+    @State private var meHighlightTask: Task<Void, Never>? = nil
 
     @State private var scale: CGFloat = 0.8
     @State private var baseScale: CGFloat = 0.8
@@ -701,23 +704,27 @@ struct WomenClassicTreeView: View {
             path.append(c)
             cur = byId[c]?.fatherId
         }
-        // وسّع كل الأجداد في المسار (أزلهم من المطويّ) — التركيز يُظهر المسار فقط
-        var next = collapsed
-        for a in path { next.remove(a) }
-        collapsed = next
+        // نفس «موقعي» في شجرة العائلة (طلب المالك ٢٠٢٦-١٠-٢٥): خط الأجداد وحده مفتوح وباقي الفروع مطويّة،
+        // الزوم كما هو، والعقدة مميّزة بـ «أنت هنا» وإطار ٥ ثوانٍ
+        collapsed = Set(members.compactMap { $0.fatherId }).subtracting(path)
         let L = rebuild()
-        // تمركز على اسمك — تقدر تسحب لأعلى وتشوف الجذر.
         guard let p = L.positions[target], viewport.width > 0 else { centerOn(target, in: L); return }
         userInteracted = true
-        // بلا زوم (طلب المالك ٢٠٢٦-١٠-٢٥): نفس الحجم الحالي أو أكبر بخطوة صغيرة (+٠٫١، بسقف ملاءمة الشجرة ١٫١) — كان ١٫٠ ثابتاً
-        let s: CGFloat = scale < 1.1 ? min(scale + 0.1, 1.1) : scale
+        let s = scale
         let h = L.heights[target] ?? L.m.nodeH
         let cx = (p.x + L.m.nodeW / 2) * s
         let cy = (p.y + h / 2) * s
         withAnimation(DS.Anim.smooth) {
-            scale = s; baseScale = s
+            baseScale = s
             offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: viewport.height / 2 - cy))
             baseOffset = offset
+        }
+        meHighlight = target
+        meHighlightTask?.cancel()
+        meHighlightTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)   // = TreeConst.highlightDuration في شجرة العائلة
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.3)) { meHighlight = nil }
         }
     }
 
@@ -768,6 +775,29 @@ struct WomenClassicTreeView: View {
                         // الذكر بلا صورة — أرضية فاتحة بلونه والرسم فوقها
                         .opacity(noPhotoMale ? DS.Opacity.tintFillStrong : 1))
                     .frame(width: CIRCLE, height: CIRCLE)
+                    // «موقعي»: إطار «أنت هنا» ونصّها فوق الصورة — نفس شجرة العائلة
+                    .overlay {
+                        if meHighlight == m.id {
+                            RoundedRectangle(cornerRadius: CORNER + 5 * k, style: .continuous)
+                                .stroke(DS.Color.currentLocation, lineWidth: 4 * k)
+                                .frame(width: CIRCLE + 10 * k, height: CIRCLE + 10 * k)
+                                .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12 * k)
+                                .transition(.opacity)
+                        }
+                    }
+                    .overlay(alignment: .top) {
+                        if meHighlight == m.id {
+                            Text(L10n.t("أنت هنا", "You"))
+                                .dsTreeFont(.badge, k)
+                                .foregroundColor(DS.Color.onTint)
+                                .padding(.horizontal, DS.Spacing.sm * k)
+                                .padding(.vertical, DS.Spacing.xxs * k)
+                                .background(DS.Color.currentLocation)
+                                .clipShape(Capsule())
+                                .offset(y: -14 * k)
+                                .transition(.opacity)
+                        }
+                    }
                     .overlay(
                         Group {
                             if !female, let url = m.avatarUrl, let u = URL(string: url) {
