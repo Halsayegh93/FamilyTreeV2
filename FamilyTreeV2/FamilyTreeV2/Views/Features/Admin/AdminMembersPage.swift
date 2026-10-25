@@ -289,8 +289,10 @@ struct AdminMembersPage: View {
     private var listSection: some View {
         let rows = currentRows
         if chip == .all && sub == .all && !searching {
+            // الفروع الحقيقية فقط (بلا «خارج الفروع») — نفس عدد «إحصائيات العائلة» في «اليوم»
+            let branches = index.branches.filter { $0.id != nil }.count
             AdminSectionLabel(title: L10n.t("حسب الفرع", "By branch"),
-                              trailing: L10n.t("\(index.branches.count) فروع", "\(index.branches.count) branches"))
+                              trailing: L10n.t("\(branches) فروع", "\(branches) branches"))
             ForEach(index.branches) { branch in
                 AnyView(branchCard(branch))
             }
