@@ -314,8 +314,13 @@ enum WomenStore {
     /// تُربط زوجةً له، وإلا `name` = بنت جديدة تحت أبيها ثم تُربط. السيرفر يرفض المتزوجة بغيره وغير بنات الأب.
     @discardableResult
     static func addOrLinkSelfWife(fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID {
+        try await addOrLinkSelfRelative(kind: "wife", fatherId: fatherId, womanId: womanId, name: name)
+    }
+    /// نفس الدالة بنوعها ('wife' أو 'mother') — الأم: البنت تصير أمّه وزوجةً لأبيه
+    @discardableResult
+    static func addOrLinkSelfRelative(kind: String, fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID {
         let params: [String: AnyEncodable] = [
-            "p_kind": AnyEncodable("wife"),
+            "p_kind": AnyEncodable(kind),
             "p_father_id": AnyEncodable(fatherId.uuidString),
             "p_woman_id": AnyEncodable(womanId?.uuidString),   // null صريح
             "p_name": AnyEncodable(name)                         // null صريح

@@ -185,10 +185,8 @@ struct BranchPickerSheet: View {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if q.isEmpty { return rootChildren }
 
-        return allMembers
-            .filter { m in
-                m.fullName.localizedCaseInsensitiveContains(q)
-            }
+        // البحث الدقيق الواحد (`NameSearch`)
+        return NameSearch.filter(allMembers, query: q) { $0.fullName }
             .map { m in
                 BranchNode(
                     member: m,

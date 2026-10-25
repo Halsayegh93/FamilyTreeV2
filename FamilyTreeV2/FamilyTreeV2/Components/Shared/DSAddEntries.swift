@@ -89,23 +89,26 @@ struct DSAddEntriesSection: View {
                 }
             }
             // اختيارات الاسم في سطر واحد يلتفّ إن ضاق: ذكر/أنثى، «متوفّى/متوفّاة» (تبديل)، الميلاد، «متزوجة»
-            OccasionFlowLayout(spacing: DS.Spacing.sm) {
+            // اختيارات الاسم بطاقات متساوية في سطر واحد — المقاس والزوايا والخط نفسها (طلب المالك ٢٠٢٦-١٠-٢٥):
+            // الجنس (يتبدّل بالضغط)، «متوفّى/متوفّاة»، الميلاد (مربّع التاريخ الموحّد)، و«متزوجة» حيث تُكتب
+            HStack(spacing: DS.Spacing.sm) {
                 if showsGender {
-                    DSSegmentedSwitch(options: genderOptions,
-                                      selection: Binding(get: { entry.gender },
-                                                         set: { g in edit(entry.id) { $0.gender = g } }),
-                                      size: .compact)
+                    DSEntryOptionCard(title: entry.isFemale ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male"),
+                                      icon: entry.isFemale ? "figure.stand.dress" : "figure.stand",
+                                      tint: entry.isFemale ? DS.Color.female : DS.Color.male, isOn: true,
+                                      hint: L10n.t("يبدّل بين ذكر وأنثى", "Switches between male and female")) {
+                        withAnimation(DS.Anim.snappy) { edit(entry.id) { $0.gender = $0.isFemale ? "male" : "female" } }
+                    }
                 }
-                // «متوفّى/متوفّاة» بجنس الاسم — رمادي الوفاة الهادئ، والمختار ممتلئ بعلامة ✓
-                DSChipButton(entry.isFemale ? L10n.t("متوفّاة", "Deceased") : L10n.t("متوفّى", "Deceased"),
-                             icon: entry.deceased ? "checkmark" : "heart.slash",
-                             tint: DS.Color.textSecondary, isSelected: entry.deceased, size: .small) {
+                DSEntryOptionCard(title: entry.isFemale ? L10n.t("متوفّاة", "Deceased") : L10n.t("متوفّى", "Deceased"),
+                                  icon: entry.deceased ? "checkmark" : "heart.slash",
+                                  tint: DS.Color.textSecondary, isOn: entry.deceased) {
                     withAnimation(DS.Anim.snappy) { edit(entry.id) { $0.deceased.toggle() } }
                 }
-                if showsBirth { birthChip(entry) }
+                if showsBirth { birthCard(entry) }
                 if showsMarried && entry.isFemale {
-                    DSChipButton(L10n.t("متزوجة", "Married"), icon: entry.married ? "checkmark" : "heart",
-                                 tint: DS.Color.female, isSelected: entry.married, size: .small) {
+                    DSEntryOptionCard(title: L10n.t("متزوجة", "Married"), icon: entry.married ? "checkmark" : "heart",
+                                      tint: DS.Color.female, isOn: entry.married) {
                         edit(entry.id) { $0.married.toggle() }
                     }
                 }
@@ -113,16 +116,12 @@ struct DSAddEntriesSection: View {
         }
     }
 
-    private var genderOptions: [DSSegmentOption<String>] {
-        [DSSegmentOption(id: "male", title: L10n.t("ذكر", "Male"), icon: "figure.stand"),
-         DSSegmentOption(id: "female", title: L10n.t("أنثى", "Female"), icon: "figure.stand.dress")]
-    }
-
-    /// الميلاد (اختياري) — شريحة تفتح مربّع التاريخ الموحّد، والمحدَّد يُمسح منه
-    private func birthChip(_ entry: DSAddEntry) -> some View {
+    /// الميلاد (اختياري) — بطاقة تفتح مربّع التاريخ الموحّد (`DSDateCard`)، والمحدَّد يُمسح منه
+    private func birthCard(_ entry: DSAddEntry) -> some View {
         let id = entry.id
-        return DSChipButton(entry.hasBirth ? DSDateText.display(entry.birth) : L10n.t("تاريخ الميلاد", "Birth date"),
-                            icon: "gift.fill", tint: DS.Color.warning, isSelected: entry.hasBirth, size: .small) {
+        return DSEntryOptionCard(title: entry.hasBirth ? Self.shortDay(entry.birth) : L10n.t("الميلاد", "Birth"),
+                                 icon: "gift.fill", tint: DS.Color.warning, isOn: entry.hasBirth,
+                                 hint: L10n.t("تاريخ الميلاد (اختياري)", "Birth date (optional)")) {
             dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
                                 initial: entry.hasBirth ? entry.birth : nil, allowClear: entry.hasBirth) { picked in
                 edit(id) { e in
@@ -131,6 +130,16 @@ struct DSAddEntriesSection: View {
             }
         }
     }
+
+    /// تاريخ قصير يتّسع في البطاقة
+    private static let shortFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy/M/d"
+        return f
+    }()
+    private static func shortDay(_ date: Date) -> String { shortFormatter.string(from: date) }
 
     // MARK: التعديل بالمعرّف (لا بالموضع — الصفوف تُحذف وتُضاف)
 
@@ -158,5 +167,42 @@ enum DSRequestCount {
         case 11...99: return L10n.t("\(n) طلباً", "\(n) requests")
         default: return L10n.t("\(n) طلب", "\(n) requests")
         }
+    }
+}
+
+/// بطاقة اختيار في صفّ الاسم — كل البطاقات بمقاس واحد (عرض متساوٍ، ارتفاع بطاقة الإجراء، زوايا واحدة، خط واحد):
+/// المفعّلة ممتلئة بلونها ورمز أبيض، وغيرها تعبئة خفيفة من لونها
+struct DSEntryOptionCard: View {
+    let title: String
+    let icon: String
+    let tint: Color
+    let isOn: Bool
+    var hint: String? = nil
+    let action: () -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DSMemberKit.chipRadius, style: .continuous)
+        Button(action: action) {
+            VStack(spacing: DS.Spacing.xxs) {
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.md)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .dsFont(.caption)
+                    .lineLimit(1)
+                    .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            }
+            .foregroundColor(isOn ? DS.Color.textOnPrimary : tint.dsReadableGlyph)
+            .padding(.horizontal, DS.Spacing.xs)
+            .frame(maxWidth: .infinity, minHeight: DSMemberKit.chipHeight)
+            .background(shape.fill(isOn ? AnyShapeStyle(tint.dsSolidFill) : AnyShapeStyle(tint.opacity(DS.Opacity.tintFillSoft))))
+            .overlay(shape.strokeBorder(tint.opacity(isOn ? DS.Opacity.selectedStroke : DS.Opacity.tintStroke),
+                                        lineWidth: DS.Border.width))
+            .contentShape(shape)
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(title)
+        .accessibilityHint(hint ?? "")
+        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 }

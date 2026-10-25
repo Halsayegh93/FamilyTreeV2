@@ -425,11 +425,10 @@ struct AdminNotificationsPage: View {
 
     private func visible(_ items: [AdminNoticeItem]) -> [AdminNoticeItem] {
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let needle = q.isEmpty ? "" : ArabicTextNormalizer.normalizeForSearch(q)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
         return items.filter { item in
-            matches(item, filter) && (needle.isEmpty
-                || ArabicTextNormalizer.normalizeForSearch(item.title).contains(needle)
-                || ArabicTextNormalizer.normalizeForSearch(item.subtitle).contains(needle))
+            matches(item, filter) && (q.isEmpty || NameSearch.matches(query: q, any: [item.title, item.subtitle]))
         }
     }
 

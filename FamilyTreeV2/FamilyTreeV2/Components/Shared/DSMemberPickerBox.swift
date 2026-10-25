@@ -20,6 +20,8 @@ struct DSMemberPickerBox: View {
     /// الخصوصية (حسابي): لا تُعرض أسماء حتى يُكتب اسم محدّد بما يكفي (كلمتان أو ٨ أحرف).
     /// false (الإدارة): كل المرشّحين ظاهرون ويُصفّون بالبحث.
     var requiresSpecificQuery: Bool = false
+    /// false = لا أسماء قبل الكتابة (اختيار الأب في «إضافة زوجة/أم» — طلب المالك ٢٠٢٦-١٠-٢٥)، والإرشاد مكانها
+    var listsAllWhenEmpty: Bool = true
     var searchLabel: String = L10n.t("بحث بالاسم", "Search by name")
     var searchPlaceholder: String = L10n.t("الاسم", "Name")
     /// الإرشاد قبل كتابة اسم محدّد (مع `requiresSpecificQuery` فقط)
@@ -62,12 +64,13 @@ struct DSMemberPickerBox: View {
         let query = search.trimmingCharacters(in: .whitespaces)
         let queryWords = query.split(whereSeparator: \.isWhitespace).count
         let queryIsSpecific = queryWords >= Self.specificWords || query.count >= Self.specificLength
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
         let list: [FamilyMember] = {
             if requiresSpecificQuery {
-                return queryIsSpecific ? candidates.filter { $0.fullName.contains(query) } : []
+                return queryIsSpecific ? NameSearch.filter(candidates, query: query) { $0.fullName } : []
             }
-            guard !query.isEmpty else { return candidates }
-            return candidates.filter { $0.fullName.contains(query) || $0.firstName.contains(query) }
+            guard !query.isEmpty else { return listsAllWhenEmpty ? candidates : [] }
+            return NameSearch.filter(candidates, query: query) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
         }()
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
@@ -101,7 +104,7 @@ struct DSMemberPickerBox: View {
                     // التحميل الواحد: المجسّم يتنفّس
                     DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
                         .padding(.vertical, DS.Spacing.md)
-                } else if requiresSpecificQuery && !queryIsSpecific {
+                } else if (requiresSpecificQuery && !queryIsSpecific) || (!listsAllWhenEmpty && query.isEmpty) {
                     // الحالة الافتراضية: إرشاد بلا أي أسماء
                     DSEmptyView(hintTitle, message: hintMessage, icon: "magnifyingglass", style: .inline)
                 } else if list.isEmpty {

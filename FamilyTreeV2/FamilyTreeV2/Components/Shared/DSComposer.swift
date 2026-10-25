@@ -312,6 +312,8 @@ struct DSComposer<Content: View>: View {
     /// «رفض» و«حذف نهائي» في تفاصيل الطلب (طلب المالك ٢٠٢٦-١٠-٠٧ «أدمج أزرار الإجراءات مع بوكس
     /// العمل»). فارغ = الشريط كما كان.
     var extraActions: [DSComposerAction] = []
+    /// إجراء آخر وحيد بجانب «إلغاء/إغلاق» في صفّه (بلا إجراء رئيسي) بدل صفّ مستقل فوقه — اختياري لكل مربّع
+    var extraBesideCancel: Bool = false
     /// الإجراء بعرض الشريط في صفّ وحده و«إلغاء» تحته — لنصّ إجراء يقول بالضبط ما سيحدث
     /// («أرسل الحين ← 32 عضو»، منشئ الإعلان، الدفعة ١١). false = الزرّان جنباً إلى جنب كما كانا
     var actionFullRow: Bool = false
@@ -399,7 +401,7 @@ struct DSComposer<Content: View>: View {
                 .foregroundColor(DS.Color.textTertiary)
             }
             // الإجراءات الأخرى — بنفس الزرّ الواحد، زرّان بالصفّ، فوق صفّ «الإجراء / إلغاء»
-            if !extraActions.isEmpty {
+            if !extraActions.isEmpty && inlineExtra == nil {
                 VStack(spacing: DSBox.buttonSpacing) {
                     ForEach(extraRows.indices, id: \.self) { row in
                         HStack(spacing: DSBox.buttonSpacing) {
@@ -419,6 +421,9 @@ struct DSComposer<Content: View>: View {
             } else {
                 HStack(spacing: DSBox.buttonSpacing) {
                     if showsAction { actionButton }
+                    // بلا إجراء رئيسي وإجراء آخر واحد: بجانب «إلغاء/إغلاق» في الصفّ نفسه (طلب المالك ٢٠٢٦-١٠-٢٥
+                    // «حطلي زر الحذف جنب الاغلاق»)
+                    if let inlineExtra { extraButton(inlineExtra) }
                     cancelButton
                 }
                 .buttonStyle(DSPressStyle())
@@ -471,6 +476,12 @@ struct DSComposer<Content: View>: View {
             .modifier(DSReadyGlow(isReady: canSubmit, armed: entranceSettled, cornerRadius: DSBox.buttonRadius))
         }
         .disabled(!canSubmit || isBusy)
+    }
+
+    /// إجراء آخر وحيد في صفّ «إلغاء» — حين لا إجراء رئيسي (والإجراء ليس بعرض كامل)
+    private var inlineExtra: DSComposerAction? {
+        guard extraBesideCancel, !showsAction, extraActions.count == 1, let only = extraActions.first, !only.fullRow else { return nil }
+        return only
     }
 
     /// صفوف الإجراءات الأخرى: زرّان بالصفّ، وما عُلّم `fullRow` وحده بعرض الصفّ (ن-٥ فحص ٢٠٢٦-١٠-٠٧:

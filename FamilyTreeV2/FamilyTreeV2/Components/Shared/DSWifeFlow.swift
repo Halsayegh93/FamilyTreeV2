@@ -106,6 +106,31 @@ enum WifeCandidateRules {
         return (eligible, all.count - eligible.count)
     }
 
+    /// آباء «الأم من العائلة»: رجال الشجرة عدا صاحب العقدة وأبيه (الأم ليست أخت أبيه في الشجرة)
+    static func motherFathers(for personId: UUID, in people: [FamilyMember], showsHidden: Bool) -> [FamilyMember] {
+        let personFather = people.first { $0.id == personId }?.fatherId
+        return people
+            .filter { m in
+                !m.isFemale && m.id != personId && m.id != personFather
+                    && (showsHidden || !m.isHiddenFromTree)
+                    && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
+    }
+
+    /// بنات الأب للأم: بلا زوج أو زوجها أبو صاحب العقدة (المتوفّاة تظهر — قد تكون الأم متوفّاة)، وعدد من سواهنّ
+    static func motherDaughters(of fatherId: UUID, personId: UUID, personFatherId: UUID?, in people: [FamilyMember],
+                                showsHidden: Bool) -> (eligible: [FamilyMember], hidden: Int) {
+        let all = people.filter {
+            $0.fatherId == fatherId && $0.isFemale && $0.id != personId
+                && (showsHidden || !$0.isHiddenFromTree)
+                && !$0.firstName.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        let eligible = all.filter { $0.husbandId == nil || ($0.husbandId != nil && $0.husbandId == personFatherId) }
+            .sorted { $0.sortOrder < $1.sortOrder }
+        return (eligible, all.count - eligible.count)
+    }
+
     /// رسالة خطأ الكتابة في مسار الزوجة (رموز `add_or_link_self_relative`)، وإلا الرسالة العامة
     static func failureMessage(_ error: Error) -> String {
         switch (error as? PostgrestError)?.hint {
@@ -159,10 +184,16 @@ enum WifeCandidateRules {
 struct DSWifeFlowBox: View {
     /// آلية الكتابة عند المضيف — تغيّر العنوان وزرّ الإجراء فقط
     enum Mode { case direct, selfFamily, request }
+    /// زوجة لهذا الرجل، أو أمّ لهذا الشخص (طلب المالك ٢٠٢٦-١٠-٢٥ «الأم نفس طريقة الزوجة»)
+    enum Relation { case wife, mother }
     private enum Step: Equatable { case choice, father, daughters(UUID) }
 
     let mode: Mode
+    var relation: Relation = .wife
+    /// الزوج (للزوجة) أو صاحب العقدة (للأم)
     let husbandId: UUID
+    /// أبو صاحب العقدة (للأم): بناتٌ زوجُهنّ أبوه يظهرن أيضاً
+    var personFatherId: UUID? = nil
     let husbandName: String
     /// السطر تحت العنوان — nil = اسم الزوج (مثل مربّع الإجراءات)
     var subtitle: String? = nil
@@ -187,14 +218,17 @@ struct DSWifeFlowBox: View {
     /// القوائم تُعاد حين تصل أرقام السيرفر
     @ObservedObject private var config = AppConfigValues.shared
 
-    init(mode: Mode, husbandId: UUID, husbandName: String, subtitle: String? = nil, people: [FamilyMember],
+    init(mode: Mode, relation: Relation = .wife, husbandId: UUID, personFatherId: UUID? = nil,
+         husbandName: String, subtitle: String? = nil, people: [FamilyMember],
          isLoading: Bool = false, showsHidden: Bool = false, startsAtFather: Bool = false,
          isBusy: Bool = false, error: String? = nil, onOutside: (() -> Void)? = nil,
          onLink: @escaping (_ daughter: FamilyMember, _ father: FamilyMember) -> Void,
          onAddUnderFather: @escaping (_ name: String, _ father: FamilyMember) -> Void,
          onCancel: @escaping () -> Void) {
         self.mode = mode
+        self.relation = relation
         self.husbandId = husbandId
+        self.personFatherId = personFatherId
         self.husbandName = husbandName
         self.subtitle = subtitle
         self.people = people
@@ -225,9 +259,16 @@ struct DSWifeFlowBox: View {
 
     // MARK: النصوص
 
+    private var isMother: Bool { relation == .mother }
     private var title: String {
-        mode == .request ? L10n.t("طلب إضافة زوجة", "Request a wife") : L10n.t("إضافة زوجة", "Add wife")
+        if isMother {
+            return mode == .request ? L10n.t("طلب إضافة أم", "Request a mother") : L10n.t("إضافة أم", "Add mother")
+        }
+        return mode == .request ? L10n.t("طلب إضافة زوجة", "Request a wife") : L10n.t("إضافة زوجة", "Add wife")
     }
+    private var headerIcon: String { isMother ? "figure.stand.dress" : "heart.fill" }
+    /// «زوجةً» / «أمّاً» في الأزرار والشرح
+    private var asWord: String { isMother ? L10n.t("أمّاً", "as mother") : L10n.t("زوجةً", "as wife") }
     /// السطر تحت العنوان: الزوج (مثل مربّع الإجراءات)، أو ما يمرّره المضيف
     private var forLine: String { subtitle ?? husbandName }
     private var requestNote: String? {
@@ -249,7 +290,7 @@ struct DSWifeFlowBox: View {
         DSComposer(
             title: title,
             subtitle: forLine,
-            icon: "heart.fill",
+            icon: headerIcon,
             tint: DS.Color.actionNavy,
             actionTitle: "",
             showsAction: false,
@@ -258,7 +299,8 @@ struct DSWifeFlowBox: View {
             onSubmit: {},
             onCancel: onCancel
         ) {
-            DSComposerSection(title: L10n.t("من أين الزوجة؟", "Where is she from?"), icon: "person.fill.questionmark",
+            DSComposerSection(title: isMother ? L10n.t("من أين الأم؟", "Where is she from?")
+                                              : L10n.t("من أين الزوجة؟", "Where is she from?"), icon: "person.fill.questionmark",
                               tint: DS.Color.female, index: 0) {
                 VStack(spacing: DS.Spacing.sm) {
                     // من العائلة = أخضر العائلة ورمز الشجرة، ومن خارجها = كحلي القسم (اسم يُكتب)
@@ -285,11 +327,17 @@ struct DSWifeFlowBox: View {
             title: L10n.t("أبوها في الشجرة", "Her father in the tree"),
             subtitle: L10n.t("اختر أباها، ثم اخترها من بناته", "Pick her father, then pick her from his daughters"),
             icon: "tree.fill",
-            candidates: WifeCandidateRules.fathers(for: husbandId, in: people, showsHidden: showsHidden),
+            candidates: isMother ? WifeCandidateRules.motherFathers(for: husbandId, in: people, showsHidden: showsHidden)
+                                 : WifeCandidateRules.fathers(for: husbandId, in: people, showsHidden: showsHidden),
             search: $search,
             isLoading: isLoading,
+            // لا أسماء قبل الكتابة (طلب المالك ٢٠٢٦-١٠-٢٥) — والمطابقة دقيقة (`NameSearch`)
+            listsAllWhenEmpty: false,
             searchLabel: L10n.t("اسم الأب", "Father's name"),
             searchPlaceholder: L10n.t("اكتب اسم أبيها", "Type her father's name"),
+            hintTitle: L10n.t("اكتب اسم أبيها", "Type her father's name"),
+            hintMessage: L10n.t("تظهر الأسماء بعد الكتابة — كل كلمة تطابق بداية اسم بالترتيب.",
+                                "Names appear as you type — each word matches the start of a name, in order."),
             emptyTitle: L10n.t("لا رجال في الشجرة بعد", "No men in the tree yet"),
             noMatchTitle: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
             rowHint: L10n.t("عرض بناته", "Show his daughters"),
@@ -302,14 +350,17 @@ struct DSWifeFlowBox: View {
 
     private func daughtersStep(fatherId: UUID) -> some View {
         let father = people.first { $0.id == fatherId }
-        let list = WifeCandidateRules.daughters(of: fatherId, husbandId: husbandId, in: people, showsHidden: showsHidden)
+        let list = isMother
+            ? WifeCandidateRules.motherDaughters(of: fatherId, personId: husbandId, personFatherId: personFatherId,
+                                                 in: people, showsHidden: showsHidden)
+            : WifeCandidateRules.daughters(of: fatherId, husbandId: husbandId, in: people, showsHidden: showsHidden)
         let request = mode == .request
         let actionTitle = request ? L10n.t("إرسال الطلب", "Send request")
-            : (addingNew ? L10n.t("إضافة وربط", "Add & link") : L10n.t("ربط زوجةً", "Link as wife"))
+            : (addingNew ? L10n.t("إضافة وربط", "Add & link") : L10n.t("ربطها ", "Link ") + asWord)
         return DSComposer(
             title: title,
             subtitle: forLine,
-            icon: "heart.fill",
+            icon: headerIcon,
             tint: DS.Color.actionNavy,
             actionTitle: actionTitle,
             actionIcon: request ? "paperplane.fill" : (addingNew ? "plus" : "link"),
@@ -373,7 +424,9 @@ struct DSWifeFlowBox: View {
                         Image(systemName: "eye.slash")
                             .dsGlyph(DS.Glyph.xs, weight: .semibold)
                             .accessibilityHidden(true)
-                        Text(hiddenNote(list.hidden))
+                        Text(isMother ? L10n.t("لا تظهر \(list.hidden): المتزوجة بغير أبيه",
+                                           "\(list.hidden) not shown: married to someone other than his father")
+                                  : hiddenNote(list.hidden))
                             .dsFont(.footnote)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -409,10 +462,8 @@ struct DSWifeFlowBox: View {
                                 text: $newName)
                 if let father {
                     Text(mode == .request
-                         ? L10n.t("تضيفها الإدارة بنتاً لـ\(firstName(father)) ثم تربطها زوجةً",
-                                  "The admins add her as \(firstName(father))'s daughter, then link her as wife")
-                         : L10n.t("تُضاف بنتاً لـ\(firstName(father)) ثم تُربط زوجةً",
-                                  "Added as \(firstName(father))'s daughter, then linked as wife"))
+                         ? L10n.t("تضيفها الإدارة بنتاً لـ\(firstName(father)) ثم تربطها ", "The admins add her as \(firstName(father))'s daughter, then link her ") + asWord
+                         : L10n.t("تُضاف بنتاً لـ\(firstName(father)) ثم تُربط ", "Added as \(firstName(father))'s daughter, then linked ") + asWord)
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)

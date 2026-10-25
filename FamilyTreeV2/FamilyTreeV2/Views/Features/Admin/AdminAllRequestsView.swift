@@ -758,13 +758,12 @@ struct AdminAllRequestsView: View {
         }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return items }
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
-        let digits = String(q.filter(\.isNumber))
-        return items.filter { item in
-            let texts = searchTexts(item)
-            if texts.contains(where: { ArabicTextNormalizer.normalizeForSearch($0).contains(needle) }) { return true }
-            return digits.count >= 3 && texts.contains { $0.filter(\.isNumber).contains(digits) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب (والرقم أرقاماً فقط)
+        if NameSearch.isPhoneQuery(q) {
+            let digits = NameSearch.digits(q)
+            return digits.count >= 3 ? items.filter { searchTexts($0).contains { NameSearch.digits($0).contains(digits) } } : []
         }
+        return items.filter { NameSearch.matches(query: q, any: searchTexts($0)) }
     }
 
     /// نصوص البحث لكل طلب: الاسم، مقدّم الطلب، الرقم، القيمة الجديدة، العنوان

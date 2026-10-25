@@ -1705,44 +1705,11 @@ struct FatherPickerSheet: View {
     /// «تقليل الحركة» (توصية أبل): علامة الاختيار تظهر بتلاشٍ فقط بلا تكبير
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var prepared: [(member: FamilyMember, normalized: String)] = []
+    @State private var prepared: [(member: FamilyMember, words: [String])] = []
 
     private enum FatherChoice {
         case noFather
         case father(FamilyMember)
-    }
-
-    private static func normalizeArabicFast(_ s: String) -> String {
-        var out = String()
-        out.reserveCapacity(s.count)
-        for ch in s {
-            switch ch {
-            case "أ", "إ", "آ", "ٱ": out.append("ا")
-            case "ى": out.append("ي")
-            case "ة": out.append("ه")
-            case "\u{064B}", "\u{064C}", "\u{064D}",
-                 "\u{064E}", "\u{064F}", "\u{0650}",
-                 "\u{0651}", "\u{0652}", "\u{0670}":
-                continue
-            default:
-                if ch.isLetter {
-                    out.append(contentsOf: String(ch).lowercased())
-                } else {
-                    out.append(ch)
-                }
-            }
-        }
-        return out.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func matchRank(normalized: String, query: String) -> Int? {
-        if query.isEmpty { return 0 }
-        if normalized.hasPrefix(query) { return 0 }
-        for word in normalized.split(separator: " ") {
-            if word.hasPrefix(query) { return 1 }
-        }
-        if normalized.contains(query) { return 2 }
-        return nil
     }
 
     private func rebuildPrepared() {
@@ -1762,18 +1729,19 @@ struct FatherPickerSheet: View {
 
         prepared = memberVM.allMembers
             .filter { $0.isCountable && !exclude.contains($0.id) }
-            .map { (member: $0, normalized: Self.normalizeArabicFast($0.fullName)) }
+            .map { (member: $0, words: NameSearch.words($0.fullName)) }
             .sorted { $0.member.fullName < $1.member.fullName }
     }
 
     var filteredMembers: [FamilyMember] {
-        let q = Self.normalizeArabicFast(debouncedSearch)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
+        let q = NameSearch.words(debouncedSearch)
         if q.isEmpty {
             return prepared.map(\.member)
         }
         return prepared
             .compactMap { item -> (FamilyMember, Int)? in
-                guard let r = Self.matchRank(normalized: item.normalized, query: q) else { return nil }
+                guard let r = NameSearch.score(queryWords: q, candidateWords: item.words) else { return nil }
                 return (item.member, r)
             }
             .sorted { lhs, rhs in

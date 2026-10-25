@@ -1143,11 +1143,12 @@ struct EditProjectView: View {
     /// بحث ثم الأعضاء صفوفاً والمختار بعلامة ✓ — الضغط على عضو يختاره ويغلق المربّع (كالسابق).
     private var ownerPickerSheet: some View {
         let q = ownerSearch.trimmingCharacters(in: .whitespacesAndNewlines)
-        let candidates = memberVM.allMembers
+        let alive = memberVM.allMembers
             .filter { $0.isCountable && $0.isDeceased != true }
-            .filter { q.isEmpty || $0.fullName.localizedCaseInsensitiveContains(q)
-                || $0.displayFullName.localizedCaseInsensitiveContains(q) }
             .sorted { $0.fullName < $1.fullName }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
+        let candidates = NameSearch.filter(alive, query: q) { $0.displayFullName }
         return DSComposer(
             title: L10n.t("اختيار صاحب المشروع", "Select Owner"),
             subtitle: project.title,
