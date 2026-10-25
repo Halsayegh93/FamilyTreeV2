@@ -671,7 +671,7 @@ struct DSComposerHeader: View {
                 .dsEntrance(delay: DSMotion.titleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
             if !(compact && subtitle.isEmpty) {
                 // الاسم الطويل (اسم العضو في مربّعات الطلبات) سطران بدل «…» (طلب المالك ٢٠٢٦-١٠-٢٥)
-                Text(subtitle)
+                DSBalancedText(subtitle)
                     .font(DSBox.subtitleFont)
                     .foregroundColor(DS.Color.boxHeaderSubtitle)
                     .lineLimit(2)

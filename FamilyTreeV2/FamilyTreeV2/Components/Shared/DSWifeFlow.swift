@@ -388,7 +388,7 @@ struct DSWifeFlowBox: View {
                     .accessibilityHidden(true)
                 // الاسم كاملاً على سطرين — هو ما يميّز الأب
                 Text(father.map(shownName) ?? "")
-                    .dsFieldFont(.rowTitle)
+                    .dsFieldFont(.memberName)
                     .foregroundColor(DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
@@ -559,7 +559,7 @@ private struct WifeDaughterRow: View {
                 DSFieldIcon(name: "person.fill", tint: DS.Color.female)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(name)
-                        .dsFieldFont(.rowTitle)
+                        .dsFieldFont(.memberName)
                         .foregroundColor(DS.Color.fieldValue)
                     if let age {
                         Text(L10n.t("\(age) سنة", "\(age) yrs"))

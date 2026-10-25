@@ -475,7 +475,7 @@ struct TreeSearchOverlay: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(result.displayName)
-                    .dsFont(.rowTitle)
+                    .dsFont(.memberName)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 

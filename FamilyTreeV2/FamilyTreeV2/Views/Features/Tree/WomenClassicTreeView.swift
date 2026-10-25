@@ -31,8 +31,10 @@ private struct WomenTreeMetrics: Equatable {
         self.k = k
         // نفس عقدة شجرة العائلة (`FamilyTreeMetrics`) — طلب المالك ٢٠٢٦-١٠-٢٥ «نبي حجم موحد نفس العائلة» و«الاسم صار
         // أكبر من الصورة»: الصورة ١٠٥، العقدة ١٢٤، كبسولة الاسم ٣٢، شريط السنوات ٢٠، ومسافات العائلة (كانت ٤٤ / ٦٢ / ٢٢ / ١٣)
-        circle = 105 * k; corner = 28 * k; ring = 2.5 * k
-        pillH = 32 * k; badgeH = 17 * k; lifeH = 18 * k; nodeW = 124 * k
+        // ثم (طلب المالك ٢٠٢٦-١٠-٢٥ «تكبر حجم الاسم وشوي تصغر حجم الصورة علشان اقدر اطق على الاسم»): الصورة ٨٤،
+        // كبسولة الاسم ٤٢ بخط Title 3 — مساحة لمس أكبر تفتح المربّع
+        circle = 84 * k; corner = 22 * k; ring = 2.5 * k
+        pillH = 42 * k; badgeH = 17 * k; lifeH = 18 * k; nodeW = 124 * k
         hGap = 14 * k; vGap = 48 * k; rowGap = 6 * k; wrapGap = 34 * k
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; pad = 60 * k
     }
@@ -760,7 +762,7 @@ struct WomenClassicTreeView: View {
                         ForEach(wives.prefix(3)) { wifeCell($0) }
                     }
                     .offset(x: -(CIRCLE / 2 + (6
-                                 + CGFloat(min(wives.count, 3)) * 17
+                                 + CGFloat(min(wives.count, 3)) * 30   // نصف عرض خلية الزوجة (٦٠)
                                  + CGFloat(max(0, min(wives.count, 3) - 1)) * 3) * k),
                             y: -2 * k)
                 }
@@ -902,7 +904,7 @@ struct WomenClassicTreeView: View {
                 // (نفس تصميم شجرة العائلة، بمقاس عقد النساء الصغيرة)
                 VStack(spacing: 0) {
                     Text(m.firstName)
-                        .dsTreeFont(.headline, k)
+                        .dsTreeFont(.title3Tree, k)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -929,7 +931,7 @@ struct WomenClassicTreeView: View {
                 .onTapGesture { if TreeTapGuard.allowsTap { onSelect?(m) } }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             } else {
                 Text(m.firstName)
-                    .dsTreeFont(.headline, k)
+                    .dsTreeFont(.title3Tree, k)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
@@ -955,18 +957,20 @@ struct WomenClassicTreeView: View {
     }
 
     /// خلية زوجة واحدة: مربّع «زوجة» + الاسم الأول والأخير تحته.
+    /// مقاسها بعد توحيد العقدة مع شجرة العائلة (طلب المالك ٢٠٢٦-١٠-٢٥ «اسم الزوجة وصورتها صارو صغار»): مربّع ٤٠ واسم Footnote
+    /// بعرض ٦٠ (كانت ٢٤ / ٨ / ٣٤)
     private func wifeCell(_ w: FamilyMember) -> some View {
         let k = layout.m.k
         return VStack(spacing: DS.Spacing.xxs * k) {
-            RoundedRectangle(cornerRadius: 7 * k, style: .continuous)
+            RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
                 .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
-                .frame(width: 24 * k, height: 24 * k)
-                .overlay(RoundedRectangle(cornerRadius: 7 * k, style: .continuous)
+                .frame(width: 40 * k, height: 40 * k)
+                .overlay(RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
                     .strokeBorder(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : DS.Color.textOnPrimary,
                                   lineWidth: w.isDeceased == true ? DS.Border.widthBold * k : DS.Border.width * k))
                 .overlay(
                     Text(L10n.t("زوجة", "Wife"))
-                        .dsTreeFont(.treeNodeTiny, k)
+                        .dsTreeFont(.caption, k)
                         .minimumScaleFactor(0.7)
                         .lineLimit(1)
                         .foregroundColor(DS.Color.textOnPrimary)
@@ -975,10 +979,10 @@ struct WomenClassicTreeView: View {
                 .overlay(alignment: .topTrailing) {
                     if w.isHiddenFromTree {
                         Circle().fill(DS.Color.background)
-                            .frame(width: 12 * k, height: 12 * k)
+                            .frame(width: 18 * k, height: 18 * k)
                             .overlay(
                                 Image(systemName: "eye.slash.fill")
-                                    .dsTreeGlyph(DS.Glyph.nano, k)
+                                    .dsTreeGlyph(DS.Glyph.microCompact, k)
                                     .foregroundColor(DS.Color.slate)
                             )
                             .offset(x: 3 * k, y: -3 * k)
@@ -986,12 +990,12 @@ struct WomenClassicTreeView: View {
                 }
                 .opacity(w.isHiddenFromTree ? DS.Opacity.disabled : 1)
             Text(wifeShortName(w))
-                .dsTreeFont(.treeNodeTiny, k)
+                .dsTreeFont(.footnote, k)
                 .foregroundColor(DS.Color.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
-                .frame(width: 34 * k)
+                .frame(width: 60 * k)
         }
     }
 

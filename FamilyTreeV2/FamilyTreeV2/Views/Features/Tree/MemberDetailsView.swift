@@ -424,8 +424,8 @@ struct MemberDetailsView: View {
                 }
             }
 
-            Text(member.displayFullName)
-                .dsFont(.title)
+            DSBalancedText(member.displayFullName)
+                .dsFont(.memberNameTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)

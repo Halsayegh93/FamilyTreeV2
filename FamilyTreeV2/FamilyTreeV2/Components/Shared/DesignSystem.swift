@@ -2064,6 +2064,16 @@ extension DS.Glyph {
 extension DS.TextRole {
     /// عدد الأبناء على شارة عقدة شجرة العائلة — مقاس رسم داخل العقدة (× `DS.TreeScale`)
     static let nodeCount = DS.TextRole(size: 16, weight: .heavy)
+    /// اسم العقدة في شجرة النساء — Title 3 (٢٠) عريض: كبسولة أكبر للّمس (طلب المالك ٢٠٢٦-١٠-٢٥)
+    static let title3Tree = DS.TextRole(.title3, weight: .bold)
+}
+
+// MARK: - أسماء الأعضاء أخفّ (طلب المالك ٢٠٢٦-١٠-٢٥ «الأسماء بتفاصيل العضو خفف التغميق، حتى بالبحث»)
+extension DS.TextRole {
+    /// الاسم الكامل في رأس تفاصيل العضو — Headline (١٧) متوسط (كان `title` عريضاً)
+    static let memberNameTitle = DS.TextRole(.headline, weight: .medium)
+    /// الاسم في نتائج البحث والمنتقيات — Body (١٧) متوسط (كان `rowTitle` شبه عريض)
+    static let memberName = DS.TextRole(.body, weight: .medium)
 }
 
 // MARK: - عقد الشجرتين تكبر مع «حجم النص» (طلب المالك ٢٠٢٦-١٠-٠٨ «بشي منظم»)

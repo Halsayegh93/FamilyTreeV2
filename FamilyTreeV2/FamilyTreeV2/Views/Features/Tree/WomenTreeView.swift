@@ -646,8 +646,8 @@ struct WomanDetailSheet: View {
                 }
             }
 
-            Text(displayName(woman))
-                .dsFont(.title)
+            DSBalancedText(displayName(woman))
+                .dsFont(.memberNameTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -1208,8 +1208,13 @@ struct WomanDetailSheet: View {
                 onCancel: { showAdminBox = false }
             ) {
                 // مجموعة واحدة (طلب المالك ٢٠٢٦-١٠-٢٥ «اشيل المجموعات… بمجموعة وحدة بس منفصلين المربعات»): كل
-                // الإجراءات مربّعات منفصلة صغيرة — ترتيبها إضافة ← ربط ← السجل، وكل مربّع بلون نوعه
-                let tiles = ActionGroup.allCases.flatMap { g in actions.filter { $0.group == g } }
+                // الإجراءات مربّعات منفصلة، وكل مربّع بلون نوعه. الترتيب (طلب المالك ٢٠٢٦-١٠-٢٥): الأم وجنبها الزوجة،
+                // تحتهما الأبناء وجنبهم ترتيب الأبناء، ثم تعديل البيانات
+                let order = ["addMother", "mother", "wife", "husband", "child", "reorder", "sister", "edit"]
+                let tiles = actions.enumerated().sorted {
+                    (order.firstIndex(of: $0.element.id) ?? order.count, $0.offset)
+                        < (order.firstIndex(of: $1.element.id) ?? order.count, $1.offset)
+                }.map(\.element)
                 if !tiles.isEmpty {
                     DSComposerSection(title: L10n.t("الإجراءات", "Actions"), icon: "square.grid.2x2.fill",
                                       tint: DS.Color.actionNavy, index: 0) {
@@ -1300,8 +1305,8 @@ struct WomanDetailSheet: View {
                 .saturation(woman.isDeceased == true && !woman.isFemale ? 0 : 1)
                 .overlay(Circle().stroke(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
                 .accessibilityHidden(true)   // الصورة زخرفة — الاسم تحتها
-            Text(displayName(woman))
-                .dsFont(.headline)
+            DSBalancedText(displayName(woman))
+                .dsFont(.memberNameTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -1716,8 +1721,8 @@ struct WomanDetailSheet: View {
                 Text(kind.contextLabel)
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
-                Text(displayName(woman))
-                    .dsFont(.headlineCompact)
+                DSBalancedText(displayName(woman))
+                    .dsFont(.memberNameTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)

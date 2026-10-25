@@ -138,7 +138,7 @@ struct DSMemberPickerBox: View {
             HStack(spacing: DS.Spacing.sm) {
                 avatar(m)
                 Text(shownName)
-                    .dsFieldFont(.rowTitle)
+                    .dsFieldFont(.memberName)
                     .foregroundColor(DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
