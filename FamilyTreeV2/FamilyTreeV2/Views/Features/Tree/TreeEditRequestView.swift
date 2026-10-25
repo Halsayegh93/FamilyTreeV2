@@ -118,6 +118,7 @@ struct TreeEditRequestView: View {
                                     tint: actionColor, index: 1,
                                     rowLabel: { _ in L10n.t("ابن", "Son") },
                                     placeholder: L10n.t("اسم الابن الأول", "Son's first name"),
+                                    showsBirth: true,
                                     newGender: "male")
                 DSComposerSection(title: L10n.t("ملاحظات", "Notes"), icon: "note.text",
                                   tint: DS.Color.primary, index: 2) {
@@ -450,6 +451,10 @@ struct TreeEditRequestView: View {
             var sent = 0
             for son in list {
                 var lines: [String] = []
+                // القبول لا يكتب الميلاد ولا الوفاة — في ملاحظة طلبه بوضوح
+                if son.hasBirth {
+                    lines.append(L10n.t("تاريخ الميلاد: ", "Birth date: ") + DateHelper.format(son.birth))
+                }
                 if son.deceased {
                     lines.append(L10n.t("الحالة: متوفّى — بعد القبول سجّل وفاته من تفاصيله.",
                                         "Status: deceased — after approval, record his death from his details."))

@@ -239,7 +239,7 @@ struct WomanDetailSheet: View {
         var id: Int { rawValue }
         var title: String {
             switch self {
-            case .child: return L10n.t("إضافة ابن", "Add son")
+            case .child: return L10n.t("إضافة أبناء", "Add children")
             case .wife: return L10n.t("إضافة زوجة", "Add wife")
             case .mother: return L10n.t("إضافة أم", "Add mother")
             case .sister: return L10n.t("إضافة أخت", "Add sister")
@@ -248,7 +248,7 @@ struct WomanDetailSheet: View {
         /// عنوان مربّع «طلب إضافة» (لمن لا يضيف مباشرة)
         var requestTitle: String {
             switch self {
-            case .child: return L10n.t("طلب إضافة ابن", "Request a son")
+            case .child: return L10n.t("طلب إضافة أبناء", "Request children")
             case .wife: return L10n.t("طلب إضافة زوجة", "Request a wife")
             case .mother: return L10n.t("طلب إضافة أم", "Request a mother")
             case .sister: return L10n.t("إضافة أخت", "Add sister")
@@ -1014,12 +1014,12 @@ struct WomanDetailSheet: View {
     private func tileSubtitle(_ id: String) -> String? {
         let who = "«" + shortName(woman) + "»"
         switch id {
-        case "child": return L10n.t("ابن أو ابنة لـ", "Son or daughter of ") + who
+        case "child": return L10n.t("أبناء لـ", "Children of ") + who
         case "sister": return L10n.t("أختك — بنت ", "Your sister — daughter of ") + who
         case "wife": return L10n.t("زوجة لـ", "Wife of ") + who
         case "husband": return L10n.t("زوج لـ", "Husband of ") + who
         case "mother": return L10n.t("من زوجات أبي ", "From the wives of the father of ") + who
-        case "addMother": return L10n.t("أم جديدة لـ", "A new mother of ") + who
+        case "addMother": return L10n.t("أم لـ", "Mother of ") + who
         case "reorder": return L10n.t("أبناء ", "Children of ") + who
         case "edit": return L10n.t("بيانات ", "Details of ") + who
         default: return nil
@@ -1040,7 +1040,7 @@ struct WomanDetailSheet: View {
     private var directActions: [AdminAction] {
         // بطاقات الإضافة بأسماء قصيرة (ابن · أخت · زوجة · أم) وسطر «لمن» تحتها (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن»)
         var list: [AdminAction] = [
-            AdminAction(id: "child", title: L10n.t("ابن", "Son"),
+            AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
                         icon: "person.badge.plus") { startAdd(.child) }
         ]
         // على عقدة أبيه هو: «إضافة أخت» للإدارة أيضاً (طلب المالك ٢٠٢٦-١٠-٢٤)
@@ -1067,7 +1067,7 @@ struct WomanDetailSheet: View {
         // الأم الجديدة زوجةٌ للأب — بلا أب في الشجرة كانت تظهر جذراً مستقلاً
         if mother == nil, woman.fatherId != nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
-                                    icon: "figure.stand.dress") { startAdd(.mother) })
+                                    icon: "figure.stand.dress") { openMotherFlow() })
         }
         if !children.isEmpty {
             list.append(AdminAction(id: "reorder", title: L10n.t("ترتيب الأبناء", "Reorder"),
@@ -1083,7 +1083,7 @@ struct WomanDetailSheet: View {
     /// العضو على عقدته — دوال السيرفر الذاتية (زوجته، أبناؤه، أمّه)
     private var selfActions: [AdminAction] {
         var list: [AdminAction] = [
-            AdminAction(id: "child", title: L10n.t("ابن", "Son"),
+            AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
                         icon: "person.badge.plus") { startAdd(.child) }
         ]
         if !woman.isFemale {
@@ -1098,7 +1098,7 @@ struct WomanDetailSheet: View {
         }
         if mother == nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
-                                    icon: "figure.stand.dress") { startAdd(.mother) })
+                                    icon: "figure.stand.dress") { openMotherFlow() })
         }
         return list
     }
@@ -1110,7 +1110,7 @@ struct WomanDetailSheet: View {
             list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
                                     icon: "figure.stand.dress") { startAdd(.sister) })
         }
-        list.append(AdminAction(id: "child", title: L10n.t("ابن", "Son"),
+        list.append(AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
                                 icon: "person.badge.plus") { startAdd(.child) })
         if !woman.isFemale {
             list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
@@ -1121,7 +1121,7 @@ struct WomanDetailSheet: View {
         }
         if mother == nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
-                                    icon: "figure.stand.dress") { startAdd(.mother) })
+                                    icon: "figure.stand.dress") { openMotherFlow() })
         }
         return list
     }
@@ -1129,6 +1129,13 @@ struct WomanDetailSheet: View {
     /// «إضافة زوجة» الواحدة — يبدأ بسؤال «من أين الزوجة؟» (كان «إضافة زوجة» و«ربط زوجة» مربّعين)
     private func openWifeFlow() {
         draft.addNotes = ""
+        draft.flowRelation = .wife
+        draft.showWifeFlow = true
+    }
+    /// «أم» — نفس طريقة الزوجة (طلب المالك ٢٠٢٦-١٠-٢٥): «من أين الأم؟» ← من العائلة / من خارجها
+    private func openMotherFlow() {
+        draft.addNotes = ""
+        draft.flowRelation = .mother
         draft.showWifeFlow = true
     }
     private func openHusbandPicker() {
@@ -1196,6 +1203,7 @@ struct WomanDetailSheet: View {
                 note: actionsBoxNote,
                 isBehindExtra: draft.boxOnTop,
                 extraActions: deleteFooterAction,
+                extraBesideCancel: true,
                 onSubmit: {},
                 onCancel: { showAdminBox = false }
             ) {
@@ -1650,8 +1658,9 @@ struct WomanDetailSheet: View {
                                 showsGender: kind == .child,
                                 allowsMultiple: kind.allowsMultiple,
                                 showsBirth: showsBirth,
-                                // «متزوجة» تُكتب في الكتابة المباشرة وحدها — والزوجة والأم متزوجتان بالرابط
-                                showsMarried: mode == .direct && (kind == .child || kind == .sister),
+                                // «أبناء»: ثلاث بطاقات فقط (الجنس، الوفاة، الميلاد — طلب المالك ٢٠٢٦-١٠-٢٥)؛ «متزوجة» للأخت في
+                                // الكتابة المباشرة، والزوجة والأم متزوجتان بالرابط
+                                showsMarried: mode == .direct && kind == .sister,
                                 newGender: kind == .child ? "male" : "female")
 
             // دوال «عائلتي» لا تحمل الوفاة للزوجة والأم والأخت — المتوفّاة تُرسل طلباً (يقال قبل الضغط)
@@ -1737,21 +1746,86 @@ struct WomanDetailSheet: View {
     /// المربّع المشترك مع «حسابي» (`DSWifeFlowBox`): القوائم بقواعد `WifeCandidateRules` (لا متزوجة، ولا دون ١٨،
     /// ولا مولودة حديثاً)، و«من خارج العائلة» = مربّع «إضافة زوجة» بالاسم الموجود
     private var wifeFlowBox: some View {
-        DSWifeFlowBox(
+        let mother = draft.flowRelation == .mother
+        return DSWifeFlowBox(
             mode: mode == .direct ? .direct : (mode == .selfFamily ? .selfFamily : .request),
+            relation: draft.flowRelation,
             husbandId: woman.id,
+            personFatherId: woman.fatherId,
             husbandName: displayName(woman),
             people: allWomen,
             showsHidden: canEdit,
             isBusy: draft.busy,
             onOutside: {
                 draft.showWifeFlow = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { startAdd(.wife) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { startAdd(mother ? .mother : .wife) }
             },
-            onLink: { daughter, father in linkFamilyWife(daughter, father: father) },
-            onAddUnderFather: { name, father in addWifeUnderFather(name, father: father) },
+            onLink: { daughter, father in
+                if mother { linkFamilyMother(daughter, father: father) } else { linkFamilyWife(daughter, father: father) }
+            },
+            onAddUnderFather: { name, father in
+                if mother { addMotherUnderFather(name, father: father) } else { addWifeUnderFather(name, father: father) }
+            },
             onCancel: { draft.showWifeFlow = false }
         )
+    }
+
+    /// «الأم من العائلة»: بنت موجودة تصير أمّه (وزوجةً لأبيه إن لم يكن لها زوج) — الإدارة بمسارات السجل الموجودة،
+    /// والعضو على عقدته بدالته الذاتية (add_or_link_self_relative 'mother')، وغيره يطلب
+    private func linkFamilyMother(_ daughter: FamilyMember, father: FamilyMember) {
+        let childId = woman.id
+        let personFather = woman.fatherId
+        switch mode {
+        case .direct:
+            runWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link")) {
+                if let personFather, daughter.husbandId == nil {
+                    try await WomenStore.setHusbandId(womanId: daughter.id, husbandId: personFather)
+                }
+                try await WomenStore.setMotherId(childId: childId, motherId: daughter.id)
+            }
+        case .selfFamily:
+            runWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link")) {
+                do { try await WomenStore.addOrLinkSelfRelative(kind: "mother", fatherId: father.id, womanId: daughter.id, name: nil) }
+                catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
+            }
+        case .request:
+            submitLinkRequest(title: L10n.t("طلب ربط أم", "Mother link request"), picked: daughter,
+                              details: [L10n.t("أبوها: ", "Her father: ") + displayName(father)])
+        case .viewOnly:
+            break
+        }
+    }
+
+    /// «أضفها تحت أبيها» للأم: بنت جديدة لأبيها تصير أمّه (وزوجةً لأبيه)
+    private func addMotherUnderFather(_ name: String, father: FamilyMember) {
+        let childId = woman.id
+        let personFather = woman.fatherId
+        switch mode {
+        case .direct:
+            let sort = (allWomen.filter { $0.fatherId == father.id }.map(\.sortOrder).max() ?? -1) + 1
+            let fatherFull = father.fullName
+            runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
+                let newId = try await WomenStore.addFamilyChild(parentId: father.id, name: name, gender: "female",
+                                                                birthDate: nil, sortOrder: sort, parentFullName: fatherFull)
+                if let personFather { try await WomenStore.setHusbandId(womanId: newId, husbandId: personFather) }
+                try await WomenStore.setMotherId(childId: childId, motherId: newId)
+            }
+        case .selfFamily:
+            runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
+                do { try await WomenStore.addOrLinkSelfRelative(kind: "mother", fatherId: father.id, womanId: nil, name: name) }
+                catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
+            }
+        case .request:
+            guard let anchor = requestAnchor(preferHusband: false) else { return }
+            sendRequest(requestPayload(title: L10n.t("طلب إضافة أم من العائلة", "Request a mother from the family"),
+                                       name: name,
+                                       details: [L10n.t("أبوها في الشجرة: ", "Her father in the tree: ") + displayName(father),
+                                                 L10n.t("تُضاف بنتاً لأبيها ثم تُربط أمّاً (وزوجةً للأب).",
+                                                        "Add her as his daughter, then link her as the mother (and the father's wife).")],
+                                       createsSon: false, anchor: anchor))
+        case .viewOnly:
+            break
+        }
     }
 
     /// «من العائلة»: بنت موجودة تُربط زوجةً — الإدارة مباشرة، والعضو على عقدته بدالته الذاتية، وغيره يطلب
@@ -2359,6 +2433,8 @@ private final class WomanAdminDraft: ObservableObject {
     @Published var showMother = false
     /// «إضافة زوجة» الواحدة (`DSWifeFlowBox`)
     @Published var showWifeFlow = false
+    /// زوجة أو أم — المربّع نفسه
+    @Published var flowRelation: DSWifeFlowBox.Relation = .wife
     @Published var showHusbandPicker = false
     @Published var showGender = false
     @Published var showDelete = false
@@ -2419,3 +2495,4 @@ private struct WomanPanelCloseButton: View {
         .buttonStyle(.ds(.cancel))
     }
 }
+
