@@ -355,7 +355,7 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
                     .dsFont(.subtitle)
                     .foregroundColor(DS.Hub.onBandMuted)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, DS.Spacing.xxs)
+                    .padding(.top, DSBox.headerLineGap)
             }
 
             accessory()

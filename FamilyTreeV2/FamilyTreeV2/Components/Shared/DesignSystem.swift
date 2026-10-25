@@ -1449,6 +1449,9 @@ enum DSBox {
     static let pageWatermark: CGFloat = 104
     static let pageWatermarkOpacity: Double = 0.2
     static let pageWatermarkAngle: Double = -18
+    /// المسافة بين العنوان ووصفه في كل الرؤوس (التبويب، الصفحة الفرعية، رأس المربّع، صفحات الإدارة) — حروف Alexandria
+    /// تتجاوز سطرها فكان العنوان يلامس السطر تحته (طلب المالك ٢٠٢٦-١٠-٢٥ «جمل متشابكة مع السطر الى تحته»)
+    static var headerLineGap: CGFloat { DS.Font.Plex.useAlexandria ? 6 : 2 }
     static var pageTitleFont: Font { DS.Font.role(.pageTitle) }
     static var pageSubtitleFont: Font { DS.Font.role(.pageSubtitle) }
     /// أقصى أسطر وصف الرأس (الطويل يلتفّ والرأس يطول بدل «…»)

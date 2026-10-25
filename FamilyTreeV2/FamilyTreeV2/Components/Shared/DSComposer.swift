@@ -647,7 +647,7 @@ struct DSComposerHeader: View {
 
     /// العنوان ثم الوصف ينسابان من جهة الأيقونة (٦٠ ملّي ثانية بينهما)
     private var titles: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
             Text(title)
                 .font(compact ? DSBox.alertTitleFont : DSBox.titleFont)
                 .foregroundColor(DS.Color.headerTitle)
