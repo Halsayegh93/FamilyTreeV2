@@ -1367,14 +1367,21 @@ struct PrivacyPolicyView: View {
                 }, selection: $tab.animation(DS.Anim.snappy), size: .regular)
             }
 
+            // كل النقاط صفوف خفيفة في بطاقة واحدة بخط رفيع بينها (طلب المالك «تخفيف زحمة» — كانت بطاقة لكل نقطة)
             if let current {
-                VStack(spacing: DS.Spacing.sm) {
+                VStack(spacing: 0) {
                     ForEach(Array(current.items.enumerated()), id: \.element.id) { index, item in
-                        itemCard(item)
+                        if index > 0 {
+                            Divider().padding(.leading, DS.Icon.row + DS.Spacing.md)
+                        }
+                        itemRow(item)
                             .dsStaggerIn(index)
                     }
                 }
-                .id(current.key)   // تبويب جديد ← دخول بطاقاته من جديد
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
+                .dsCard()
+                .id(current.key)   // تبويب جديد ← دخول صفوفه من جديد
             }
 
             VStack(spacing: DS.Spacing.xs) {
@@ -1402,29 +1409,29 @@ struct PrivacyPolicyView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    /// نقطة واحدة: رمز بدائرة ملوّنة + العنوان + سطورها
-    private func itemCard(_ item: LegalContent.Item) -> some View {
+    /// نقطة واحدة: رمز صغير بلون القسم + العنوان (١٥) + سطرها (١٣ رمادي)
+    private func itemRow(_ item: LegalContent.Item) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             Image(systemName: LegalContent.icon(for: item.id))
-                .dsGlyph(DS.Glyph.md)
-                .foregroundColor(DS.Color.textOnPrimary)
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
+                .foregroundColor(DS.Color.primary.dsChrome(in: section))
                 .frame(width: DS.Icon.row, height: DS.Icon.row)
-                .background(Circle().fill(DS.Color.actionNavy.dsChromeFill(in: section)))
+                .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(DS.Opacity.tintFill)))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(item.title)
-                    .dsFont(.rowTitle)
+                    .dsFont(.chip)
                     .foregroundColor(DS.Color.textPrimary)
                 ForEach(item.lines, id: \.self) { line in
                     Text(line)
-                        .dsFieldFont(.fieldValue)
-                        .foregroundColor(DS.Color.fieldValue)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 0)
         }
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm)
         .accessibilityElement(children: .combine)
     }
 }
