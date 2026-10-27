@@ -608,7 +608,7 @@ struct AdminMemberDetailSheet: View {
                         HStack(spacing: DS.Spacing.sm) {
                             if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
                                 Text(father.displayFullName)
-                                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                                    .dsFieldFont(.rowTitle)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .dsNameLines()
                             } else {
@@ -703,7 +703,7 @@ struct AdminMemberDetailSheet: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(child.firstName)
-                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 if let birth = child.birthDate, !birth.isEmpty {
@@ -1888,7 +1888,7 @@ struct FatherPickerSheet: View {
                             .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("رأس شجرة", "Tree root"))
-                            .dsFieldFont(DSBox.fieldValueSize, weight: checked ? .bold : .regular)
+                            .dsFieldFont(DSBox.fieldValueSize, weight: checked ? .medium : .regular)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
@@ -1956,7 +1956,7 @@ private struct FatherPickerRow: View, Equatable {
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم بجانبه
 
                 Text(member.displayFullName)
-                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .medium : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .dsNameLines()
                     .truncationMode(.tail)

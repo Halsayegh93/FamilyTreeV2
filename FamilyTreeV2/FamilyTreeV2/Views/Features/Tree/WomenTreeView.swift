@@ -1431,7 +1431,7 @@ struct WomanDetailSheet: View {
             HStack(spacing: DS.Spacing.sm) {
                 if let value {
                     Text(value)
-                        .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                        .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                 } else {
@@ -1464,7 +1464,7 @@ struct WomanDetailSheet: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(m.firstName.isEmpty ? m.fullName : m.firstName)
-                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 if let birth = m.birthDate, !birth.isEmpty {

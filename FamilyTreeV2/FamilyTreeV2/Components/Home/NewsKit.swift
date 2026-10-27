@@ -94,9 +94,9 @@ struct NewsMediaViewerItem: Identifiable {
 
 extension DS.TextRole {
     /// اسم النوع فوق الخبر («مولود»، «زواج») — Footnote (١٣) عريض بلون النوع
-    static let newsKicker = DS.TextRole(.footnote, weight: .bold)
+    static let newsKicker = DS.TextRole(.footnote, weight: .semibold)
     /// اسم الكاتب في سطر التوقيع — Footnote (١٣) شبه عريض
-    static let newsByline = DS.TextRole(.footnote, weight: .semibold)
+    static let newsByline = DS.TextRole(.footnote, weight: .medium)
 }
 
 // MARK: - ختم النوع

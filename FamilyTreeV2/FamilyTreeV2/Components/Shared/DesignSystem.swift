@@ -471,7 +471,7 @@ enum DS {
         static var body: SwiftUI.Font        { role(.body) }
         static var bodyBold: SwiftUI.Font    { role(.bodySemibold) }
         static var callout: SwiftUI.Font     { role(.callout) }
-        static var calloutBold: SwiftUI.Font { plex(DS.TextRole.callout.textSize, weight: .bold, relativeTo: .callout) }
+        static var calloutBold: SwiftUI.Font { role(.rowTitle) }
         static var subheadline: SwiftUI.Font { role(.subtitle) }
         static var footnote: SwiftUI.Font    { role(.footnote) }
         static var caption1: SwiftUI.Font    { plex(appleSize(.caption) * opticalScale, relativeTo: .caption) }
@@ -778,28 +778,28 @@ extension DS {
 
 extension DS.TextRole {
     /// عنوان رأس الصفحة الفرعية / بطاقة رأس الصفحة — Title 3 (٢٠)
-    static let pageTitle    = DS.TextRole(.title3, weight: .bold)
+    static let pageTitle    = DS.TextRole(.headline, weight: .bold)
     /// عنوان الحالة الفارغة — Title 3 (٢٠)
-    static let emptyTitle   = DS.TextRole(.title3, weight: .bold)
+    static let emptyTitle   = DS.TextRole(.headline, weight: .semibold)
     /// رقم إحصاء (داخل الحلقة، صفّ الأرقام، «+N» فوق الصور) — نصّ غير عنوان: سقفه Headline (١٧ عريض)
     /// (طلب المالك ٢٠٢٦-١٠-٠٨ «لا نصّ أكبر من ١٧ إلا العناوين»؛ كان `emptyTitle` ٢٠)
-    static let statValue    = DS.TextRole(.headline, weight: .bold)
+    static let statValue    = DS.TextRole(.headline, weight: .semibold)
     /// عنوان رأس المربّع — Headline (١٧)
     static let title        = DS.TextRole(.headline, weight: .bold)
     /// عنوان التنبيه والبطاقة — Headline (١٧)
     static let headline     = DS.TextRole(.headline, weight: .bold)
     /// نص عادي وقيمة الحقل — Body (١٧)
-    static let body         = DS.TextRole(.body)
+    static let body         = DS.TextRole(.subheadline)
     /// عنوان الصفّ — Body (١٧) شبه عريض
-    static let rowTitle     = DS.TextRole(.body, weight: .semibold)
+    static let rowTitle     = DS.TextRole(.subheadline, weight: .medium)
     /// نص التنبيه والملاحظة — Callout (١٦)
-    static let callout      = DS.TextRole(.callout)
+    static let callout      = DS.TextRole(.subheadline)
     /// عنوان قسم في صفحة (`DSSectionTitle`) — Footnote (١٣)
-    static let sectionTitle = DS.TextRole(.footnote, weight: .bold)
+    static let sectionTitle = DS.TextRole(.footnote, weight: .semibold)
     /// وصف تحت عنوان / صفّ، ووصف رأس المربّع — Subheadline (١٥)
-    static let subtitle     = DS.TextRole(.subheadline)
+    static let subtitle     = DS.TextRole(.footnote)
     /// وصف رأس الصفحة الفرعية — Subheadline (١٥)
-    static let pageSubtitle = DS.TextRole(.subheadline, weight: .medium)
+    static let pageSubtitle = DS.TextRole(.footnote, weight: .medium)
     /// عنوان الحقل (`DSFieldLabel`، فوق القيمة في كل مكان) — Footnote (١٣) عادي، رمادي
     /// (طلب المالك ٢٠٢٦-١٠-٢٥: «الفرق بين عنوان الحقل وقيمته» + «مانبي شي غامق ونفضل الأحجام الصغيرة» — كان ١٣ ثقيل مقابل قيمة ١٧)
     static let label        = DS.TextRole(.footnote)
@@ -808,30 +808,30 @@ extension DS.TextRole {
     /// القيمة الجديدة في مقارنة «قبل ← بعد» — Subheadline (١٥) متوسط (لا عريض)
     static let fieldValueStrong = DS.TextRole(.subheadline, weight: .medium)
     /// الشرائح والأزرار الصغيرة — Subheadline (١٥)
-    static let chip         = DS.TextRole(.subheadline, weight: .semibold)
+    static let chip         = DS.TextRole(.footnote, weight: .medium)
     /// نص جانبي وتلميح (طرف عنوان القسم) — Caption 1 (١٢)
-    static let caption      = DS.TextRole(.caption, weight: .semibold)
+    static let caption      = DS.TextRole(.caption, weight: .medium)
     /// شارة حالة — Caption 2 (١١)
-    static let badge        = DS.TextRole(.caption2, weight: .bold)
+    static let badge        = DS.TextRole(.caption2, weight: .semibold)
     /// عنوان قسم داخل المربّع (`DSComposerSection`) — Footnote (١٣)
-    static let boxSectionTitle = DS.TextRole(.footnote, weight: .bold)
+    static let boxSectionTitle = DS.TextRole(.footnote, weight: .semibold)
     /// ملاحظة صغيرة (فوق أزرار المربّع) — Footnote (١٣)
     static let footnote     = DS.TextRole(.footnote)
     /// عدّاد ورقم صغير — Caption 2 (١١)
-    static let micro        = DS.TextRole(.caption2, weight: .semibold)
+    static let micro        = DS.TextRole(.caption2, weight: .medium)
     /// نص الزرّ الواحد (٤٤ في المربّعات والصفحات) — Body (١٧) شبه عريض كأزرار iOS
-    static let button       = DS.TextRole(.body, weight: .semibold)
+    static let button       = DS.TextRole(.subheadline, weight: .medium)
     /// زرّ ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة) — Body (١٧)
-    static let buttonLarge  = DS.TextRole(.body, weight: .semibold)
+    static let buttonLarge  = DS.TextRole(.subheadline, weight: .medium)
 }
 
 extension DS.TextRole {
     /// عنوان رأس التبويب (`MainHeaderView`: اسم القسم، واسم العضو في الرئيسية) — Title 2 (٢٢)
     static let tabTitle     = DS.TextRole(.title2, weight: .bold)
     /// «مرحباً بك» فوق اسم العضو في رأس الرئيسية — Footnote (١٣)
-    static let tabGreeting  = DS.TextRole(.footnote, weight: .semibold)
+    static let tabGreeting  = DS.TextRole(.footnote, weight: .medium)
     /// اسم مربّع القسم في الرئيسية (تحت المجسّم، سطر واحد يصغر إن ضاق) — Subheadline (١٥)
-    static let tileTitle    = DS.TextRole(.subheadline, weight: .bold)
+    static let tileTitle    = DS.TextRole(.subheadline, weight: .semibold)
 }
 
 extension DS.Font {
@@ -2075,7 +2075,7 @@ extension DS.TextRole {
     /// الاسم الكامل في رأس تفاصيل العضو — Headline (١٧) متوسط (كان `title` عريضاً)
     static let memberNameTitle = DS.TextRole(.headline, weight: .medium)
     /// الاسم في نتائج البحث والمنتقيات — Body (١٧) متوسط (كان `rowTitle` شبه عريض)
-    static let memberName = DS.TextRole(.body, weight: .medium)
+    static let memberName = DS.TextRole(.subheadline, weight: .medium)
 }
 
 // MARK: - عقد الشجرتين تكبر مع «حجم النص» (طلب المالك ٢٠٢٦-١٠-٠٨ «بشي منظم»)
@@ -2170,20 +2170,20 @@ extension DSBox {
 
 extension DS.TextRole {
     /// نص المبدّل الكبير / العادي — Subheadline (١٥)، والمدمّج (تبويب الشجرة) — Footnote (١٣)
-    static let segment        = DS.TextRole(.subheadline, weight: .semibold)
-    static let segmentRegular = DS.TextRole(.subheadline, weight: .semibold)
-    static let segmentCompact = DS.TextRole(.footnote, weight: .semibold)
+    static let segment        = DS.TextRole(.subheadline, weight: .medium)
+    static let segmentRegular = DS.TextRole(.subheadline, weight: .medium)
+    static let segmentCompact = DS.TextRole(.footnote, weight: .medium)
     // «نصف الدرجة» القديمة (نصف نقطة أصغر) — مع مقاسات Apple صارت نفس نمط الدور الأصلي (طلب المالك ٢٠٢٦-١٠-٠٨)؛
     // الشريحة المضغوطة وحدها أصغر بنمط (Footnote بدل Subheadline)
     static let headlineCompact = DS.TextRole(.headline, weight: .bold)
-    static let bodyCompact     = DS.TextRole(.body)
-    static let rowTitleCompact = DS.TextRole(.body, weight: .semibold)
-    static let calloutCompact  = DS.TextRole(.callout)
-    static let chipCompact     = DS.TextRole(.footnote, weight: .semibold)
-    static let captionCompact  = DS.TextRole(.caption, weight: .semibold)
-    static let badgeCompact    = DS.TextRole(.caption2, weight: .bold)
+    static let bodyCompact     = DS.TextRole(.subheadline)
+    static let rowTitleCompact = DS.TextRole(.subheadline, weight: .medium)
+    static let calloutCompact  = DS.TextRole(.subheadline)
+    static let chipCompact     = DS.TextRole(.footnote, weight: .medium)
+    static let captionCompact  = DS.TextRole(.caption, weight: .medium)
+    static let badgeCompact    = DS.TextRole(.caption2, weight: .semibold)
     static let footnoteCompact = DS.TextRole(.footnote)
-    static let microCompact    = DS.TextRole(.caption2, weight: .semibold)
+    static let microCompact    = DS.TextRole(.caption2, weight: .medium)
 }
 
 extension DS.Glyph {
@@ -2233,20 +2233,20 @@ extension DSBox {
 // MARK: - قسم «العائلة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٠٧: الخط كما كان قبل التوحيد)
 extension DS.TextRole {
     /// «الأبناء · N» فوق صور الأبناء — Footnote (١٣)
-    static let familyLabel = DS.TextRole(.footnote, weight: .heavy)
+    static let familyLabel = DS.TextRole(.footnote, weight: .semibold)
     /// قيمة صفّ العلاقة (الأم/الزوج) في «العائلة» — Callout (١٦)
-    static let familyValue = DS.TextRole(.callout)
+    static let familyValue = DS.TextRole(.subheadline)
 }
 
 // MARK: - دفعة 5 «أسلوب واحد» (٢٠٢٦-١٠-٠٧): آخر الأوزان التي كانت أرقاماً في المكوّنات المشتركة والدليل
 extension DS.TextRole {
     /// نص المحتوى بوزن أثقل: عريض (صفّ فرع مختار)، شبه عريض (قيمة تاريخ، شرح نقطة الدليل)، متوسط (مفتاح)
-    static let bodyStrong   = DS.TextRole(.body, weight: .bold)
-    static let bodySemibold = DS.TextRole(.body, weight: .semibold)
-    static let bodyMedium   = DS.TextRole(.body, weight: .medium)
+    static let bodyStrong   = DS.TextRole(.subheadline, weight: .semibold)
+    static let bodySemibold = DS.TextRole(.subheadline, weight: .medium)
+    static let bodyMedium   = DS.TextRole(.subheadline, weight: .medium)
     /// نص ملاحظة بوزن متوسط (قيمة «قبل/بعد»، رقم الإصدار، تلميح فوق صورة، سطر تحت اسم) — Callout (١٦)
-    static let calloutMedium        = DS.TextRole(.callout, weight: .medium)
-    static let calloutCompactMedium = DS.TextRole(.callout, weight: .medium)
+    static let calloutMedium        = DS.TextRole(.subheadline, weight: .medium)
+    static let calloutCompactMedium = DS.TextRole(.subheadline, weight: .medium)
     /// عنوان نهاية فصل الدليل (= `DS.Font.title2`) — Title 2 (٢٢)
     static let celebrationTitle = DS.TextRole(.title2, weight: .bold)
     /// رقم في خانة رمز التحقق داخل المربّع (`DSOTPField`) — مستثنى من تغيير الخط: كما كان ٢٢ مقيّداً بـ Title 2
@@ -2394,20 +2394,20 @@ extension DS {
 
 extension DS.TextRole {
     /// التحية في رأس «اليوم» وعنوان صفحة القسم — Title 1 (٢٨)
-    static let hubTitle = DS.TextRole(.title, weight: .bold)
+    static let hubTitle = DS.TextRole(.title2, weight: .bold)
     /// رقم المربّع الزجاجي في رؤوس الأقسام (`AdminKPITile`) ووسط الحلقة الكبيرة (`DS.Ring.large`: رصيد رسائل الدخول) —
     /// Title 1 (٢٨) بموافقة المالك على رأس «أ». وأرقام المربّع اللي ينسحب في «اليوم» (الدفعة ١٣ «إلى داخله نكبر»): الأربعة في
     /// «يحتاج انتباهك» ووسط حلقات «إحصاء الأفراد» (`DS.Ring.census`)
-    static let hubKPI = DS.TextRole(.title, weight: .bold)
+    static let hubKPI = DS.TextRole(.title3, weight: .semibold)
     /// وسط الحلقة المتوسطة الموحّدة (`DS.Ring.medium`)، ورقم رسائل الدخول — Title 2 (٢٢)
-    static let hubPulse = DS.TextRole(.title2, weight: .bold)
+    static let hubPulse = DS.TextRole(.headline, weight: .semibold)
     /// اسم الرقم في «يحتاج انتباهك» وسطر «54 حياً · 14 متوفى» تحت حلقات «إحصاء الأفراد» (الدفعة ١٣ — كانت Caption 1 ١٢) —
     /// Footnote (١٣) شبه عريض
-    static let hubLabel = DS.TextRole(.footnote, weight: .semibold)
+    static let hubLabel = DS.TextRole(.footnote, weight: .medium)
     /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
-    static let hubRow = DS.TextRole(.subheadline, weight: .bold)
+    static let hubRow = DS.TextRole(.subheadline, weight: .medium)
     /// نص زرّ الكبسولة في الصفوف — Footnote (١٣) عريض
-    static let hubButton = DS.TextRole(.footnote, weight: .bold)
+    static let hubButton = DS.TextRole(.footnote, weight: .medium)
 }
 
 // MARK: - المؤشرات الموحّدة (الدفعة ١٠ «وحّد شكلها كلها» — طلب المالك ٢٠٢٦-١٠-٢٠)
@@ -2494,5 +2494,5 @@ extension DS.Hub {
 
 extension DS.TextRole {
     /// الرقم داخل الحلقة الصغيرة — Footnote (١٣) عريض
-    static let ringSmall = DS.TextRole(.footnote, weight: .bold)
+    static let ringSmall = DS.TextRole(.footnote, weight: .semibold)
 }

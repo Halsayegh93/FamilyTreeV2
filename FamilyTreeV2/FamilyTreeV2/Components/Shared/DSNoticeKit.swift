@@ -37,7 +37,7 @@ enum DSNoticeMetrics {
 
 extension DS.TextRole {
     /// عنوان صفّ الإشعار: غير المقروء عريض، والمقروء أخفّ — Subheadline (١٥)
-    static let noticeTitle = DS.TextRole(.subheadline, weight: .bold)
+    static let noticeTitle = DS.TextRole(.subheadline, weight: .semibold)
     static let noticeTitleRead = DS.TextRole(.subheadline, weight: .medium)
 }
 

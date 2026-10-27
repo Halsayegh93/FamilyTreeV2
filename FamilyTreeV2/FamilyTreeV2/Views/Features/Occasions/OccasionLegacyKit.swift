@@ -51,7 +51,7 @@ struct DSSectionHeader: View {
                             .foregroundColor(iconColor)
                     }
                     Text(title)
-                        .font(DS.Font.scaled(13, weight: .semibold))
+                        .dsFont(.chip)
                         .foregroundColor(iconColor)
                 }
                 .padding(.horizontal, DS.Spacing.md)
@@ -62,8 +62,7 @@ struct DSSectionHeader: View {
                 if let trailing {
                     // تلميح ثانوي — لا ينافس عنوان القسم في اللون ولا الحجم
                     Text(trailing)
-                        .font(DS.Font.caption2)
-                        .fontWeight(.semibold)
+                        .dsFont(.micro)
                         .foregroundColor(DS.Color.textTertiary)
                 }
 

@@ -163,8 +163,7 @@ struct DeviceRevokedView: View {
 
                 VStack(spacing: DS.Spacing.md) {
                     Text(L10n.t("تم إزالة هذا الجهاز", "Device Removed"))
-                        .font(DS.Font.title2)
-                        .fontWeight(.black)
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
 
                     Text(L10n.t(

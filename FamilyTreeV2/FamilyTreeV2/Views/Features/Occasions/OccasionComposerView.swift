@@ -404,7 +404,7 @@ struct OccasionComposerView: View {
                     } label: {
                         // نفس عائلة مربعات القالب والنموذج: حدّ شعري، والمختار ذهبي
                         Text(p.title)
-                            .font(DS.Font.plex(13, weight: .semibold))
+                            .dsFont(.chip)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                             .foregroundColor(DS.Color.textPrimary)
@@ -484,7 +484,7 @@ struct OccasionComposerView: View {
                         showMemberPicker = true
                     } label: {
                         Label(L10n.t("اختر من شجرة العائلة", "Pick from the family tree"), systemImage: "magnifyingglass")
-                            .font(DS.Font.calloutBold)
+                            .dsFont(.rowTitle)
                             .foregroundColor(DS.Color.textOnPrimary)
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .background(Capsule().fill(DS.Color.primary))
@@ -521,7 +521,7 @@ struct OccasionComposerView: View {
             OccasionMemberAvatar(member: m, size: 44)
             VStack(alignment: .leading, spacing: 2) {
                 Text(vm.nameResolution("name")?.option.name ?? vm.name)
-                    .font(DS.Font.calloutBold)
+                    .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                 HStack(spacing: DS.Spacing.xs) {
@@ -537,7 +537,7 @@ struct OccasionComposerView: View {
             }
             Spacer(minLength: 0)
             Button(L10n.t("تغيير", "Change")) { showMemberPicker = true }
-                .font(DS.Font.calloutBold)
+                .dsFont(.rowTitle)
                 .foregroundColor(DS.Color.primary)
             Button {
                 withAnimation(DS.Anim.quick) { vm.clearMember() }
@@ -946,7 +946,7 @@ struct OccasionComposerView: View {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     Label(vm.photo.image == nil ? L10n.t("اختيار صورة", "Choose photo") : L10n.t("تغيير الصورة", "Change photo"),
                           systemImage: "photo.on.rectangle")
-                        .font(DS.Font.calloutBold)
+                        .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.lg)
                         .padding(.vertical, DS.Spacing.sm + 2)

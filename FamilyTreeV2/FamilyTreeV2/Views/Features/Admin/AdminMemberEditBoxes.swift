@@ -122,7 +122,7 @@ struct LinkFatherSheet: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(father.displayFullName)
-                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .medium)
+                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .semibold : .medium)
                         .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                         .dsNameLines()
                     if father.isDeceased == true {
