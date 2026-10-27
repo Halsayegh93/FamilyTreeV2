@@ -910,7 +910,7 @@ struct WomenClassicTreeView: View {
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                        .padding(.horizontal, DS.Spacing.xsm * k)
+                        .padding(.horizontal, 10 * k)   // هامش الاسم نفسه في الشجرتين
                         .frame(maxWidth: NODE_W)
                         .frame(height: PILL_H)
                         .background(DS.Color.surface)
@@ -937,7 +937,7 @@ struct WomenClassicTreeView: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
-                    .padding(.horizontal, DS.Spacing.xsm * k)
+                    .padding(.horizontal, 10 * k)   // هامش الاسم نفسه في الشجرتين
                     .frame(maxWidth: NODE_W)
                     .frame(height: PILL_H)
                     .background(Capsule().fill(DS.Color.surface))
@@ -1064,7 +1064,9 @@ struct WomenClassicTreeView: View {
         let landscape = size.width > size.height
         // الملاءمة بوحدات العقدة الافتراضية (العرض ÷ معامل «حجم النص»): مع الخط الأكبر تظهر الشجرة أكبر
         // وتمتدّ خارج الشاشة للسحب (اختيار المالك ٢٠٢٦-١٠-٠٨)
-        let s = max(0.28, min(landscape ? 0.65 : 1.1, (size.width - 48) / (L.size.width / L.m.k)))   // نفس ملاءمة شجرة العائلة
+        // نفس مستوى شجرة العائلة إن فُتحت قبلها (عمودي)، وإلا ملاءمتها هي بنفس القاعدة
+        let own = max(0.28, min(landscape ? 0.65 : 1.1, (size.width - 48) / (L.size.width / L.m.k)))
+        let s = (!landscape ? TreeSharedZoom.familyFit : nil) ?? own
         scale = s; baseScale = s
         // عمودي: 72 = ارتفاع البار العائم — الجذر يبدأ تحته لا خلفه
         offset = CGSize(width: (size.width - L.size.width * s) / 2, height: landscape ? 16 : 72)

@@ -11,6 +11,11 @@ extension Notification.Name {
 }
 
 // MARK: - ثوابت الشجرة
+/// مستوى تكبير شجرة العائلة الحالي (الملاءمة ثم كل تكبير/تصغير) — شجرة النساء تفتح به (طلب المالك ٢٠٢٦-١٠-٢٧ «نفس مستوى شجرة العائلة»)
+enum TreeSharedZoom {
+    static var familyFit: CGFloat?
+}
+
 private enum TreeConst {
     // Zoom
     static let minScale: CGFloat = 0.2
@@ -654,6 +659,8 @@ struct TreeView: View {
                 highlightTask = nil
             }
             // «أنت هنا» دائم — يتبع حساب المستخدم الحالي
+            // زوم شجرة العائلة الحالي (بعد التكبير/التصغير باليد أيضاً) — شجرة النساء تفتح عليه (طلب المالك ٢٠٢٦-١٠-٢٧)
+            .onChange(of: scale) { TreeSharedZoom.familyFit = $0 }
             .onChange(of: authVM.currentUser?.id) { newId in
                 currentLocationMemberID = newId
             }
@@ -1458,6 +1465,7 @@ struct TreeView: View {
         // وتمتدّ خارج الشاشة للسحب (اختيار المالك ٢٠٢٦-١٠-٠٨) — بدل أن تصغّرها الملاءمة فيضيع التكبير
         let s = max(0.28, min(maxS, (size.width - 48) / (L.size.width / L.m.k)))
         scale = s; baseScale = s; fittedScale = s
+        TreeSharedZoom.familyFit = size.width > size.height ? nil : s   // شجرة النساء تفتح بنفس المستوى
         offset = centeredOffset(scale: s, in: size, layout: L)
         baseOffset = offset
     }
@@ -1862,10 +1870,11 @@ struct TreeMemberNode: View, Equatable {
                                         .dsTreeFont(.title3Tree, k)
                                         .foregroundColor(DS.Color.textPrimary)
                                         .lineLimit(1)
-                                        .minimumScaleFactor(0.75)
-                                        .padding(.horizontal, DS.Spacing.lg * k)
+                                        .minimumScaleFactor(0.55)
+                                        // هامش ثابت على الجانبين في كل الصفوف (طلب المالك ٢٠٢٦-١٠-٢٧) — الطويل يصغر داخل المربّع
+                                        .padding(.horizontal, 10 * k)
                                         .padding(.vertical, DS.Spacing.xs * k)
-                                        .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2 * k)
+                                        .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
                                         .background(DS.Color.surface)
                                 }
                                 Text(getLifeSpan())
@@ -1877,7 +1886,7 @@ struct TreeMemberNode: View, Equatable {
                                     // سطر خط الهوية أطول من خط النظام (١٫٥×) — حشوة أصغر فيبقى الشريط ٢١ كما كان
                                     .padding(.vertical, DS.Spacing.xxs * k)
                                     // maxWidth يمدّد الشريط الأحمر ليطابق عرض الاسم مهما طال
-                                    .frame(minWidth: interactiveLabelWidth, maxWidth: .infinity, minHeight: 21 * k)
+                                    .frame(width: interactiveLabelWidth, height: 21 * k)
                                     .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                             }
                             // نفس بطاقة شجرة النساء (طلب المالك ٢٠٢٦-١٠-٢٧): زوايا ١٠ وإطار رفيع بلون العقدة الخفيف
@@ -1891,10 +1900,10 @@ struct TreeMemberNode: View, Equatable {
                                 .dsTreeFont(.title3Tree, k)
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                                .padding(.horizontal, DS.Spacing.lg * k)
+                                .minimumScaleFactor(0.55)
+                                .padding(.horizontal, 10 * k)
                                 .padding(.vertical, DS.Spacing.xs * k)
-                                .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2 * k)
+                                .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
                                 .background(DS.Color.surface)
                                 .clipShape(Capsule())
                                 .modifier(DSClaySkin(section: .tree))
