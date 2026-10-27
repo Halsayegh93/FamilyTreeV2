@@ -1905,9 +1905,11 @@ struct TreeMemberNode: View, Equatable {
                                 .padding(.vertical, DS.Spacing.xs * k)
                                 .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
                                 .background(DS.Color.surface)
-                                .clipShape(Capsule())
-                                .modifier(DSClaySkin(section: .tree))
-                                .overlay(Capsule().stroke(nameStroke, lineWidth: DS.Border.width * k))
+                                // نفس مربّع المتوفّى (زوايا ١٠) بلا شريط السنوات — طلب المالك ٢٠٢٦-١٠-٢٧ (كانت كبسولة)
+                                .clipShape(RoundedRectangle(cornerRadius: 10 * k, style: .continuous))
+                                .modifier(DSClaySkin(radius: 10 * k, section: .tree))
+                                .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
+                                    .stroke(nameStroke, lineWidth: DS.Border.width * k))
                         }
                     }
                     .contentShape(Rectangle())
@@ -1969,7 +1971,7 @@ struct TreeMemberNode: View, Equatable {
     private var interactiveNodeSize: CGFloat { 105 * k }
     // كبسولة الاسم بمقاس شجرة النساء (طلب المالك ٢٠٢٦-١٠-٢٧ «المربعات نفس النساء شكلها أوضح»): ٤٢ ارتفاعاً بعرض العقدة،
     // والاسم بخط Title 3 (`title3Tree`) — كانت ٣٠ × ١١٠ بخط Headline
-    private var interactiveLabelWidth: CGFloat { 124 * k }
+    private var interactiveLabelWidth: CGFloat { 116 * k }   // أضيق من العقدة (١٢٤) بـ٨ — فراغ واضح متساوٍ بين المربّعات في كل صف
     private var interactiveLabelHeight: CGFloat { 40 * k }
 
     /// وصف صوتي موحّد للعقدة (VoiceOver): الاسم + الحالة + عدد الأبناء

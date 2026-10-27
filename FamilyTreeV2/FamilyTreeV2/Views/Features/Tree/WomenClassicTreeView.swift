@@ -911,7 +911,7 @@ struct WomenClassicTreeView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .padding(.horizontal, 10 * k)   // هامش الاسم نفسه في الشجرتين
-                        .frame(maxWidth: NODE_W)
+                        .frame(width: NODE_W - 8 * k)   // نفس فراغ شجرة العائلة بين المربّعات
                         .frame(height: PILL_H)
                         .background(DS.Color.surface)
                     Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
@@ -921,7 +921,7 @@ struct WomenClassicTreeView: View {
                         .minimumScaleFactor(0.7)
                         .environment(\.layoutDirection, .leftToRight)
                         .padding(.horizontal, DS.Spacing.xs * k)
-                        .frame(maxWidth: NODE_W)
+                        .frame(width: NODE_W - 8 * k)   // نفس فراغ شجرة العائلة بين المربّعات
                         .frame(height: LIFE_H + 2 * k)
                         .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                 }
@@ -938,11 +938,13 @@ struct WomenClassicTreeView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)   // تصغير أكبر → الاسم الطويل يظهر كاملاً بلا اقتطاع
                     .padding(.horizontal, 10 * k)   // هامش الاسم نفسه في الشجرتين
-                    .frame(maxWidth: NODE_W)
+                    .frame(width: NODE_W - 8 * k)   // نفس فراغ شجرة العائلة بين المربّعات
                     .frame(height: PILL_H)
-                    .background(Capsule().fill(DS.Color.surface))
-                    .modifier(DSClaySkin(compact: true, section: .tree))
-                    .overlay(Capsule().stroke(accent.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * k))
+                    // نفس مربّع المتوفّاة (زوايا ١٠) بلا شريط السنوات — طلب المالك ٢٠٢٦-١٠-٢٧ (كانت كبسولة)
+                    .background(RoundedRectangle(cornerRadius: 10 * k, style: .continuous).fill(DS.Color.surface))
+                    .modifier(DSClaySkin(radius: 10 * k, compact: true, section: .tree))
+                    .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
+                        .stroke(accent.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * k))
                     .onTapGesture { if TreeTapGuard.allowsTap { onSelect?(m) } }   // الاسم يفتح تفاصيل العضو (طلب المالك)
             }
         }
