@@ -739,10 +739,13 @@ struct WomenClassicTreeView: View {
     private func nodeView(_ m: FamilyMember, at p: CGPoint) -> some View {
         // مقاسات التخطيط نفسها × معامل «حجم النص» — كل ما في العقدة × k (١ = الشكل الافتراضي)
         let M = layout.m, k = M.k
-        let CIRCLE = M.circle, CORNER = M.corner, RING = M.ring, NODE_W = M.nodeW
+        let CIRCLE = M.circle, RING = M.ring, NODE_W = M.nodeW
         let PILL_H = M.pillH, LIFE_H = M.lifeH, NODE_H = M.nodeH
         let deceased = m.isDeceased == true
         let female = m.isFemale
+        // شكل خاص للنساء (طلب المالك ٢٠٢٦-١٠-٢٧ «شكل معين للنساء فقط مو دوائر»): مربّع بزوايا ناعمة ٢٨،
+        // والرجال دائرة مثل شجرة العائلة (M.corner = نصف القطر)
+        let CORNER = female ? 28 * k : M.corner
         // الإناث وردي ثابت؛ المتوفّاة وردي أغمق (طلب المالك). الذكر المتوفّى يبقى رمادياً.
         let accent: Color = female
             ? (deceased ? DS.Color.femaleDeceased : rose)
