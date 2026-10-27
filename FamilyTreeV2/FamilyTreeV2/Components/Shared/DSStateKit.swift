@@ -897,8 +897,7 @@ struct DSDangerTextButton: View {
                 Image(systemName: icon)
                     .dsGlyph(DS.Glyph.sm)
                 Text(title)
-                    .dsFont(.callout)
-                    .fontWeight(.semibold)
+                    .dsFont(.rowTitle)
                     .lineLimit(1)
             }
             .fixedSize(horizontal: true, vertical: false)

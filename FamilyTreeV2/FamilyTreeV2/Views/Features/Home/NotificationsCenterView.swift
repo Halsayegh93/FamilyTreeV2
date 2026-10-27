@@ -1807,7 +1807,7 @@ private struct WrappingHStack: View {
                 if segment.isCapsule, let capColor = roleColor(for: segment.text) {
                     // كبسولة للأدوار فقط
                     Text(segment.text)
-                        .font(font).bold()
+                        .font(font).fontWeight(.medium)
                         .foregroundColor(capColor)
                         .padding(.horizontal, DS.Spacing.sm)
                         .padding(.vertical, DS.Spacing.xxs)
@@ -1817,7 +1817,7 @@ private struct WrappingHStack: View {
                 } else if segment.isCapsule {
                     // اسم شخص — bold يلتف على سطرين لو طويل
                     Text(segment.text)
-                        .font(font).bold()
+                        .font(font).fontWeight(.medium)
                         .foregroundColor(color)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
