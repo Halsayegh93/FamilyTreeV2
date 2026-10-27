@@ -15,7 +15,7 @@ struct LoginView: View {
     @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: CGFloat = 0
-    /// «شروط الاستخدام وسياسة الخصوصية» قبل الدخول (Guideline 5.1.1)
+    /// «الخصوصية والاستخدام» قبل الدخول (Guideline 5.1.1)
     @State private var showLegal = false
 
 
@@ -188,23 +188,23 @@ struct LoginView: View {
             .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
     }
 
-    /// سطر صغير أسفل الشاشة يفتح «الخصوصية والشروط»
+    /// سطر واحد صغير أسفل الشاشة: «بالمتابعة توافق على «الخصوصية والاستخدام»» — الاسم يُضغط فيفتح المربّع
+    /// (طلب المالك ٢٠٢٦-١٠-٢٧؛ كان «باستخدامك التطبيق فإنك توافق على شروط الاستخدام وسياسة الخصوصية» بسطرين)
     private var legalFooter: some View {
-        VStack(spacing: 0) {
-            Text(L10n.t("باستخدامك التطبيق فإنك توافق على", "By using the app you agree to the"))
-                .dsFont(.footnote)
+        Button { showLegal = true } label: {
+            (Text(L10n.t("بالمتابعة توافق على ", "By continuing you agree to "))
                 .foregroundColor(DS.Color.textTertiary)
-            Button { showLegal = true } label: {
-                Text(L10n.t("شروط الاستخدام وسياسة الخصوصية", "Terms of Use and Privacy Policy"))
-                    .dsFont(.badge)
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+             + Text(L10n.t("الخصوصية والاستخدام", "Privacy & Use"))
+                .foregroundColor(DS.Color.primary)
+                .underline())
+                .dsFont(.footnote)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
+                .contentShape(Rectangle())
         }
-        .multilineTextAlignment(.center)
+        .buttonStyle(.plain)
+        .accessibilityHint(L10n.t("يفتح الخصوصية والاستخدام", "Opens Privacy & Use"))
         .frame(maxWidth: .infinity)
         .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView() }
     }
