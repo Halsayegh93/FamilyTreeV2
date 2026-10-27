@@ -68,7 +68,7 @@ private struct FamilyTreeMetrics: Equatable {
 
     init(k: CGFloat) {
         self.k = k
-        nodeW = 124 * k; circleFull = 112 * k; nameH = 44 * k; lifeH = 30 * k   // كبسولة الاسم ٤٢ مثل شجرة النساء (٢٠٢٦-١٠-٢٧)
+        nodeW = 124 * k; circleFull = 112 * k; nameH = 44 * k; lifeH = 26 * k   // كبسولة الاسم ٤٢ مثل شجرة النساء (٢٠٢٦-١٠-٢٧)
         hGap = 14 * k; vGap = 48 * k; rowGap = 34 * k
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; canvasPad = 60 * k
     }
@@ -1862,9 +1862,11 @@ struct TreeMemberNode: View, Equatable {
                 // والتوسيع له زر مستقل مدخل تحت آخر مربع (شريحة العدد + السهم).
                 Button(action: { if TreeTapGuard.allowsTap { onTap() } }) {
                     Group {
-                        // الاسم كبسولة واحدة للحي والمتوفّى، وللمتوفّى مربّع ثانٍ منفصل تحته للسنوات بخط أكبر
-                        // (طلب المالك ٢٠٢٦-١٠-٢٧: «شكل الأحياء السابق… المتوفّى نفس الأحياء مع المربّع الثاني»)
-                        VStack(spacing: 4 * k) {
+                        // كبسولة الاسم للحي؛ والمتوفّى بطاقة واحدة متصلة: الاسم فوق والسنوات تحته بلا فراغ، بأطراف
+                        // مدوّرة كالكبسولة (طلب المالك ٢٠٢٦-١٠-٢٧ «لا تفصل… متصلتين»)، وخط السنوات أكبر (`treeYears`)
+                        let deceased = member.isDeceased ?? false
+                        let cardShape = RoundedRectangle(cornerRadius: (interactiveLabelHeight + 2 * k) / 2, style: .continuous)
+                        VStack(spacing: 0) {
                             if showName {
                                 Text(displayName)
                                     .dsTreeFont(.title3Tree, k)
@@ -1876,22 +1878,22 @@ struct TreeMemberNode: View, Equatable {
                                     .padding(.vertical, DS.Spacing.xs * k)
                                     .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
                                     .background(DS.Color.surface)
-                                    .clipShape(Capsule())
-                                    .modifier(DSClaySkin(section: .tree))
-                                    .overlay(Capsule().stroke(nameStroke, lineWidth: DS.Border.width * k))
                             }
-                            if member.isDeceased ?? false {
+                            if deceased {
                                 Text(getLifeSpan())
                                     .dsTreeFont(.treeYears, k)
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.6)
-                                    .padding(.horizontal, 10 * k)
+                                    .padding(.horizontal, 12 * k)
                                     .frame(width: interactiveLabelWidth, height: 26 * k)
-                                    .background(DS.Color.deceasedStrip, in: Capsule())   // عنّابي بدرجة خفيفة (طلب المالك)
-                                    .modifier(DSClaySkin(onFill: true, compact: true, section: .tree))
+                                    .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                             }
                         }
+                        .clipShape(cardShape)
+                        .modifier(DSClaySkin(radius: (interactiveLabelHeight + 2 * k) / 2,
+                                             eyeRow: deceased && showName ? interactiveLabelHeight + 2 * k : nil, section: .tree))
+                        .overlay(cardShape.stroke(nameStroke, lineWidth: DS.Border.width * k))
                     }
                     .contentShape(Rectangle())
                 }
