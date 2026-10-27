@@ -63,7 +63,7 @@ private struct FamilyTreeMetrics: Equatable {
 
     init(k: CGFloat) {
         self.k = k
-        nodeW = 124 * k; circleFull = 112 * k; nameH = 32 * k; lifeH = 20 * k
+        nodeW = 124 * k; circleFull = 112 * k; nameH = 44 * k; lifeH = 20 * k   // كبسولة الاسم ٤٢ مثل شجرة النساء (٢٠٢٦-١٠-٢٧)
         hGap = 14 * k; vGap = 48 * k; rowGap = 34 * k
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; canvasPad = 60 * k
     }
@@ -1696,6 +1696,8 @@ struct TreeMemberNode: View, Equatable {
 
     // حلقة العقدة وإطار الاسم — لون الرتبة صلباً
     private var borderStroke: Color { nodeAccentColor.opacity(0.9) }
+    /// إطار كبسولة الاسم — رفيع وخفيف مثل شجرة النساء (`tintStroke`)
+    private var nameStroke: Color { nodeAccentColor.opacity(DS.Opacity.tintStroke) }
 
     var body: some View {
             // الوضع التفاعلي — دائري
@@ -1857,7 +1859,7 @@ struct TreeMemberNode: View, Equatable {
                             VStack(spacing: 0) {
                                 if showName {
                                     Text(displayName)
-                                        .dsTreeFont(.headline, k)
+                                        .dsTreeFont(.title3Tree, k)
                                         .foregroundColor(DS.Color.textPrimary)
                                         .lineLimit(1)
                                         .minimumScaleFactor(0.75)
@@ -1878,14 +1880,15 @@ struct TreeMemberNode: View, Equatable {
                                     .frame(minWidth: interactiveLabelWidth, maxWidth: .infinity, minHeight: 21 * k)
                                     .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                             }
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg * k, style: .continuous))
-                            .modifier(DSClaySkin(radius: DS.Radius.lg * k,
+                            // نفس بطاقة شجرة النساء (طلب المالك ٢٠٢٦-١٠-٢٧): زوايا ١٠ وإطار رفيع بلون العقدة الخفيف
+                            .clipShape(RoundedRectangle(cornerRadius: 10 * k, style: .continuous))
+                            .modifier(DSClaySkin(radius: 10 * k,
                                                  eyeRow: showName ? interactiveLabelHeight + 2 * k : nil, section: .tree))
-                            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg * k, style: .continuous)
-                                .stroke(borderStroke, lineWidth: 2.5 * k))
+                            .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
+                                .stroke(nameStroke, lineWidth: DS.Border.width * k))
                         } else if showName {
                             Text(displayName)
-                                .dsTreeFont(.headline, k)
+                                .dsTreeFont(.title3Tree, k)
                                 .foregroundColor(DS.Color.textPrimary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)
@@ -1895,7 +1898,7 @@ struct TreeMemberNode: View, Equatable {
                                 .background(DS.Color.surface)
                                 .clipShape(Capsule())
                                 .modifier(DSClaySkin(section: .tree))
-                                .overlay(Capsule().stroke(borderStroke, lineWidth: 2.5 * k))
+                                .overlay(Capsule().stroke(nameStroke, lineWidth: DS.Border.width * k))
                         }
                     }
                     .contentShape(Rectangle())
@@ -1955,8 +1958,10 @@ struct TreeMemberNode: View, Equatable {
 
     // مقاسات العقدة × معامل «حجم النص» (k = ١ في الإعداد الافتراضي)
     private var interactiveNodeSize: CGFloat { 105 * k }
-    private var interactiveLabelWidth: CGFloat { 110 * k }
-    private var interactiveLabelHeight: CGFloat { 28 * k }
+    // كبسولة الاسم بمقاس شجرة النساء (طلب المالك ٢٠٢٦-١٠-٢٧ «المربعات نفس النساء شكلها أوضح»): ٤٢ ارتفاعاً بعرض العقدة،
+    // والاسم بخط Title 3 (`title3Tree`) — كانت ٣٠ × ١١٠ بخط Headline
+    private var interactiveLabelWidth: CGFloat { 124 * k }
+    private var interactiveLabelHeight: CGFloat { 40 * k }
 
     /// وصف صوتي موحّد للعقدة (VoiceOver): الاسم + الحالة + عدد الأبناء
     var nodeAccessibilityLabel: String {
