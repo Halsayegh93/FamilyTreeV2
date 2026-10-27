@@ -48,6 +48,8 @@ class MemberViewModel: ObservableObject {
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    /// آخر «إضافة ابن» من العضو دخلت الشجرة مباشرة (لا طلب) — قرار المالك ٢٠٢٦-١٠-٢٧
+    var lastChildAddWasDirect = false
 
     /// يصير true إذا فشل تحميل الأعضاء ولا توجد بيانات محلية (للشاشات تعرض حالة خطأ + إعادة محاولة)
     @Published var membersLoadFailed: Bool = false
@@ -369,6 +371,25 @@ class MemberViewModel: ObservableObject {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
+        do {
+            let newId = try await rpcAddFamilyChild(parentId: parentId, name: trimmed, gender: gender,
+                                                    birth: birthDate.map { DateHelper.format($0) },
+                                                    isDeceased: isDeceased,
+                                                    death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) },
+                                                    parentFullName: parentFullName)
+            Log.info("[Family] إضافة \(gender == "female" ? "ابنة" : "ابن"): \(trimmed)")
+            await fetchChildren(for: parentId)   // يُنعش الشجرة العامة + شجرة النساء
+            return newId
+        } catch {
+            self.errorMessage = L10n.t("تعذّر إضافة الفرد.", "Failed to add member.")
+            Log.error("[Family] خطأ إضافة ابن: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// add_family_child — الأنثى لشجرة النساء، والذكر للشجرة العامة (مفعّل للإدارة، ولابن العضو نفسه).
+    private func rpcAddFamilyChild(parentId: UUID, name: String, gender: String, birth: String?,
+                                   isDeceased: Bool, death: String?, parentFullName: String) async throws -> UUID {
         struct Params: Encodable {
             let p_parent_id: String
             let p_name: String
@@ -396,26 +417,9 @@ class MemberViewModel: ObservableObject {
                 try c.encode(p_parent_full_name, forKey: .p_parent_full_name)
             }
         }
-        let params = Params(
-            p_parent_id: parentId.uuidString,
-            p_name: trimmed,
-            p_gender: gender,
-            p_birth: birthDate.map { DateHelper.format($0) },
-            p_deceased: isDeceased,
-            p_death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) },
-            p_sort: 0,
-            p_parent_full_name: parentFullName
-        )
-        do {
-            let newId: UUID = try await supabase.rpc("add_family_child", params: params).execute().value
-            Log.info("[Family] إضافة \(gender == "female" ? "ابنة" : "ابن"): \(trimmed)")
-            await fetchChildren(for: parentId)   // يُنعش الشجرة العامة + شجرة النساء
-            return newId
-        } catch {
-            self.errorMessage = L10n.t("تعذّر إضافة الفرد.", "Failed to add member.")
-            Log.error("[Family] خطأ إضافة ابن: \(error.localizedDescription)")
-            return nil
-        }
+        let params = Params(p_parent_id: parentId.uuidString, p_name: name, p_gender: gender, p_birth: birth,
+                            p_deceased: isDeceased, p_death: death, p_sort: 0, p_parent_full_name: parentFullName)
+        return try await supabase.rpc("add_family_child", params: params).execute().value
     }
 
     // MARK: - عائلة المستخدم نفسه (شجرة النساء عبر RPCs السيرفر)
@@ -953,6 +957,32 @@ class MemberViewModel: ObservableObject {
         
         let finalFullName = "\(firstNameOnly) \(father.fullName)".trimmingCharacters(in: .whitespaces)
         let newId = UUID()
+
+        // العضو يضيف ابنه بنفسه (قرار المالك ٢٠٢٦-١٠-٢٧): بلا رقم → مفعّل فوراً عبر add_family_child
+        // ويصل إشعار للمالك والمدير. الرقم = حساب دخول → يبقى طلباً، وكذلك عند حدّ اليوم (daily_limit).
+        lastChildAddWasDirect = false
+        let typedPhone = KuwaitPhone.normalizeForStorageFromInput(phoneNumber) ?? ""
+        if !canModerate, typedPhone.isEmpty, (gender ?? "male") == "male", fatherId == currentUser?.id {
+            do {
+                let directId = try await rpcAddFamilyChild(parentId: fatherId, name: firstNameOnly, gender: "male",
+                                                           birth: cleanedBirthDate, isDeceased: isDeceased,
+                                                           death: isDeceased ? cleanedDeathDate : nil,
+                                                           parentFullName: father.fullName)
+                lastChildAddWasDirect = true
+                Log.info("[Family] ابن مباشر: \(firstNameOnly)")
+                await fetchSingleMember(id: directId)
+                await fetchChildren(for: fatherId)
+                self.isLoading = false
+                return directId
+            } catch where "\(error)".contains("daily_limit") {
+                Log.info("[Family] حدّ اليوم — الابن يُرسل طلباً")
+            } catch {
+                Log.error("[Family] ابن مباشر: \(error)")
+                self.errorMessage = L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.", "Couldn't add the son. Try again.")
+                self.isLoading = false
+                return nil
+            }
+        }
 
         // ج-١: السيرفر (prevent_role_self_promotion) يرفض إدراج غير الإدارة بحالة «مفعّل» —
         // فكان العضو لا يقدر يضيف ابناً أبداً. العضو يُدرج ابنه «معلّقاً» (دور member) ثم يُرسل

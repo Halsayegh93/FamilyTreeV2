@@ -2050,7 +2050,7 @@ struct WomanDetailSheet: View {
                                                         parentFullName: parentFull, isDeceased: e.deceased)
                     tally.added += 1
                 case .child:
-                    // نفس مسار «إضافة ابن» في «عائلتي»: يُكتب في الشجرة العامة ويُرسل طلبه للإدارة
+                    // نفس مسار «إضافة ابن» في «عائلتي»: مباشر للعضو (إشعار للإدارة)، والطلب عند حدّ اليوم فقط
                     let newId = await vm.addChild(firstNameOnly: e.trimmedName, phoneNumber: "", birthDate: birth,
                                                   fatherId: meId, isDeceased: e.deceased, deathDate: nil, gender: "male")
                     if newId == nil {
@@ -2058,7 +2058,8 @@ struct WomanDetailSheet: View {
                         throw WomenWriteFailure(message: msg ?? L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.",
                                                                         "Couldn't add the son. Try again."))
                     }
-                    if staff { tally.added += 1 } else { tally.pending += 1 }
+                    let direct = await MainActor.run { vm.lastChildAddWasDirect }
+                    if staff || direct { tally.added += 1 } else { tally.pending += 1 }
                 case .wife, .mother:
                     if let payload = deceasedRequests[e.id] {
                         try await Self.submit(payload, via: requests)

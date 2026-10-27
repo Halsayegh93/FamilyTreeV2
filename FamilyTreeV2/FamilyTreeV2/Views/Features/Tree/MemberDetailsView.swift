@@ -39,6 +39,8 @@ struct MemberDetailsView: View {
     @State private var showDeleteBioAlert = false
 
     @State private var showEditActions = false
+    /// «إضافة ابن» على عقدته هو — العضو يضيف ابنه بنفسه (قرار المالك ٢٠٢٦-١٠-٢٧)
+    @State private var showSelfAddChild = false
     /// نموذج الطلب المختار من «طلب تعديل» — «ابن» هنا أبناء ذكور فقط (البنت والزوجة في شجرة النساء)
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
@@ -306,6 +308,10 @@ struct MemberDetailsView: View {
                     TreeEditRequestView(member: member, action: action)
                 }
                 .background(ClearPresentationBackground())
+            }
+            .fullScreenCover(isPresented: $showSelfAddChild) {
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { AddChildSheet(member: member) }
+                    .background(ClearPresentationBackground())
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
@@ -1150,6 +1156,12 @@ struct MemberDetailsView: View {
                          tint: DSMemberKit.directTint, motion: .write,
                          hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), tile: true) {
                 showAdminControl = true
+            }
+        } else if isViewingSelf && !member.isDeleted {
+            DSLiveButton(L10n.t("إضافة ابن", "Add Child"), icon: "plus",
+                         tint: DSMemberKit.directTint, motion: .write,
+                         hint: L10n.t("يضيف ابنك للشجرة", "Adds your child to the tree"), tile: true) {
+                showSelfAddChild = true
             }
         }
     }

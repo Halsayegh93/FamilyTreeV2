@@ -58,6 +58,8 @@ struct ProfileView: View {
     /// عائلة شجرة النساء (الأم/الزوجة/الأبناء) تظهر فقط عند «متزوج».
     private var isCurrentUserMarried: Bool { authVM.currentUser?.isMarried ?? false }
     private var hasWife: Bool { memberVM.currentMemberWomenFamily.contains { $0.role == .wife } }
+    /// له أسرة: متزوج أو له زوجة/أبناء مسجّلون — خانات الزوجة والأبناء. الأم تظهر للجميع (قرار المالك ٢٠٢٦-١٠-٢٧)
+    private var hasOwnFamily: Bool { isCurrentUserMarried || hasWife || !memberVM.currentMemberChildren.isEmpty }
     private var hasMother: Bool { memberVM.currentMemberWomenFamily.contains { $0.role == .mother } }
 
     var body: some View {
@@ -113,7 +115,7 @@ struct ProfileView: View {
                                             if isWomanAccount {
                                                 womenPositionSection
                                                     .dsCardCascade(4, appeared: appeared)
-                                            } else if isCurrentUserMarried {
+                                            } else {
                                                 serverSonsSection
                                                     .dsCardCascade(4, appeared: appeared)
                                             }
@@ -142,8 +144,8 @@ struct ProfileView: View {
                                         if isWomanAccount {
                                             womenPositionSection
                                                 .dsCardCascade(4, appeared: appeared)
-                                        } else if isCurrentUserMarried {
-                                            // قسم «عائلتي» — يظهر فقط عند «متزوج»، ويختفي كاملاً عند «أعزب»
+                                        } else {
+                                            // قسم «عائلتي» لكل رجل مفعّل — الأعزب يضيف أمّه (قرار المالك ٢٠٢٦-١٠-٢٧)
                                             serverSonsSection
                                                 .dsCardCascade(4, appeared: appeared)
                                         }
@@ -457,7 +459,7 @@ struct ProfileView: View {
                     // عدد الأبناء (شجرة الرجال + شجرة النساء)
                     // الأبناء الذكور لهم نسخة في شجرة النساء — نستثنيها حتى لا يُحسب
                     // الابن مرتين عند الأعضاء المتزوجين (طلب المالك)
-                    let totalChildren = memberVM.currentMemberChildren.count + (isCurrentUserMarried ? memberVM.currentMemberWomenFamily.filter { $0.role != .child || $0.member.gender != "male" }.count : 0)
+                    let totalChildren = memberVM.currentMemberChildren.count + memberVM.currentMemberWomenFamily.filter { $0.role != .child || $0.member.gender != "male" }.count
                     if totalChildren > 0 {
                         DSStatusChip(text: "\(totalChildren) " + L10n.t("من العائلة", "family"),
                                      icon: "person.2.fill", tint: DS.Color.textSecondary)
@@ -933,6 +935,29 @@ struct ProfileView: View {
             .accessibilityHint(L10n.t("تعديل", "Edit"))
     }
 
+    /// «من أين الزوجة؟» + الإضافة بالاسم في مربّع عند الخانة نفسها (طلب المالك)
+    private func wifeSourcePopover<V: View>(_ anchor: V, editing wife: WomenFamilyEntry? = nil) -> some View {
+        anchor.anchoredPopover(isPresented: $showWifeSource) {
+            WifeSourceCard(
+                onFamily: {
+                    showWifeSource = false
+                    // المربّع يُفتح فوراً ويحمّل بداخله
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showWifeFamily = true }
+                },
+                onAdd: { name, hidden in
+                    let ok = await memberVM.addSelfWife(name: name, hidden: hidden)
+                    if ok { showWifeSource = false; return nil }
+                    return memberVM.errorMessage ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
+                },
+                onCancel: { showWifeSource = false },
+                onEdit: wife.map { w in {
+                    showWifeSource = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { editingFamilyMember = w }
+                } }
+            )
+        }
+    }
+
     /// القارئ الصوتي: الاسم + الدور (أم/زوجة) + «متوفى» — نفس ما تعرضه الخلية
     private func familyMemberAccessibilityLabel(_ entry: WomenFamilyEntry) -> String {
         var parts = [entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName]
@@ -947,8 +972,8 @@ struct ProfileView: View {
         let womenKids = womenOnlyChildren
         let motherEntry = parents.first { $0.role == .mother }
         let wifeEntries = parents.filter { $0.role == .wife }
-        // صف الأم/الزوجة (وخانات الإضافة) يظهر لأي عضو متزوّج — الإضافة/الاختيار مقيّدة على النفس.
-        let showParents = isCurrentUserMarried
+        // صف الأم يظهر لكل عضو، والزوجة لمن له أسرة — الإضافة/الاختيار مقيّدة على النفس.
+        let showParents = true
         return VStack(spacing: DS.Spacing.sm) {
             // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
             if showParents {
@@ -982,32 +1007,26 @@ struct ProfileView: View {
                             )
                         }
                     }
-                    // خانة الزوجة (ثابتة بعد الأم)
+                    // خانة الزوجة (ثابتة بعد الأم) — آخر زوجة تفتح مربّع «إضافة زوجة» وفيه «تعديل» زوجتك
+                    // (طلب المالك ٢٠٢٦-١٠-٢٨: «زوجة أخرى» بلا خانة مستقلة ولا «+»)
                     ForEach(wifeEntries) { entry in
-                        familyMemberButton(entry)
+                        if hasOwnFamily && entry.id == wifeEntries.last?.id {
+                            wifeSourcePopover(
+                                Button { showWifeSource = true } label: { womanFamilyGridCell(entry: entry) }
+                                    .buttonStyle(DSPressStyle())
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel(familyMemberAccessibilityLabel(entry)),
+                                editing: entry)
+                        } else {
+                            familyMemberButton(entry)
+                        }
                     }
-                    // إضافة الزوجة متاحة لأي عضو متزوّج (مو المدير فقط) — اختياري لا إجبار
-                    if !hasWife {
-                        addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
-                                            icon: "heart.fill", color: DS.Color.neonPink) {
+                    // إضافة الزوجة الأولى لمن له أسرة — اختياري لا إجبار
+                    if hasOwnFamily && wifeEntries.isEmpty {
+                        wifeSourcePopover(addFamilyActionCell(title: L10n.t("إضافة زوجة", "Add Wife"),
+                                                              icon: "heart.fill", color: DS.Color.neonPink) {
                             showWifeSource = true
-                        }
-                        // «من أين الزوجة؟» + الإضافة بالاسم في مربّع عند الخانة نفسها (طلب المالك)
-                        .anchoredPopover(isPresented: $showWifeSource) {
-                            WifeSourceCard(
-                                onFamily: {
-                                    showWifeSource = false
-                                    // المربّع يُفتح فوراً ويحمّل بداخله
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showWifeFamily = true }
-                                },
-                                onAdd: { name, hidden in
-                                    let ok = await memberVM.addSelfWife(name: name, hidden: hidden)
-                                    if ok { showWifeSource = false; return nil }
-                                    return memberVM.errorMessage ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
-                                },
-                                onCancel: { showWifeSource = false }
-                            )
-                        }
+                        })
                     }
                     // الأخت لا تظهر ولا تُضاف من «حسابي» — من الشجرة فقط، تحت الأب (طلب المالك ٢٠٢٦-١٠-٢٤)
                 }
@@ -1024,15 +1043,15 @@ struct ProfileView: View {
                                             + ((son.isDeceased ?? false) ? L10n.t("، متوفى", ", deceased") : ""))
                         .accessibilityHint(L10n.t("تعديل", "Edit"))
                 }
-                if isCurrentUserMarried {
-                    // البنات — قابلة للنقر للتعديل لأي عضو؛ الترتيب انتقل للوضع الموحّد.
-                    ForEach(womenKids) { entry in
-                        familyMemberButton(entry)
-                    }
+                // البنات — قابلة للنقر للتعديل لأي عضو؛ الترتيب انتقل للوضع الموحّد.
+                ForEach(womenKids) { entry in
+                    familyMemberButton(entry)
                 }
-                // إضافة ابن — نفس خانة الإضافة
-                addFamilyActionCell(title: L10n.t("إضافة ابن", "Add Child"), icon: "plus",
-                                    color: AppSection.profile.ink) { showAddChild = true }
+                // إضافة ابن — نفس خانة الإضافة (لمن له أسرة)
+                if hasOwnFamily {
+                    addFamilyActionCell(title: L10n.t("إضافة ابن", "Add Child"), icon: "plus",
+                                        color: AppSection.profile.ink) { showAddChild = true }
+                }
             }
         }
     }
@@ -1859,6 +1878,8 @@ private struct MotherPickCard: View {
     /// «من العائلة» — مربّع «أبوها ← بناته» نفسه مع الزوجة
     let onTree: () -> Void
     let onCancel: () -> Void
+    /// زوجة موجودة: «تعديل» داخل مربّع الإضافة نفسه (طلب المالك ٢٠٢٦-١٠-٢٨) — بلا اسمها (أسماء النساء مستورة)
+    var onEdit: (() -> Void)? = nil
     @State private var adding = false
     @State private var name = ""
 
@@ -1913,6 +1934,8 @@ private struct WifeSourceCard: View {
     /// يرجع رسالة الخطأ، أو nil عند النجاح
     let onAdd: (String, Bool) async -> String?
     let onCancel: () -> Void
+    /// زوجة موجودة: «تعديل» داخل مربّع الإضافة نفسه (طلب المالك ٢٠٢٦-١٠-٢٨) — بلا اسمها (أسماء النساء مستورة)
+    var onEdit: (() -> Void)? = nil
     @State private var adding = false
     @State private var name = ""
     @State private var hidden = false
@@ -1958,6 +1981,12 @@ private struct WifeSourceCard: View {
                     },
                     onCancel: { withAnimation(.easeInOut(duration: 0.2)) { adding = false; error = nil } })
             } else {
+                if let onEdit {
+                    AnchoredChoiceRow(title: L10n.t("تعديل الزوجة", "Edit Wife"),
+                                      icon: "pencil",
+                                      hint: L10n.t("الاسم والتواريخ والصورة", "Name, dates and photo"),
+                                      action: onEdit)
+                }
                 AnchoredChoiceRow(title: L10n.t("من العائلة", "From the family"), icon: "tree.fill",
                                   hint: L10n.t("أبوها في الشجرة — تختارها من بناته أو تضيفها تحته",
                                                "Her father is in the tree — pick her or add her under him"),

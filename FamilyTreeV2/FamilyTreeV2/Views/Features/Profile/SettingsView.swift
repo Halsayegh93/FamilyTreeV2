@@ -1409,7 +1409,7 @@ struct PrivacyPolicyView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    /// نقطة واحدة: رمز صغير بلون القسم + العنوان (١٥) + سطرها (١٣ رمادي)
+    /// نقطة واحدة: رمز صغير بلون القسم + العنوان + سطرها (رمادي) بمقاس نص التطبيق
     private func itemRow(_ item: LegalContent.Item) -> some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
             Image(systemName: LegalContent.icon(for: item.id))
@@ -1419,12 +1419,13 @@ struct PrivacyPolicyView: View {
                 .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(DS.Opacity.tintFill)))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                // مقاس نص التطبيق نفسه (طلب المالك ٢٠٢٦-١٠-٢٨ — كان أصغر من بقية التطبيق)
                 Text(item.title)
-                    .dsFont(.chip)
+                    .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                 ForEach(item.lines, id: \.self) { line in
                     Text(line)
-                        .dsFont(.footnote)
+                        .dsFont(.body)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

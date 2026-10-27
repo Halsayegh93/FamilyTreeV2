@@ -743,9 +743,10 @@ struct WomenClassicTreeView: View {
         let PILL_H = M.pillH, LIFE_H = M.lifeH, NODE_H = M.nodeH
         let deceased = m.isDeceased == true
         let female = m.isFemale
-        // شكل خاص للنساء (طلب المالك ٢٠٢٦-١٠-٢٧ «شكل معين للنساء فقط مو دوائر»): مربّع بزوايا ناعمة ٢٨،
-        // والرجال دائرة مثل شجرة العائلة (M.corner = نصف القطر)
+        // شكل خاص للنساء (طلب المالك ٢٠٢٦-١٠-٢٧، اختار «ورقة»): زاويتان متقابلتان مدوّرتان بالكامل،
+        // والرجال دائرة مثل شجرة العائلة. CORNER لزخرفة الطين فقط (تُقصّ على الشكل)
         let CORNER = female ? 28 * k : M.corner
+        let leafSharp: CGFloat = 6 * k
         // الإناث وردي ثابت؛ المتوفّاة وردي أغمق (طلب المالك). الذكر المتوفّى يبقى رمادياً.
         let accent: Color = female
             ? (deceased ? DS.Color.femaleDeceased : rose)
@@ -757,7 +758,7 @@ struct WomenClassicTreeView: View {
         let showWives = !isCollapsed && !kids.isEmpty
         let wives = showWives ? (cWives[m.id] ?? []) : []
 
-        let shape = RoundedRectangle(cornerRadius: CORNER, style: .continuous)
+        let shape = TreeNodeShape(leaf: female, sharp: leafSharp)
         let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil
 
         // ٧ بين الصورة والاسم = مكان حلقة شجرة العائلة (circleFull ١١٢ − الدائرة ١٠٥) — الاسم بنفس موضعه هناك
@@ -788,7 +789,7 @@ struct WomenClassicTreeView: View {
                     // «موقعي»: إطار «أنت هنا» ونصّها فوق الصورة — نفس شجرة العائلة
                     .overlay {
                         if meHighlight == m.id {
-                            RoundedRectangle(cornerRadius: CORNER + 5 * k, style: .continuous)
+                            TreeNodeShape(leaf: female, sharp: leafSharp + 5 * k)
                                 .stroke(DS.Color.currentLocation, lineWidth: 4 * k)
                                 .frame(width: CIRCLE + 10 * k, height: CIRCLE + 10 * k)
                                 .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12 * k)
@@ -836,9 +837,11 @@ struct WomenClassicTreeView: View {
                     // بنصف قطر أكبر بمقدار المسافة نفسها — فتتطابق الزوايا ولا تتعرّج
                     // (حلقة بيضاء رسم — نفس لون النص فوق التعبئة)
                     .overlay(shape.strokeBorder(DS.Color.textOnPrimary, lineWidth: RING))
-                    .modifier(DSClaySkin(active: female, radius: CORNER, onFill: true, section: .tree))
+                    .overlay(Color.clear
+                        .modifier(DSClaySkin(active: female, radius: CORNER, onFill: true, section: .tree))
+                        .clipShape(shape))
                     .overlay(
-                        RoundedRectangle(cornerRadius: CORNER + 2.5 * k, style: .continuous)
+                        TreeNodeShape(leaf: female, sharp: leafSharp + 2.5 * k)
                             .strokeBorder(border, lineWidth: 2 * k)
                             .padding(-2.5 * k)
                     )
@@ -957,10 +960,10 @@ struct WomenClassicTreeView: View {
     private func wifeCell(_ w: FamilyMember) -> some View {
         let k = layout.m.k
         return VStack(spacing: DS.Spacing.xxs * k) {
-            RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
+            TreeNodeShape(leaf: true, sharp: 3 * k)
                 .fill(w.isDeceased == true ? DS.Color.femaleDeceased : rose)
                 .frame(width: 40 * k, height: 40 * k)
-                .overlay(RoundedRectangle(cornerRadius: 11 * k, style: .continuous)
+                .overlay(TreeNodeShape(leaf: true, sharp: 3 * k)
                     .strokeBorder(w.isDeceased == true ? DS.Color.femaleDeceasedBorder : DS.Color.textOnPrimary,
                                   lineWidth: w.isDeceased == true ? DS.Border.widthBold * k : DS.Border.width * k))
                 .overlay(
@@ -1196,5 +1199,42 @@ private struct SemiCapsule: Shape {
         p.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
         p.closeSubpath()
         return p
+    }
+}
+
+/// شكل عقدة شجرة النساء: الرجل دائرة، والمرأة «ورقة» (اختيار المالك ٢٠٢٦-١٠-٢٧) — أعلى الطرف وأسفل البداية
+/// مدوّرتان بنصف الضلع، والزاويتان الأخريان شبه حادّتين (`sharp`)
+struct TreeNodeShape: InsettableShape {
+    var leaf: Bool
+    var sharp: CGFloat = 0
+    var inset: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: inset, dy: inset)
+        guard leaf else { return Path(ellipseIn: r) }
+        let big = min(r.width, r.height) / 2
+        let s = min(max(sharp - inset, 0), big)
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX + s, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX - big, y: r.minY))
+        p.addArc(center: CGPoint(x: r.maxX - big, y: r.minY + big), radius: big,
+                 startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY - s))
+        p.addArc(center: CGPoint(x: r.maxX - s, y: r.maxY - s), radius: s,
+                 startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        p.addLine(to: CGPoint(x: r.minX + big, y: r.maxY))
+        p.addArc(center: CGPoint(x: r.minX + big, y: r.maxY - big), radius: big,
+                 startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY + s))
+        p.addArc(center: CGPoint(x: r.minX + s, y: r.minY + s), radius: s,
+                 startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        p.closeSubpath()
+        return p
+    }
+
+    func inset(by amount: CGFloat) -> TreeNodeShape {
+        var c = self
+        c.inset += amount
+        return c
     }
 }
