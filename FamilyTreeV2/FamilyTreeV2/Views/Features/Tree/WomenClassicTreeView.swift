@@ -41,11 +41,11 @@ private struct WomenTreeMetrics: Equatable {
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; pad = 60 * k
     }
 
-    var nodeH: CGFloat { circle + 4 * k + pillH + lifeH + badgeH - 6 * k }
+    var nodeH: CGFloat { circle + 9 * k + pillH + lifeH }   // أطول عقدة (متوفّى) — مثل شجرة العائلة
     /// ارتفاع صندوق العقدة — يطابق الارتفاع الفعلي بدقّة (لمحاذاة الأسماء بين الأعمدة).
     /// شريحة السهم أُزيلت — العدّاد صار شارة فوق الصورة، فلا ارتفاع إضافي للأبناء
     func boxHeight(deceased: Bool) -> CGFloat {
-        var h = circle + 2 * k + pillH
+        var h = circle + 9 * k + pillH   // = circleFull ١١٢ + nameH ٤٤ في شجرة العائلة
         if deceased { h += lifeH }   // شريط السنوات متصل تحت الاسم
         return h
     }
@@ -757,7 +757,8 @@ struct WomenClassicTreeView: View {
         let shape = RoundedRectangle(cornerRadius: CORNER, style: .continuous)
         let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil
 
-        VStack(spacing: DS.Spacing.xxs * k) {
+        // ٧ بين الصورة والاسم = مكان حلقة شجرة العائلة (circleFull ١١٢ − الدائرة ١٠٥) — الاسم بنفس موضعه هناك
+        VStack(spacing: 7 * k) {
             ZStack {
                 // الزوجات جنب العضو — دائماً جنب بعض (طلب المالك)؛
                 // الاسم الطويل ينزل على سطرين تحت مربعه بدل تكديس المربعات
@@ -1058,7 +1059,15 @@ struct WomenClassicTreeView: View {
         let s = (!landscape ? TreeSharedZoom.familyFit : nil) ?? own
         scale = s; baseScale = s
         // عمودي: 72 = ارتفاع البار العائم — الجذر يبدأ تحته لا خلفه
-        offset = CGSize(width: (size.width - L.size.width * s) / 2, height: landscape ? 16 : 72)
+        // الجذر بنفس موضعه في شجرة العائلة (`centeredOffset`): مركزه على ٣٧٪ من الارتفاع (٣٠٪ أفقياً) — كان أعلاه ثابتاً على ٧٢
+        var rootCY = L.m.pad + L.m.nodeH / 2
+        if let r = activeRoot, let p = L.positions[r] { rootCY = p.y + (L.heights[r] ?? L.m.nodeH) / 2 }
+        // مساحة شجرة النساء تبدأ تحت شريط أدواتها (≈٧٩)، وشجرة العائلة شريطها عائم فوق مساحتها — نحسب الموضع
+        // نفسه على الشاشة: ٠٫٣٧ من (الارتفاع + الشريط) ناقص الشريط
+        let toolbarRoom: CGFloat = landscape ? 0 : 79
+        let anchor: CGFloat = landscape ? 0.30 : 0.37
+        offset = CGSize(width: (size.width - L.size.width * s) / 2,
+                        height: (size.height + toolbarRoom) * anchor - toolbarRoom - rootCY * s)
         baseOffset = offset
     }
 
