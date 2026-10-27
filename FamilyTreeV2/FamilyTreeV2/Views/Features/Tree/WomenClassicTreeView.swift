@@ -34,7 +34,7 @@ private struct WomenTreeMetrics: Equatable {
         // ثم (طلب المالك ٢٠٢٦-١٠-٢٥ «تكبر حجم الاسم وشوي تصغر حجم الصورة علشان اقدر اطق على الاسم»): الصورة ٨٤،
         // كبسولة الاسم ٤٢ بخط Title 3 — مساحة لمس أكبر تفتح المربّع
         circle = 84 * k; corner = 22 * k; ring = 2.5 * k
-        pillH = 42 * k; badgeH = 17 * k; lifeH = 18 * k; nodeW = 124 * k
+        pillH = 42 * k; badgeH = 17 * k; lifeH = 26 * k; nodeW = 124 * k
         hGap = 14 * k; vGap = 48 * k; rowGap = 6 * k; wrapGap = 34 * k
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; pad = 60 * k
     }
@@ -44,7 +44,7 @@ private struct WomenTreeMetrics: Equatable {
     /// شريحة السهم أُزيلت — العدّاد صار شارة فوق الصورة، فلا ارتفاع إضافي للأبناء
     func boxHeight(deceased: Bool) -> CGFloat {
         var h = circle + 2 * k + pillH
-        if deceased { h += 2 * k + lifeH }
+        if deceased { h += 4 * k + lifeH }   // فراغ ٤ ثم مربّع السنوات
         return h
     }
 }
@@ -901,37 +901,9 @@ struct WomenClassicTreeView: View {
                 withAnimation(DS.Anim.snappy) { toggle(m.id) }
             }
 
-            if deceased {
-                // بطاقة مدمجة للمتوفّى — الاسم فوق وشريط السنوات الأحمر ملتصق تحته
-                // (نفس تصميم شجرة العائلة، بمقاس عقد النساء الصغيرة)
-                VStack(spacing: 0) {
-                    Text(m.firstName)
-                        .dsTreeFont(.title3Tree, k)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .padding(.horizontal, 10 * k)   // هامش الاسم نفسه في الشجرتين
-                        .frame(width: NODE_W - 8 * k)   // نفس فراغ شجرة العائلة بين المربّعات
-                        .frame(height: PILL_H)
-                        .background(DS.Color.surface)
-                    Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
-                        .dsTreeFont(.badge, k)
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .environment(\.layoutDirection, .leftToRight)
-                        .padding(.horizontal, DS.Spacing.xs * k)
-                        .frame(width: NODE_W - 8 * k)   // نفس فراغ شجرة العائلة بين المربّعات
-                        .frame(height: LIFE_H + 2 * k)
-                        .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 10 * k, style: .continuous))
-                .modifier(DSClaySkin(radius: 10 * k, compact: true, section: .tree))
-                .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
-                    .stroke(female ? border.opacity(DS.Opacity.selectedStroke) : accent.opacity(DS.Opacity.tintStroke),
-                            lineWidth: DS.Border.width * k))
-                .onTapGesture { if TreeTapGuard.allowsTap { onSelect?(m) } }   // الاسم يفتح تفاصيل العضو (طلب المالك)
-            } else {
+            // الاسم كبسولة واحدة للحي والمتوفّى، وللمتوفّى مربّع ثانٍ منفصل تحته للسنوات بخط أكبر — نفس شجرة العائلة
+            // (طلب المالك ٢٠٢٦-١٠-٢٧)
+            VStack(spacing: 4 * k) {
                 Text(m.firstName)
                     .dsTreeFont(.title3Tree, k)
                     .foregroundColor(DS.Color.textPrimary)
@@ -940,13 +912,25 @@ struct WomenClassicTreeView: View {
                     .padding(.horizontal, 10 * k)   // هامش الاسم نفسه في الشجرتين
                     .frame(width: NODE_W - 8 * k)   // نفس فراغ شجرة العائلة بين المربّعات
                     .frame(height: PILL_H)
-                    // نفس مربّع المتوفّاة (زوايا ١٠) بلا شريط السنوات — طلب المالك ٢٠٢٦-١٠-٢٧ (كانت كبسولة)
-                    .background(RoundedRectangle(cornerRadius: 10 * k, style: .continuous).fill(DS.Color.surface))
-                    .modifier(DSClaySkin(radius: 10 * k, compact: true, section: .tree))
-                    .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
-                        .stroke(accent.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * k))
-                    .onTapGesture { if TreeTapGuard.allowsTap { onSelect?(m) } }   // الاسم يفتح تفاصيل العضو (طلب المالك)
+                    .background(Capsule().fill(DS.Color.surface))
+                    .modifier(DSClaySkin(compact: true, section: .tree))
+                    .overlay(Capsule().stroke(female && deceased ? border.opacity(DS.Opacity.selectedStroke)
+                                                                 : accent.opacity(DS.Opacity.tintStroke),
+                                              lineWidth: DS.Border.width * k))
+                if deceased {
+                    Text(lifeSpanNeat(m) ?? L10n.t(m.isFemale ? "متوفية" : "متوفى", "Deceased"))
+                        .dsTreeFont(.treeYears, k)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .padding(.horizontal, 10 * k)
+                        .frame(width: NODE_W - 8 * k, height: LIFE_H)
+                        .background(DS.Color.deceasedStrip, in: Capsule())   // عنّابي بدرجة خفيفة (طلب المالك)
+                        .modifier(DSClaySkin(onFill: true, compact: true, section: .tree))
+                }
             }
+            .onTapGesture { if TreeTapGuard.allowsTap { onSelect?(m) } }   // الاسم يفتح تفاصيل العضو (طلب المالك)
         }
         .frame(width: NODE_W, height: layout.heights[m.id] ?? NODE_H, alignment: .top)  // ارتفاع ثابت → الأسماء بنفس المستوى
         .position(x: p.x + NODE_W / 2, y: p.y + (layout.heights[m.id] ?? NODE_H) / 2)

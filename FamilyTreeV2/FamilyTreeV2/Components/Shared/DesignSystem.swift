@@ -2066,6 +2066,8 @@ extension DS.TextRole {
     static let nodeCount = DS.TextRole(size: 16, weight: .heavy)
     /// اسم العقدة في شجرة النساء — Title 3 (٢٠) عريض: كبسولة أكبر للّمس (طلب المالك ٢٠٢٦-١٠-٢٥)
     static let title3Tree = DS.TextRole(.title3, weight: .bold)
+    /// سنوات المتوفّى في مربّعها تحت الاسم (الشجرتان) — Subheadline (١٥) عريض (طلب المالك «كبّر خط المتوفّى»)
+    static let treeYears = DS.TextRole(.subheadline, weight: .bold)
 }
 
 // MARK: - أسماء الأعضاء أخفّ (طلب المالك ٢٠٢٦-١٠-٢٥ «الأسماء بتفاصيل العضو خفف التغميق، حتى بالبحث»)

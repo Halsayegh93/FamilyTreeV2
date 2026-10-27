@@ -68,7 +68,7 @@ private struct FamilyTreeMetrics: Equatable {
 
     init(k: CGFloat) {
         self.k = k
-        nodeW = 124 * k; circleFull = 112 * k; nameH = 44 * k; lifeH = 20 * k   // كبسولة الاسم ٤٢ مثل شجرة النساء (٢٠٢٦-١٠-٢٧)
+        nodeW = 124 * k; circleFull = 112 * k; nameH = 44 * k; lifeH = 30 * k   // كبسولة الاسم ٤٢ مثل شجرة النساء (٢٠٢٦-١٠-٢٧)
         hGap = 14 * k; vGap = 48 * k; rowGap = 34 * k
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; canvasPad = 60 * k
     }
@@ -1862,54 +1862,35 @@ struct TreeMemberNode: View, Equatable {
                 // والتوسيع له زر مستقل مدخل تحت آخر مربع (شريحة العدد + السهم).
                 Button(action: { if TreeTapGuard.allowsTap { onTap() } }) {
                     Group {
-                        if member.isDeceased ?? false {
-                            // ── المتوفّى: بطاقة واحدة مدمجة — الاسم فوق وشريط السنوات الأحمر تحته ──
-                            VStack(spacing: 0) {
-                                if showName {
-                                    Text(displayName)
-                                        .dsTreeFont(.title3Tree, k)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.55)
-                                        // هامش ثابت على الجانبين في كل الصفوف (طلب المالك ٢٠٢٦-١٠-٢٧) — الطويل يصغر داخل المربّع
-                                        .padding(.horizontal, 10 * k)
-                                        .padding(.vertical, DS.Spacing.xs * k)
-                                        .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
-                                        .background(DS.Color.surface)
-                                }
+                        // الاسم كبسولة واحدة للحي والمتوفّى، وللمتوفّى مربّع ثانٍ منفصل تحته للسنوات بخط أكبر
+                        // (طلب المالك ٢٠٢٦-١٠-٢٧: «شكل الأحياء السابق… المتوفّى نفس الأحياء مع المربّع الثاني»)
+                        VStack(spacing: 4 * k) {
+                            if showName {
+                                Text(displayName)
+                                    .dsTreeFont(.title3Tree, k)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.55)
+                                    // هامش ثابت على الجانبين في كل الصفوف — الطويل يصغر داخل الكبسولة
+                                    .padding(.horizontal, 10 * k)
+                                    .padding(.vertical, DS.Spacing.xs * k)
+                                    .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
+                                    .background(DS.Color.surface)
+                                    .clipShape(Capsule())
+                                    .modifier(DSClaySkin(section: .tree))
+                                    .overlay(Capsule().stroke(nameStroke, lineWidth: DS.Border.width * k))
+                            }
+                            if member.isDeceased ?? false {
                                 Text(getLifeSpan())
-                                    .dsTreeFont(.badge, k)
+                                    .dsTreeFont(.treeYears, k)
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                    .padding(.horizontal, DS.Spacing.md * k)
-                                    // سطر خط الهوية أطول من خط النظام (١٫٥×) — حشوة أصغر فيبقى الشريط ٢١ كما كان
-                                    .padding(.vertical, DS.Spacing.xxs * k)
-                                    // maxWidth يمدّد الشريط الأحمر ليطابق عرض الاسم مهما طال
-                                    .frame(width: interactiveLabelWidth, height: 21 * k)
-                                    .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
+                                    .minimumScaleFactor(0.6)
+                                    .padding(.horizontal, 10 * k)
+                                    .frame(width: interactiveLabelWidth, height: 26 * k)
+                                    .background(DS.Color.deceasedStrip, in: Capsule())   // عنّابي بدرجة خفيفة (طلب المالك)
+                                    .modifier(DSClaySkin(onFill: true, compact: true, section: .tree))
                             }
-                            // نفس بطاقة شجرة النساء (طلب المالك ٢٠٢٦-١٠-٢٧): زوايا ١٠ وإطار رفيع بلون العقدة الخفيف
-                            .clipShape(RoundedRectangle(cornerRadius: 10 * k, style: .continuous))
-                            .modifier(DSClaySkin(radius: 10 * k,
-                                                 eyeRow: showName ? interactiveLabelHeight + 2 * k : nil, section: .tree))
-                            .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
-                                .stroke(nameStroke, lineWidth: DS.Border.width * k))
-                        } else if showName {
-                            Text(displayName)
-                                .dsTreeFont(.title3Tree, k)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.55)
-                                .padding(.horizontal, 10 * k)
-                                .padding(.vertical, DS.Spacing.xs * k)
-                                .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
-                                .background(DS.Color.surface)
-                                // نفس مربّع المتوفّى (زوايا ١٠) بلا شريط السنوات — طلب المالك ٢٠٢٦-١٠-٢٧ (كانت كبسولة)
-                                .clipShape(RoundedRectangle(cornerRadius: 10 * k, style: .continuous))
-                                .modifier(DSClaySkin(radius: 10 * k, section: .tree))
-                                .overlay(RoundedRectangle(cornerRadius: 10 * k, style: .continuous)
-                                    .stroke(nameStroke, lineWidth: DS.Border.width * k))
                         }
                     }
                     .contentShape(Rectangle())
