@@ -55,7 +55,8 @@ struct RootView: View {
                 } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
                     AnyView(MaintenanceModeView())
                 } else {
-                    AnyView(MainTabView())
+                    // قبول «الخصوصية والاستخدام» مرة لكل إصدار (app_config.terms_version)
+                    AnyView(MainTabView().termsAcceptanceGate())
                 }
             }
             }

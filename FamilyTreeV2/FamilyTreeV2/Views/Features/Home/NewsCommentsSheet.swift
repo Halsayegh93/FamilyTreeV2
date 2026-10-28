@@ -297,6 +297,10 @@ struct NewsCommentsSheet: View {
                     isSendingComment = false
                     if success {
                         await MainActor.run { commentInput = "" }
+                    } else if newsVM.lastCommentRejectedAsObjectionable {
+                        // فلتر السيرفر (قائمته في app_config) — نفس تنبيه فلتر الجهاز
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                        showObjectionableAlert = true
                     }
                 }
             }) {

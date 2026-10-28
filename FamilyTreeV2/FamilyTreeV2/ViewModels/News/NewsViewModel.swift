@@ -364,7 +364,11 @@ class NewsViewModel: ObservableObject {
         return role == .member || role == .pending
     }
 
+    /// السيرفر رفض آخر تعليق لكلمة غير لائقة (`trg_news_comments_filter`، hint `objectionable`)
+    @Published var lastCommentRejectedAsObjectionable = false
+
     func addNewsComment(to postId: UUID, text: String) async -> Bool {
+        lastCommentRejectedAsObjectionable = false
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let memberId = await authenticatedUserId(),
               let authorName = currentUser?.displayFullName else { return false }
@@ -423,6 +427,9 @@ class NewsViewModel: ObservableObject {
 
             return true
         } catch {
+            if (error as? PostgrestError)?.hint == "objectionable" {
+                lastCommentRejectedAsObjectionable = true
+            }
             Log.error("خطأ إضافة تعليق: \(error.localizedDescription)")
             return false
         }

@@ -17,6 +17,7 @@ struct LoginView: View {
     @State private var logoOpacity: CGFloat = 0
     /// «الخصوصية والاستخدام» قبل الدخول (Guideline 5.1.1)
     @State private var showLegal = false
+    @State private var showLegalTerms = false
 
 
 
@@ -190,23 +191,35 @@ struct LoginView: View {
 
     /// سطر واحد صغير أسفل الشاشة: «بالمتابعة توافق على «الخصوصية والاستخدام»» — الاسم يُضغط فيفتح المربّع
     /// (طلب المالك ٢٠٢٦-١٠-٢٧؛ كان «باستخدامك التطبيق فإنك توافق على شروط الاستخدام وسياسة الخصوصية» بسطرين)
+    /// وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨): «بالمتابعة توافق على سياسة الخصوصية وقواعد الاستخدام»،
+    /// وكل اسم يُضغط فيفتح وثيقته وحدها
     private var legalFooter: some View {
-        Button { showLegal = true } label: {
-            (Text(L10n.t("بالمتابعة توافق على ", "By continuing you agree to "))
+        VStack(spacing: 0) {
+            Text(L10n.t("بالمتابعة توافق على", "By continuing you agree to the"))
                 .foregroundColor(DS.Color.textTertiary)
-             + Text(L10n.t("الخصوصية والاستخدام", "Privacy & Use"))
+            HStack(spacing: DS.Spacing.xs) {
+                legalLink(L10n.t("سياسة الخصوصية", "Privacy Policy")) { showLegal = true }
+                Text(L10n.t("و", "and")).foregroundColor(DS.Color.textTertiary)
+                legalLink(L10n.t("قواعد الاستخدام", "Terms of Use")) { showLegalTerms = true }
+            }
+        }
+        .dsFont(.footnote)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(maxWidth: .infinity)
+        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView(only: "privacy") }
+        .dsTallBox(isPresented: $showLegalTerms) { PrivacyPolicyView(only: "terms") }
+    }
+
+    private func legalLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
                 .foregroundColor(DS.Color.primary)
-                .underline())
-                .dsFont(.footnote)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, DS.Spacing.md)
+                .underline()
                 .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح الخصوصية والاستخدام", "Opens Privacy & Use"))
-        .frame(maxWidth: .infinity)
-        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView() }
     }
 
     /// مربّع رقم واحد من رمز التحقق — يبرز المربّع النشط

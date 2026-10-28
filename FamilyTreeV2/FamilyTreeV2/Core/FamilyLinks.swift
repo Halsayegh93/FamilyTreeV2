@@ -13,12 +13,12 @@ enum FamilyLinks {
 
     /// سياسة الخصوصية — بلغة التطبيق
     static var privacyPolicy: URL {
-        URL(string: L10n.isArabic ? "https://almohali.com/privacy" : "https://almohali.com/privacy/en")!
+        URL(string: L10n.isArabic ? "https://almohali.com/privacy/ar" : "https://almohali.com/privacy")!
     }
 
     /// شروط الاستخدام — بلغة التطبيق
     static var termsOfUse: URL {
-        URL(string: L10n.isArabic ? "https://almohali.com/terms" : "https://almohali.com/terms/en")!
+        URL(string: L10n.isArabic ? "https://almohali.com/terms/ar" : "https://almohali.com/terms")!
     }
 
     /// البريد الرسمي المنشور على الموقع

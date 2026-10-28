@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var showLanguage = false
     @State private var showAbout = false
     @State private var showTerms = false
+    @State private var showPrivacyDoc = false
     @State private var showDeleteConfirmation = false
     /// حذف الحساب جارٍ — طبقة انتظار حتى يكتمل ويُسجَّل الخروج
     @State private var isDeletingAccount = false
@@ -104,7 +105,9 @@ struct SettingsView: View {
             AppearanceSettingsView(focus: .language).environmentObject(appSettingsVM)
         }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
-        .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView() }   // قراءة طويلة — مربّع طويل (توصية أبل)
+        // قراءة طويلة — مربّع طويل (توصية أبل)؛ وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
+        .dsTallBox(isPresented: $showPrivacyDoc) { PrivacyPolicyView(only: "privacy") }
+        .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView(only: "terms") }
         .dsAlert(t("حذف الحساب", "Delete Account"), isPresented: $showDeleteConfirmation) {
             Button(t("إلغاء", "Cancel"), role: .cancel) {}
             Button(t("حذف نهائي", "Delete Permanently"), role: .destructive) {
@@ -260,7 +263,7 @@ struct SettingsView: View {
     private var allTiles: [SettingsTile] {
         let byId = Dictionary(uniqueKeysWithValues: (preferenceTiles + accountTiles + helpTiles).map { ($0.id, $0) })
         // «تعديل الملف» أُزيل ٢٠٢٦-١٠-١٠ — يبقى من قلم بطاقة الهوية أعلى الإعدادات
-        let order = ["notifications", "privacy", "appearance", "language", "devices", "terms", "about"]
+        let order = ["notifications", "privacy", "appearance", "language", "devices", "privacyDoc", "terms", "about"]
         return order.compactMap { byId[$0] }
     }
 
@@ -291,9 +294,12 @@ struct SettingsView: View {
     private var helpTiles: [SettingsTile] {
         [SettingsTile(id: "about", icon: "app.badge.fill", color: DS.Color.secondary,
                       title: t("عن التطبيق", "About"), value: AppVersion.string) { showAbout = true },
+         SettingsTile(id: "privacyDoc", icon: "hand.raised.fill", color: chromeInk,
+                      title: t("سياسة الخصوصية", "Privacy Policy"),
+                      value: t("بياناتك وحقوقك", "Your data and rights")) { showPrivacyDoc = true },
          SettingsTile(id: "terms", icon: "doc.text.fill", color: chromeInk,
-                      title: t("الخصوصية والاستخدام", "Privacy & Use"),
-                      value: t("بياناتك والقواعد", "Your data and rules")) { showTerms = true }]
+                      title: t("قواعد الاستخدام", "Terms of Use"),
+                      value: t("القواعد والشروط", "Rules and terms")) { showTerms = true }]
     }
 
     private func cardFact(icon: String, title: String, value: String) -> some View {
@@ -1337,11 +1343,30 @@ struct PrivacyPolicyView: View {
     @ObservedObject private var store = LegalContentStore.shared
     /// يبدأ بالخصوصية (أو بالقواعد إن طُلب)
     var startsWithTerms: Bool = false
+    /// وثيقة واحدة فقط (`privacy` أو `terms`) بلا تبويبين — صفحتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
+    var only: String? = nil
+    /// شاشة الموافقة عند الدخول (`termsAcceptanceGate`): «أوافق» بدل «فهمت» و«تسجيل الخروج» بدل «إغلاق»
+    var acceptance: Acceptance? = nil
+    /// شاشة الموافقة تبدأ صغيرة (طلب المالك ٢٠٢٦-١٠-٢٨): السطر والزرّان، والنص كاملاً عند الطلب
+    @State private var showsFullText = false
+    /// المواد المفتوحة (الملخّص ← النص كاملاً)
+    @State private var openItems: Set<String> = []
     @State private var tab = "privacy"
+
+    struct Acceptance {
+        var isAccepting: Bool
+        var errorMessage: String?
+        var onAccept: () -> Void
+        var onSignOut: () -> Void
+    }
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
-    private var content: LegalContent { store.content }
+    private var fullContent: LegalContent { store.content }
+    private var content: LegalContent {
+        guard let only, let doc = fullContent.sections.first(where: { $0.key == only }) else { return fullContent }
+        return LegalContent(title: doc.title, subtitle: fullContent.title, updated: fullContent.updated, sections: [doc])
+    }
     private var current: LegalContent.Section? {
         content.sections.first { $0.key == tab } ?? content.sections.first
     }
@@ -1352,14 +1377,36 @@ struct PrivacyPolicyView: View {
             subtitle: content.subtitle,
             icon: "lock.shield.fill",
             tint: DS.Color.actionNavy,
-            actionTitle: t("فهمت", "Got it"),
+            actionTitle: acceptance == nil ? t("فهمت", "Got it") : t("أوافق", "I Agree"),
             actionIcon: "checkmark",
             showsAction: true,
-            cancelTitle: t("إغلاق", "Close"),
+            cancelTitle: acceptance == nil ? t("إغلاق", "Close") : t("تسجيل الخروج", "Sign Out"),
             canSubmit: true,
-            onSubmit: { dismiss() },
-            onCancel: { dismiss() }
+            isBusy: acceptance?.isAccepting ?? false,
+            onSubmit: { if let acceptance { acceptance.onAccept() } else { dismiss() } },
+            onCancel: { if let acceptance { acceptance.onSignOut() } else { dismiss() } }
         ) {
+            if let acceptance {
+                Text(t("للمتابعة، يُرجى الموافقة على سياسة الخصوصية وقواعد الاستخدام. ولا نتسامح مع المحتوى المسيء أو المستخدمين المسيئين.",
+                       "To continue, please agree to the privacy policy and rules of use. We have no tolerance for objectionable content or abusive users."))
+                    .dsFont(.body)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                if let error = acceptance.errorMessage {
+                    DSNoteCard(error, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                }
+                Label(showsFullText ? t("إخفاء النص", "Hide the text") : t("اقرأ النص كاملاً", "Read the full text"),
+                      systemImage: showsFullText ? "chevron.up" : "chevron.down")
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.info)
+                    .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(DS.Anim.snappy) { showsFullText.toggle() } }
+                    .accessibilityAddTraits(.isButton)
+            }
+            if acceptance == nil || showsFullText {
             if content.sections.count > 1 {
                 DSSegmentedSwitch(options: content.sections.map {
                     DSSegmentOption(id: $0.key, title: $0.title,
@@ -1403,15 +1450,18 @@ struct PrivacyPolicyView: View {
                 .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity)
+            }
         }
-        .onAppear { tab = startsWithTerms ? "terms" : "privacy" }
+        .onAppear { tab = only ?? (startsWithTerms ? "terms" : "privacy") }
         .task { await store.refresh() }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    /// نقطة واحدة: رمز صغير بلون القسم + العنوان + سطرها (رمادي) بمقاس نص التطبيق
+    /// مادة واحدة: رمز بلون القسم + العنوان + ملخّصها في سطر، والضغط يفتح المادة كاملة (طلب المالك ٢٠٢٦-١٠-٢٨
+    /// «نختصر النص بالتطبيق… مرتب مع السيرفر»: الملخّص `summary` والنص `lines` كلاهما من السيرفر)
     private func itemRow(_ item: LegalContent.Item) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.md) {
+        let open = item.summary == nil || openItems.contains(item.id)
+        return HStack(alignment: .top, spacing: DS.Spacing.md) {
             Image(systemName: LegalContent.icon(for: item.id))
                 .dsGlyph(DS.Glyph.md, weight: .semibold)
                 .foregroundColor(DS.Color.primary.dsChrome(in: section))
@@ -1423,17 +1473,40 @@ struct PrivacyPolicyView: View {
                 Text(item.title)
                     .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
-                ForEach(item.lines, id: \.self) { line in
-                    Text(line)
+                if let summary = item.summary, !open {
+                    Text(summary)
                         .dsFont(.body)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(item.lines, id: \.self) { line in
+                        Text(line)
+                            .dsFont(.body)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             Spacer(minLength: 0)
+            if item.summary != nil {
+                Image(systemName: open ? "chevron.up" : "chevron.down")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .padding(.top, DS.Spacing.xxs)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.vertical, DS.Spacing.sm)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard item.summary != nil else { return }
+            withAnimation(DS.Anim.snappy) {
+                if openItems.contains(item.id) { openItems.remove(item.id) } else { openItems.insert(item.id) }
+            }
+        }
         .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(item.summary != nil ? .isButton : [])
+        .accessibilityHint(item.summary == nil ? "" : (open ? t("يطوي المادة", "Collapses the article") : t("يفتح المادة كاملة", "Opens the full article")))
     }
 }
 
