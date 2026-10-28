@@ -885,7 +885,7 @@ struct ProjectDetailView: View {
                     .dsFont(.chip)
                     .foregroundColor(AppSection.projects.ink)
                 Text(text)
-                    .dsFont(.body)
+                    .dsReadingFont()
                     .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }

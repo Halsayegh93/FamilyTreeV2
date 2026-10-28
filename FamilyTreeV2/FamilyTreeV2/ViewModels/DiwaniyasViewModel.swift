@@ -163,7 +163,10 @@ class DiwaniyasViewModel: ObservableObject {
                 do {
                     struct AddrUpdate: Codable { let address: String }
                     try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: newId.uuidString).execute()
-                } catch { Log.warning("address column not available: \(error.localizedDescription)") }
+                } catch {
+                    if ObjectionableText.isObjectionable(error) { throw error }   // الكلمات غير اللائقة تُعرض
+                    Log.warning("address column not available: \(error.localizedDescription)")
+                }
             }
 
             // أيام الانعقاد المهيكلة — عمود قد لا يكون مطبّقاً بعد، فيُحدَّث على حدة
@@ -204,7 +207,8 @@ class DiwaniyasViewModel: ObservableObject {
             isLoading = false
             return true
         } catch {
-            self.errorMessage = L10n.t("فشل إضافة الديوانية. حاول مرة أخرى.", "Failed to add diwaniya. Please try again.")
+            self.errorMessage = ObjectionableText.message(for: error)
+                ?? L10n.t("فشل إضافة الديوانية. حاول مرة أخرى.", "Failed to add diwaniya. Please try again.")
             Log.error("خطأ إضافة ديوانية: \(error.localizedDescription)")
             isLoading = false
             return false
@@ -344,11 +348,15 @@ class DiwaniyasViewModel: ObservableObject {
                 struct ExtraUpdate: Codable { let address: String?; let is_closed: Bool }
                 try await supabase.from("diwaniyas").update(ExtraUpdate(address: address, is_closed: isClosed)).eq("id", value: id.uuidString).execute()
             } catch {
+                if ObjectionableText.isObjectionable(error) { throw error }
                 // Try each separately
                 do {
                     struct AddrUpdate: Codable { let address: String? }
                     try await supabase.from("diwaniyas").update(AddrUpdate(address: address)).eq("id", value: id.uuidString).execute()
-                } catch { Log.warning("address column not available: \(error.localizedDescription)") }
+                } catch {
+                    if ObjectionableText.isObjectionable(error) { throw error }   // الكلمات غير اللائقة تُعرض
+                    Log.warning("address column not available: \(error.localizedDescription)")
+                }
                 do {
                     struct ClosedUpdate: Codable { let is_closed: Bool }
                     try await supabase.from("diwaniyas").update(ClosedUpdate(is_closed: isClosed)).eq("id", value: id.uuidString).execute()
@@ -359,7 +367,8 @@ class DiwaniyasViewModel: ObservableObject {
             isLoading = false
             return true
         } catch {
-            self.errorMessage = L10n.t("فشل تحديث الديوانية. حاول مرة أخرى.", "Failed to update diwaniya. Please try again.")
+            self.errorMessage = ObjectionableText.message(for: error)
+                ?? L10n.t("فشل تحديث الديوانية. حاول مرة أخرى.", "Failed to update diwaniya. Please try again.")
             Log.error("خطأ تحديث ديوانية: \(error.localizedDescription)")
             isLoading = false
             return false

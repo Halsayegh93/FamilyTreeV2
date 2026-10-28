@@ -104,7 +104,10 @@ class AuthViewModel: ObservableObject {
     @Published var isAuthenticated: Bool = false
     private var isEndingSession = false
     private var sessionGeneration = UUID()
-    @Published var currentUser: FamilyMember? = nil
+    @Published var currentUser: FamilyMember? = nil {
+        // «إظهار آخر ظهوري ونشاطي» مطفأ → لا يُرسَل `current_screen` (٢٠٢٦-١٠-٢٩)
+        didSet { MemberActivityTracker.setVisible(currentUser?.activityVisible ?? true) }
+    }
     @Published var status: AuthStatus = .checking {
         didSet {
             guard status != oldValue else { return }
@@ -1530,6 +1533,56 @@ class AuthViewModel: ObservableObject {
                     "تعذّر إرسال طلب الحذف. حاول مرة أخرى.", "Couldn't send the deletion request. Please try again."))
             }
             Log.error("[AccountDeletion] فشل إرسال الطلب: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// حذف حساب لم يُعتمد بعد (شاشة «قيد المراجعة») — `delete-account` بلا معرّف طلب.
+    /// السيرفر يسمح به للحساب المعلّق/الموقوف/بلا ملف فقط؛ لو ردّ 403 «use_request» (عضو معتمد)
+    /// نرجع لمسار الطلب `request_account_deletion`. true = حُذف الحساب (والمستدعي يسجّل الخروج)،
+    /// false مع `pendingDeletionRequest` ≠ nil = أُرسل طلب بدل الحذف.
+    @discardableResult
+    func deletePendingAccount() async -> Bool {
+        guard !isOwner else {
+            deleteAccountError = Self.ownerProtectedMessage
+            return false
+        }
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        isLoading = true
+        deleteAccountError = nil
+        nonisolated struct Response: Decodable { let ok: Bool?; let error: String? }
+        nonisolated struct Empty: Encodable {}
+        do {
+            let response: Response = try await supabase.functions.invoke(
+                "delete-account",
+                options: FunctionInvokeOptions(body: Empty())
+            )
+            isLoading = false
+            guard response.ok == true else { throw NSError(domain: "AccountDeletion", code: 1) }
+            await signOut()
+            return true
+        } catch let FunctionsError.httpError(code, data) {
+            isLoading = false
+            nonisolated struct Body: Decodable { let error: String?; let message_ar: String? }
+            let body = try? JSONDecoder().decode(Body.self, from: data)
+            if code == 403, body?.error == "use_request" {
+                Log.info("[AccountDeletion] الحساب معتمد — تحويل لطلب حذف")
+                await requestAccountDeletion()
+                return false
+            }
+            Log.error("[AccountDeletion] رفض السيرفر (\(code))")
+            if let ar = body?.message_ar, L10n.isArabic, !ar.isEmpty {
+                deleteAccountError = ar
+            } else {
+                deleteAccountError = L10n.t("تعذّر حذف الحساب. حاول مرة أخرى.",
+                                            "Couldn't delete the account. Please try again.")
+            }
+            return false
+        } catch {
+            isLoading = false
+            Log.error("[AccountDeletion] فشل الحذف: \(error.localizedDescription)")
+            deleteAccountError = L10n.t("تعذّر حذف الحساب. حاول مرة أخرى.",
+                                        "Couldn't delete the account. Please try again.")
             return false
         }
     }

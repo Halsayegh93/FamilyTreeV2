@@ -1295,7 +1295,7 @@ struct ArchiveItemViewer: View {
 
             if let desc = item.description, !desc.isEmpty {
                 Text(desc)
-                    .dsFont(.callout)
+                    .dsReadingFont()
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)

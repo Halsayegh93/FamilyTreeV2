@@ -1803,8 +1803,8 @@ struct WomanDetailSheet: View {
                 try await WomenStore.setMotherId(childId: childId, motherId: daughter.id)
             }
         case .selfFamily:
-            runWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link")) {
-                do { try await WomenStore.addOrLinkSelfRelative(kind: "mother", fatherId: father.id, womanId: daughter.id, name: nil) }
+            selfRelativeWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link")) {
+                do { return try await WomenStore.addOrLinkSelfRelative(kind: "mother", fatherId: father.id, womanId: daughter.id, name: nil) }
                 catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
             }
         case .request:
@@ -1830,8 +1830,8 @@ struct WomanDetailSheet: View {
                 try await WomenStore.setMotherId(childId: childId, motherId: newId)
             }
         case .selfFamily:
-            runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
-                do { try await WomenStore.addOrLinkSelfRelative(kind: "mother", fatherId: father.id, womanId: nil, name: name) }
+            selfRelativeWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
+                do { return try await WomenStore.addOrLinkSelfRelative(kind: "mother", fatherId: father.id, womanId: nil, name: name) }
                 catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
             }
         case .request:
@@ -1854,10 +1854,15 @@ struct WomanDetailSheet: View {
         case .direct:
             linkWife(daughter.id) { try await WomenStore.setHusbandId(womanId: daughter.id, husbandId: husbandId) }
         case .selfFamily:
-            linkWife(daughter.id) {
-                do { try await WomenStore.addOrLinkSelfWife(fatherId: father.id, womanId: daughter.id, name: nil) }
+            let womanId = daughter.id
+            let open = onOpenMember
+            selfRelativeWrite(failTitle: L10n.t("تعذّر الربط", "Couldn't link"), {
+                do { return try await WomenStore.addOrLinkSelfWife(fatherId: father.id, womanId: womanId, name: nil) }
                 catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
-            }
+            }, onLinked: {
+                // افتح بروفايل الزوجة المختارة (وإلا أغلق المربّع) — كما في `linkWife`
+                if let open { open(womanId) } else { dismiss() }
+            })
         case .request:
             submitLinkRequest(title: L10n.t("طلب ربط زوجة", "Wife link request"), picked: daughter,
                               details: [L10n.t("أبوها: ", "Her father: ") + displayName(father)])
@@ -1879,8 +1884,8 @@ struct WomanDetailSheet: View {
                                               parentFullName: fatherFull, isMarried: true, husbandId: husbandId)
             }
         case .selfFamily:
-            runWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
-                do { try await WomenStore.addOrLinkSelfWife(fatherId: father.id, womanId: nil, name: name) }
+            selfRelativeWrite(failTitle: L10n.t("تعذّرت الإضافة", "Couldn't add")) {
+                do { return try await WomenStore.addOrLinkSelfWife(fatherId: father.id, womanId: nil, name: name) }
                 catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
             }
         case .request:
@@ -1946,6 +1951,26 @@ struct WomanDetailSheet: View {
                 draft.writeError = WomanWriteError(title: failTitle, message: WomenStore.failureMessage(error))
             }
         }
+    }
+
+    /// كتابة قريبة ذاتية (`add_or_link_self_relative`): معرّف = كُتبت (`onLinked` أو الإغلاق)، nil = أُرسلت للإدارة
+    /// ← رسالة «أُرسل طلبك للإدارة، وستظهر بعد الموافقة» بدل الإغلاق
+    private func selfRelativeWrite(failTitle: String,
+                                   _ write: @escaping () async throws -> UUID?,
+                                   onLinked: (@MainActor () -> Void)? = nil) {
+        let tally = WomanAddTally()
+        runWrite(failTitle: failTitle, {
+            if try await write() == nil { tally.awaitingApproval += 1 }
+        }, onSuccess: {
+            if tally.awaitingApproval > 0 {
+                draft.notice = WomanWriteError(title: WomenStore.sentForApprovalTitle,
+                                               message: WomenStore.sentForApprovalMessage)
+            } else if let onLinked {
+                onLinked()
+            } else {
+                dismiss()
+            }
+        })
     }
 
     // MARK: - Actions
@@ -2065,11 +2090,12 @@ struct WomanDetailSheet: View {
                         try await Self.submit(payload, via: requests)
                         tally.requested += 1
                     } else if kind == .wife {
-                        try await WomenStore.addSelfWife(name: e.trimmedName)
-                        tally.added += 1
+                        // nil = أُرسلت طلباً للإدارة (`relative_add`)
+                        if try await WomenStore.addSelfWife(name: e.trimmedName) != nil { tally.added += 1 }
+                        else { tally.awaitingApproval += 1 }
                     } else {
-                        try await WomenStore.addSelfMother(name: e.trimmedName)
-                        tally.added += 1
+                        if try await WomenStore.addSelfMother(name: e.trimmedName) != nil { tally.added += 1 }
+                        else { tally.awaitingApproval += 1 }
                     }
                 case .sister:
                     break
@@ -2105,8 +2131,8 @@ struct WomanDetailSheet: View {
                     try await Self.submit(payload, via: requests)
                     tally.requested += 1
                 } else {
-                    try await WomenStore.addSelfSister(fatherId: fatherId, name: e.trimmedName)
-                    tally.added += 1
+                    if try await WomenStore.addSelfSister(fatherId: fatherId, name: e.trimmedName) != nil { tally.added += 1 }
+                    else { tally.awaitingApproval += 1 }
                 }
                 await Self.written(e, in: draft)
             }
@@ -2115,11 +2141,15 @@ struct WomanDetailSheet: View {
 
     /// بعد دفعة الأسماء: كلها كُتبت → تُغلق التفاصيل؛ وما ينتظر الإدارة (ابن «عائلتي»، طلب) → رسالة بالأعداد
     private func finishAdds(_ t: WomanAddTally) {
-        let waiting = t.pending + t.requested
+        let waiting = t.pending + t.requested + t.awaitingApproval
         guard waiting > 0 else { dismiss(); return }
         let title: String
         let message: String
-        if t.added == 0 && t.pending == 0 {
+        if t.added == 0 && t.pending == 0 && t.requested == 0 {
+            // إضافة قريبة لغير الإدارة — تنتظر موافقة الإدارة (`relative_add`)
+            title = WomenStore.sentForApprovalTitle
+            message = WomenStore.sentForApprovalMessage
+        } else if t.added == 0 && t.pending == 0 && t.awaitingApproval == 0 {
             title = t.requested > 1 ? L10n.t("تم إرسال ", "Sent ") + DSRequestCount.text(t.requested)
                                     : L10n.t("تم إرسال الطلب", "Request sent")
             message = t.requested > 1
@@ -2127,7 +2157,7 @@ struct WomanDetailSheet: View {
                          "The administration got your requests — each is reviewed on its own; you'll be notified.")
                 : L10n.t("وصل طلبك للإدارة، ويصلك إشعار عند البتّ فيه.",
                          "The administration got your request — you'll be notified of the decision.")
-        } else if t.added == 0 && t.requested == 0 {
+        } else if t.added == 0 && t.requested == 0 && t.awaitingApproval == 0 {
             title = t.pending > 1 ? L10n.t("أُضيف الأبناء", "Sons added") : L10n.t("أُضيف الابن", "Son added")
             message = t.pending > 1
                 ? L10n.t("يظهرون في الشجرة، وينتظرون اعتماد الإدارة.", "They show in the tree and await the administration's approval.")
@@ -2138,6 +2168,9 @@ struct WomanDetailSheet: View {
             if t.added > 0 { parts.append(L10n.t("أُضيف \(t.added) للشجرة", "\(t.added) added to the tree")) }
             if t.pending > 0 { parts.append(L10n.t("\(t.pending) يظهر وينتظر اعتماد الإدارة", "\(t.pending) shown, awaiting approval")) }
             if t.requested > 0 { parts.append(L10n.t("\(t.requested) أُرسل طلباً للإدارة", "\(t.requested) sent to the administration")) }
+            if t.awaitingApproval > 0 {
+                parts.append(L10n.t("\(t.awaitingApproval) تظهر بعد موافقة الإدارة", "\(t.awaitingApproval) appear once approved"))
+            }
             message = parts.joined(separator: L10n.t("، و", ", ")) + "."
         }
         draft.notice = WomanWriteError(title: title, message: message)
@@ -2487,6 +2520,8 @@ private final class WomanAddTally {
     var pending = 0
     /// أُرسل طلباً للإدارة
     var requested = 0
+    /// قريبة («عائلتي») أُرسلت للإدارة من السيرفر نفسه — تظهر بعد الموافقة
+    var awaitingApproval = 0
 }
 
 private struct WomanWriteError {

@@ -458,6 +458,9 @@ struct NotificationsAndPrivacyView: View {
     @State private var isBirthDateHidden: Bool = false
     @State private var isPhotoHidden: Bool = false
     @State private var skipPhotoHiddenWrite = false
+    /// «إظهار آخر ظهوري ونشاطي» (`set_activity_visibility`، ٢٠٢٦-١٠-٢٩)
+    @State private var isActivityVisible: Bool = true
+    @State private var skipActivityWrite = false
     /// «بياناتي في الشجرة»: طلب إخفاء/حذف/تصحيح (`request_privacy_change`)
     @State private var treeDataRequest: TreeDataRequestKind?
     @State private var treeDataResult: String?
@@ -567,6 +570,7 @@ struct NotificationsAndPrivacyView: View {
             setPhoneHiddenSilently(authVM.currentUser?.isPhoneHidden ?? false)
             setBirthHiddenSilently(authVM.currentUser?.isBirthDateHidden ?? false)
             setPhotoHiddenSilently(authVM.currentUser?.isPhotoHidden ?? false)
+            setActivityVisibleSilently(authVM.currentUser?.activityVisible ?? true)
         }
         .task {
             // أنواع الإشعارات وحالة الجهاز لجزء الإشعارات فقط
@@ -618,6 +622,20 @@ struct NotificationsAndPrivacyView: View {
                 let success = await memberVM.updateBirthDateHidden(newValue)
                 if !success {
                     if isBirthDateHidden == newValue { setBirthHiddenSilently(!newValue) }
+                    showUpdateError = true
+                }
+            }
+        }
+        .onChange(of: isActivityVisible) { newValue in
+            if skipActivityWrite { skipActivityWrite = false; return }
+            guard NetworkMonitor.shared.requireOnline() else {
+                setActivityVisibleSilently(!newValue)
+                return
+            }
+            Task {
+                let success = await memberVM.updateActivityVisible(newValue)
+                if !success {
+                    if isActivityVisible == newValue { setActivityVisibleSilently(!newValue) }
                     showUpdateError = true
                 }
             }
@@ -710,6 +728,12 @@ struct NotificationsAndPrivacyView: View {
         isBirthDateHidden = value
     }
 
+    private func setActivityVisibleSilently(_ value: Bool) {
+        guard isActivityVisible != value else { return }
+        skipActivityWrite = true
+        isActivityVisible = value
+    }
+
     private func setPhotoHiddenSilently(_ value: Bool) {
         guard isPhotoHidden != value else { return }
         skipPhotoHiddenWrite = true
@@ -732,6 +756,10 @@ struct NotificationsAndPrivacyView: View {
                           title: t("إخفاء تاريخ ميلادي عن الأعضاء", "Hide my birth date from members"),
                           subtitle: t("لا يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
                           isOn: $isBirthDateHidden)
+                switchRow(icon: "clock.fill", color: DS.Color.accent,
+                          title: t("إظهار آخر ظهوري ونشاطي", "Show my last seen and activity"),
+                          subtitle: t("عند الإيقاف لا يرى الأعضاء متى كنت متصلاً", "When off, members won't see when you were online"),
+                          isOn: $isActivityVisible)
                 sectionNote(t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
                               "Your data stays in the tree but is hidden from members. Admins can still see it."))
             }
@@ -1482,7 +1510,7 @@ struct PrivacyPolicyView: View {
             if let acceptance {
                 Text(t("للمتابعة، يُرجى الموافقة على سياسة الخصوصية وقواعد الاستخدام. ولا نتسامح مع المحتوى المسيء أو المستخدمين المسيئين.",
                        "To continue, please agree to the privacy policy and rules of use. We have no tolerance for objectionable content or abusive users."))
-                    .dsFont(.body)
+                    .dsReadingFont()
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1566,15 +1594,16 @@ struct PrivacyPolicyView: View {
                 Text(item.title)
                     .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
+                // نص القراءة: Plex العادي بسطور مريحة (قرار المالك ٢٠٢٦-١٠-٢٨) — العنوان فوقه بخط التطبيق
                 if let summary = item.summary, !open {
                     Text(summary)
-                        .dsFont(.body)
+                        .dsReadingFont()
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     ForEach(item.lines, id: \.self) { line in
                         Text(line)
-                            .dsFont(.body)
+                            .dsReadingFont()
                             .foregroundColor(DS.Color.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }

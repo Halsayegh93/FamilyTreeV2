@@ -8,9 +8,8 @@ import Combine
 // ٥٠ في الصفحة (`next_before` للمزيد). لكل طلب مُرسَل: «انرسل بعد X ث من الطلب» (`recorded_at − details.requested_at`)
 // وحالة التسليم من `details.queue_status` (يملؤها السيرفر تلقائياً بعد ١–٣٠ دقيقة من الإرسال، ووقت الفحص `queue_checked_at`).
 // «فك القفل» (المالك، بعد التأكيد): `kwtsms-admin` `{action:"unlock", phone}` ← `{ok, was_locked, cleared_requests}`.
-// رمز كل رسالة (المالك ٢٠٢٦-١٠-٢٣): `owner_number_login_codes(p_phone, p_days)` ← `{codes:[{code, sent_at, status valid|expired}]}`
-// (كل نداء يُسجَّل «عرضت الرمز»)، ويُطابَق كل طلب مُرسَل بأقرب رمز خلال دقيقتين. بعد «فك القفل»:
-// `owner_clear_number_messages(p_phone)` يمسح طلبات الرقم ورموزه. قبل ترحيل 20261023180000 يفشل الاثنان بصمت.
+// رموز الدخول لا تُعرض (٢٠٢٦-١٠-٢٩: حُذفت `owner_number_login_codes` وواجهتها). بعد «فك القفل»:
+// `owner_clear_number_messages(p_phone)` يمسح طلبات الرقم. قبل ترحيل 20261023180000 يفشل بصمت.
 // المدير لا يصل هنا أصلاً (صفوفه مخفية بلا `phone_e164`) — لا نداء جديد له.
 // حارس المكدس: الصفحة خلف `AdminLazyPage { AnyView(…) }`، والرأس والمحتوى خلف `AnyView`.
 
@@ -43,7 +42,6 @@ struct SmsNumberDetails: Equatable {
     var total = 0
     var items: [Request] = []
     var nextBefore: Int64?
-    var codeViewCount = 0
 
     static func decode(_ data: Data) throws -> SmsNumberDetails {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -65,7 +63,6 @@ struct SmsNumberDetails: Equatable {
         r.items = (root["items"] as? [[String: Any]] ?? []).map { decodeRequest($0) }
         r.total = SmsJSON.int(root["total"]) ?? r.items.count
         r.nextBefore = SmsJSON.double(root["next_before"]).map { Int64($0) }
-        r.codeViewCount = SmsJSON.int(root["code_view_count"]) ?? 0
         return r
     }
 
@@ -82,30 +79,6 @@ struct SmsNumberDetails: Equatable {
                        queueStatus: (d["queue_status"] as? String)
                            .map { $0.trimmingCharacters(in: .whitespaces) }.flatMap { $0.isEmpty ? nil : $0 },
                        queueCheckedAt: ApprovalWorkflow.date(d["queue_checked_at"] as? String))
-    }
-}
-
-/// رمز دخول أُرسل للرقم — من `owner_number_login_codes`
-struct SmsLoginCode: Equatable {
-    var code: String
-    var sentAt: Date
-    /// آخر رمز للرقم، لم ينتهِ، ولم يدخل صاحبه بعده
-    var valid: Bool
-
-    static func decode(_ data: Data) -> [SmsLoginCode] {
-        let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        return (root?["codes"] as? [[String: Any]] ?? []).compactMap { x in
-            guard let code = x["code"] as? String, let sent = ApprovalWorkflow.date(x["sent_at"] as? String) else { return nil }
-            return SmsLoginCode(code: code, sentAt: sent, valid: x["status"] as? String == "valid")
-        }
-    }
-
-    /// رمز الطلب المُرسَل: أقرب رمز حُفظ خلال دقيقتين من تسجيل الطلب
-    static func match(_ item: SmsNumberDetails.Request, in codes: [SmsLoginCode]) -> SmsLoginCode? {
-        guard item.outcome == "sent", let at = item.recordedAt else { return nil }
-        return codes
-            .filter { abs($0.sentAt.timeIntervalSince(at)) <= 120 }
-            .min { abs($0.sentAt.timeIntervalSince(at)) < abs($1.sentAt.timeIntervalSince(at)) }
     }
 }
 
@@ -212,8 +185,6 @@ final class SmsNumberDetailsStore: ObservableObject {
     @Published private(set) var unlocking = false
     @Published var confirmUnlock = false
     @Published var unlockNotice: SmsNotice?
-    /// رموز الرقم في الفترة (المالك) — فارغة إن تعذّر الجلب
-    @Published private(set) var codes: [SmsLoginCode] = []
 
     init(phoneE164: String, days: Int) {
         self.phoneE164 = phoneE164
@@ -241,7 +212,6 @@ final class SmsNumberDetailsStore: ObservableObject {
             result = try await fetch(before: nil)
             failed = false
             denied = false
-            await fetchCodes()
         } catch {
             handle(error)
         }
@@ -264,34 +234,14 @@ final class SmsNumberDetailsStore: ObservableObject {
         }
     }
 
-    private struct CodesParams: Encodable {
-        let p_phone: String
-        let p_days: Int
-    }
-
-    /// رموز الرقم — أفضل جهد: أي خطأ يترك الصفوف بلا رمز
-    private func fetchCodes() async {
-        do {
-            let data = try await SupabaseConfig.client
-                .rpc("owner_number_login_codes", params: CodesParams(p_phone: phoneE164, p_days: days))
-                .execute().data
-            codes = SmsLoginCode.decode(data)
-        } catch {
-            if !ErrorHelper.isCancellation(error) {
-                Log.warning("[KWT SMS] تعذّر جلب رموز الرقم: \(error.localizedDescription)")
-            }
-        }
-    }
-
     private struct PhoneParams: Encodable { let p_phone: String }
 
-    /// مسح طلبات الرقم ورموزه بعد «فك القفل» — true إن نجح
+    /// مسح طلبات الرقم بعد «فك القفل» — true إن نجح
     private func clearMessages() async -> Bool {
         do {
             _ = try await SupabaseConfig.client
                 .rpc("owner_clear_number_messages", params: PhoneParams(p_phone: phoneE164))
                 .execute()
-            codes = []
             return true
         } catch {
             Log.warning("[KWT SMS] تعذّر مسح رسائل الرقم: \(error.localizedDescription)")
@@ -441,7 +391,7 @@ private struct SmsNumberDetailsContent: View {
                     DSEmptyView(L10n.t("لا طلبات في هذه الفترة", "No requests in this period"),
                                 icon: "person.badge.key.fill", style: .inline)
                 } else {
-                    SmsNumberRequestRows(items: result.items, codes: store.codes)
+                    SmsNumberRequestRows(items: result.items)
                 }
                 if result.nextBefore != nil {
                     Button { Task { await store.loadMore() } } label: {
@@ -510,10 +460,6 @@ private struct SmsNumberSummary: View {
                         DSStatusChip(text: "\(entry.title): \(n)", tint: tint)
                     }
                 }
-                if result.codeViewCount > 0 {
-                    DSStatusChip(text: L10n.t("عرضت الرمز: \(result.codeViewCount)", "Code views: \(result.codeViewCount)"),
-                                 icon: "key.fill", tint: DS.Color.slate)
-                }
             }
             Text(verbatim: signInLine)
                 .dsFont(.footnote)
@@ -539,12 +485,11 @@ private struct SmsNumberSummary: View {
 
 private struct SmsNumberRequestRows: View {
     let items: [SmsNumberDetails.Request]
-    let codes: [SmsLoginCode]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(items) { item in
-                SmsNumberRequestRow(item: item, code: SmsLoginCode.match(item, in: codes))
+                SmsNumberRequestRow(item: item)
                 if item.id != items.last?.id { AdminRowDivider() }
             }
         }
@@ -554,8 +499,6 @@ private struct SmsNumberRequestRows: View {
 /// صفّ طلب: الوقت + النتيجة، ثم للمُرسَل «انرسل بعد…» وسطر التسليم، وللمرفوض «انتظر N ث»
 private struct SmsNumberRequestRow: View {
     let item: SmsNumberDetails.Request
-    /// رمز هذه الرسالة وحالته (المالك)
-    let code: SmsLoginCode?
 
     var body: some View {
         let outcome = SmsAttemptsText.outcome(item.outcome)
@@ -573,13 +516,6 @@ private struct SmsNumberRequestRow: View {
                     SmsDetailLine(text: SmsDetailsText.sendDelay(delay), icon: "timer", tint: DS.Color.textSecondary)
                 }
                 SmsDeliveryLine(item: item)
-                if let code {
-                    SmsDetailLine(text: code.valid
-                                    ? L10n.t("الرمز \(code.code) · صالح", "Code \(code.code) · valid")
-                                    : L10n.t("الرمز \(code.code) · منتهي", "Code \(code.code) · expired"),
-                                  icon: "key.fill",
-                                  tint: code.valid ? DS.Color.success : DS.Color.textSecondary)
-                }
             } else if item.outcome == "blocked", let text = SmsDetailsText.blocked(item.retryAfterSeconds) {
                 SmsDetailLine(text: text, icon: "hourglass", tint: DS.Color.warning.dsReadableGlyph)
             } else if item.outcome == "failed", let code = item.errorCode {

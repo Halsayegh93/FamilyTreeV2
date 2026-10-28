@@ -386,6 +386,9 @@ struct AdminPolicyRequestsSection: View {
             ForEach(adminRequestVM.privacyRequests) { request in
                 card(request, isDeletion: false)
             }
+            ForEach(adminRequestVM.relativeAddRequests) { request in
+                card(request, isDeletion: false)
+            }
         }
         .dsAlert(L10n.t("حذف نهائي للحساب؟", "Delete the account permanently?"),
                  isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
@@ -417,14 +420,19 @@ struct AdminPolicyRequestsSection: View {
     }
 
     private func card(_ request: AdminRequest, isDeletion: Bool) -> some View {
-        let details = isDeletion ? nil : PrivacyRequestDetails.parse(request.details)
+        let isRelative = request.requestType == RequestType.relativeAdd.rawValue
+        let details = isDeletion || isRelative ? nil : PrivacyRequestDetails.parse(request.details)
         let tint = isDeletion ? DS.Color.error : DS.Color.palm
         let title = isDeletion ? L10n.t("طلب حذف حساب", "Account deletion request")
-                               : L10n.t("طلب خصوصية: \(details?.kindTitle ?? "")", "Privacy request: \(details?.kindTitle ?? "")")
-        let note = details?.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+                  : isRelative ? L10n.t("إضافة قريبة", "Add a relative")
+                  : L10n.t("طلب خصوصية: \(details?.kindTitle ?? "")", "Privacy request: \(details?.kindTitle ?? "")")
+        // «إضافة قريبة»: ملخّص السيرفر («إضافة زوجة: …») مكان الملاحظة
+        let note = isRelative ? RelativeAddDetails.parse(request.details)?.summaryText
+                              : details?.note?.trimmingCharacters(in: .whitespacesAndNewlines)
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: isDeletion ? "person.crop.circle.badge.xmark" : "lock.shield.fill", tint: tint)
+                DSFieldIcon(name: isDeletion ? "person.crop.circle.badge.xmark" : isRelative ? "person.badge.plus" : "lock.shield.fill",
+                            tint: tint)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(title)
                         .dsFont(.rowTitle)
@@ -478,9 +486,12 @@ struct AdminPolicyRequestsSection: View {
         guard busyId == nil else { return }
         busyId = request.id
         Task {
-            let ok = request.requestType == RequestType.accountDelete.rawValue
-                ? await adminRequestVM.approveAccountDeletion(request)
-                : await adminRequestVM.decidePrivacyRequest(request, approve: true, reason: nil)
+            let ok: Bool
+            switch request.requestType {
+            case RequestType.accountDelete.rawValue: ok = await adminRequestVM.approveAccountDeletion(request)
+            case RequestType.relativeAdd.rawValue: ok = await adminRequestVM.decideRelativeAdd(request, approve: true, reason: nil)
+            default: ok = await adminRequestVM.decidePrivacyRequest(request, approve: true, reason: nil)
+            }
             busyId = nil
             if ok {
                 DSMomentToast.show(request.requestType == RequestType.accountDelete.rawValue
@@ -495,6 +506,8 @@ struct AdminPolicyRequestsSection: View {
         Task {
             if request.requestType == RequestType.accountDelete.rawValue {
                 _ = await adminRequestVM.rejectAccountDeletion(request, reason: reason)
+            } else if request.requestType == RequestType.relativeAdd.rawValue {
+                _ = await adminRequestVM.decideRelativeAdd(request, approve: false, reason: reason)
             } else {
                 _ = await adminRequestVM.decidePrivacyRequest(request, approve: false, reason: reason)
             }

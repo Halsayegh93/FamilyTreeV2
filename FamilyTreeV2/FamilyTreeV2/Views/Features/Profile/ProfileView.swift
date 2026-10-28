@@ -953,7 +953,15 @@ struct ProfileView: View {
                 },
                 onAdd: { name, hidden in
                     let ok = await memberVM.addSelfWife(name: name, hidden: hidden)
-                    if ok { showWifeSource = false; return nil }
+                    if ok {
+                        showWifeSource = false
+                        if memberVM.lastSelfRelativeAwaitingApproval {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                treeDaughterDoneMessage = WomenStore.sentForApprovalMessage
+                            }
+                        }
+                        return nil
+                    }
                     return memberVM.errorMessage ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
                 },
                 onCancel: { showWifeSource = false },
@@ -1004,7 +1012,12 @@ struct ProfileView: View {
                                 },
                                 onAdd: { name in
                                     showMotherOptions = false
-                                    Task { await memberVM.addSelfMother(name: name) }
+                                    Task {
+                                        let ok = await memberVM.addSelfMother(name: name)
+                                        if ok && memberVM.lastSelfRelativeAwaitingApproval {
+                                            treeDaughterDoneMessage = WomenStore.sentForApprovalMessage
+                                        }
+                                    }
                                 },
                                 onTree: {
                                     showMotherOptions = false
@@ -2089,11 +2102,13 @@ private struct ProfileWifeFamilyBox: View {
         Task {
             do {
                 let kind = relation == .mother ? "mother" : "wife"
-                try await WomenStore.addOrLinkSelfRelative(kind: kind, fatherId: father.id, womanId: womanId, name: name)
+                let newId = try await WomenStore.addOrLinkSelfRelative(kind: kind, fatherId: father.id, womanId: womanId, name: name)
                 Log.info("[Women] add_or_link_self_relative \(kind) \(womanId == nil ? "new" : "link")")
                 // نفس التحديث بعد اختيار الأم وإضافتها
                 await memberVM.fetchWomenFamily(for: me.id)
                 busy = false
+                // nil = أُرسلت للإدارة (`relative_add`) — تظهر بعد الموافقة
+                guard newId != nil else { onDone(WomenStore.sentForApprovalMessage); return }
                 onDone(relation == .mother ? L10n.t("صارت أمك في «عائلتي».", "She's now your mother in «My family».")
                                            : L10n.t("صارت زوجتك في «عائلتي».", "She's now your wife in «My family»."))
             } catch {

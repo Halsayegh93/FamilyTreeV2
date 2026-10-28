@@ -277,7 +277,7 @@ struct SmsAlertsRows: View {
 // MARK: - طريقة العمل
 
 /// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة صفحتها `SmsHowItWorksPage` من ⋯ (تبسيط ٢٠٢٦-١٠-٢٢): المسار، ما يُحفظ،
-/// رمز الدخول (٥ دقائق للمالك وحده — 20261021080000)، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
+/// رمز الدخول (لا يُحفظ ولا يُعرض — 20261029110000)، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
 /// «إعدادات الإرسال» و«تنبيهات الرصيد» (الدفعة ج). النص نفسه سيُنقل للأندرويد
 struct SmsHowItWorksCard: View {
     let overview: SmsOverview?
@@ -296,14 +296,14 @@ struct SmsHowItWorksCard: View {
                           text: keptText)
                 SmsHowRow(icon: "key.fill", tint: DS.Color.success,
                           title: L10n.t("رمز الدخول", "The sign-in code"),
-                          text: L10n.t("يُحفظ 5 دقائق فقط (مدة صلاحيته) في مكان مقفول لا تصله التطبيقات، ويراه المالك وحده بزرّ «اعرض الرمز» وكل عرض ينكتب في السجل. بعدها، أو إذا دخل صاحبه، يُمسح نهائياً. لا يظهر في سجلات الخدمة، ولا يراه المدراء أبداً.",
-                                       "Kept for 5 minutes only (while valid) in a locked place no app can reach; only the owner sees it with “Show code”, and every view is logged. Then, or once its owner signs in, it's erased for good. It never appears in service logs, and admins never see it."),
+                          text: L10n.t("لا يُحفظ في التطبيق ولا في السيرفر، ولا يراه أحد غير صاحب الرقم — لا المالك ولا المدراء. لا يظهر في سجلات الخدمة.",
+                                       "It isn't stored in the app or on the server, and no one but the number's owner sees it — not the owner nor the admins. It never appears in service logs."),
                           warning: L10n.t("تنبيه: لوحة حساب \(SmsText.isolate("KWT SMS")) قد تعرض نص الرسائل المرسلة — احمِ كلمة سر حساب \(SmsText.isolate("KWT")) وفعّل التحقق بخطوتين إن وُجد.",
                                           "Heads-up: the KWT SMS account dashboard may show sent message text — protect the KWT password and turn on two-step verification if offered."))
                 SmsHowRow(icon: "eye.fill", tint: DS.Color.info,
                           title: L10n.t("من يرى ماذا", "Who sees what"),
-                          text: L10n.t("المالك يرى أرقام «طلبات رمز الدخول» كاملة ورمز الدخول خلال صلاحيته، والمدير يرى الأرقام مخفية جزئياً بلا رمز، وغيرهما لا يرى الصفحة.",
-                                       "The owner sees full numbers in “Sign-in code requests” and the sign-in code while valid, admins see numbers partly masked with no code, and no one else sees this page."))
+                          text: L10n.t("المالك يرى أرقام «طلبات رمز الدخول» كاملة، والمدير يرى الأرقام مخفية جزئياً، وغيرهما لا يرى الصفحة. رمز الدخول نفسه لا يظهر لأحد.",
+                                       "The owner sees full numbers in “Sign-in code requests”, admins see numbers partly masked, and no one else sees this page. The sign-in code itself is shown to no one."))
                 SmsHowRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
                           title: L10n.t("«ناجحة» و«مشبوهة»", "“Signed in” and “Suspicious”"),
                           text: L10n.t("شارة «ناجحة» (بعلامة صح) تعني أن الرقم سجّل دخولاً بعد أول طلب في الفترة؛ «مشبوهة» = 5 طلبات أو أكثر في ساعة.",

@@ -117,7 +117,8 @@ class ProjectsViewModel: ObservableObject {
             Log.info("[Projects] ✅ تم إضافة المشروع: \(title)")
             return true
         } catch {
-            self.errorMessage = L10n.t("تعذر إضافة المشروع.",
+            ObjectionableText.presentIfObjectionable(error)   // شاشتا الإضافة والتعديل لا تعرضان الخطأ
+            self.errorMessage = ObjectionableText.message(for: error) ?? L10n.t("تعذر إضافة المشروع.",
                                        "Failed to add project.")
             Log.error("[Projects] ❌ خطأ إضافة المشروع: \(error.localizedDescription)")
             isLoading = false
@@ -304,7 +305,8 @@ class ProjectsViewModel: ObservableObject {
             isLoading = false
             return true
         } catch {
-            self.errorMessage = L10n.t("تعذر تحديث المشروع.",
+            ObjectionableText.presentIfObjectionable(error)   // شاشتا الإضافة والتعديل لا تعرضان الخطأ
+            self.errorMessage = ObjectionableText.message(for: error) ?? L10n.t("تعذر تحديث المشروع.",
                                        "Failed to update project.")
             Log.error("خطأ تحديث المشروع: \(error.localizedDescription)")
             isLoading = false

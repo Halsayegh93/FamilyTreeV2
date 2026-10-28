@@ -31,6 +31,7 @@ enum ApprovalTypeTitle {
         case RequestType.contentReport.rawValue: return L10n.t("بلاغ محتوى", "Content report")
         case RequestType.joinRequest.rawValue: return L10n.t("طلب انضمام", "Join request")
         case RequestType.linkRequest.rawValue: return L10n.t("ربط بالشجرة", "Link to tree")
+        case RequestType.relativeAdd.rawValue: return L10n.t("إضافة قريبة", "Add a relative")
         default: return type
         }
     }
@@ -45,6 +46,7 @@ enum ApprovalTypeTitle {
         case RequestType.photoSuggestion.rawValue: return "photo.fill"
         case RequestType.newsReport.rawValue, RequestType.contentReport.rawValue: return "exclamationmark.bubble.fill"
         case RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue: return "person.badge.clock.fill"
+        case RequestType.relativeAdd.rawValue: return "person.badge.plus"
         default: return "doc.text.fill"
         }
     }

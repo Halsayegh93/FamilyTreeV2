@@ -424,15 +424,19 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - عائلة المستخدم نفسه (شجرة النساء عبر RPCs السيرفر)
 
-    /// إضافة زوجة للمستخدم نفسه (RPC add_self_wife).
+    /// آخر إضافة قريبة ذاتية (زوجة/أم) أُرسلت للإدارة بدل الكتابة — السيرفر رجّع NULL (٢٠٢٦-١٠-٢٩)
+    private(set) var lastSelfRelativeAwaitingApproval = false
+
+    /// إضافة زوجة للمستخدم نفسه (RPC add_self_wife). true مع `lastSelfRelativeAwaitingApproval` = أُرسلت للإدارة.
     @discardableResult
     func addSelfWife(name: String, hidden: Bool = false) async -> Bool {
+        lastSelfRelativeAwaitingApproval = false
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-        struct P: Encodable { let p_name: String; let p_hidden: Bool }
         do {
-            _ = try await supabase.rpc("add_self_wife", params: P(p_name: trimmed, p_hidden: hidden)).execute()
+            let id = try await WomenStore.addSelfWife(name: trimmed, hidden: hidden)
+            lastSelfRelativeAwaitingApproval = id == nil
             await fetchWomenFamily(for: uid); return true
         } catch {
             self.errorMessage = L10n.t("تعذّر إضافة الزوجة.", "Failed to add wife.")
@@ -647,12 +651,13 @@ class MemberViewModel: ObservableObject {
     /// إضافة أمّ جديدة (زوجة للأب) للمستخدم نفسه (RPC add_self_mother).
     @discardableResult
     func addSelfMother(name: String) async -> Bool {
+        lastSelfRelativeAwaitingApproval = false
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
-        struct P: Encodable { let p_name: String }
         do {
-            _ = try await supabase.rpc("add_self_mother", params: P(p_name: trimmed)).execute()
+            let id = try await WomenStore.addSelfMother(name: trimmed)
+            lastSelfRelativeAwaitingApproval = id == nil
             await fetchWomenFamily(for: uid); return true
         } catch {
             self.errorMessage = L10n.t("تعذّر إضافة الأم.", "Failed to add mother.")
@@ -1579,6 +1584,8 @@ class MemberViewModel: ObservableObject {
             }
             Log.info("تم تحديث السيرة الذاتية بنجاح")
         } catch {
+            // النبذة تمر بفلتر الكلمات (٢٠٢٦-١٠-٢٩) — الشاشات لا تعرض خطأ هذا الحفظ
+            ObjectionableText.presentIfObjectionable(error)
             Log.error("خطأ في تحديث السيرة: \(error.localizedDescription)")
         }
     }
@@ -1642,6 +1649,25 @@ class MemberViewModel: ObservableObject {
             return true
         } catch {
             Log.error("خطأ تحديث إخفاء الصورة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    /// «إظهار آخر ظهوري ونشاطي» — `set_activity_visibility(p_visible)` (للنفس فقط، ٢٠٢٦-١٠-٢٩)
+    func updateActivityVisible(_ visible: Bool) async -> Bool {
+        guard let userId = currentUser?.id else { return false }
+        do {
+            _ = try await supabase.rpc("set_activity_visibility",
+                                       params: ["p_visible": AnyEncodable(visible)]).execute()
+            if !visible { MemberActivityTracker.clear() }
+            if var updated = authVM?.currentUser, updated.id == userId {
+                updated.activityVisible = visible
+                authVM?.currentUser = updated
+            }
+            if visible { MemberActivityTracker.report("profile", force: true) }
+            return true
+        } catch {
+            Log.error("خطأ تحديث ظهور النشاط: \(error.localizedDescription)")
             return false
         }
     }

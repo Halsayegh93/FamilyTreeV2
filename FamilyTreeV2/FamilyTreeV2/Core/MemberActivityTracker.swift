@@ -9,11 +9,26 @@ enum MemberActivityTracker {
     private static var lastReportedScreen: String?
     private static var lastReportTime: Date = .distantPast
     private static var heartbeatTimer: Timer?
+    /// «إظهار آخر ظهوري ونشاطي» — مطفأ = لا إرسال للشاشة ولا نبض (السيرفر يفرّغها أيضاً)
+    private static var visible = true
+
+    /// يضبطه `AuthViewModel.currentUser` ومفتاح الخصوصية. الإطفاء يوقف النبض فوراً.
+    static func setVisible(_ value: Bool) {
+        guard value != visible else { return }
+        visible = value
+        if !value {
+            heartbeatTimer?.invalidate()
+            heartbeatTimer = nil
+            lastReportedScreen = nil
+            lastReportTime = .distantPast
+        }
+    }
 
     /// أبلغ القاعدة بمكان وجود العضو حالياً
     /// - Parameter screen: مفتاح الشاشة (home, tree, diwaniyas, profile, admin, news, ...)
     /// - Parameter force: تجاوز الـ throttle (للـ heartbeat)
     static func report(_ screen: String, force: Bool = false) {
+        guard visible else { return }
         // throttle: لا ترسل نفس الشاشة أكثر من مرة كل 30 ثانية
         let now = Date()
         if !force, lastReportedScreen == screen, now.timeIntervalSince(lastReportTime) < 30 {

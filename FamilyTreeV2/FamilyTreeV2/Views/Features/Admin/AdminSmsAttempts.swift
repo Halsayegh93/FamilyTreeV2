@@ -1,7 +1,6 @@
 import SwiftUI
 import Supabase
 import Combine
-import UniformTypeIdentifiers
 
 // MARK: - «محاولات الدخول» في صفحة «رسائل الدخول · KWT SMS» (طلب المالك ٢٠٢٦-١٠-٢٠ «منو حاول يدخل وكم مرة؟»)
 //
@@ -9,9 +8,7 @@ import UniformTypeIdentifiers
 // أقصى ٢٠٠) — العدد اليوم/في الفترة، آخر نتيجة، هل دخل بعدها، و«مريب» (٥ أو أكثر في ساعة). الرقم كاملاً للمالك
 // (`phone_e164` للنسخ والاتصال)، ومخفياً للمدير («+965 5000••34») — السيرفر يقرّر، التطبيق يعرض فقط.
 // يُحفظ ٣٠ يوماً. العدّ بدأ ٢٠ أكتوبر ٢٠٢٦.
-// «اعرض الرمز» للمالك وحده (طلب المالك ٢٠٢٦-١٠-٢١ «اذا في خطا ممكن اعطيه لصاحب الرقم»، 20261021080000):
-// `owner_login_codes` = الأرقام التي لها رمز صالح الآن (بلا الرمز) + آخر عرض، و`owner_reveal_login_code` يرجع الرمز
-// ويُسجَّل كل نداء. الرمز يعيش ٥ دقائق في السيرفر ويبطل بالدخول؛ المدير يأخذ 42501 فلا يظهر له شيء.
+// رموز الدخول لا تُحفظ ولا تُعرض لأحد (٢٠٢٦-١٠-٢٩: حُذفت دوال عرض الرمز من السيرفر وواجهتها من هنا).
 // للمالك: ضغط صفّ الرقم يفتح «تفاصيل الرقم» (`AdminSmsNumberDetails.swift`، وقت الإرسال وحالة التسليم لكل طلب).
 // حارس المكدس: البطاقة نوع مستقل خلف `AnyView` في `AdminSmsView`، والصفحة الكاملة خلف `AdminLazyPage`.
 
@@ -93,55 +90,6 @@ struct SmsLoginAttempts: Equatable {
     }
 }
 
-/// ما ترجعه `owner_login_codes(p_days)` — للمالك فقط
-struct OwnerLoginCodes: Equatable {
-    struct Seen: Equatable {
-        var lastAt: Date?
-        var count = 0
-    }
-
-    /// `phone_e164` ← وقت انتهاء الرمز الصالح
-    var expiries: [String: Date] = [:]
-    /// `phone_e164` ← آخر «اعرض الرمز» وعدده في الفترة
-    var views: [String: Seen] = [:]
-
-    static func decode(_ data: Data) throws -> OwnerLoginCodes {
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw CocoaError(.coderReadCorrupt)
-        }
-        var r = OwnerLoginCodes()
-        for x in root["codes"] as? [[String: Any]] ?? [] {
-            if let phone = x["phone_e164"] as? String, let at = ApprovalWorkflow.date(x["expires_at"] as? String) {
-                r.expiries[phone] = at
-            }
-        }
-        for x in root["views"] as? [[String: Any]] ?? [] {
-            if let phone = x["phone_e164"] as? String {
-                r.views[phone] = Seen(lastAt: ApprovalWorkflow.date(x["last_viewed_at"] as? String),
-                                      count: SmsJSON.int(x["count"]) ?? 0)
-            }
-        }
-        return r
-    }
-}
-
-/// ما ترجعه `owner_reveal_login_code(p_phone)`
-struct OwnerCodeReveal: Equatable {
-    /// shown · used · expired · none
-    var status = "none"
-    var code: String?
-    var expiresAt: Date?
-
-    static func decode(_ data: Data) throws -> OwnerCodeReveal {
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw CocoaError(.coderReadCorrupt)
-        }
-        return OwnerCodeReveal(status: root["status"] as? String ?? "none",
-                               code: (root["code"] as? String).flatMap { $0.isEmpty ? nil : $0 },
-                               expiresAt: ApprovalWorkflow.date(root["expires_at"] as? String))
-    }
-}
-
 // MARK: - المخزن
 
 /// المحاولات لكل فترة (اليوم / ٧ / ٣٠) — مشترك بين البطاقة والصفحة الكاملة
@@ -157,10 +105,7 @@ final class SmsLoginAttemptsStore: ObservableObject {
     @Published private(set) var loading: Set<Int> = []
     @Published private(set) var failed: Set<Int> = []
     @Published private(set) var denied = false
-    /// للمالك فقط — يبقى فاضياً للمدير
-    @Published var ownerCodes = OwnerLoginCodes()
     private var fetchedAt: [Int: Date] = [:]
-    private var ownerCodesAt: Date?
 
     var current: SmsLoginAttempts? { results[days] }
     var isLoading: Bool { loading.contains(days) }
@@ -175,10 +120,7 @@ final class SmsLoginAttemptsStore: ObservableObject {
     /// يجلب الفترة المختارة — لا يُكرَّر خلال دقيقة إلا بالسحب للتحديث
     func refresh(force: Bool = false) async {
         let period = days
-        if !force, let at = fetchedAt[period], Date().timeIntervalSince(at) < 60 {
-            await refreshOwnerCodes()
-            return
-        }
+        if !force, let at = fetchedAt[period], Date().timeIntervalSince(at) < 60 { return }
         guard !loading.contains(period) else { return }
         fetchedAt[period] = Date()
         loading.insert(period)
@@ -190,7 +132,6 @@ final class SmsLoginAttemptsStore: ObservableObject {
             results[period] = try SmsLoginAttempts.decode(data)
             failed.remove(period)
             denied = false
-            await refreshOwnerCodes(force: force)
         } catch {
             if ErrorHelper.isCancellation(error) { fetchedAt[period] = nil; return }
             if (error as? PostgrestError)?.code == "42501" { denied = true; return }
@@ -199,31 +140,6 @@ final class SmsLoginAttemptsStore: ObservableObject {
         }
     }
 
-    /// الأرقام التي لها رمز صالح + آخر عرض — للمالك فقط (الرد غير المخفي)، ولا يتكرر خلال ١٠ ثوانٍ
-    func refreshOwnerCodes(force: Bool = false) async {
-        guard current?.masked == false else { return }
-        if !force, let at = ownerCodesAt, Date().timeIntervalSince(at) < 10 { return }
-        ownerCodesAt = Date()
-        do {
-            let data = try await SupabaseConfig.client
-                .rpc("owner_login_codes", params: ["p_days": days])
-                .execute().data
-            ownerCodes = try OwnerLoginCodes.decode(data)
-        } catch {
-            if ErrorHelper.isCancellation(error) { ownerCodesAt = nil; return }
-            Log.warning("[KWT SMS] تعذّر جلب رموز الدخول الصالحة: \(error.localizedDescription)")
-        }
-    }
-
-    /// «اعرض الرمز» — يُسجَّل في السيرفر مع كل نداء، ثم يُحدَّث سطر «عرضت الرمز»
-    func reveal(_ phoneE164: String) async throws -> OwnerCodeReveal {
-        let data = try await SupabaseConfig.client
-            .rpc("owner_reveal_login_code", params: ["p_phone": phoneE164])
-            .execute().data
-        let reply = try OwnerCodeReveal.decode(data)
-        await refreshOwnerCodes(force: true)
-        return reply
-    }
 }
 
 // MARK: - النصوص
@@ -268,7 +184,7 @@ enum SmsAttemptsText {
 // MARK: - البطاقة
 
 /// «طلبات رمز الدخول» في الصفحة (تبسيط ٢٠٢٦-١٠-٢٢): الأرقام المشبوهة + أحدث ٣ فقط، ثم «الكل (N)» ← الصفحة الكاملة
-/// (مبدّل الفترة، المجاميع، البحث، و«اعرض الرمز» للمالك كما هي)
+/// (مبدّل الفترة، المجاميع، البحث)
 struct SmsAttemptsCard: View {
     @ObservedObject private var store = SmsLoginAttemptsStore.shared
     /// قسم صفحة الرسائل — يُمرَّر لصفحة «الكل»
@@ -423,10 +339,7 @@ private struct SmsAttemptsNote: View {
 
     var body: some View {
         var parts = [L10n.t("يُحفظ \(SmsText.days(result.retentionDays))", "Kept \(SmsText.days(result.retentionDays))"),
-                     result.masked
-                        ? L10n.t("رمز الدخول لا يظهر للمدراء", "Sign-in codes aren't shown to admins")
-                        : L10n.t("رمز الدخول يظهر لك وحدك خلال صلاحيته (5 دقائق)",
-                                 "Sign-in codes show for you only while valid (5 minutes)")]
+                     L10n.t("رمز الدخول لا يُحفظ ولا يظهر لأحد", "Sign-in codes are never stored or shown")]
         if result.masked {
             parts.append(L10n.t("الأرقام مخفية جزئياً — كاملة للمالك", "Numbers partly hidden — full for the owner"))
         }
@@ -459,19 +372,14 @@ private struct SmsAttemptsRows: View {
     }
 }
 
-/// صفّ رقم + سطر «اعرض الرمز» للمالك تحته (خارج رابط الصف حتى لا تبتلع الضغطةَ)
+/// صفّ رقم
 private struct SmsAttemptRow: View {
     let item: SmsLoginAttempts.Item
     let days: Int
     let backTitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SmsAttemptRowMain(item: item, days: days, backTitle: backTitle)
-            if let e164 = item.phoneE164 {
-                SmsOwnerCodeLine(phoneE164: e164, name: item.name.map(PersonName.threeParts) ?? item.phone)
-            }
-        }
+        SmsAttemptRowMain(item: item, days: days, backTitle: backTitle)
     }
 }
 
@@ -587,144 +495,6 @@ private struct SmsAttemptRowMain: View {
                     Label(L10n.t("اتصال", "Call"), systemImage: "phone.fill")
                 }
             }
-        }
-    }
-}
-
-// MARK: - «اعرض الرمز» (المالك)
-
-/// للمالك: زر «اعرض الرمز» ما دام للرقم رمز صالح، وسطر «عرضت الرمز» بعد أي عرض — لا شيء غير ذلك
-private struct SmsOwnerCodeLine: View {
-    let phoneE164: String
-    let name: String
-    @ObservedObject private var store = SmsLoginAttemptsStore.shared
-    @State private var target: SmsRevealTarget?
-
-    var body: some View {
-        let expiry = store.ownerCodes.expiries[phoneE164]
-        let seen = store.ownerCodes.views[phoneE164]
-        if expiry != nil || seen != nil {
-            HStack(spacing: DS.Spacing.sm) {
-                if expiry != nil {
-                    DSChipButton(L10n.t("اعرض الرمز", "Show code"), icon: "key.fill", size: .small) {
-                        target = SmsRevealTarget(id: phoneE164, name: name)
-                    }
-                }
-                if let seen, let when = SmsAttemptsText.relative(seen.lastAt) {
-                    Text(verbatim: seen.count > 1
-                         ? L10n.t("عرضت الرمز \(when) · \(seen.count) مرات", "You viewed the code \(when) · \(seen.count) times")
-                         : L10n.t("عرضت الرمز \(when)", "You viewed the code \(when)"))
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.bottom, DS.Spacing.sm + 2)
-            .padding(.leading, DS.Icon.row + DS.Spacing.md)
-            .dsCenterBox(item: $target) { target in
-                AnyView(SmsRevealCodeBox(target: target))
-            }
-        }
-    }
-}
-
-struct SmsRevealTarget: Identifiable {
-    /// `phone_e164`
-    let id: String
-    let name: String
-}
-
-/// الرمز كبيراً + الوقت الباقي + «نسخ الرمز» — العرض نفسه يُسجَّل في السيرفر
-struct SmsRevealCodeBox: View {
-    let target: SmsRevealTarget
-    @Environment(\.dismiss) private var dismiss
-    @State private var reply: OwnerCodeReveal?
-    @State private var failed = false
-    @State private var copied = false
-
-    var body: some View {
-        DSComposer(title: L10n.t("رمز الدخول", "Sign-in code"),
-                   subtitle: "\(target.name) · \(SmsAttemptsText.isolatedLTR("+965 " + target.id.dropFirst(4)))",
-                   icon: "key.fill", tint: DS.Color.actionNavy,
-                   actionTitle: "", showsAction: false, cancelTitle: L10n.t("إغلاق", "Close"),
-                   canSubmit: false, onSubmit: {}, onCancel: { dismiss() }) {
-            if let reply, reply.status == "shown", let code = reply.code, let expiresAt = reply.expiresAt {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    codeSection(code: code, expiresAt: expiresAt, now: context.date)
-                }
-                DSNoteCard(L10n.t("أعطه لصاحب الرقم فقط إذا هو اللي تواصل معك. كل عرض ينكتب في السجل.",
-                                  "Give it only to the number's owner if they contacted you. Every view is logged."),
-                           icon: "hand.raised.fill", tint: DS.Color.warning)
-            } else if let reply {
-                DSNoteCard(statusText(reply.status), icon: "clock.badge.xmark", tint: DS.Color.slate)
-            } else if failed {
-                DSNoteCard(L10n.t("تعذّر جلب الرمز الآن — حاول مرة ثانية.", "Couldn't load the code — try again."),
-                           icon: "wifi.exclamationmark", tint: DS.Color.warning)
-            } else {
-                DSPageLoader(L10n.t("جاري جلب الرمز…", "Loading the code…"), size: DS.Icon.loaderArtInline, fillsSpace: false)
-            }
-        }
-        .task { if reply == nil { await load() } }
-    }
-
-    init(target: SmsRevealTarget, reply: OwnerCodeReveal? = nil) {
-        self.target = target
-        _reply = State(initialValue: reply)
-    }
-
-    private func codeSection(code: String, expiresAt: Date, now: Date) -> some View {
-        let left = max(0, Int(expiresAt.timeIntervalSince(now).rounded(.up)))
-        return DSComposerSection(title: L10n.t("الرمز", "Code"), icon: "key.fill", index: 0) {
-            if left > 0 {
-                Text(verbatim: code)
-                    .dsFont(.codeDigit)
-                    .monospacedDigit()
-                    .tracking(DS.Spacing.sm)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .environment(\.layoutDirection, .leftToRight)
-                    .frame(maxWidth: .infinity)
-                    .textSelection(.enabled)
-                    .accessibilityLabel(code.map(String.init).joined(separator: " "))
-                Text(L10n.t("ينتهي بعد \(left / 60):\(String(format: "%02d", left % 60))",
-                            "Expires in \(left / 60):\(String(format: "%02d", left % 60))"))
-                    .dsFont(.footnote)
-                    .monospacedDigit()
-                    .foregroundColor(left <= 60 ? DS.Color.warning.dsReadableGlyph : DS.Color.textSecondary)
-                    .frame(maxWidth: .infinity)
-                DSButton(copied ? L10n.t("تم النسخ", "Copied") : L10n.t("نسخ الرمز", "Copy code"),
-                         icon: copied ? "checkmark" : "doc.on.doc") {
-                    copy(code, until: expiresAt)
-                }
-            } else {
-                DSNoteCard(statusText("expired"), icon: "clock.badge.xmark", tint: DS.Color.slate)
-            }
-        }
-    }
-
-    private func statusText(_ status: String) -> String {
-        switch status {
-        case "used": return L10n.t("صاحب الرقم دخل بهذا الرمز — ما عاد يصلح.", "The number's owner already signed in — the code no longer works.")
-        case "expired": return L10n.t("انتهت صلاحية الرمز (5 دقائق). خلّه يطلب رمزاً جديداً.", "The code expired (5 minutes). Ask them to request a new one.")
-        default: return L10n.t("ما في رمز صالح لهذا الرقم الآن.", "There's no valid code for this number right now.")
-        }
-    }
-
-    /// للجهاز فقط (لا ينتقل لأجهزة آبل الأخرى) ويُمسح من الحافظة عند انتهاء الرمز
-    private func copy(_ code: String, until expiresAt: Date) {
-        UIPasteboard.general.setItems([[UTType.plainText.identifier: code]],
-                                      options: [.localOnly: true, .expirationDate: expiresAt])
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        copied = true
-    }
-
-    private func load() async {
-        do {
-            reply = try await SmsLoginAttemptsStore.shared.reveal(target.id)
-        } catch {
-            guard !ErrorHelper.isCancellation(error) else { return }
-            failed = true
-            Log.warning("[KWT SMS] تعذّر عرض رمز الدخول: \(error.localizedDescription)")
         }
     }
 }

@@ -839,6 +839,50 @@ extension DS.Font {
     static func role(_ role: DS.TextRole) -> SwiftUI.Font { plex(role.textSize, weight: role.weight, relativeTo: role.style) }
 }
 
+// MARK: - النص الطويل («القراءة»، قرار المالك ٢٠٢٦-١٠-٢٨)
+// IBM Plex Sans Arabic العادي بسطور مريحة (تباعد ≈ ٠٫٤٥ × حجم الخط) لنص القراءة: بنود الخصوصية والشروط
+// وملخّصاتها، نص الخبر، التعليقات، النبذة، أوصاف الديوانيات والمشاريع والمكتبة. العناوين والأسماء والأزرار تبقى
+// بخط التطبيق (Alexandria). الحجم حجم أدوار النص نفسه ويتبع «حجم النص» في الجهاز.
+
+extension DS.TextRole {
+    /// نص قراءة — Subheadline (١٥) مثل `body`
+    static let reading          = DS.TextRole(.subheadline)
+    /// نص قراءة ثانوي (ملاحظة، تعليق قصير، وصف في بطاقة) — Footnote (١٣)
+    static let readingSecondary = DS.TextRole(.footnote)
+}
+
+extension DS.Font {
+    /// ملف خط القراءة — IBM Plex Sans Arabic العادي (مدمج في الحزمة)
+    static let readingFace = "IBMPlexSansArabic-Regular"
+    /// تباعد السطور نسبةً لحجم الخط المرسوم
+    static let readingLineSpacingRatio: CGFloat = 0.45
+
+    /// خط القراءة للدور — Plex العادي دائماً، مقيّداً بنمط الدور (Dynamic Type)
+    static func reading(_ role: DS.TextRole) -> SwiftUI.Font {
+        .custom(readingFace, size: role.textSize, relativeTo: role.style)
+    }
+}
+
+/// خط القراءة + تباعد السطور بحجم الخط بعد تكبير «حجم النص»
+private struct DSReadingFontModifier: ViewModifier {
+    let role: DS.TextRole
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
+        let size = UIFontMetrics(forTextStyle: DS.Font.uiTextStyle(role.style))
+            .scaledValue(for: role.textSize, compatibleWith: traits)
+        return content
+            .font(DS.Font.reading(role))
+            .lineSpacing(size * DS.Font.readingLineSpacingRatio)
+    }
+}
+
+extension View {
+    /// نص طويل للقراءة — `.dsReadingFont()` (١٥) أو `.dsReadingFont(.readingSecondary)` (١٣)
+    func dsReadingFont(_ role: DS.TextRole = .reading) -> some View { modifier(DSReadingFontModifier(role: role)) }
+}
+
 extension View {
     /// خط الدور بحجمه في كل مكان
     func dsFont(_ role: DS.TextRole) -> some View { font(DS.Font.role(role)) }

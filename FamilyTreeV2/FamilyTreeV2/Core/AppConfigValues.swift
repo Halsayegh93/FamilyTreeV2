@@ -32,6 +32,13 @@ final class AppConfigValues: ObservableObject {
         }
     }
 
+    /// نص من السيرفر (غير فارغ) — وإلا nil
+    func string(_ key: String) -> String? {
+        guard let s = values[key] as? String else { return nil }
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
     /// رقم صحيح من السيرفر — وإلا `fallback`
     func int(_ key: String, default fallback: Int) -> Int {
         if let n = values[key] as? NSNumber { return n.intValue }

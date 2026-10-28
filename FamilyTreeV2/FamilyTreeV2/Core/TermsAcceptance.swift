@@ -6,7 +6,8 @@ import Combine
 //
 // السيرفر يملك الإصدار: `app_config.terms_version` (رفعه يطلب الموافقة من جديد، 0 يوقفها).
 // `my_terms_status()` ← {required, accepted, needs} و`accept_terms(p_version)` يسجّل الموافقة
-// في `terms_acceptances`. أي فشل في القراءة (بلا اتصال، سيرفر قديم) لا يقفل التطبيق.
+// في `terms_acceptances`. فشل القراءة يُقفل (٢٠٢٦-١٠-٢٩، المراجعة الثانية): يظهر المربّع برسالة،
+// و«أوافق» يعيد المحاولة (قراءة الحالة ثم الموافقة)، و«تسجيل الخروج» متاح دائماً.
 
 @MainActor
 final class TermsAcceptanceStore: ObservableObject {
@@ -16,6 +17,13 @@ final class TermsAcceptanceStore: ObservableObject {
     @Published private(set) var isAccepting = false
     @Published var errorMessage: String?
     private var required = 0
+    /// آخر قراءة للحالة فشلت — المربّع ظاهر و«أوافق» يعيد القراءة أولاً
+    private var statusUnknown = false
+
+    private static var statusFailedMessage: String {
+        L10n.t("تعذّر التحقق من موافقتك على الشروط. تحقق من الاتصال ثم اضغط «أوافق» للمحاولة مرة أخرى.",
+               "Couldn't check your agreement to the terms. Check your connection, then tap “I agree” to try again.")
+    }
 
     private struct Status: Decodable {
         let required: Int
@@ -27,18 +35,28 @@ final class TermsAcceptanceStore: ObservableObject {
         do {
             let s: Status = try await SupabaseConfig.client.rpc("my_terms_status").execute().value
             required = s.required
+            statusUnknown = false
             needsAcceptance = s.needs
         } catch {
+            if ErrorHelper.isCancellation(error) { return }
             Log.warning("my_terms_status: \(error.localizedDescription)")
-            needsAcceptance = false
+            // يُقفل عند الفشل — لا دخول بلا تأكيد الموافقة
+            statusUnknown = true
+            errorMessage = Self.statusFailedMessage
+            needsAcceptance = true
         }
     }
 
     func accept() async {
-        guard required > 0, !isAccepting else { return }
+        guard !isAccepting else { return }
         isAccepting = true
         errorMessage = nil
         defer { isAccepting = false }
+        if statusUnknown || required == 0 {
+            await refresh()
+            // ما زالت مجهولة → الرسالة باقية؛ أو لا تلزم الموافقة → أُغلق المربّع
+            guard !statusUnknown, needsAcceptance, required > 0 else { return }
+        }
         do {
             let s: Status = try await SupabaseConfig.client
                 .rpc("accept_terms", params: ["p_version": required]).execute().value
@@ -59,7 +77,11 @@ private struct TermsGateModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .task { await store.refresh() }
+            .task {
+                await store.refresh()
+                // نصوص السيرفر (منها رسالة الكلمات غير اللائقة) جاهزة قبل أول حفظ
+                await AppConfigValues.shared.refresh()
+            }
             .dsCenterBox(isPresented: Binding(get: { store.needsAcceptance }, set: { _ in })) {
                 PrivacyPolicyView(acceptance: .init(
                     isAccepting: store.isAccepting,

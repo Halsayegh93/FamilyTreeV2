@@ -1,9 +1,12 @@
 import Foundation
 import Combine
+import Supabase
 
 // MARK: - حظر الأعضاء (Guideline 1.2 — «حظر المستخدمين المسيئين»)
 //
-// الحظر على الجهاز فقط ولكل مستخدم (UserDefaults) — بلا أي تغيير في السيرفر:
+// الحظر على السيرفر منذ ٢٠٢٦-١٠-٢٩ (`member_blocks`): `block_member(p_member)` (السيرفر نفسه يرفع بلاغاً للإدارة —
+// التطبيق لا يرسل بلاغاً)، `unblock_member(p_member)`، و`my_blocked_ids()` عند الدخول. القائمة المحلية (UserDefaults)
+// تبقى فهرساً للأسماء والمعرّفات الأخرى للمطابقة، والحظر المحلي القديم يُرحَّل للسيرفر مرة واحدة.
 // يخفي عن الحاظر أخبار المحظور وتعليقاته (وإشعارات تعليقاته وإعجاباته)، ولا
 // يغيّر شيئاً في شجرة العائلة ولا في شاشات الإدارة (الإدارة ترى كل شيء).
 //
@@ -25,6 +28,10 @@ final class BlockedMembersStore: ObservableObject {
         /// أشكال الاسم كما تظهر في الأخبار والتعليقات — للمطابقة
         var names: [String]
         var blockedAt: Date
+        /// مؤكَّد على السيرفر — إن اختفى من `my_blocked_ids` (أُلغي من جهاز آخر) يُزال محلياً
+        var onServer: Bool? = nil
+        /// تاريخ الحظر معروف (المدخل الآتي من السيرفر وحده بلا تاريخ)
+        var hasDate: Bool { blockedAt > Date(timeIntervalSince1970: 0) }
     }
 
     /// المحظورون للمستخدم الحالي — الأحدث أولاً
@@ -43,17 +50,116 @@ final class BlockedMembersStore: ObservableObject {
         "blockedMembers.v1.\(owner.uuidString.lowercased())"
     }
 
+    private static func migratedKey(_ owner: UUID) -> String {
+        "blockedMembers.serverMigrated.v1.\(owner.uuidString.lowercased())"
+    }
+
+    private var syncTask: Task<Void, Never>?
+
     /// يربط القائمة بالمستخدم الحالي — عند دخول التطبيق وعند تغيّر الحساب
     func activate(for userId: UUID?) {
         guard userId != ownerId else { return }
         ownerId = userId
-        guard let userId,
-              let data = UserDefaults.standard.data(forKey: Self.storageKey(userId)),
-              let decoded = try? JSONDecoder().decode([Entry].self, from: data) else {
+        syncTask?.cancel()
+        guard let userId else {
             entries = []
             return
         }
-        entries = decoded
+        if let data = UserDefaults.standard.data(forKey: Self.storageKey(userId)),
+           let decoded = try? JSONDecoder().decode([Entry].self, from: data) {
+            entries = decoded
+        } else {
+            entries = []
+        }
+        syncTask = Task { [weak self] in await self?.syncWithServer(owner: userId) }
+    }
+
+    // MARK: - السيرفر
+
+    enum ServerResult { case ok, notAllowed, selfBlock, notFound, failed }
+
+    /// `my_blocked_ids` + ترحيل الحظر المحلي القديم مرة واحدة (`block_member` لكل مدخل)
+    func syncWithServer(owner: UUID) async {
+        let serverIds: [UUID]
+        do {
+            serverIds = try await SupabaseConfig.client.rpc("my_blocked_ids").execute().value
+        } catch {
+            if !ErrorHelper.isCancellation(error) {
+                Log.warning("[Block] تعذّر جلب المحظورين: \(error.localizedDescription)")
+            }
+            return
+        }
+        guard ownerId == owner, !Task.isCancelled else { return }
+        var known = Set(serverIds)
+        var updated = entries
+
+        // ترحيل مرة واحدة: كل مدخل محلي غير موجود على السيرفر
+        if !UserDefaults.standard.bool(forKey: Self.migratedKey(owner)) {
+            var allDone = true
+            for i in updated.indices where !updated[i].ids.contains(where: known.contains) {
+                switch await Self.serverBlock(updated[i].id) {
+                case .ok:
+                    known.insert(updated[i].id)
+                    updated[i].onServer = true
+                case .failed:
+                    allDone = false
+                case .notAllowed, .selfBlock, .notFound:
+                    break   // يبقى محلياً كما كان
+                }
+            }
+            guard ownerId == owner else { return }
+            if allDone { UserDefaults.standard.set(true, forKey: Self.migratedKey(owner)) }
+        }
+
+        // المؤكَّد سابقاً واختفى من السيرفر = أُلغي من جهاز آخر
+        updated.removeAll { $0.onServer == true && !$0.ids.contains(where: known.contains) }
+        for i in updated.indices where updated[i].ids.contains(where: known.contains) {
+            updated[i].onServer = true
+        }
+        // محظور على السيرفر بلا مدخل محلي (جهاز آخر، أو نسخة أخرى من التطبيق)
+        for id in known where !updated.contains(where: { $0.ids.contains(id) }) {
+            updated.append(Entry(id: id, ids: [id], name: "", names: [],
+                                 blockedAt: Date(timeIntervalSince1970: 0), onServer: true))
+        }
+        if updated != entries {
+            entries = updated
+            persist()
+        }
+    }
+
+    private static func serverBlock(_ member: UUID) async -> ServerResult {
+        do {
+            _ = try await SupabaseConfig.client
+                .rpc("block_member", params: ["p_member": member.uuidString.lowercased()])
+                .execute()
+            return .ok
+        } catch {
+            switch (error as? PostgrestError)?.hint {
+            case "not_allowed": return .notAllowed
+            case "self_block": return .selfBlock
+            case "member_not_found": return .notFound
+            default:
+                Log.warning("[Block] فشل الحظر على السيرفر: \(error.localizedDescription)")
+                return .failed
+            }
+        }
+    }
+
+    /// يحظر على السيرفر بعد الحظر المحلي. `notAllowed`/`selfBlock` يلغيان الحظر المحلي.
+    func blockOnServer(_ member: UUID) async -> ServerResult {
+        let result = await Self.serverBlock(member)
+        guard let index = entries.firstIndex(where: { $0.ids.contains(member) }) else { return result }
+        switch result {
+        case .ok:
+            entries[index].onServer = true
+            persist()
+        case .notAllowed, .selfBlock:
+            entries.remove(at: index)
+            persist()
+        case .notFound, .failed:
+            break   // يبقى محلياً؛ الترحيل لا يعيد المحاولة بعد اكتماله — تكفي القائمة المحلية للإخفاء
+        }
+        return result
     }
 
     // MARK: - الاستعلام
@@ -102,7 +208,7 @@ final class BlockedMembersStore: ObservableObject {
 
     /// يحظر عضواً. يرجع false إن لم يوجد مستخدم حالي أو كان المستهدف هو المستخدم نفسه.
     @discardableResult
-    func block(ids: [UUID], names: [String], selfIds: [UUID], selfNames: [String]) -> Bool {
+    func block(ids: [UUID], names: [String], selfIds: [UUID], selfNames: [String], primary: UUID? = nil) -> Bool {
         guard let ownerId else { return false }
         let cleanIds = Array(Set(ids))
         let cleanNames = names
@@ -125,7 +231,7 @@ final class BlockedMembersStore: ObservableObject {
             updated[index].ids = Array(Set(updated[index].ids + cleanIds))
             updated[index].names = Self.dedupe(updated[index].names + cleanNames)
         } else {
-            let primary = cleanIds.first ?? UUID()
+            let primary = primary.flatMap { cleanIds.contains($0) ? $0 : nil } ?? cleanIds.first ?? UUID()
             updated.insert(Entry(id: primary,
                                  ids: cleanIds,
                                  name: cleanNames.first ?? "",
@@ -140,6 +246,19 @@ final class BlockedMembersStore: ObservableObject {
     func unblock(_ entry: Entry) {
         entries.removeAll { $0.id == entry.id }
         persist()
+        // كل معرّفات العضو — السيرفر يحفظه بمعرّف ملفه
+        let ids = entry.ids
+        Task {
+            for id in ids {
+                do {
+                    _ = try await SupabaseConfig.client
+                        .rpc("unblock_member", params: ["p_member": id.uuidString.lowercased()])
+                        .execute()
+                } catch {
+                    Log.warning("[Block] فشل إلغاء الحظر على السيرفر: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     // MARK: - داخلي

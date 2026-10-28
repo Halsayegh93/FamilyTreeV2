@@ -494,6 +494,18 @@ private struct DSAlertBody<A: View, M: View>: View {
     }
 }
 
+/// رسالة «حسناً» واحدة بلا واجهة مضيفة — لنتيجة حفظ من شاشة لا تعرض أخطاءها (رفض الكلمات غير اللائقة)
+@MainActor
+enum DSStandaloneAlert {
+    static func show(title: String, message: String) {
+        var id = UUID()
+        let body = DSAlertBody<EmptyView, Text>(
+            title: title, actions: EmptyView(), message: Text(message),
+            onDismiss: { DispatchQueue.main.async { DSPopupPresenter.shared.hide(id) } })
+        id = DSPopupPresenter.shared.show(body)
+    }
+}
+
 extension DSBox {
     /// أيقونة قرص التنبيه حين لا تُمرَّر: رمز القسم (ويرسمه «مجسّمات» بمجسّم القسم)
     static func defaultIcon(for section: AppSection?) -> String {

@@ -110,11 +110,11 @@ struct HomeNewsCardView: View {
             )
 
             if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // نص القراءة (Plex بسطور مريحة — قرار المالك ٢٠٢٦-١٠-٢٨)
                 Text(content)
-                    .dsFont(.body)
+                    .dsReadingFont()
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.leading)
-                    .lineSpacing(NewsKit.bodyLineSpacing)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }

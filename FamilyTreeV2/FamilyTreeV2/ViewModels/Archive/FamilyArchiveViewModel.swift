@@ -192,7 +192,7 @@ final class FamilyArchiveViewModel: ObservableObject {
         } catch {
             // تنظيف: لو رفع الملف نجح والإدراج فشل، احذف الملف
             _ = try? await supabase.storage.from(bucketName).remove(paths: [storagePath])
-            self.errorMessage = L10n.t("تعذّر رفع العنصر.", "Failed to upload item.")
+            self.errorMessage = ObjectionableText.message(for: error) ?? L10n.t("تعذّر رفع العنصر.", "Failed to upload item.")
             Log.error("[Archive] خطأ رفع: \(error.localizedDescription)")
             return nil
         }
@@ -235,7 +235,7 @@ final class FamilyArchiveViewModel: ObservableObject {
             Log.info("[Archive] تعديل ناجح: \(trimmedTitle)")
             return true
         } catch {
-            self.errorMessage = L10n.t("تعذّر حفظ التعديل.", "Failed to save changes.")
+            self.errorMessage = ObjectionableText.message(for: error) ?? L10n.t("تعذّر حفظ التعديل.", "Failed to save changes.")
             Log.error("[Archive] خطأ تعديل: \(error.localizedDescription)")
             return false
         }
