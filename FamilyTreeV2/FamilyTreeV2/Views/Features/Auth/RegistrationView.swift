@@ -28,6 +28,8 @@ struct RegistrationView: View {
     @State private var fatherResults: [FamilyMember] = []
     @State private var fatherSearching = false
     @State private var selectedImage: UIImage? = nil
+    /// الصورة إلزامية للذكور فقط (قرار المالك ٢٠٢٦-١٠-٢٨)
+    private var photoMissing: Bool { selectedImage == nil && selectedGender != "female" }
 
     // Animation states
     @State private var headerScale: CGFloat = 0.8
@@ -156,7 +158,7 @@ struct RegistrationView: View {
                 compactEmptyState: true,
                 avatarSize: DS.Icon.photoPickerCompact
             )
-            if hasAttemptedSubmit && selectedImage == nil {
+            if hasAttemptedSubmit && photoMissing {
                 validationError(L10n.t("الصورة الشخصية مطلوبة", "A profile photo is required"))
             }
         }
@@ -437,7 +439,7 @@ struct RegistrationView: View {
             let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
                        && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
                        && !selectedGender.isEmpty
-                       && selectedImage != nil
+                       && !photoMissing
                        && birthDateChosen && !isUnder13
             let isDisabled = !isValid || authVM.isLoading
 
