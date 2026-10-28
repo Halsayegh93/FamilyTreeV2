@@ -232,7 +232,7 @@ struct AddChildSheet: View {
                     return
                 }
                 // غير الإدارة: الابن «معلّق» وطلبه عند الإدارة (ج-١) — أو حُفظ وطلبه لم يصل
-                sentForApproval = !authVM.canModerate
+                sentForApproval = !authVM.canModerate && !memberVM.lastChildAddWasDirect
                 approvalRequestWarning = memberVM.errorMessage
                 if let image = selectedUIImage {
                     await memberVM.uploadAvatar(image: image, for: childId)

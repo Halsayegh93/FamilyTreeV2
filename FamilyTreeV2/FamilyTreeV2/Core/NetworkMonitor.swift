@@ -33,6 +33,42 @@ final class NetworkMonitor: ObservableObject {
         return true
     }
 
+    /// تأكيد حقيقي قبل اعتبار الجهاز «بلا اتصال»: `NWPathMonitor` قد يتأخر أو يخطئ (بعد الرجوع من الخلفية،
+    /// تبديل الشبكة) فيبقى التطبيق على شاشة البداية بلا مخرج. طلب صغير لخادم المشروع بمهلة قصيرة — إن ردّ
+    /// (بأي رمز HTTP) فالاتصال موجود ويُصحَّح `isConnected`.
+    @discardableResult
+    func confirmReachable() async -> Bool {
+        #if DEBUG
+        if debugForced == false { return false }
+        #endif
+        if let probe = probeTask { return await probe.value }
+        let task = Task<Bool, Never> { @MainActor in
+            var request = URLRequest(url: SupabaseConfig.url.appendingPathComponent("auth/v1/health"))
+            request.setValue(SupabaseConfig.key, forHTTPHeaderField: "apikey")
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            let response = try? await Self.probeSession.data(for: request).1
+            let ok = response is HTTPURLResponse
+            if ok, !self.isConnected {
+                Log.info("[Network] ✅ الخادم يرد رغم أن مراقب الشبكة قال «بلا اتصال» — تصحيح")
+                self.isConnected = true
+                self.hasStatus = true
+            }
+            return ok
+        }
+        probeTask = task
+        let ok = await task.value
+        probeTask = nil
+        return ok
+    }
+    private var probeTask: Task<Bool, Never>?
+    private static let probeSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 5
+        configuration.timeoutIntervalForResource = 6
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }()
+
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "com.familytree.networkmonitor")
 
@@ -45,7 +81,9 @@ final class NetworkMonitor: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let wasConnected = self.isConnected
-                self.isConnected = self.debugForced ?? (path.status == .satisfied)
+                // `.requiresConnection` (VPN عند الطلب، اتصال يُفتح بأول طلب) ليس انقطاعاً — كان يُعدّ «بلا اتصال» فتغطّي
+                // شاشة البداية التطبيق وفحص الدخول يتوقف والإنترنت شغّال (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»)
+                self.isConnected = self.debugForced ?? (path.status != .unsatisfied)
                 self.hasStatus = true
 
                 if path.usesInterfaceType(.wifi) {

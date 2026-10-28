@@ -17,6 +17,13 @@ struct AdminMemberDetailSheet: View {
     private var chromeInk: Color { DS.Color.primary.dsChrome(in: section) }
 
     let member: FamilyMember
+    /// false = من «بيانات العضو» في لوحة الإدارة: بطاقة الحساب والحذف هناك (بيت واحد لكل أمر)
+    let showsAccount: Bool
+    /// «متوفى» من «تحقق من الأحياء» (الدفعة ١٢): نفس السجل وحفظه (`saveAction` — التحديث، سجل الإدارة، إشعار التعديل،
+    /// مربّع إعلان الوفاة) مفتوحاً على «التواريخ والحالة» وحدها و«متوفّى» مفعّل؛ تاريخ الوفاة اختياري («بدون تاريخ»)
+    let deathOnly: Bool
+    /// حالة الوفاة التي فُتح عليها المربّع («إلغاء» بلا تعديل لا يسأل — مثل مربّع الوفاة في شجرة النساء)
+    private let startDeceased: Bool
 
     // MARK: - States
     @State private var selectedPhoneCountry: KuwaitPhone.Country
@@ -66,10 +73,22 @@ struct AdminMemberDetailSheet: View {
     @State private var accountBusy: AccountAction?
     /// حالة الحساب هنا — المجمّد قد لا يكون في قائمة الأعضاء المحمّلة، فلا يُقرأ منها
     @State private var accountStatus: FamilyMember.MemberStatus?
+    /// له حساب دخول (من `AdminAccountsStore`) — nil قبل وصول القوائم
+    @State private var hasLogin: Bool?
     @State private var activeBan: BannedPhone?
     @State private var accountError = false
     /// سبب الفشل إن عُرف (مثل تفعيل حساب بلا أب) — وإلا رسالة الاتصال العامة
     @State private var accountErrorText: String?
+
+    // تغيير الجنس = نقل بين شجرة الرجال وشجرة النساء (`move_child_gender`، طلب المالك ٢٠٢٦-١٠-٢٤)
+    /// تأكيد النقل قبل الحفظ
+    @State private var showGenderMoveConfirm = false
+    /// نُقل إلى «ذكر» على السيرفر — الحفظ العادي يكمل بلا كتابة عمود الجنس
+    @State private var genderMoved = false
+    /// له حساب في التطبيق (أو دور إداري) — لا يُنقل: النقل يحذف ملفه من شجرة الرجال
+    @State private var genderLockedByAccount = false
+    /// السجل نُقل لشجرة النساء وتعذّر حفظ الباقي — «حسناً» يغلق المربّع (السجل القديم لم يعد موجوداً)
+    @State private var dismissAfterError = false
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
     // ما يُحفظ بزر «حفظ» فقط يُقارن بما فُتح عليه السجل — الصورة والأبناء (إضافة/تعديل/حذف)
@@ -95,7 +114,7 @@ struct AdminMemberDetailSheet: View {
         let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         if selectedPhoneCountry.id != original.country.id || phoneNumber != original.localDigits { return true }
         if selectedFatherId != member.fatherId || selectedGender != (member.gender ?? "male") { return true }
-        if isDeceased != (member.isDeceased ?? false) { return true }
+        if isDeceased != startDeceased { return true }
         let birthKey = hasBirthDate ? Self.dayFormatter.string(from: birthDate) : nil
         let deathKey = hasDeathDate ? Self.dayFormatter.string(from: deathDate) : nil
         if birthKey != startBirthKey || deathKey != startDeathKey { return true }
@@ -122,8 +141,11 @@ struct AdminMemberDetailSheet: View {
 
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
-    init(member: FamilyMember) {
+    init(member: FamilyMember, showsAccount: Bool = true, deathOnly: Bool = false) {
         self.member = member
+        self.showsAccount = showsAccount
+        self.deathOnly = deathOnly
+        self.startDeceased = deathOnly || (member.isDeceased ?? false)
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
         self._accountStatus = State(initialValue: member.status)
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
@@ -159,7 +181,7 @@ struct AdminMemberDetailSheet: View {
 
         self._bioStations = State(initialValue: member.bio ?? [])
         self._selectedGender = State(initialValue: member.gender ?? "male")
-        self._isDeceased = State(initialValue: member.isDeceased ?? false)
+        self._isDeceased = State(initialValue: deathOnly || (member.isDeceased ?? false))
         if let dDateStr = member.deathDate, !dDateStr.isEmpty, let date = formatter.date(from: dDateStr) {
             self._deathDate = State(initialValue: date)
             self._hasDeathDate = State(initialValue: true)
@@ -176,25 +198,29 @@ struct AdminMemberDetailSheet: View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك): رأس متدرّج، أقسام تدخل
         // تباعاً، و«حفظ» / «إلغاء» أسفل المربّع
         DSComposer(
-            title: L10n.t("إدارة السجل", "Member Admin"),
-            subtitle: member.fullName,
-            icon: "person.badge.shield.checkmark.fill",
-            tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
+            title: deathOnly ? L10n.t("تسجيل الوفاة", "Record death") : L10n.t("بيانات العضو", "Member details"),
+            subtitle: member.displayFullName,
+            icon: deathOnly ? "heart.text.square.fill" : "person.badge.shield.checkmark.fill",
+            tint: deathOnly || member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
-            canSubmit: isPhoneValid && isFirstNameValid,
+            canSubmit: deathOnly || (isPhoneValid && isFirstNameValid),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: saveAction,
             onCancel: { dismiss() }
         ) {
-            heroSection.dsStaggerIn(0)
-            basicsCard.dsStaggerIn(1)
-            datesCard.dsStaggerIn(2)
-            if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
-            bioCard.dsStaggerIn(4)
-            if showsAccountCard { accountCard.dsStaggerIn(5) }
-            if !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
+            if deathOnly {
+                datesCard.dsStaggerIn(0)
+            } else {
+                heroSection.dsStaggerIn(0)
+                basicsCard.dsStaggerIn(1)
+                datesCard.dsStaggerIn(2)
+                if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
+                bioCard.dsStaggerIn(4)
+                if showsAccount && showsAccountCard { accountCard.dsStaggerIn(5) }
+                if showsAccount, !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
+            }
         }
             // كل نوافذ التعديل المباشر ألواح بمنتصف الشاشة (طلب المالك)
             // قائمة أعضاء طويلة — مربّع طويل من الأسفل يُغلق بالسحب (توصية أبل)
@@ -232,7 +258,17 @@ struct AdminMemberDetailSheet: View {
                 }
             }
             .onAppear { setupLocalChildren() }
-            .task { await refreshAccount() }
+            .task {
+                await refreshAccount()
+                await refreshGenderLock()
+            }
+            // تأكيد تغيير الجنس — ينقل السجل بين الشجرتين قبل حفظ بقية الحقول
+            .dsAlert(L10n.t("تغيير الجنس", "Change gender"), isPresented: $showGenderMoveConfirm) {
+                Button(L10n.t("نقل وحفظ", "Move and save")) { performGenderMove() }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+            } message: {
+                Text(genderMoveMessage)
+            }
             // تأكيد التجميد / الحظر وإلغائهما — المربّع الوسطي الموحّد
             .dsAlert(pendingAccountAction.map(accountActionTitle) ?? "",
                      isPresented: Binding(get: { pendingAccountAction != nil },
@@ -247,7 +283,10 @@ struct AdminMemberDetailSheet: View {
                 Text(accountActionMessage(action))
             }
             .dsAlert(L10n.t("تعذّر التنفيذ", "Couldn't Complete"), isPresented: $accountError) {
-                Button(L10n.t("حسناً", "OK")) { accountErrorText = nil }
+                Button(L10n.t("حسناً", "OK")) {
+                    accountErrorText = nil
+                    if dismissAfterError { closeAfterMoveToWomen() }
+                }
             } message: {
                 Text(accountErrorText ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again."))
             }
@@ -293,11 +332,16 @@ struct AdminMemberDetailSheet: View {
                     "Changes cannot be saved without an internet connection. Check your connection and try again."
                 ))
             }
-            .dsAlert(L10n.t("حذف نهائي", "Permanent Delete"), isPresented: $showDeleteConfirmation) {
+            .dsAlert(L10n.t("حذف العضو نهائياً", "Delete member permanently"), isPresented: $showDeleteConfirmation) {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) {
                     Task {
                         guard canDeleteMember else { return }
-                        await adminRequestVM.rejectOrDeleteMember(memberId: member.id)
+                        // الإغلاق وإعلان الحذف بعد نجاحه فقط — الفشل (روابط عائلة، صلاحية…) يُعرض والمربّع باقٍ
+                        adminRequestVM.errorMessage = nil
+                        guard await adminRequestVM.rejectOrDeleteMember(memberId: member.id) else {
+                            showDeleteFailure()
+                            return
+                        }
                         dismiss()
                         NotificationCenter.default.post(name: .memberDeleted, object: member.id)
                     }
@@ -317,9 +361,15 @@ struct AdminMemberDetailSheet: View {
                     if let child = childToDelete {
                         let capturedChild = child
                         Task {
-                            await adminRequestVM.rejectOrDeleteMember(memberId: capturedChild.id)
-                            localChildren.removeAll { $0.id == capturedChild.id }
+                            adminRequestVM.errorMessage = nil
+                            let deleted = await adminRequestVM.rejectOrDeleteMember(memberId: capturedChild.id)
                             childToDelete = nil
+                            // إشعار «حذف ابن» بعد نجاح الحذف فقط
+                            guard deleted else {
+                                showDeleteFailure()
+                                return
+                            }
+                            localChildren.removeAll { $0.id == capturedChild.id }
                             let adminName = authVM.currentUser?.firstName ?? "مدير"
                             await memberVM.notificationVM?.notifyAdminsWithPush(
                                 title: L10n.t("حذف ابن", "Child Removed"),
@@ -520,7 +570,16 @@ struct AdminMemberDetailSheet: View {
                 }
             }
 
-            DSGenderPicker(selection: $selectedGender)
+            // الجنس — تغييره ينقل العضو بين شجرة الرجال وشجرة النساء (`move_child_gender`)؛
+            // من له حساب في التطبيق لا يُنقل (النقل يحذف ملفه) فيُعرض للقراءة
+            if genderLockedByAccount {
+                DSGenderReadOnlyRow(gender: member.gender ?? "male")
+                Text(L10n.t("له حساب في التطبيق — لا يُنقل", "Has an app account — can't be moved"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+            } else {
+                DSGenderPicker(selection: $selectedGender)
+            }
         }
     }
 
@@ -549,12 +608,12 @@ struct AdminMemberDetailSheet: View {
                         HStack(spacing: DS.Spacing.sm) {
                             if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
                                 Text(father.displayFullName)
-                                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                                    .dsFieldFont(.rowTitle)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .dsNameLines()
                             } else {
                                 Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
-                                    .dsFieldFont(.body)
+                                    .dsFieldFont(.fieldValue)
                                     .foregroundColor(DS.Color.textSecondary)
                             }
                             Spacer(minLength: 0)
@@ -644,7 +703,7 @@ struct AdminMemberDetailSheet: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(child.firstName)
-                    .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                    .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 if let birth = child.birthDate, !birth.isEmpty {
@@ -773,40 +832,42 @@ struct AdminMemberDetailSheet: View {
     /// السيرة: مربّع عمل بمنتصف الشاشة (`dsCenterBox`) — نفس مربّع تعديل البيانات
     private func openBioPopup() { showBioBox = true }
 
-    // MARK: - حالة الحساب: التفعيل والتجميد وحظر الرقم (طلب المالك ٢٠٢٦-١٠-١٠)
-    /// لكل عضو مفعّلاً كان أو غير مفعّل («ابي حالة الحساب في السجل كامل») — للإدارة والمراقب
-    /// (نفس صلاحية التجميد في السجل)، لا على المالك ولا على النفس ولا على المتوفى
+    // MARK: - حالة الحساب: التسجيل في التطبيق والإيقاف ومنع الرقم (طلب المالك ٢٠٢٦-١٠-١٠؛ المسميات الرسمية ٢٠٢٦-١٠-٢٠)
+    /// لكل عضو مسجّلاً كان أو مقيّداً في الشجرة — للإدارة والمراقب، لا على المالك ولا على النفس ولا على المتوفى.
+    /// الإيقاف للمالك والمدير (`canFreezeMembers`، والسيرفر يرفضه لغيرهما)، ومنع الرقم للمالك
     private var showsAccountCard: Bool {
         authVM.canEditMembers && member.role != .owner
             && member.id != authVM.currentUser?.id && member.isDeceased != true
     }
-    /// مفعّل = حالته فعّالة وله رقم يدخل به (نفس تعريف «تفعيل الحسابات»)
-    private var isActivated: Bool { accountStatus == .active && !savedPhone.isEmpty }
-    /// زرّ «تفعيل الحساب»: بانتظار التفعيل وله رقم — طلبات الانضمام تُعتمد من «الطلبات»
+    /// «تسجيل في التطبيق» (كان «تفعيل»): حالته التاريخية «معلّق» وله رقم — طلبات الانضمام تُعتمد من «الوارد»
     private var canActivate: Bool {
         (accountStatus == nil || accountStatus == .pending) && !savedPhone.isEmpty && member.role != .pending
     }
 
-    /// شارة الحالة في رأس البطاقة
-    private var accountChip: (text: String, tint: Color) {
-        if isFrozen { return (L10n.t("مجمّد", "Frozen"), DS.Color.info) }
-        if isActivated { return (L10n.t("مفعّل", "Active"), DS.Color.success) }
-        return (L10n.t("غير مفعّل", "Not active"), DS.Color.warning)
+    /// شارة الحالة الرسمية في رأس البطاقة: حساب موقوف · عضو مسجّل (له حساب دخول) · مقيّد في الشجرة
+    /// («مفعّل / بانتظار التفعيل» تقسيم تاريخي لا يُعرض)
+    private var accountChip: (text: String, tint: Color)? {
+        if isFrozen { return (AdminMemberStatus.frozen.title, AdminMemberStatus.frozen.tint) }
+        guard let hasLogin else { return nil }
+        let status: AdminMemberStatus = hasLogin ? .registered : .treeOnly
+        return (status.title, status.tint)
     }
 
-    /// سطر التفعيل لغير المفعّل: لماذا، وما المطلوب
-    private var activationNote: String {
+    /// سطر «تسجيل في التطبيق» لغير المسجّل: لماذا، وما المطلوب
+    private var activationNote: String? {
+        if hasLogin == true || isFrozen { return nil }
         if savedPhone.isEmpty {
             return L10n.t("لا يوجد رقم يدخل به — أضف رقمه في «البيانات الأساسية» واحفظ.",
                           "No number to sign in with — add it under Basic Info and save.")
         }
         if member.role == .pending {
-            return L10n.t("طلب انضمام بانتظار الموافقة من «الطلبات».", "A join request awaiting approval in Requests.")
+            return L10n.t("طلب انضمام قيد المراجعة — القرار من «الوارد».", "A join request under review — decide in the Inbox.")
         }
-        return L10n.t("الحساب بانتظار التفعيل — بعد التفعيل يدخل للتطبيق برقمه.",
-                      "Awaiting activation — once active they can sign in with their number.")
+        return canActivate
+            ? L10n.t("يتيح له الدخول برقمه فيصير «عضواً مسجّلاً».", "Lets them sign in with their number.")
+            : nil
     }
-    /// حظر الأرقام للمالك وحده (نفس صفحة «الأرقام المحظورة» وصلاحية السيرفر)
+    /// منع الأرقام للمالك وحده (نفس صفحة «الأرقام الممنوعة من التسجيل» وصلاحية السيرفر)
     private var canBan: Bool { authVM.canManageBannedPhones }
     private var isFrozen: Bool { accountStatus == .frozen }
     private var savedPhone: String {
@@ -817,18 +878,19 @@ struct AdminMemberDetailSheet: View {
     /// زرّان بالصفّ ونصّ الزرّ نفسه يقول الحالة، وتحتهما سطر يشرح فائدة كلٍّ منهما
     /// (طلب المالك ٢٠٢٦-١٠-١٠ «بسّط الأزرار» — بدل مربّع لكل إجراء بشارة ووصف طويل)
     private var accountCard: some View {
-        adminCard(L10n.t("حالة الحساب", "Account Status"), icon: "lock.shield.fill", color: DS.Color.error,
+        adminCard(L10n.t("الحساب", "Account"), icon: "lock.shield.fill", color: DS.Color.error,
                   trailing: {
-                      DSStatusChip(text: accountChip.text, tint: accountChip.tint)
-                          .id(accountChip.text)
-                          .transition(.scale(scale: 0.8).combined(with: .opacity))
+                      if let chip = accountChip {
+                          DSStatusChip(text: chip.text, tint: chip.tint)
+                              .id(chip.text)
+                              .transition(.scale(scale: 0.8).combined(with: .opacity))
+                      }
                   }) {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                // غير المفعّل (وغير المجمّد): سبب عدم التفعيل، وزرّ «تفعيل الحساب» إن أمكن
-                if !isActivated && !isFrozen {
-                    accountNote(L10n.t("التفعيل", "Activation"), activationNote)
+                if let note = activationNote {
+                    accountNote(L10n.t("تسجيل في التطبيق", "Register in the app"), note)
                     if canActivate {
-                        DSButton(L10n.t("تفعيل الحساب", "Activate Account"), icon: "checkmark.seal.fill",
+                        DSButton(L10n.t("تسجيل في التطبيق", "Register in the app"), icon: "checkmark.seal.fill",
                                  tint: DS.Color.success, isLoading: accountBusy == .activate) {
                             pendingAccountAction = .activate
                         }
@@ -836,26 +898,28 @@ struct AdminMemberDetailSheet: View {
                     }
                 }
                 HStack(spacing: DSBox.buttonSpacing) {
-                    if isFrozen {
-                        DSButton(L10n.t("إلغاء التجميد", "Unfreeze"), icon: "checkmark.circle.fill",
-                                 tint: DS.Color.success, isLoading: accountBusy == .unfreeze) {
-                            pendingAccountAction = .unfreeze
-                        }
-                    } else {
-                        DSButton(L10n.t("تجميد", "Freeze"), icon: "snowflake",
-                                 tint: DS.Color.info, isLoading: accountBusy == .freeze) {
-                            pendingAccountAction = .freeze
+                    if authVM.canFreezeMembers {
+                        if isFrozen {
+                            DSButton(L10n.t("رفع الإيقاف", "Lift suspension"), icon: "checkmark.circle.fill",
+                                     tint: DS.Color.success, isLoading: accountBusy == .unfreeze) {
+                                pendingAccountAction = .unfreeze
+                            }
+                        } else {
+                            DSButton(L10n.t("إيقاف الحساب", "Suspend"), icon: "hand.raised.fill",
+                                     tint: DS.Color.info, isLoading: accountBusy == .freeze) {
+                                pendingAccountAction = .freeze
+                            }
                         }
                     }
                     if canBan {
                         if activeBan != nil {
-                            DSButton(L10n.t("إلغاء الحظر", "Lift Ban"), icon: "checkmark.circle.fill",
+                            DSButton(L10n.t("رفع المنع", "Unblock"), icon: "checkmark.circle.fill",
                                      tint: DS.Color.success, isLoading: accountBusy == .unban) {
                                 pendingAccountAction = .unban
                             }
                         } else {
-                            // برتقالي «الرفض» لا أحمر الحذف — يتميّز عن «حذف السجل نهائياً» (طلب المالك ٢٠٢٦-١٠-١١)
-                            DSButton(L10n.t("حظر الرقم", "Ban Number"), icon: "phone.down.fill",
+                            // برتقالي «الرفض» لا أحمر الحذف — يتميّز عن «حذف العضو نهائياً» (طلب المالك ٢٠٢٦-١٠-١١)
+                            DSButton(L10n.t("منع الرقم", "Block number"), icon: "nosign",
                                      tint: DS.Color.reject, isLoading: accountBusy == .ban) {
                                 pendingAccountAction = .ban
                             }
@@ -866,15 +930,17 @@ struct AdminMemberDetailSheet: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
 
-                accountNote(L10n.t("التجميد", "Freeze"),
-                            L10n.t("يوقف الحساب مؤقتاً ويخفيه من الشجرة، وبياناته محفوظة.",
-                                   "Pauses the account and hides it from the tree; data is kept."))
+                if authVM.canFreezeMembers {
+                    accountNote(L10n.t("إيقاف الحساب", "Suspend"),
+                                L10n.t("يمنعه من الدخول مؤقتاً ويخفيه من الشجرة، وبياناته محفوظة.",
+                                       "Blocks sign-in for now and hides them from the tree; data is kept."))
+                }
                 if canBan {
-                    accountNote(L10n.t("الحظر", "Ban"),
+                    accountNote(L10n.t("منع الرقم من التسجيل", "Block from signing up"),
                                 savedPhone.isEmpty
                                 ? L10n.t("لا يوجد رقم محفوظ لهذا العضو.", "No saved number for this member.")
-                                : L10n.t("يمنع الرقم من التسجيل نهائياً ويجمّد حساب صاحبه. إلغاء الحظر لا يلغي التجميد.",
-                                         "Blocks the number from signing up and freezes its account. Lifting the ban doesn't unfreeze."))
+                                : L10n.t("يمنع الرقم من التسجيل نهائياً ويوقف حساب صاحبه. رفع المنع لا يرفع الإيقاف.",
+                                         "Blocks the number from signing up and suspends its account. Unblocking doesn't lift the suspension."))
                 }
             }
             .animation(DS.Anim.snappy, value: accountStatus)
@@ -893,35 +959,43 @@ struct AdminMemberDetailSheet: View {
 
     private func accountActionTitle(_ action: AccountAction) -> String {
         switch action {
-        case .activate: return L10n.t("تفعيل حساب \(member.firstName)؟", "Activate \(member.firstName)'s account?")
-        case .freeze: return L10n.t("تجميد حساب \(member.firstName)؟", "Freeze \(member.firstName)'s account?")
-        case .unfreeze: return L10n.t("إلغاء تجميد \(member.firstName)؟", "Unfreeze \(member.firstName)?")
-        case .ban: return L10n.t("حظر رقم \(member.firstName)؟", "Ban \(member.firstName)'s number?")
-        case .unban: return L10n.t("إلغاء حظر رقم \(member.firstName)؟", "Lift the ban on \(member.firstName)'s number?")
+        case .activate: return L10n.t("تسجيل \(member.firstName) في التطبيق؟", "Register \(member.firstName) in the app?")
+        case .freeze: return L10n.t("إيقاف حساب \(member.firstName)؟", "Suspend \(member.firstName)'s account?")
+        case .unfreeze: return L10n.t("رفع إيقاف \(member.firstName)؟", "Lift \(member.firstName)'s suspension?")
+        case .ban: return L10n.t("منع رقم \(member.firstName) من التسجيل؟", "Block \(member.firstName)'s number?")
+        case .unban: return L10n.t("رفع منع رقم \(member.firstName)؟", "Unblock \(member.firstName)'s number?")
         }
     }
 
     private func accountActionButton(_ action: AccountAction) -> String {
         switch action {
-        case .activate: return L10n.t("تفعيل الحساب", "Activate Account")
-        case .freeze: return L10n.t("تجميد الحساب", "Freeze Account")
-        case .unfreeze: return L10n.t("إلغاء التجميد", "Unfreeze")
-        case .ban: return L10n.t("حظر الرقم", "Ban Number")
-        case .unban: return L10n.t("إلغاء الحظر", "Lift Ban")
+        case .activate: return L10n.t("تسجيل في التطبيق", "Register")
+        case .freeze: return L10n.t("إيقاف الحساب", "Suspend")
+        case .unfreeze: return L10n.t("رفع الإيقاف", "Lift suspension")
+        case .ban: return L10n.t("منع الرقم", "Block number")
+        case .unban: return L10n.t("رفع المنع", "Unblock")
         }
     }
 
     private func accountActionMessage(_ action: AccountAction) -> String {
         switch action {
         case .activate: return L10n.t("سيتمكن من الدخول للتطبيق برقمه.", "They will be able to sign in with their number.")
-        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُلغى التجميد.",
-                                    "They won't be able to use the app until unfrozen.")
+        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف.",
+                                    "They won't be able to use the app until the suspension is lifted.")
         case .unfreeze: return L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to use the app again.")
-        case .ban: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُجمَّد حساب صاحبه.",
-                                 "This number won't be able to sign up, and its account will be frozen.")
-        case .unban: return L10n.t("سيتمكن هذا الرقم من التسجيل مجدداً. الحساب يبقى مجمّداً حتى تلغي تجميده.",
-                                   "This number can sign up again. The account stays frozen until you unfreeze it.")
+        case .ban: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُوقف حساب صاحبه.",
+                                 "This number won't be able to sign up, and its account will be suspended.")
+        case .unban: return L10n.t("سيتمكن هذا الرقم من التسجيل مجدداً. الحساب يبقى موقوفاً حتى ترفع إيقافه.",
+                                   "This number can sign up again. The account stays suspended until you lift it.")
         }
+    }
+
+    /// فشل الحذف: السبب من الـ VM (مثل حماية روابط العائلة) في مربّع «تعذّر التنفيذ»
+    private func showDeleteFailure() {
+        accountErrorText = adminRequestVM.errorMessage
+            ?? L10n.t("تعذّر حذف العضو. حاول مرة أخرى.", "Couldn't delete the member. Try again.")
+        adminRequestVM.errorMessage = nil
+        accountError = true
     }
 
     private func performAccountAction(_ action: AccountAction) {
@@ -941,12 +1015,19 @@ struct AdminMemberDetailSheet: View {
                 }
                 await refreshStatus()
             case .freeze, .unfreeze:
+                // الإيقاف ورفعه للمالك والمدير فقط (`canFreezeMembers`) — `setMemberStatus` يقبل `canEditMembers`
+                guard authVM.canFreezeMembers else {
+                    accountErrorText = L10n.t("إيقاف الحسابات ورفعه للمالك والمدير فقط.",
+                                              "Only the owner and admins can suspend accounts.")
+                    ok = false
+                    break
+                }
                 let target: FamilyMember.MemberStatus = action == .freeze ? .frozen : .active
                 ok = await memberVM.setMemberStatus(memberId: member.id, status: target)
                 if ok { withAnimation(DS.Anim.snappy) { accountStatus = target } }
             case .ban:
-                ok = await authVM.banPhone(savedPhone, reason: L10n.t("من «إدارة السجل»: \(member.fullName)",
-                                                                      "From Member Admin: \(member.fullName)"))
+                ok = await authVM.banPhone(savedPhone, reason: L10n.t("من «بيانات العضو»: \(member.fullName)",
+                                                                      "From Member details: \(member.fullName)"))
                 await refreshBan()
                 await refreshStatus()   // السيرفر يجمّد صاحب الرقم المحظور
             case .unban:
@@ -960,9 +1041,13 @@ struct AdminMemberDetailSheet: View {
 
     /// الحالة والحظر من السيرفر عند الفتح — العضو المعروض قد يكون قديماً
     private func refreshAccount() async {
-        guard showsAccountCard else { return }
+        guard showsAccount, showsAccountCard else { return }
         await refreshStatus()
         await refreshBan()
+        await AdminAccountsStore.shared.refresh()
+        if AdminAccountsStore.shared.loaded {
+            withAnimation(DS.Anim.snappy) { hasLogin = AdminAccountsStore.shared.info(member.id) != nil }
+        }
     }
 
     private func refreshStatus() async {
@@ -981,7 +1066,7 @@ struct AdminMemberDetailSheet: View {
     /// (طلب المالك ٢٠٢٦-١٠-١١، نفس تفريق «حذف الحساب» في الإعدادات) — التأكيد كما هو
     private var deleteButton: some View {
         VStack(spacing: DS.Spacing.xs) {
-            DSDangerTextButton(L10n.t("حذف السجل نهائياً", "Permanently Delete")) {
+            DSDangerTextButton(L10n.t("حذف العضو نهائياً", "Delete member permanently")) {
                 showDeleteConfirmation = true
             }
             Text(L10n.t("يحذف العضو وكل بياناته من الشجرة، ولا يمكن التراجع عنه.",
@@ -1041,27 +1126,8 @@ struct AdminMemberDetailSheet: View {
         }
     }
 
-    // MARK: - Save Action (unchanged logic)
-    private func saveAction() {
-        guard !isSaving else { return }
-        guard NetworkMonitor.shared.isConnected else {
-            showOfflineAlert = true
-            return
-        }
-        guard isPhoneValid else { return }
-        isSaving = true
-
-        let capturedMemberId = member.id
-        let capturedPhoneCountry = selectedPhoneCountry
-        let capturedPhone = phoneNumber
-        let capturedFatherId = selectedFatherId
-        let capturedBirthDate = hasBirthDate ? birthDate : nil
-        let capturedIsDeceased = isDeceased
-        let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
-        let capturedChildren = localChildren
-        let capturedGender = selectedGender
-        let capturedBioStations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
-
+    /// الاسم الكامل كما يُحفظ: الحقل + اسم العائلة الجديد إن كُتب
+    private func composedFullName() -> String {
         let cleanFamily = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         var finalFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         let originalFamily = member.fullName
@@ -1084,23 +1150,191 @@ struct AdminMemberDetailSheet: View {
             }
             finalFullName = nameParts.joined(separator: " ")
         }
-        let capturedFullName = finalFullName
+        return finalFullName
+    }
 
-        guard !capturedFullName.isEmpty else {
+    // MARK: - تغيير الجنس (نقل بين الشجرتين)
+
+    /// له حساب دخول مؤكَّد من بياناته: هو نفسه، أو دور إداري، أو حساب موقوف
+    private var memberHasAccountByRole: Bool {
+        member.id == authVM.currentUser?.id
+            || [.owner, .admin, .monitor, .supervisor].contains(member.role)
+            || accountStatus == .frozen
+    }
+
+    /// يقفل الجنس لمن له حساب في التطبيق (`AdminAccountsStore` — نفس «عضو مسجّل»)
+    private func refreshGenderLock(force: Bool = false) async {
+        guard !deathOnly, authVM.canEditMembers else { return }
+        if memberHasAccountByRole {
+            genderLockedByAccount = true
+            selectedGender = member.gender ?? "male"
+            return
+        }
+        await AdminAccountsStore.shared.refresh(force: force)
+        guard AdminAccountsStore.shared.loaded else { return }
+        let locked = AdminAccountsStore.shared.info(member.id) != nil
+        withAnimation(DS.Anim.snappy) {
+            genderLockedByAccount = locked
+            if locked { selectedGender = member.gender ?? "male" }
+        }
+    }
+
+    private var genderMoveMessage: String {
+        if selectedGender == "female" {
+            return L10n.t("سيُنقل «\(member.firstName)» إلى شجرة النساء مع روابطه. أفراد شجرة النساء بلا رقم ولا صورة ولا سيرة، فتُحذف هذه من سجله.",
+                          "«\(member.firstName)» will move to the women's tree with their links. Women's tree entries have no phone, photo or biography, so these are removed.")
+        }
+        return L10n.t("سيُنقل «\(member.firstName)» إلى شجرة الرجال ويُسجَّل ذكراً.",
+                      "«\(member.firstName)» will move to the men's tree as male.")
+    }
+
+    /// بعد التأكيد: التحقق من الحساب ← النقل على السيرفر (`moveChildGender`) ← بقية الحقول على السجل
+    /// بعد النقل (ترتيب EditChildSheet). ذكر: السجل نفسه فيكمل الحفظ العادي؛ أنثى: السجل صار في شجرة
+    /// النساء — الاسم والتواريخ فقط
+    private func performGenderMove() {
+        guard !isSaving else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            showOfflineAlert = true
+            return
+        }
+        let toFemale = selectedGender == "female"
+        isSaving = true
+        Task {
+            // من له حساب لا يُنقل — السيرفر لا يمنعه والنقل يحذف ملفه
+            await refreshGenderLock(force: true)
+            guard memberHasAccountByRole || AdminAccountsStore.shared.loaded else {
+                failGenderMove(L10n.t("تعذّر التحقق من حساب العضو. حاول مرة أخرى.",
+                                      "Couldn't check the member's account. Try again."))
+                return
+            }
+            guard !genderLockedByAccount else {
+                failGenderMove(L10n.t("له حساب في التطبيق — لا يُنقل بين الشجرتين.",
+                                      "Has an app account — can't be moved between trees."))
+                return
+            }
+
+            memberVM.errorMessage = nil
+            guard let newId = await memberVM.moveChildGender(childId: member.id,
+                                                             toGender: toFemale ? "female" : "male") else {
+                failGenderMove(memberVM.errorMessage
+                               ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again."))
+                return
+            }
+            Log.info("[AdminEdit] ⚧ نقل بين الشجرتين → \(toFemale ? "female" : "male")")
+
+            guard toFemale else {
+                // ذكر: السجل نفسه في شجرة الرجال — بقية الحقول بالحفظ العادي (بلا كتابة الجنس مرة ثانية)
+                isSaving = false
+                genderMoved = true
+                if newId != member.id {
+                    Log.warning("[AdminEdit] النقل لذكر غيّر المعرّف — يُغلق المربّع")
+                    closeAfterMoveToWomen()
+                    return
+                }
+                saveAction()
+                return
+            }
+
+            // أنثى: الاسم والتواريخ على سجلها الجديد في شجرة النساء
+            let fullNameToSave = composedFullName()
+            let deathToSave: Date? = (isDeceased && hasDeathDate) ? deathDate : nil
+            let deceasedJustMarked = isDeceased && !(member.isDeceased ?? false)
+            let saved = await memberVM.updateWomanMember(
+                id: newId,
+                firstName: PersonName.clean(firstName),
+                birthDate: hasBirthDate ? birthDate : nil,
+                isDeceased: isDeceased,
+                deathDate: deathToSave,
+                gender: "female",
+                fullName: fullNameToSave.isEmpty ? nil : fullNameToSave
+            )
+            // تخرج من «الأبناء» في شجرة الرجال
+            if let fatherId = member.fatherId { await memberVM.fetchChildren(for: fatherId) }
+
+            let adminName = authVM.currentUser?.firstName ?? "مدير"
+            await memberVM.notificationVM?.notifyAdminsWithChangesAndPush(
+                title: L10n.t("تعديل بيانات عضو", "Member Data Updated"),
+                body: L10n.t("\(adminName) نقل «\(member.fullName)» إلى شجرة النساء",
+                             "\(adminName) moved «\(member.fullName)» to the women's tree"),
+                kind: "admin_edit",
+                changes: [.init(field: "gender", before: member.gender, after: "female")]
+            )
+            if saved, deceasedJustMarked {
+                let target = DeathAnnouncementTarget(
+                    id: newId, name: fullNameToSave.isEmpty ? member.fullName : fullNameToSave,
+                    isFemale: true, deathDate: DeathRecency.string(from: deathToSave))
+                let canAnnounce = authVM.isAdmin
+                Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
+            }
+
+            isSaving = false
+            guard saved else {
+                // نُقلت ولم يُحفظ الباقي — السجل القديم لم يعد في شجرة الرجال، فالمربّع يُغلق بعد «حسناً»
+                dismissAfterError = true
+                failGenderMove(L10n.t("نُقل إلى شجرة النساء، لكن تعذّر حفظ بقية التعديلات. عدّلها من شجرة النساء.",
+                                      "Moved to the women's tree, but the other changes couldn't be saved. Edit them from the women's tree."))
+                return
+            }
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            closeAfterMoveToWomen()
+        }
+    }
+
+    private func failGenderMove(_ text: String) {
+        isSaving = false
+        accountErrorText = text
+        accountError = true
+    }
+
+    /// السجل خرج من شجرة الرجال: يُغلق المربّع وتُغلق تفاصيله (نفس إشعار الحذف)
+    private func closeAfterMoveToWomen() {
+        dismissAfterError = false
+        let oldId = member.id
+        dismiss()
+        NotificationCenter.default.post(name: .memberDeleted, object: oldId)
+    }
+
+    // MARK: - Save Action (unchanged logic)
+    private func saveAction() {
+        guard !isSaving else { return }
+        guard NetworkMonitor.shared.isConnected else {
+            showOfflineAlert = true
+            return
+        }
+        // «تسجيل الوفاة» لا يعرض الاسم ولا الرقم ولا يحفظهما (التواريخ فقط)
+        guard deathOnly || isPhoneValid else { return }
+        isSaving = true
+
+        let capturedMemberId = member.id
+        let capturedPhoneCountry = selectedPhoneCountry
+        let capturedPhone = phoneNumber
+        let capturedFatherId = selectedFatherId
+        let capturedBirthDate = hasBirthDate ? birthDate : nil
+        let capturedIsDeceased = isDeceased
+        let capturedDeathDate = (isDeceased && hasDeathDate) ? deathDate : nil
+        let capturedChildren = localChildren
+        let capturedGender = selectedGender
+        let capturedBioStations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
+
+        let capturedFullName = composedFullName()
+
+        guard deathOnly || !capturedFullName.isEmpty else {
             isSaving = false
             showEmptyNameAlert = true
             return
         }
         // الاسم الكامل لازم يبدأ بالاسم الأول (التنبيه ظاهر تحت الحقل)
-        guard PersonName.startsWithFirstName(capturedFullName, firstName) else {
+        guard deathOnly || PersonName.startsWithFirstName(capturedFullName, firstName) else {
             isSaving = false
             return
         }
 
         // الاسم الأول = الحقل (القاعدة ١) — يتغيّر بروحه أيضاً (تصحيح «زين» ← «زين العابدين»)
         let capturedFirstName = PersonName.clean(firstName)
-        let nameChanged = capturedFullName != member.fullName || capturedFirstName != PersonName.clean(member.firstName)
+        let nameChanged = !deathOnly
+            && (capturedFullName != member.fullName || capturedFirstName != PersonName.clean(member.firstName))
         let phoneChanged: Bool = {
+            guard !deathOnly else { return false }
             let original = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
             return capturedPhoneCountry.id != original.country.id || capturedPhone != original.localDigits
         }()
@@ -1108,7 +1342,7 @@ struct AdminMemberDetailSheet: View {
             let originalDigits = KuwaitPhone.detectCountryAndLocal(member.phoneNumber).localDigits
             return phoneChanged && capturedPhone.isEmpty && !originalDigits.isEmpty
         }()
-        let fatherChanged = capturedFatherId != member.fatherId
+        let fatherChanged = !deathOnly && capturedFatherId != member.fatherId
         let datesChanged: Bool = {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
@@ -1125,8 +1359,9 @@ struct AdminMemberDetailSheet: View {
                formatter.string(from: cd) != formatter.string(from: od) { return true }
             return false
         }()
-        let genderChanged = capturedGender != (member.gender ?? "male")
+        let genderChanged = !deathOnly && capturedGender != (member.gender ?? "male")
         let bioChanged: Bool = {
+            guard !deathOnly else { return false }
             let oldKey = (member.bio ?? []).map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
             let newKey = capturedBioStations.map { "\($0.year ?? "")|\($0.title)|\($0.details)" }.joined(separator: ";")
             return oldKey != newKey
@@ -1134,6 +1369,7 @@ struct AdminMemberDetailSheet: View {
         let deceasedJustMarked = capturedIsDeceased && !(member.isDeceased ?? false)
         let auditMemberName = member.fullName
         let childrenOrderChanged: Bool = {
+            guard !deathOnly else { return false }
             let originalChildren = memberVM.allMembers
                 .filter { $0.fatherId == capturedMemberId && $0.isCountable }
                 .sortedForDisplay()
@@ -1147,6 +1383,25 @@ struct AdminMemberDetailSheet: View {
         guard nameChanged || phoneChanged || fatherChanged || datesChanged || genderChanged || childrenOrderChanged || bioChanged else {
             isSaving = false
             dismiss()
+            return
+        }
+
+        // تغيير الجنس = نقل بين الشجرتين على السيرفر أولاً (بعد التأكيد)، ثم بقية الحقول (`performGenderMove`)
+        let genderAlreadyMoved = genderMoved
+        if genderChanged && !genderAlreadyMoved {
+            isSaving = false
+            guard !genderLockedByAccount else {
+                selectedGender = member.gender ?? "male"
+                return
+            }
+            // الأب يُحفظ قبل النقل لشجرة النساء — لا الاثنان في حفظة واحدة
+            if capturedGender == "female" && fatherChanged {
+                accountErrorText = L10n.t("احفظ تغيير الأب أولاً، ثم غيّر الجنس.",
+                                          "Save the father change first, then change the gender.")
+                accountError = true
+                return
+            }
+            showGenderMoveConfirm = true
             return
         }
 
@@ -1245,7 +1500,8 @@ struct AdminMemberDetailSheet: View {
                 await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId, silent: true)
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)") }
             }
-            if genderChanged {
+            // الجنس نُقل على السيرفر قبل هذا الحفظ (`moveChildGender`) — لا يُكتب العمود مرة ثانية
+            if genderChanged && !genderAlreadyMoved {
                 Log.info("[AdminEdit] ⚧ تعديل الجنس: \(capturedGender)")
                 await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(err)") }
@@ -1360,8 +1616,8 @@ struct AdminMemberDetailSheet: View {
                 if (member.isDeceased ?? false) != capturedIsDeceased {
                     changeEntries.append(.init(
                         field: "is_deceased",
-                        before: (member.isDeceased ?? false) ? "متوفّى" : "حيّ",
-                        after: capturedIsDeceased ? "متوفّى" : "حيّ"
+                        before: (member.isDeceased ?? false) ? "متوفى" : "حيّ",
+                        after: capturedIsDeceased ? "متوفى" : "حيّ"
                     ))
                 }
                 if (member.deathDate ?? "") != (capturedDeathDate.map { dateFormatter.string(from: $0) } ?? "") {
@@ -1449,44 +1705,11 @@ struct FatherPickerSheet: View {
     /// «تقليل الحركة» (توصية أبل): علامة الاختيار تظهر بتلاشٍ فقط بلا تكبير
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var prepared: [(member: FamilyMember, normalized: String)] = []
+    @State private var prepared: [(member: FamilyMember, words: [String])] = []
 
     private enum FatherChoice {
         case noFather
         case father(FamilyMember)
-    }
-
-    private static func normalizeArabicFast(_ s: String) -> String {
-        var out = String()
-        out.reserveCapacity(s.count)
-        for ch in s {
-            switch ch {
-            case "أ", "إ", "آ", "ٱ": out.append("ا")
-            case "ى": out.append("ي")
-            case "ة": out.append("ه")
-            case "\u{064B}", "\u{064C}", "\u{064D}",
-                 "\u{064E}", "\u{064F}", "\u{0650}",
-                 "\u{0651}", "\u{0652}", "\u{0670}":
-                continue
-            default:
-                if ch.isLetter {
-                    out.append(contentsOf: String(ch).lowercased())
-                } else {
-                    out.append(ch)
-                }
-            }
-        }
-        return out.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func matchRank(normalized: String, query: String) -> Int? {
-        if query.isEmpty { return 0 }
-        if normalized.hasPrefix(query) { return 0 }
-        for word in normalized.split(separator: " ") {
-            if word.hasPrefix(query) { return 1 }
-        }
-        if normalized.contains(query) { return 2 }
-        return nil
     }
 
     private func rebuildPrepared() {
@@ -1506,18 +1729,19 @@ struct FatherPickerSheet: View {
 
         prepared = memberVM.allMembers
             .filter { $0.isCountable && !exclude.contains($0.id) }
-            .map { (member: $0, normalized: Self.normalizeArabicFast($0.fullName)) }
+            .map { (member: $0, words: NameSearch.words($0.fullName)) }
             .sorted { $0.member.fullName < $1.member.fullName }
     }
 
     var filteredMembers: [FamilyMember] {
-        let q = Self.normalizeArabicFast(debouncedSearch)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
+        let q = NameSearch.words(debouncedSearch)
         if q.isEmpty {
             return prepared.map(\.member)
         }
         return prepared
             .compactMap { item -> (FamilyMember, Int)? in
-                guard let r = Self.matchRank(normalized: item.normalized, query: q) else { return nil }
+                guard let r = NameSearch.score(queryWords: q, candidateWords: item.words) else { return nil }
                 return (item.member, r)
             }
             .sorted { lhs, rhs in
@@ -1664,7 +1888,7 @@ struct FatherPickerSheet: View {
                             .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(L10n.t("رأس شجرة", "Tree root"))
-                            .dsFieldFont(DSBox.fieldValueSize, weight: checked ? .bold : .regular)
+                            .dsFieldFont(DSBox.fieldValueSize, weight: checked ? .medium : .regular)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
@@ -1732,7 +1956,7 @@ private struct FatherPickerRow: View, Equatable {
                     .accessibilityHidden(true)   // الحرف الأول زخرفة — الاسم بجانبه
 
                 Text(member.displayFullName)
-                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .medium : .regular)
                     .foregroundColor(isSelected ? DS.Color.fieldLabel : DS.Color.fieldValue)
                     .dsNameLines()
                     .truncationMode(.tail)

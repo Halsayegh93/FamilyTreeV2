@@ -18,6 +18,8 @@ struct EditChildSheet: View {
     @State private var selectedGender: String = "male"
     @State private var isDeceased: Bool = false
     @State private var deathDate: Date = Date()
+    /// تاريخ الوفاة معروف/حدّده المستخدم — بدونه لا يُرسل «اليوم» كتاريخ وفاة
+    @State private var deathDateProvided: Bool = false
     @State private var selectedUIImage: UIImage? = nil
     @State private var showSuccessAlert = false
     /// وفاة الابن أُرسلت طلباً للإدارة (بدل تسجيلها مباشرة) — تتغيّر رسالة الحفظ
@@ -34,7 +36,7 @@ struct EditChildSheet: View {
             title: L10n.t("تعديل بيانات الابن", "Edit Child Info"),
             // الاسم الثلاثي للابن بدل الجملة العامة — ليعرف المستخدم بيانات من يعدّل (طلب المالك ٢٠٢٦-١٠-٠٧)
             subtitle: member.fullName.isEmpty ? L10n.t("عدّل بياناته في الشجرة", "Update the details in the tree")
-                                              : member.threePartName,
+                                              : member.shortFullName,   // بالعائلة المختارة
             icon: "person.crop.circle.badge.checkmark",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
@@ -149,21 +151,14 @@ struct EditChildSheet: View {
     /// القيم التي فُتح عليها المربّع — تُلتقط مرة في setupData
     @State private var startDraft: Draft? = nil
 
-    private static let dayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        return f
-    }()
-
     private var currentDraft: Draft {
         Draft(
             name: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
             gender: selectedGender,
             phone: phoneNumber.isEmpty ? "" : "\(selectedPhoneCountry.id)|\(phoneNumber)",
-            birth: birthDateProvided ? Self.dayFormatter.string(from: birthDate) : nil,
+            birth: birthDateProvided ? DateHelper.format(birthDate) : nil,
             isDeceased: isDeceased,
-            death: isDeceased ? Self.dayFormatter.string(from: deathDate) : nil
+            death: isDeceased && deathDateProvided ? DateHelper.format(deathDate) : nil
         )
     }
 
@@ -248,10 +243,12 @@ struct EditChildSheet: View {
             if isDeceased {
                 dateRow(icon: "calendar", tint: DS.Color.error,
                         title: L10n.t("تاريخ الوفاة", "Death Date"),
-                        value: DSDateText.display(deathDate)) {
+                        value: deathDateProvided ? DSDateText.display(deathDate) : L10n.t("بدون تاريخ", "No date")) {
                     dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                                        initial: deathDate, allowClear: false) { picked in
-                        if let picked { deathDate = picked }
+                                        initial: deathDateProvided ? deathDate : nil, allowClear: false) { picked in
+                        guard let picked else { return }
+                        deathDate = picked
+                        deathDateProvided = true
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -291,17 +288,15 @@ struct EditChildSheet: View {
         phoneNumber = detectedPhone.localDigits
         isDeceased = member.isDeceased ?? false
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-
-        if let birth = member.birthDate, !birth.isEmpty, let parsed = formatter.date(from: birth) {
+        // DateHelper: ميلادي بأرقام لاتينية أياً كان تقويم الجهاز
+        if let parsed = DateHelper.parse(member.birthDate) {
             birthDate = parsed
             birthDateProvided = true
         }
 
-        if let death = member.deathDate, !death.isEmpty, let parsed = formatter.date(from: death) {
+        if let parsed = DateHelper.parse(member.deathDate) {
             deathDate = parsed
+            deathDateProvided = true
         }
 
         // نقطة البداية لمقارنة «تغييرات لم تُحفظ» — مرة واحدة فقط (لا يُعاد عند رجوع العرض)
@@ -314,13 +309,9 @@ struct EditChildSheet: View {
         guard !isSaving else { return }
         isSaving = true
         Task {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-
-            // اختياري: نُرسل nil (غير معروف) إن لم يُحدَّد تاريخ ميلاد — بدل «اليوم» الخاطئ.
-            let birthDateString: String? = birthDateProvided ? formatter.string(from: birthDate) : nil
-            let deathDateString: String? = isDeceased ? formatter.string(from: deathDate) : nil
+            // اختياري: نُرسل nil (غير معروف) إن لم يُحدَّد تاريخ ميلاد/وفاة — بدل «اليوم» الخاطئ.
+            let birthDateString: String? = birthDateProvided ? DateHelper.format(birthDate) : nil
+            let deathDateString: String? = isDeceased && deathDateProvided ? DateHelper.format(deathDate) : nil
 
             let cleanFirst = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -386,7 +377,7 @@ struct EditChildSheet: View {
                     firstName: cleanFirst,
                     birthDate: birthDateProvided ? birthDate : nil,
                     isDeceased: isDeceased,
-                    deathDate: isDeceased ? deathDate : nil,
+                    deathDate: isDeceased && deathDateProvided ? deathDate : nil,
                     gender: "female",
                     fullName: finalFullName
                 )

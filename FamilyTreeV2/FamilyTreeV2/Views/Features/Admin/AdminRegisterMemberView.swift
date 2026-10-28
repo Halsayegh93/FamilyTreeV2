@@ -1,9 +1,9 @@
 import SwiftUI
 
-// MARK: - تسجيل عضو جديد — بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧)
+// MARK: - تسجيل عضو جديد — بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`)
 //
-// الرأس الملوّن الموحّد ← صفّ أرقام يتابع اكتمال النموذج ← أقسام المربّعات: الصورة، البيانات
-// الأساسية، تاريخ الميلاد، رقم الهاتف ← زر «إضافة العضو» بالزرّ الواحد («أسلوب واحد» ٢٠٢٦-١٠-٠٧).
+// رأس كحلي بأرقام تتابع اكتمال النموذج ← بطاقات بيضاء: الصورة (تصعد فوق الرأس)، البيانات الأساسية، تاريخ
+// الميلاد، رقم الهاتف ← زر «إضافة العضو» بالزرّ الواحد («أسلوب واحد» ٢٠٢٦-١٠-٠٧).
 // منطق النموذج كما هو تماماً: نفس الحقول والحدود والتحقّق والحفظ (`adminAddMember`)
 // ورسالتا النجاح والخطأ.
 struct AdminRegisterMemberView: View {
@@ -52,88 +52,75 @@ struct AdminRegisterMemberView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            if isLandscape {
-                // الوضع الأفقي: الرأس والصورة بعمود، والحقول بعمود
-                HStack(alignment: .top, spacing: DS.Spacing.lg) {
-                    VStack(spacing: DS.Spacing.md) {
-                        hero
-                        photoSection
-                    }
-                    .frame(maxWidth: .infinity)
-
-                    VStack(spacing: DS.Spacing.md) {
-                        basicsSection
-                        birthDateSection
-                        phoneSection
-                        submitButton
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
-            } else {
-                VStack(spacing: DS.Spacing.md) {
-                    hero
-                    // الصورة الشخصية — في الأعلى مثل فورم التسجيل
-                    photoSection
-                    // الاسم الرباعي + اسم العائلة
-                    basicsSection
-                    birthDateSection
-                    // رقم الهاتف (خاص بالإدارة — اختياري)
-                    phoneSection
-                    // زر الإرسال
-                    submitButton
-                }
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.md)
-                .padding(.bottom, DS.Spacing.xxxl)
+        page
+            .dsAlert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess, moment: .newMember) {
+                Button(L10n.t("حسناً", "OK")) { dismiss() }
+            } message: {
+                Text(L10n.t("تمت إضافة العضو بنجاح.", "Member added successfully."))
             }
-        }
-        .scrollDismissesKeyboard(.interactively)
-        // الرأس الملوّن الموحّد (بدل شريط النظام وبطاقة الرأس)
-        .dsSubPageHeader(L10n.t("تسجيل عضو جديد", "Register New Member"),
-                         subtitle: L10n.t("أدخل بيانات العضو الجديد", "Enter the new member's details"))
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .dsAlert(L10n.t("تم التسجيل", "Registered"), isPresented: $showingSuccess, moment: .newMember) {
-            Button(L10n.t("حسناً", "OK")) { dismiss() }
-        } message: {
-            Text(L10n.t("تمت إضافة العضو بنجاح.", "Member added successfully."))
-        }
-        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
-            Button(L10n.t("حسناً", "OK")) {}
-        } message: {
-            Text(L10n.t("تعذر الإضافة. حاول مرة أخرى.", "Add failed. Try again."))
-        }
-        .onAppear {
-            if !lastAuthDialingCode.isEmpty {
-                selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
+            .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showingError) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(L10n.t("تعذر الإضافة. حاول مرة أخرى.", "Add failed. Try again."))
             }
-        }
+            .onAppear {
+                if !lastAuthDialingCode.isEmpty {
+                    selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
+                }
+            }
     }
 
-    // MARK: - صفّ الأرقام — يتابع اكتمال النموذج (العنوان والوصف في الرأس الملوّن)
+    /// عمودياً: الصورة تصعد فوق الرأس ثم بقية البطاقات؛ أفقياً: الصورة بعمود والحقول بعمود
+    private var page: AdminPage {
+        if isLandscape {
+            return AdminPage(header: header, content: AnyView(
+                HStack(alignment: .top, spacing: DS.Hub.stackSpacing) {
+                    AnyView(photoSection)
+                        .frame(maxWidth: .infinity)
+                    VStack(spacing: DS.Hub.stackSpacing) {
+                        AnyView(basicsSection)
+                        AnyView(birthDateSection)
+                        AnyView(phoneSection)
+                        AnyView(submitButton)
+                    }
+                    .frame(maxWidth: .infinity)
+                }))
+        }
+        return AdminPage(header: header, lead: AnyView(photoSection), content: AnyView(
+            VStack(spacing: DS.Hub.stackSpacing) {
+                // الاسم الرباعي + اسم العائلة
+                AnyView(basicsSection)
+                AnyView(birthDateSection)
+                // رقم الهاتف (خاص بالإدارة — اختياري)
+                AnyView(phoneSection)
+                // زر الإرسال
+                AnyView(submitButton)
+            }))
+    }
 
-    private var hero: some View {
+    // MARK: - الرأس الكحلي — أرقامه تتابع اكتمال النموذج
+
+    private var header: AdminPageHeader {
         let requiredDone = (isValidName(trimmedFullName) ? 1 : 0) + (isValidName(trimmedFamilyName) ? 1 : 0)
-        return DSStatsRow([
-            DSHeroStat(value: L10n.t("\(requiredDone) من 2", "\(requiredDone) of 2"),
-                       label: L10n.t("الحقول المطلوبة", "Required fields"), icon: "checklist"),
-            DSHeroStat(value: selectedImage == nil ? "—" : "✓",
-                       label: L10n.t("الصورة", "Photo"), icon: "camera.fill"),
-            DSHeroStat(value: phoneNumber.isEmpty ? "—" : "✓",
-                       label: L10n.t("الرقم", "Phone"), icon: "phone.fill")
-        ], tint: tint)
+        return AdminPageHeader(
+            title: L10n.t("تسجيل عضو جديد", "Register New Member"),
+            subtitle: L10n.t("أدخل بيانات العضو الجديد", "Enter the new member's details"),
+            glyph: "person.badge.plus",
+            kpis: [
+                AdminPageKPI(L10n.t("\(requiredDone) من 2", "\(requiredDone) of 2"),
+                             L10n.t("الحقول المطلوبة", "Required fields"), icon: "checklist",
+                             tint: requiredDone == 2 ? DS.Hub.kpiMine : DS.Color.textOnPrimary),
+                AdminPageKPI(selectedImage == nil ? "—" : "✓", L10n.t("الصورة", "Photo"), icon: "camera",
+                             tint: DS.Hub.kpiMine),
+                AdminPageKPI(phoneNumber.isEmpty ? "—" : "✓", L10n.t("الرقم", "Phone"), icon: "phone",
+                             tint: DS.Hub.kpiMine)
+            ])
     }
 
     // MARK: - Photo Section — كاميرا على الصورة مباشرة (نفس فورم التسجيل)
     private var photoSection: some View {
-        DSComposerSection(title: L10n.t("الصورة الشخصية", "Profile Photo"),
-                          icon: "camera.fill",
-                          tint: tint,
-                          trailing: L10n.t("اختياري", "Optional"),
-                          index: 1) {
+        AdminSectionCard(title: L10n.t("الصورة الشخصية", "Profile Photo"),
+                         tag: L10n.t("اختياري", "Optional")) {
             VStack(spacing: DS.Spacing.xs) {
                 DSProfilePhotoPicker(
                     selectedImage: $selectedImage,
@@ -158,11 +145,8 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - البيانات الأساسية — الاسم الرباعي واسم العائلة (نفس فورم التسجيل)
     private var basicsSection: some View {
-        DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
-                          icon: "person.text.rectangle.fill",
-                          tint: tint,
-                          trailing: L10n.t("مطلوب", "Required"),
-                          index: 2) {
+        AdminSectionCard(title: L10n.t("البيانات الأساسية", "Basic Info"),
+                         tag: L10n.t("مطلوب", "Required"), spacing: DS.Spacing.md) {
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 DSComposerField(
                     icon: "person.crop.circle",
@@ -235,10 +219,7 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - Birth Date Section — صف تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف
     private var birthDateSection: some View {
-        DSComposerSection(title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                          icon: "calendar",
-                          tint: tint,
-                          index: 3) {
+        AdminSectionCard(title: L10n.t("تاريخ الميلاد", "Birth Date")) {
             Button {
                 dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
                                     initial: birthDate,
@@ -254,7 +235,7 @@ struct AdminRegisterMemberView: View {
                             .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(DSDateText.display(birthDate))
-                            .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                            .dsFieldFont(.rowTitle)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)
@@ -271,11 +252,8 @@ struct AdminRegisterMemberView: View {
 
     // MARK: - Phone Section — حقل موحّد مع كود الدولة على الجهة المقابلة
     private var phoneSection: some View {
-        DSComposerSection(title: L10n.t("رقم الهاتف", "Phone Number"),
-                          icon: "phone.fill",
-                          tint: tint,
-                          trailing: L10n.t("اختياري", "Optional"),
-                          index: 4) {
+        AdminSectionCard(title: L10n.t("رقم الهاتف", "Phone Number"),
+                         tag: L10n.t("اختياري", "Optional")) {
             DSPhoneField(
                 country: $selectedPhoneCountry,
                 digits: $phoneNumber,
@@ -345,7 +323,6 @@ struct AdminRegisterMemberView: View {
         .buttonStyle(DSPressStyle())
         .disabled(memberVM.isLoading)
         .padding(.top, DS.Spacing.xs)
-        .dsStaggerIn(5)
     }
 
     // MARK: - Validation Error — نفس فورم التسجيل

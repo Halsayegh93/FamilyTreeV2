@@ -108,7 +108,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                             .offset(x: isAnimating ? 0 : 15)
                             .opacity(isAnimating ? 1.0 : 0.0)
                         } else {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
                             if subtitleAbove, let customSubtitle = customSubtitle, !customSubtitle.isEmpty {
                                 Text(customSubtitle)
                                     .dsFont(.bodySemibold)
@@ -131,8 +131,9 @@ struct MainHeaderView<TrailingContent: View>: View {
                                         .overlay(Capsule().stroke(DS.Color.headerChipStroke, lineWidth: 1))
                                         .padding(.top, 2)
                                 } else {
+                                    // الوصف أصغر درجة من قبل (كان callout) — لا يزاحم العنوان
                                     Text(customSubtitle)
-                                        .dsFont(.calloutMedium)
+                                        .dsFont(.pageSubtitle)
                                         .foregroundColor(DS.Color.headerSubtitle)
                                 }
                             }
@@ -148,7 +149,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                 .scaleEffect(isAnimating ? 1.0 : 0.8)
                                 .opacity(isAnimating ? 1.0 : 0.0)
 
-                            VStack(alignment: .leading, spacing: isLandscape ? 0 : 3) {
+                            VStack(alignment: .leading, spacing: isLandscape ? 0 : DSBox.headerLineGap) {
                                 Text(L10n.t("مرحباً بك", "Welcome Back"))
                                     .dsFont(isLandscape ? .micro : .tabGreeting)
                                     .foregroundColor(DS.Color.headerSubtitle)

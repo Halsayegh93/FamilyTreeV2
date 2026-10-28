@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -14,8 +15,9 @@ struct LoginView: View {
     @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: CGFloat = 0
-    /// «شروط الاستخدام وسياسة الخصوصية» قبل الدخول (Guideline 5.1.1)
+    /// «الخصوصية والاستخدام» قبل الدخول (Guideline 5.1.1)
     @State private var showLegal = false
+    @State private var showLegalTerms = false
 
 
 
@@ -81,6 +83,11 @@ struct LoginView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .animation(DS.Anim.bouncy, value: authVM.isOtpSent)
         .onAppear {
+            // رجع للتطبيق بعد ما أغلقه النظام وهو في «الرسائل»: خانة الرمز من جديد بعدّاداتها
+            if let elapsed = authVM.restorePendingOTPIfAny() {
+                timeRemaining = max(0, Self.resendSeconds - Int(elapsed))
+                otpTimeRemaining = max(0, Int(AuthViewModel.pendingOTPLifetime - elapsed))
+            }
             // «تقليل الحركة»: الشعار يظهر بتلاشٍ فقط بلا تكبير
             guard !reduceMotion else {
                 logoScale = 1.0
@@ -93,6 +100,7 @@ struct LoginView: View {
                 logoOpacity = 1.0
             }
         }
+        .task { await Self.refreshResendSeconds() }
         .task(id: timeRemaining) {
             guard timeRemaining > 0 else { return }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -118,7 +126,7 @@ struct LoginView: View {
                         actionIcon: DSBackButton.symbol,   // سهم الرجوع الموحّد
                         action: {
                             withAnimation(DS.Anim.smooth) {
-                                authVM.isOtpSent = false
+                                authVM.isOtpSent = false; authVM.cancelPendingOTP()
                                 authVM.otpCode = ""; otpText = ""
                                 authVM.otpErrorMessage = nil
                                 authVM.otpStatusMessage = ""
@@ -181,25 +189,37 @@ struct LoginView: View {
             .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
     }
 
-    /// سطر صغير أسفل الشاشة يفتح «الخصوصية والشروط»
+    /// سطر واحد صغير أسفل الشاشة: «بالمتابعة توافق على «الخصوصية والاستخدام»» — الاسم يُضغط فيفتح المربّع
+    /// (طلب المالك ٢٠٢٦-١٠-٢٧؛ كان «باستخدامك التطبيق فإنك توافق على شروط الاستخدام وسياسة الخصوصية» بسطرين)
+    /// وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨): «بالمتابعة توافق على سياسة الخصوصية وقواعد الاستخدام»،
+    /// وكل اسم يُضغط فيفتح وثيقته وحدها
     private var legalFooter: some View {
         VStack(spacing: 0) {
-            Text(L10n.t("باستخدامك التطبيق فإنك توافق على", "By using the app you agree to the"))
-                .dsFont(.footnote)
+            Text(L10n.t("بالمتابعة توافق على", "By continuing you agree to the"))
                 .foregroundColor(DS.Color.textTertiary)
-            Button { showLegal = true } label: {
-                Text(L10n.t("شروط الاستخدام وسياسة الخصوصية", "Terms of Use and Privacy Policy"))
-                    .dsFont(.badge)
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
-                    .contentShape(Rectangle())
+            HStack(spacing: DS.Spacing.xs) {
+                legalLink(L10n.t("سياسة الخصوصية", "Privacy Policy")) { showLegal = true }
+                Text(L10n.t("و", "and")).foregroundColor(DS.Color.textTertiary)
+                legalLink(L10n.t("قواعد الاستخدام", "Terms of Use")) { showLegalTerms = true }
             }
-            .buttonStyle(.plain)
         }
+        .dsFont(.footnote)
         .multilineTextAlignment(.center)
+        .padding(.horizontal, DS.Spacing.md)
         .frame(maxWidth: .infinity)
-        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView() }
+        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView(only: "privacy") }
+        .dsTallBox(isPresented: $showLegalTerms) { PrivacyPolicyView(only: "terms") }
+    }
+
+    private func legalLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .foregroundColor(DS.Color.primary)
+                .underline()
+                .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// مربّع رقم واحد من رمز التحقق — يبرز المربّع النشط
@@ -324,6 +344,28 @@ struct LoginView: View {
         }
     }
 
+    /// بين رمز ورمز — يُقرأ من الإعدادات (`sms_resend_seconds()` = «حماية رسائل الدخول ← بين رمز ورمز»، المالك
+    /// ٢٠٢٦-١٠-٢٤)؛ آخر قيمة محفوظة على الجهاز، وبلا قيمة ٣ دقائق
+    static let resendSecondsKey = "smsResendSeconds.v1"
+    static var resendSeconds: Int {
+        let n = UserDefaults.standard.integer(forKey: resendSecondsKey)
+        return n > 0 ? n : 180
+    }
+
+    /// تحديث «بين رمز ورمز» من السيرفر (قبل الدخول) — أي خطأ يبقي القيمة السابقة
+    static func refreshResendSeconds() async {
+        guard let n: Int = try? await SupabaseConfig.client.rpc("sms_resend_seconds").execute().value,
+              (30...3600).contains(n) else { return }
+        UserDefaults.standard.set(n, forKey: resendSecondsKey)
+    }
+
+    /// وقت الانتظار على الزر: «45ث» · «1:59» · «ساعة» (حد الساعة أو اليوم — `OTPWaitText.hourThreshold`)
+    static func waitLabel(_ n: Int) -> String {
+        if n >= OTPWaitText.hourThreshold { return L10n.t("ساعة", "an hour") }
+        if n < 60 { return L10n.t("\(n)ث", "\(n)s") }
+        return String(format: "%d:%02d", n / 60, n % 60)
+    }
+
     // MARK: - Phone Input — Compact Card
     @ViewBuilder
     var phoneInputSection: some View {
@@ -344,19 +386,22 @@ struct LoginView: View {
             // زر الإرسال — DSPrimaryButton
             DSPrimaryButton(
                 timeRemaining > 0
-                    ? L10n.t("إعادة الطلب بعد \(timeRemaining)ث", "Resend in \(timeRemaining)s")
+                    ? L10n.t("إعادة الطلب بعد \(Self.waitLabel(timeRemaining))", "Resend in \(Self.waitLabel(timeRemaining))")
                     : L10n.t("متابعة", "Continue"),
                 icon: timeRemaining > 0 ? nil : "arrow.forward",
                 isLoading: authVM.isLoading,
                 useGradient: !isDisabled,
                 color: isDisabled ? DS.Color.inactive : DS.Color.primary
             ) {
+                guard !isDisabled else { return }
                 isFieldFocused = false
-                timeRemaining = 60
+                timeRemaining = Self.resendSeconds
                 authVM.otpCode = ""; otpText = ""
                 Task {
                     await authVM.sendOTP()
-                    if !authVM.isOtpSent { timeRemaining = 0 }
+                    // رفض السيرفر بمهلة (حد الرقم أو «رمز واحد لكل دقيقتين») ← الزر يُقفل بوقت السيرفر نفسه،
+                    // وأي فشل آخر يفتحه (المالك ٢٠٢٦-١٠-٢٣: «ابى الزر يرتبط بالسيرفر»)
+                    if !authVM.isOtpSent { timeRemaining = authVM.otpRetryAfter ?? 0 }
                 }
             }
             .disabled(isDisabled)
@@ -396,7 +441,7 @@ struct LoginView: View {
 
                     Button(action: {
                         withAnimation(DS.Anim.smooth) {
-                            authVM.isOtpSent = false
+                            authVM.isOtpSent = false; authVM.cancelPendingOTP()
                             authVM.otpCode = ""; otpText = ""
                             authVM.otpErrorMessage = nil
                             authVM.otpStatusMessage = ""
@@ -410,21 +455,9 @@ struct LoginView: View {
                     .padding(.leading, DS.Spacing.xs)
                 }
 
-                // مؤقت الرمز — 5 دقائق
-                if otpTimeRemaining > 0 {
-                    HStack(spacing: DS.Spacing.xs) {
-                        Image(systemName: "timer")
-                            .dsGlyph(DS.Glyph.sm)
-                            .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
-                        Text(L10n.t(
-                            "ينتهي الرمز خلال \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))",
-                            "Code expires in \(otpTimeRemaining / 60):\(String(format: "%02d", otpTimeRemaining % 60))"
-                        ))
-                            .dsFont(.caption)
-                            .foregroundStyle(otpTimeRemaining <= 60 ? DS.Color.error : DS.Color.primary)
-                    }
-                    .padding(.top, DS.Spacing.xs)
-                } else {
+                // وقت واحد ظاهر = عدّاد «إعادة عبر SMS» (المالك ٢٠٢٦-١٠-٢٤ «في وقتين … نبي وقت واحد»)؛ صلاحية
+                // الرمز (٥ دقائق) تُحسب بصمت وتظهر سطراً فقط بعد ما تنتهي
+                if otpTimeRemaining == 0 {
                     Text(L10n.t("انتهت صلاحية الرمز", "Code has expired"))
                         .dsFont(.caption)
                         .foregroundStyle(DS.Color.error)
@@ -458,7 +491,8 @@ struct LoginView: View {
                     isFieldFocused = true
                     otpText = ""
                     authVM.otpCode = ""
-                    otpTimeRemaining = 300
+                    // الرجوع لخانة رمز محفوظ يبدأ من الوقت الباقي له (`restorePendingOTPIfAny`)
+                    if otpTimeRemaining == 0 { otpTimeRemaining = 300 }
                 }
                 .onChange(of: otpText) { newValue in
                     // يقبل الأرقام العربية والفارسية ويحوّلها إنجليزية — نفس حقل الهاتف
@@ -496,7 +530,7 @@ struct LoginView: View {
             // إعادة الإرسال — الشريحة الواحدة (رمادية أثناء الانتظار)
             HStack(spacing: DS.Spacing.md) {
                 DSChipButton(timeRemaining > 0
-                             ? L10n.t("بعد \(timeRemaining)ث", "in \(timeRemaining)s")
+                             ? L10n.t("بعد \(Self.waitLabel(timeRemaining))", "in \(Self.waitLabel(timeRemaining))")
                              : L10n.t("إعادة عبر SMS", "Resend via SMS"),
                              icon: "message.fill",
                              tint: timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary) {
@@ -504,10 +538,11 @@ struct LoginView: View {
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
-                    timeRemaining = 60
+                    timeRemaining = Self.resendSeconds
                     Task {
                         await authVM.sendOTP(channel: .sms)
-                        if authVM.otpErrorMessage != nil { timeRemaining = 30 }
+                        // محجوب بمهلة معروفة (نفس الرقم): عدّاد «إعادة عبر SMS» يبدأ منها، وإلا ٣٠ ث كما كان
+                        if authVM.otpErrorMessage != nil { timeRemaining = authVM.otpRetryAfter ?? 30 }
                     }
                 }
                 .disabled(authVM.isLoading || timeRemaining > 0)

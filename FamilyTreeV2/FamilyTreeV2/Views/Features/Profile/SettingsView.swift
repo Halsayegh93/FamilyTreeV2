@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var showLanguage = false
     @State private var showAbout = false
     @State private var showTerms = false
+    @State private var showPrivacyDoc = false
     @State private var showDeleteConfirmation = false
     /// حذف الحساب جارٍ — طبقة انتظار حتى يكتمل ويُسجَّل الخروج
     @State private var isDeletingAccount = false
@@ -104,7 +105,9 @@ struct SettingsView: View {
             AppearanceSettingsView(focus: .language).environmentObject(appSettingsVM)
         }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
-        .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView() }   // قراءة طويلة — مربّع طويل (توصية أبل)
+        // قراءة طويلة — مربّع طويل (توصية أبل)؛ وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
+        .dsTallBox(isPresented: $showPrivacyDoc) { PrivacyPolicyView(only: "privacy") }
+        .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView(only: "terms") }
         .dsAlert(t("حذف الحساب", "Delete Account"), isPresented: $showDeleteConfirmation) {
             Button(t("إلغاء", "Cancel"), role: .cancel) {}
             Button(t("حذف نهائي", "Delete Permanently"), role: .destructive) {
@@ -260,7 +263,7 @@ struct SettingsView: View {
     private var allTiles: [SettingsTile] {
         let byId = Dictionary(uniqueKeysWithValues: (preferenceTiles + accountTiles + helpTiles).map { ($0.id, $0) })
         // «تعديل الملف» أُزيل ٢٠٢٦-١٠-١٠ — يبقى من قلم بطاقة الهوية أعلى الإعدادات
-        let order = ["notifications", "privacy", "appearance", "language", "devices", "terms", "about"]
+        let order = ["notifications", "privacy", "appearance", "language", "devices", "privacyDoc", "terms", "about"]
         return order.compactMap { byId[$0] }
     }
 
@@ -291,9 +294,12 @@ struct SettingsView: View {
     private var helpTiles: [SettingsTile] {
         [SettingsTile(id: "about", icon: "app.badge.fill", color: DS.Color.secondary,
                       title: t("عن التطبيق", "About"), value: AppVersion.string) { showAbout = true },
+         SettingsTile(id: "privacyDoc", icon: "hand.raised.fill", color: chromeInk,
+                      title: t("سياسة الخصوصية", "Privacy Policy"),
+                      value: t("بياناتك وحقوقك", "Your data and rights")) { showPrivacyDoc = true },
          SettingsTile(id: "terms", icon: "doc.text.fill", color: chromeInk,
-                      title: t("الخصوصية والشروط", "Privacy & Terms"),
-                      value: t("كيف نحمي بياناتك", "How we protect you")) { showTerms = true }]
+                      title: t("قواعد الاستخدام", "Terms of Use"),
+                      value: t("القواعد والشروط", "Rules and terms")) { showTerms = true }]
     }
 
     private func cardFact(icon: String, title: String, value: String) -> some View {
@@ -425,6 +431,10 @@ struct NotificationsAndPrivacyView: View {
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
+    /// تغيير برمجي (التعبئة من الملف أو التراجع بعد فشل) — لا يُكتب للسيرفر.
+    /// كان كل فتح يكتب، والتراجع يُطلق onChange من جديد (حلقة قد تُظهر رقماً مخفياً)
+    @State private var skipPhoneHiddenWrite = false
+    @State private var skipBirthHiddenWrite = false
     @State private var showUpdateError: Bool = false
     /// أنواع الإشعارات — محفوظة بالسيرفر ويقرأها مُطلِق الدفع (طلب المالك)
     @State private var prefs: [String: Bool] = [:]
@@ -523,8 +533,8 @@ struct NotificationsAndPrivacyView: View {
         .environment(\.layoutDirection, langManager.layoutDirection)
         .onAppear {
             badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
-            isPhoneHidden = authVM.currentUser?.isPhoneHidden ?? false
-            isBirthDateHidden = authVM.currentUser?.isBirthDateHidden ?? false
+            setPhoneHiddenSilently(authVM.currentUser?.isPhoneHidden ?? false)
+            setBirthHiddenSilently(authVM.currentUser?.isBirthDateHidden ?? false)
         }
         .task {
             // أنواع الإشعارات وحالة الجهاز لجزء الإشعارات فقط
@@ -551,15 +561,33 @@ struct NotificationsAndPrivacyView: View {
             }
         }
         .onChange(of: isPhoneHidden) { newValue in
+            if skipPhoneHiddenWrite { skipPhoneHiddenWrite = false; return }
+            // بلا اتصال: يرجع المفتاح بلا كتابة (requireOnline يعرض تنبيه الاتصال)
+            guard NetworkMonitor.shared.requireOnline() else {
+                setPhoneHiddenSilently(!newValue)
+                return
+            }
             Task {
                 let success = await memberVM.updatePhoneHidden(newValue)
-                if !success { isPhoneHidden = !newValue; showUpdateError = true }
+                if !success {
+                    // التراجع للقيمة المحفوظة لا يُعاد كتابته
+                    if isPhoneHidden == newValue { setPhoneHiddenSilently(!newValue) }
+                    showUpdateError = true
+                }
             }
         }
         .onChange(of: isBirthDateHidden) { newValue in
+            if skipBirthHiddenWrite { skipBirthHiddenWrite = false; return }
+            guard NetworkMonitor.shared.requireOnline() else {
+                setBirthHiddenSilently(!newValue)
+                return
+            }
             Task {
                 let success = await memberVM.updateBirthDateHidden(newValue)
-                if !success { isBirthDateHidden = !newValue; showUpdateError = true }
+                if !success {
+                    if isBirthDateHidden == newValue { setBirthHiddenSilently(!newValue) }
+                    showUpdateError = true
+                }
             }
         }
         .dsAlert(t("خطأ", "Error"), isPresented: $showUpdateError) {
@@ -603,6 +631,19 @@ struct NotificationsAndPrivacyView: View {
                       subtitle: t("عدد غير المقروء على أيقونة التطبيق", "Unread count on the app icon"),
                       isOn: $badgeEnabled)
         }
+    }
+
+    /// يضبط المفتاح بلا كتابة للسيرفر — العلامة تُرفع فقط لو تغيّرت القيمة فعلاً (وإلا لا onChange يمسحها)
+    private func setPhoneHiddenSilently(_ value: Bool) {
+        guard isPhoneHidden != value else { return }
+        skipPhoneHiddenWrite = true
+        isPhoneHidden = value
+    }
+
+    private func setBirthHiddenSilently(_ value: Bool) {
+        guard isBirthDateHidden != value else { return }
+        skipBirthHiddenWrite = true
+        isBirthDateHidden = value
     }
 
     private var privacySection: some View {
@@ -1290,164 +1331,182 @@ struct AboutView: View {
 }
 
 // MARK: - Privacy Policy & Terms View
-/// «الخصوصية والشروط» — مربّع عرض بمنتصف الشاشة بتصميم المربّعات الموحّد (طلب المالك)
+/// «الخصوصية والاستخدام» (طلب المالك ٢٠٢٦-١٠-٢٧: اسم أوضح ونص أخف وأدق) — مربّع بمنتصف الشاشة بتصميم المربّعات:
+/// رأس بالعنوان وسطر «سياسة الخصوصية وشروط الاستخدام»، تبويبان («بياناتك وخصوصيتك» · «قواعد الاستخدام»)، وكل نقطة
+/// بطاقة صغيرة (رمز + عنوان + سطران)، ثم «آخر تحديث» ورابط النسخة على الموقع، وزرّ «فهمت». النص من السيرفر
+/// (`LegalContentStore`، `app_config_public` ← `legal_content`) — يُقرأ قبل الدخول ويُعدَّل بلا تحديث؛ وإلا النص المدمج.
+/// الاسم القديم للنوع باقٍ (يفتحه «الدخول» و«الإعدادات»).
 struct PrivacyPolicyView: View {
-    /// لون القسم («حسابي») — كحلي «الإطار» يتبعه، وبلا قسم يبقى كحلي العلامة
     @Environment(\.dsSection) private var section
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
-    private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
-    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
+    @ObservedObject private var store = LegalContentStore.shared
+    /// يبدأ بالخصوصية (أو بالقواعد إن طُلب)
+    var startsWithTerms: Bool = false
+    /// وثيقة واحدة فقط (`privacy` أو `terms`) بلا تبويبين — صفحتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
+    var only: String? = nil
+    /// شاشة الموافقة عند الدخول (`termsAcceptanceGate`): «أوافق» بدل «فهمت» و«تسجيل الخروج» بدل «إغلاق»
+    var acceptance: Acceptance? = nil
+    /// شاشة الموافقة تبدأ صغيرة (طلب المالك ٢٠٢٦-١٠-٢٨): السطر والزرّان، والنص كاملاً عند الطلب
+    @State private var showsFullText = false
+    /// المواد المفتوحة (الملخّص ← النص كاملاً)
+    @State private var openItems: Set<String> = []
+    @State private var tab = "privacy"
 
-    private struct Policy: Identifiable {
-        /// ثابت بين إعادات الرسم — حتى لا تُعاد حركة دخول الأقسام
-        var id: String { title }
-        let icon: String
-        let color: Color
-        let title: String
-        let points: [String]
+    struct Acceptance {
+        var isAccepting: Bool
+        var errorMessage: String?
+        var onAccept: () -> Void
+        var onSignOut: () -> Void
     }
 
-    private var policies: [Policy] {
-        [
-            Policy(icon: "tray.and.arrow.down.fill", color: DS.Color.primary,
-                   title: t("جمع البيانات", "Data Collection"),
-                   points: [
-                    t("نجمع الاسم ورقم الهاتف وتاريخ الميلاد، والبريد الإلكتروني إن أضفته، والصور والمحتوى الذي تنشره (الأخبار والتعليقات والمشاريع والديوانيات ومواد المكتبة).",
-                      "We collect your name, phone number, birth date, your email if you add it, and the photos and content you post (news, comments, projects, diwaniyas and library items)."),
-                    t("نحفظ معرّف جهازك ونوعه لإدارة الأجهزة المرتبطة وإرسال الإشعارات، وآخر نشاط لك داخل التطبيق لأغراض الإدارة وإحصاءات الاستخدام.",
-                      "We store your device identifier and model to manage linked devices and deliver notifications, and your last in-app activity for administration and usage statistics."),
-                    t("لا نجمع بيانات الموقع أو جهات الاتصال أو سجل التصفح.", "We don't collect location, contacts, or browsing history."),
-                    t("يُتحقَّق من هويتك برمز تحقّق يُرسل إلى هاتفك.", "Your identity is verified with a verification code sent to your phone.")
-                   ]),
-            Policy(icon: "hand.raised.fill", color: DS.Color.accent,
-                   title: t("استخدام البيانات", "Data Usage"),
-                   points: [
-                    t("بياناتك تُستخدم فقط لعرض الشجرة والتواصل بين الأعضاء.", "Your data is only used for the family tree and communication."),
-                    t("لا نبيع بياناتك ولا نستخدمها للإعلانات أو التتبّع، ولا نشاركها إلا مع مزوّدي الخدمة الذين يشغّلون التطبيق (الاستضافة ورسائل التحقق والإشعارات).",
-                      "We never sell your data or use it for ads or tracking; it is shared only with the service providers that run the app (hosting, verification messages and notifications)."),
-                    t("يمكن للمدراء فقط الاطلاع على البيانات لأغراض الإدارة.", "Only admins can view data for management purposes.")
-                   ]),
-            Policy(icon: "server.rack", color: DS.Color.info,
-                   title: t("التخزين والأمان", "Storage & Security"),
-                   points: [
-                    t("بياناتك مخزّنة على خوادم مشفرة وآمنة.", "Your data is stored on encrypted and secure servers."),
-                    t("جميع الاتصالات محمية عبر بروتوكول HTTPS.", "All connections are protected via HTTPS protocol."),
-                    t("نستخدم حماية على مستوى كل مستخدم.", "We apply per-user level data protection.")
-                   ]),
-            Policy(icon: "trash.fill", color: DS.Color.error,
-                   title: t("حذف البيانات", "Data Deletion"),
-                   points: [
-                    t("يمكنك حذف حسابك في أي وقت من الإعدادات ← «حذف الحساب».", "You can delete your account at any time from Settings → “Delete Account”."),
-                    t("عند الحذف تُحذف من خوادمنا بياناتك الشخصية وصورك وما نشرته من أخبار وتعليقات ومحتوى، ويبقى اسمك وموضعك في شجرة العائلة حفاظاً على تسلسل النسب.",
-                      "Deletion removes your personal details, photos and the news, comments and content you posted from our servers; your name and place in the family tree stay to keep the lineage intact."),
-                    t("لا يمكن استرجاع البيانات بعد الحذف النهائي.", "Data cannot be recovered after permanent deletion.")
-                   ]),
-            Policy(icon: "bell.badge.fill", color: DS.Color.warning,
-                   title: t("الإشعارات", "Notifications"),
-                   points: [
-                    t("نرسل إشعارات عن التعليقات والإعجابات والتحديثات.", "We send alerts for comments, likes, and updates."),
-                    t("يمكنك التحكم في أنواع الإشعارات من إعدادات الخصوصية.", "You can control notification types from Privacy settings."),
-                    t("يمكنك تعطيل الإشعارات بالكامل من الإعدادات.", "You can fully disable notifications from Settings.")
-                   ]),
-            Policy(icon: "doc.text.fill", color: DS.Color.neonPurple,
-                   title: t("شروط الاستخدام", "Terms of Use"),
-                   points: [
-                    t("التطبيق مخصص حصراً لأفراد عائلة المحمدعلي ومن توافق عليهم إدارة العائلة، ويُعدّ استخدامه موافقةً على هذه الشروط.",
-                      "The app is exclusively for Al-Mohammad Ali family members and those approved by the family administration; using it constitutes acceptance of these terms."),
-                    t("لا تهاون مطلقاً مع المحتوى المسيء أو المستخدمين المسيئين؛ إذ يُحظر نشر أي محتوى مسيء أو مهين أو خادش للحياء أو يحض على الكراهية، كما يُحظر التحرّش بأي عضو أو انتحال شخصيته.",
-                      "Zero tolerance for objectionable content or abusive users: posting offensive, insulting, indecent or hateful content is prohibited, as is harassing any member or impersonating anyone."),
-                    t("يحق لكل عضو الإبلاغ عن أي خبر أو تعليق أو محتوى أو عضو عبر زر «إبلاغ»، وحظر أي عضو فلا يظهر له محتواه.",
-                      "Every member may report any post, comment, content or member with the “Report” button, and block any member so their content no longer appears."),
-                    t("تراجع الإدارة كل بلاغ خلال ٢٤ ساعة، وتحذف المحتوى المخالف، وتوقف حساب ناشره.",
-                      "The administration reviews every report within 24 hours, removes the violating content and suspends the account that posted it."),
-                    t("يلتزم العضو باستخدام التطبيق بمسؤولية، واحترام خصوصية الآخرين، وعدم تداول بياناتهم خارج التطبيق.", "Members must use the app responsibly, respect others' privacy and not share their data outside the app."),
-                    t("يحق للإدارة تجميد الحسابات المخالفة أو حذفها.", "The administration may freeze or delete accounts that violate these terms.")
-                   ])
-        ]
+    private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
+
+    private var fullContent: LegalContent { store.content }
+    private var content: LegalContent {
+        guard let only, let doc = fullContent.sections.first(where: { $0.key == only }) else { return fullContent }
+        return LegalContent(title: doc.title, subtitle: fullContent.title, updated: fullContent.updated, sections: [doc])
+    }
+    private var current: LegalContent.Section? {
+        content.sections.first { $0.key == tab } ?? content.sections.first
     }
 
     var body: some View {
         DSComposer(
-            title: t("الخصوصية والشروط", "Privacy & Terms"),
-            subtitle: t("كيف نحمي بياناتك", "How we protect your data"),
+            title: content.title,
+            subtitle: content.subtitle,
             icon: "lock.shield.fill",
-            tint: DS.Color.composerProject,
-            actionTitle: "",
-            showsAction: false,
-            cancelTitle: t("إغلاق", "Close"),
-            canSubmit: false,
-            onSubmit: {},
-            onCancel: { dismiss() }
+            tint: DS.Color.actionNavy,
+            actionTitle: acceptance == nil ? t("فهمت", "Got it") : t("أوافق", "I Agree"),
+            actionIcon: "checkmark",
+            showsAction: true,
+            cancelTitle: acceptance == nil ? t("إغلاق", "Close") : t("تسجيل الخروج", "Sign Out"),
+            canSubmit: true,
+            isBusy: acceptance?.isAccepting ?? false,
+            onSubmit: { if let acceptance { acceptance.onAccept() } else { dismiss() } },
+            onCancel: { if let acceptance { acceptance.onSignOut() } else { dismiss() } }
         ) {
-            Text(t(
-                "نلتزم بحماية خصوصيتك وبياناتك. فيما يلي سياسة الخصوصية وشروط الاستخدام.",
-                "We are committed to protecting your privacy and data. Below are our Privacy Policy and Terms of Use."
-            ))
-            .dsFont(.callout)
-            .foregroundColor(DS.Color.textSecondary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .dsStaggerIn(0)
+            if let acceptance {
+                Text(t("للمتابعة، يُرجى الموافقة على سياسة الخصوصية وقواعد الاستخدام. ولا نتسامح مع المحتوى المسيء أو المستخدمين المسيئين.",
+                       "To continue, please agree to the privacy policy and rules of use. We have no tolerance for objectionable content or abusive users."))
+                    .dsFont(.body)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+                if let error = acceptance.errorMessage {
+                    DSNoteCard(error, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                }
+                Label(showsFullText ? t("إخفاء النص", "Hide the text") : t("اقرأ النص كاملاً", "Read the full text"),
+                      systemImage: showsFullText ? "chevron.up" : "chevron.down")
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.info)
+                    .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(DS.Anim.snappy) { showsFullText.toggle() } }
+                    .accessibilityAddTraits(.isButton)
+            }
+            if acceptance == nil || showsFullText {
+            if content.sections.count > 1 {
+                DSSegmentedSwitch(options: content.sections.map {
+                    DSSegmentOption(id: $0.key, title: $0.title,
+                                    icon: $0.key == "terms" ? "doc.text.fill" : "hand.raised.fill")
+                }, selection: $tab.animation(DS.Anim.snappy), size: .regular)
+            }
 
-            ForEach(Array(policies.enumerated()), id: \.element.id) { index, policy in
-                DSComposerSection(title: policy.title, icon: policy.icon, tint: policy.color, index: index + 1) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                        ForEach(policy.points, id: \.self) { point in
-                            HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                                Circle()
-                                    .fill(policy.color.dsChrome(in: section).dsReadableGlyph)
-                                    .frame(width: DS.Spacing.xsm, height: DS.Spacing.xsm)
-                                    .padding(.top, DS.Spacing.xsm)
-                                Text(point)
-                                    .dsFieldFont(.callout)
-                                    .foregroundColor(DS.Color.fieldValue)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                            }
+            // كل النقاط صفوف خفيفة في بطاقة واحدة بخط رفيع بينها (طلب المالك «تخفيف زحمة» — كانت بطاقة لكل نقطة)
+            if let current {
+                VStack(spacing: 0) {
+                    ForEach(Array(current.items.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 {
+                            Divider().padding(.leading, DS.Icon.row + DS.Spacing.md)
                         }
+                        itemRow(item)
+                            .dsStaggerIn(index)
                     }
                 }
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.xs)
+                .dsCard()
+                .id(current.key)   // تبويب جديد ← دخول صفوفه من جديد
             }
 
-            // النص الكامل على الموقع الرسمي (Guideline 5.1.1)
-            DSComposerSection(title: t("على موقع العائلة", "On our website"), icon: "globe",
-                              tint: DS.Color.info, index: policies.count + 1) {
-                VStack(spacing: DS.Spacing.sm) {
-                    SafetyLinkRow(icon: "hand.raised.fill", tint: DS.Color.accent,
-                                  title: t("سياسة الخصوصية", "Privacy Policy"),
-                                  subtitle: "\(FamilyLinks.websiteDisplay)/privacy",
-                                  external: true) {
-                        openURL(FamilyLinks.privacyPolicy)
-                    }
-                    SafetyLinkRow(icon: "doc.text.fill", tint: DS.Color.neonPurple,
-                                  title: t("شروط الاستخدام", "Terms of Use"),
-                                  subtitle: "\(FamilyLinks.websiteDisplay)/terms",
-                                  external: true) {
-                        openURL(FamilyLinks.termsOfUse)
-                    }
+            VStack(spacing: DS.Spacing.xs) {
+                if !content.updated.isEmpty {
+                    Text(t("آخر تحديث: ", "Last updated: ") + content.updated)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
                 }
+                Button {
+                    openURL(current?.key == "terms" ? FamilyLinks.termsOfUse : FamilyLinks.privacyPolicy)
+                } label: {
+                    Text(t("النسخة الكاملة على الموقع", "Full version on the website"))
+                        .dsFont(.footnote)
+                        .underline()
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(minHeight: DS.Icon.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-
-            // تواصل معنا (Guideline 1.5)
-            DSComposerSection(title: t("تواصل معنا", "Contact Us"), icon: "envelope.fill",
-                              tint: DS.Color.primary, index: policies.count + 2) {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text(t("لأي استفسار أو بلاغ، استخدم «التواصل» في الصفحة الرئيسية داخل التطبيق، أو راسلنا على البريد الرسمي.",
-                           "For any question or report, use “Contact” on the Home screen inside the app, or email us."))
-                        .dsFieldFont(.callout)
-                        .foregroundColor(DS.Color.fieldValue)
-                        .fixedSize(horizontal: false, vertical: true)
-                    SafetyLinkRow(icon: "envelope.fill", tint: DS.Color.info,
-                                  title: t("البريد الإلكتروني", "Email"),
-                                  subtitle: FamilyLinks.supportEmail,
-                                  external: true) {
-                        openURL(FamilyLinks.supportEmailURL)
-                    }
-                }
+            .frame(maxWidth: .infinity)
             }
         }
+        .onAppear { tab = only ?? (startsWithTerms ? "terms" : "privacy") }
+        .task { await store.refresh() }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// مادة واحدة: رمز بلون القسم + العنوان + ملخّصها في سطر، والضغط يفتح المادة كاملة (طلب المالك ٢٠٢٦-١٠-٢٨
+    /// «نختصر النص بالتطبيق… مرتب مع السيرفر»: الملخّص `summary` والنص `lines` كلاهما من السيرفر)
+    private func itemRow(_ item: LegalContent.Item) -> some View {
+        let open = item.summary == nil || openItems.contains(item.id)
+        return HStack(alignment: .top, spacing: DS.Spacing.md) {
+            Image(systemName: LegalContent.icon(for: item.id))
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
+                .foregroundColor(DS.Color.primary.dsChrome(in: section))
+                .frame(width: DS.Icon.row, height: DS.Icon.row)
+                .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(DS.Opacity.tintFill)))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                // مقاس نص التطبيق نفسه (طلب المالك ٢٠٢٦-١٠-٢٨ — كان أصغر من بقية التطبيق)
+                Text(item.title)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                if let summary = item.summary, !open {
+                    Text(summary)
+                        .dsFont(.body)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    ForEach(item.lines, id: \.self) { line in
+                        Text(line)
+                            .dsFont(.body)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            if item.summary != nil {
+                Image(systemName: open ? "chevron.up" : "chevron.down")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .padding(.top, DS.Spacing.xxs)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard item.summary != nil else { return }
+            withAnimation(DS.Anim.snappy) {
+                if openItems.contains(item.id) { openItems.remove(item.id) } else { openItems.insert(item.id) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(item.summary != nil ? .isButton : [])
+        .accessibilityHint(item.summary == nil ? "" : (open ? t("يطوي المادة", "Collapses the article") : t("يفتح المادة كاملة", "Opens the full article")))
     }
 }
 

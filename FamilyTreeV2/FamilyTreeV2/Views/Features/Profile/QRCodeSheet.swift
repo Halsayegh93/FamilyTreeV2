@@ -17,7 +17,8 @@ struct QRCodeSheet: View {
 
     private var lineage: String {
         let path = KinshipCalculator.ancestorPath(for: member, lookup: memberVM._memberById)
-        return path.prefix(8).map(\.firstName).joined(separator: " ")
+        // بالعائلة المختارة آخر السلسلة (ولقبها بين قوسين يُختصر بها) — طلب المالك ٢٠٢٦-١٠-٢٤
+        return FamilyNameCatalog.units(path.prefix(8).map(\.firstName), family: member.familyName).joined(separator: " ")
     }
 
     @Environment(\.verticalSizeClass) private var vSizeClass

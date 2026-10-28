@@ -185,7 +185,7 @@ struct OverLimitDevicesSheet: View {
             cancelTitle: t("إغلاق", "Close"),
             canSubmit: excessCount == 0,
             onSubmit: {
-                authVM.status = .fullyAuthenticated
+                authVM.releaseDeviceGate()
                 dismiss()
             },
             onCancel: { dismiss() }
@@ -224,7 +224,7 @@ struct OverLimitDevicesSheet: View {
                     await notificationVM.removeDevice(device)
                     // إذا وصلنا للحد → أدخل التطبيق مباشرة
                     if notificationVM.linkedDevices.count <= maxDevices {
-                        authVM.status = .fullyAuthenticated
+                        authVM.releaseDeviceGate()
                         dismiss()
                     }
                     isRemoving = false
@@ -383,7 +383,7 @@ struct LinkedDevicesSheet: View {
                         // بعد الحذف: سجّل الجهاز الحالي وانتقل للتطبيق
                         if notificationVM.linkedDevices.count < maxDevices {
                             await notificationVM.registerDevice()
-                            authVM.status = .fullyAuthenticated
+                            authVM.releaseDeviceGate()
                             dismiss()
                         }
                         isRemoving = false

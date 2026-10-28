@@ -126,6 +126,8 @@ class AuthViewModel: ObservableObject {
     @Published var newsApprovalFeatureAvailable: Bool = true
     @Published var contactMessageError: String?
     @Published var otpErrorMessage: String?
+    /// ثوانٍ قبل السماح بطلب رمز جديد كما ذكرها خطأ الحجب (٢٠٢٦-١٠-٢٠، الانتظار يضبطه المالك) — nil = لم يُذكر
+    @Published var otpRetryAfter: Int?
     @Published var otpStatusMessage: String = ""
     @Published var deleteAccountError: String?
     /// خطأ تسجيل يُعرض للمستخدم في شاشة التسجيل — يُمسح في بداية كل محاولة تسجيل.
@@ -208,8 +210,12 @@ class AuthViewModel: ObservableObject {
     /// إعدادات التطبيق — المالك فقط
     var canManageSettings: Bool { isOwner }
 
-    /// رؤية شاشة "إعدادات النظام" (قراءة فقط للمدير، تعديل للمالك)
-    var canViewSystemSettings: Bool { isAdmin }
+    /// قسما «التطبيق» و«الفريق والأمان» وكل مداخلهما (الإعدادات، رسائل الدخول ومحاولاته، الأجهزة، فريق الإدارة
+    /// والأدوار، التسجيل والمنع) — المالك فقط (طلب المالك ٢٠٢٦-١٠-٢٤؛ كان المدير يتصفّحها للقراءة)
+    var canViewSystemSettings: Bool { isOwner }
+
+    /// «المؤشرات» (الأعداد، الاستخدام، تقرير الموافقات) — المالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
+    var canViewInsights: Bool { isAdmin }
 
     /// أرقام محظورة — المالك فقط
     var canManageBannedPhones: Bool { isOwner }
@@ -328,10 +334,16 @@ class AuthViewModel: ObservableObject {
     }
 
     /// «إعادة المحاولة» من شاشة البداية العالقة
+    /// يلغي الفحص الجاري (قد يكون عالقاً على طلب بلا رد) ويبدأ واحداً جديداً — كانت الضغطة تضيف فحصاً
+    /// موازياً فوق العالق بدل أن تحلّ محلّه
     func retryLaunchCheck() async {
         launchCheckStalled = false
         armLaunchWatchdog()
-        await checkUserProfile()
+        profileRecheckTask?.cancel()
+        activeProfileCheckTask?.cancel()
+        let task = Task<Void, Never> { [weak self] in await self?.checkUserProfile() }
+        activeProfileCheckTask = task
+        await task.value
     }
 
     /// بلا اتصال ولا نسخة محفوظة للعضو: «تعذّر الاتصال» على شاشة البداية ومحاولة تلقائية كل
@@ -390,6 +402,7 @@ class AuthViewModel: ObservableObject {
     private func userFacingOTPError(_ error: Error) -> String {
         let text = "\(error) \(error.localizedDescription)".lowercased()
         
+        if let wait = OTPWaitText.message(from: text, arabic: L10n.isArabic) { return wait }
         if text.contains("429") || text.contains("rate") {
             return L10n.t("تم تجاوز عدد المحاولات. انتظر دقيقة ثم أعد المحاولة.", "Too many attempts. Please wait a minute and try again.")
         }
@@ -501,6 +514,16 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    /// رقم ملف العضو نفسه من السيرفر (`get_member_phone`: يرجع رقمك ولو مخفياً، بهوية `current_profile_id()`)
+    private func ownPhoneFromServer(_ id: UUID) async -> String? {
+        let phone: String? = try? await supabase
+            .rpc("get_member_phone", params: ["p_id": id.uuidString])
+            .execute()
+            .value
+        let trimmed = phone?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     /// معرّف ملف هذا الحساب كما يراه السيرفر: `current_profile_id()` = app_metadata.profile_id
     /// وإلا auth.uid() — مصدر الهوية الوحيد بعد إزالة الربط القديم على الجهاز (فحص الثغرات ب-٦).
     private func serverProfileId() async -> UUID? {
@@ -607,6 +630,15 @@ class AuthViewModel: ObservableObject {
     private func applyAuthenticatedProfile(_ profile: FamilyMember, normalizedPhone: String?) async {
         guard !isEndingSession, !Task.isCancelled, let authUser = supabase.auth.currentUser else { return }
         let generation = sessionGeneration
+        var profile = profile
+        // حساب مربوط بملف شجرة بمعرّف آخر (app_metadata.profile_id) ورقمه مخفي: `members_masked` يقارن بـ auth.uid
+        // فيصل رقمه فارغاً، فكان يُرسَل لشاشة التسجيل كأن الإدارة حذفت رقمه. الرقم من السيرفر بهويته الصحيحة.
+        if profile.id != authUser.id, profile.role != .owner,
+           (profile.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let phone = await ownPhoneFromServer(profile.id) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
+            profile.phoneNumber = phone
+        }
         CacheManager.shared.beginAccount(authUser.id)
         var access = self.resolveAuthAccess(for: profile)
 
@@ -624,6 +656,12 @@ class AuthViewModel: ObservableObject {
             access = .pendingApproval
         }
 
+        // شاشة حد الأجهزة/الجهاز المُزال للعضو نفسه تبقى حتى يزيل جهازاً — إعادة الفحص (الرجوع للتطبيق،
+        // عودة الاتصال) كانت تكتب فوقها «مفعّل» فيفتح التطبيق على الجهاز الزائد
+        let deviceGates: [AuthStatus] = [.deviceLimitExceeded, .deviceRevoked, .deviceOverLimit]
+        if access == .fullyAuthenticated, deviceGates.contains(self.status), self.currentUser?.id == profile.id {
+            access = self.status
+        }
         self.currentUser = profile
         self.status = access
 
@@ -682,6 +720,34 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    /// اختيار الأب في تسجيل الأنثى — بحث السيرفر بالاسم (`search_members_by_name`، كلمتان على الأقل).
+    /// المسجّل الجديد لا يقرأ الشجرة كاملة، فالنتائج من السيرفر فقط
+    func searchFatherCandidates(_ query: String) async -> [FamilyMember] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.split(whereSeparator: \.isWhitespace).count >= 2 else { return [] }
+        nonisolated struct Row: Decodable {
+            let memberId: UUID
+            let fullName: String
+            enum CodingKeys: String, CodingKey {
+                case memberId = "member_id"
+                case fullName = "full_name"
+            }
+        }
+        do {
+            let rows: [Row] = try await supabase
+                .rpc("search_members_by_name", params: ["p_query": AnyEncodable(trimmed)])
+                .execute()
+                .value
+            return rows.map { row in
+                let first = row.fullName.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
+                return FamilyMember(id: row.memberId, firstName: first, fullName: row.fullName)
+            }
+        } catch {
+            Log.warning("[REGISTER] فشل البحث عن الأب: \(error.localizedDescription)")
+            return []
+        }
+    }
+
     // MARK: - OTP Send / Verify
 
     /// Feature flag — اقلب لـ true بعد إعداد WhatsApp Business Account في Twilio Verify.
@@ -715,7 +781,54 @@ class AuthViewModel: ObservableObject {
         }
     }
 
+    /// طلب رمز جارٍ — ضغطتان سريعتان على «متابعة» أو «إعادة» ترسلان طلباً واحداً (طلب المالك ٢٠٢٦-١٠-٢٣)؛
+    /// السيرفر يحمي أيضاً: رمز واحد لكل دقيقتين (`sms_one_code_seconds`)
+    private var otpRequestInFlight = false
+
+    // MARK: - رمز بانتظار الكتابة (المالك ٢٠٢٦-١٠-٢٤: «يذهب الى المسجات و يرجع الى التطبيق يعيد التطبيق من البداية»)
+    // آخر رمز أُرسل يُحفظ على الجهاز ٥ دقائق (صلاحية الرمز)، فلو أغلق النظام التطبيق وهو في «الرسائل» يرجع لخانة الرمز.
+
+    static let pendingOTPKey = "pendingOTP.v1"
+    static let pendingOTPLifetime: TimeInterval = 300
+
+    /// تعديل الرقم، الدخول، الخروج — لا رجوع لخانة الرمز بعدها. (`clearLocalSession` لا يلغيه: فحص الجلسة عند
+    /// الإقلاع بلا حساب يمرّ به، وكان يمسح الرمز المحفوظ قبل ما تظهر شاشة الدخول)
+    func cancelPendingOTP() {
+        UserDefaults.standard.removeObject(forKey: Self.pendingOTPKey)
+    }
+
+    private func savePendingOTP() {
+        UserDefaults.standard.set(["phone": phoneNumber, "dial": dialingCode, "at": Date().timeIntervalSince1970],
+                                  forKey: Self.pendingOTPKey)
+    }
+
+    /// يرجع لخانة الرمز إن أُرسل رمز خلال آخر ٥ دقائق — الثواني المنقضية منذ الإرسال، أو nil
+    @discardableResult
+    func restorePendingOTPIfAny() -> TimeInterval? {
+        guard status == .unauthenticated,
+              let saved = UserDefaults.standard.dictionary(forKey: Self.pendingOTPKey),
+              let phone = saved["phone"] as? String, let dial = saved["dial"] as? String,
+              let at = saved["at"] as? TimeInterval else { return nil }
+        let elapsed = Date().timeIntervalSince1970 - at
+        guard elapsed >= 0, elapsed < Self.pendingOTPLifetime, !phone.isEmpty else {
+            UserDefaults.standard.removeObject(forKey: Self.pendingOTPKey)
+            return nil
+        }
+        // الشاشة قد تُبنى من جديد والرمز ما زال ظاهراً — نرجع الوقت المنقضي فقط حتى تكمل العدّادات
+        if !isOtpSent {
+            phoneNumber = phone
+            dialingCode = dial
+            isOtpSent = true
+        }
+        Log.info("[OTP] رجوع لخانة الرمز بعد \(Int(elapsed)) ث")
+        return elapsed
+    }
+
     func sendOTP(channel: OTPChannel = .sms) async {
+        guard !otpRequestInFlight else { return }
+        otpRequestInFlight = true
+        defer { otpRequestInFlight = false }
+        otpRetryAfter = nil
         let cleanPhone = normalizePhoneDigits(phoneNumber)
         let cleanDialingCode = normalizeDialingCode(dialingCode)
         guard cleanPhone.count >= 6 else {
@@ -765,6 +878,7 @@ class AuthViewModel: ObservableObject {
             withAnimation(.spring()) {
                 self.isOtpSent = true
             }
+            savePendingOTP()
             self.otpErrorMessage = nil
             self.otpStatusMessage = L10n.t(
                 "تم إرسال الرمز عبر \(channelAr)",
@@ -775,6 +889,7 @@ class AuthViewModel: ObservableObject {
         } catch {
             Log.error("[OTP] ❌ فشل: \(error)")
             self.otpStatusMessage = ""
+            self.otpRetryAfter = OTPWaitText.seconds(in: "\(error) \(error.localizedDescription)")
             self.otpErrorMessage = friendlyOTPErrorMessage(error: error, channel: channel)
             self.isLoading = false
         }
@@ -811,6 +926,11 @@ class AuthViewModel: ObservableObject {
                 "تجاوزت عدد المحاولات. انتظر 10 دقائق ثم حاول.",
                 "Attempts exceeded. Wait 10 minutes and try again."
             )
+        }
+
+        // «انتظر N ثانية» — الحجب يذكر الثواني (دالة KWT SMS أو Supabase نفسه)، قبل الفرع العام (٢٠٢٦-١٠-٢٠)
+        if let wait = OTPWaitText.message(from: raw, arabic: L10n.isArabic) {
+            return wait
         }
 
         // Rate limited (Supabase or Twilio)
@@ -953,10 +1073,18 @@ class AuthViewModel: ObservableObject {
             return
         }
 
+        // فتح التطبيق: العضو المفعّل محفوظ على الجهاز → يدخل فوراً والتحقق يكمل بالخلفية — لا انتظار على شاشة
+        // البداية لتجديد الجلسة وثلاثة طلبات للخادم (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). إن تغيّر شيء
+        // (جُمّد، حُذف رقمه، انتهت الجلسة) ينقله التحقق للشاشة الصحيحة، والسيرفر يحمي البيانات بنفسه.
+        if status == .checking, currentUser == nil {
+            restoreActiveMemberFromCache()
+        }
+
         let user: Supabase.User
         do {
             user = try await supabase.auth.session.user
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
+            cancelPendingOTP()
             CacheManager.shared.beginAccount(user.id)
         } catch {
             guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
@@ -973,6 +1101,9 @@ class AuthViewModel: ObservableObject {
                 || authCode == ErrorCode.refreshTokenNotFound || authCode == ErrorCode.refreshTokenAlreadyUsed
 
             if isReallyNoSession {
+                // ما زال على شاشة الدخول (مثلاً رجع من «الرسائل» ليكتب الرمز): لا شيء يُمسح — المسح كان يرجّعه
+                // لخانة الرقم ويفرّغها (المالك ٢٠٢٦-١٠-٢٤)
+                if status == .unauthenticated && currentUser == nil { return }
                 Log.info("[AUTH] No session found → unauthenticated: \(error.localizedDescription)")
                 clearLocalSession()
             } else if currentUser == nil {
@@ -998,8 +1129,10 @@ class AuthViewModel: ObservableObject {
             return
         }
 
-        // بدون نت بعد قراءة الجلسة — نستعيد من الكاش بدل جلب من السيرفر
-        if !NetworkMonitor.shared.isConnected {
+        // بدون نت بعد قراءة الجلسة — نستعيد من الكاش بدل جلب من السيرفر (بعد التأكد أن الخادم لا يرد فعلاً:
+        // مراقب الشبكة قد يخطئ فيبقى الفحص متوقفاً والإنترنت شغّال)
+        if !NetworkMonitor.shared.isConnected, !(await NetworkMonitor.shared.confirmReachable()) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             if let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
                let profile = cached.first(where: { $0.id == user.id }) {
                 Log.info("[AUTH] استعادة المستخدم من الكاش (cold start بدون نت): \(profile.fullName)")
@@ -1046,7 +1179,8 @@ class AuthViewModel: ObservableObject {
         }
 
         // بدون نت — لا نحاول جلب البروفايل من السيرفر
-        if !NetworkMonitor.shared.isConnected {
+        if !NetworkMonitor.shared.isConnected, !(await NetworkMonitor.shared.confirmReachable()) {
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
             Log.info("[AUTH] بدون اتصال — تخطي جلب البروفايل من السيرفر")
             showLaunchConnectionProblem(generation: generation)   // لا دوران بلا نهاية (ج-٦)
             return
@@ -1158,6 +1292,28 @@ class AuthViewModel: ObservableObject {
 
         Log.warning("[AUTH] ⚠️ لم يتم العثور على بروفايل بعد 4 محاولات. Phone: \(Log.masked(normalizedSessionPhone)), UUID: \(userIdString)")
         self.status = .authenticatedNoProfile
+    }
+
+    /// بعد إزالة جهاز من شاشة حد الأجهزة: الشاشة الصحيحة لحالة الحساب — كانت تفتح التطبيق كاملاً لكل من
+    /// يزيل جهازاً ولو كان تسجيله معلّقاً
+    func releaseDeviceGate() {
+        guard let profile = currentUser else { status = .fullyAuthenticated; return }
+        let access = resolveAuthAccess(for: profile)
+        status = access == .unauthenticated ? .fullyAuthenticated : access
+    }
+
+    /// العضو المفعّل من كاش حسابه (جلسة محفوظة على الجهاز، بلا شبكة) — للدخول الفوري عند فتح التطبيق.
+    /// غير المفعّل (معلّق، مجمّد، بلا رقم…) ينتظر التحقق من الخادم كما كان.
+    private func restoreActiveMemberFromCache() {
+        guard let storedUser = supabase.auth.currentUser else { return }
+        CacheManager.shared.beginAccount(storedUser.id)
+        guard let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+              let profile = cached.first(where: { $0.id == storedUser.id }),
+              resolveAuthAccess(for: profile) == .fullyAuthenticated else { return }
+        Log.info("[AUTH] دخول فوري من الكاش — التحقق يكمل بالخلفية")
+        currentUser = profile
+        isAuthenticated = true
+        status = .fullyAuthenticated
     }
 
     /// إعادة فحص البروفايل بعد خطأ مؤقت (بلا كاش) — ما دامت الجلسة نفسها على شاشة البداية
@@ -1274,6 +1430,7 @@ class AuthViewModel: ObservableObject {
     
     private func clearLocalSession() {
         sessionGeneration = UUID()
+        MemberActivityTracker.stop()
         activeProfileCheckTask?.cancel()
         CacheManager.shared.clearAll()
         SharedSessionStore.clear()
@@ -1296,6 +1453,7 @@ class AuthViewModel: ObservableObject {
         isEndingSession = true
         defer { isEndingSession = false }
         await notificationVM?.unregisterPushToken()
+        cancelPendingOTP()
         clearLocalSession()
         // هذا الجهاز فقط — الافتراضي .global كان يُخرج العضو من كل أجهزته
         // (الأندرويد والآيباد…) عند خروج واحد أو إزالة جهاز واحد من الإدارة.
@@ -1334,7 +1492,8 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Registration
     
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, avatarImage: UIImage? = nil) async {
+    /// - fatherId/fatherName: للأنثى (دخول النساء ٢٠٢٦-١٠-٢٤) الأب الذي اختارته — يُحمل في طلب الانضمام لا في ملفها
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, fatherName: String? = nil, avatarImage: UIImage? = nil) async {
         self.isLoading = true
         self.registrationError = nil
         guard let user = try? await supabase.auth.session.user else {
@@ -1413,8 +1572,10 @@ class AuthViewModel: ObservableObject {
             "sort_order": AnyEncodable(0),
             "created_at": AnyEncodable(DateHelper.now)
         ]
-        // الأب يُكتب فقط إن اختير — لا تفريغ لأب موجود
-        if let fatherId { profileData["father_id"] = AnyEncodable(fatherId.uuidString) }
+        // الأب يُكتب فقط إن اختير — لا تفريغ لأب موجود. الأنثى مكانها شجرة النساء: أبوها لا يُكتب في ملفها
+        // (`link_woman_account` يرفض حساباً له أب — has_father) بل يُحمل في طلب الانضمام لتربطها الإدارة تحت أبيها
+        let isFemale = gender.lowercased() == "female"
+        if let fatherId, !isFemale { profileData["father_id"] = AnyEncodable(fatherId.uuidString) }
         // تاريخ الميلاد فقط إن اختاره فعلاً — لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي (٢٠٢٦-١٠-٠٥)
         if let birthDate { profileData["birth_date"] = AnyEncodable(DateHelper.format(birthDate)) }
         
@@ -1476,11 +1637,21 @@ class AuthViewModel: ObservableObject {
             }
             
             // بناء تفاصيل الطلب مع المطابقات المحتملة
+            // الأب المختار (الأنثى) قبل matched_ids — قارئها يأخذ كل ما بعدها (`fetchMatchedMemberIds`)
+            var fatherInfo = ""
+            if isFemale, let fatherId {
+                let cleanFather = (fatherName ?? "")
+                    .replacingOccurrences(of: "|", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                fatherInfo = "|father_id:\(fatherId.uuidString.lowercased())"
+                if !cleanFather.isEmpty { fatherInfo += "|father_name:\(cleanFather)" }
+            }
             let matchInfo: String
             if matchedMemberIds.isEmpty {
-                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة"
+                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة" + fatherInfo
             } else {
-                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة|matched_ids:\(matchedMemberIds.joined(separator: ","))"
+                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة" + fatherInfo
+                    + "|matched_ids:\(matchedMemberIds.joined(separator: ","))"
             }
             
             // طلب ربط واحد فقط — «تعديل البيانات» لا يكرّره
@@ -1530,11 +1701,17 @@ class AuthViewModel: ObservableObject {
             // فشل التسجيل (شبكة/خادم) → أظهر خطأً للمستخدم بدل الطرد الصامت،
             // ثم أعد فحص البروفايل (يُبقيه في شاشة التسجيل إن لم يُنشأ السجل).
             let raw = "\(error) \(error.localizedDescription)".lowercased()
-            self.registrationError = raw.contains("phone_in_use")
-                ? L10n.t("هذا الرقم مسجّل لعضو آخر. تواصل مع إدارة العائلة.",
-                         "This number is registered to another member. Please contact the family administration.")
-                : L10n.t("تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
-                         "Registration couldn't be completed. Check your internet connection and try again.")
+            if raw.contains("phone_banned") {
+                // حارس السيرفر يرفض الرقم المحظور — كانت الرسالة «تأكد من اتصالك» فيعيد المحاولة بلا فائدة
+                self.registrationError = L10n.t("هذا الرقم محظور من استخدام التطبيق.",
+                                                "This phone number is banned from using the app.")
+            } else {
+                self.registrationError = raw.contains("phone_in_use")
+                    ? L10n.t("هذا الرقم مسجّل لعضو آخر. تواصل مع إدارة العائلة.",
+                             "This number is registered to another member. Please contact the family administration.")
+                    : L10n.t("تعذّر إكمال التسجيل. تأكد من اتصالك بالإنترنت وحاول مرة أخرى.",
+                             "Registration couldn't be completed. Check your internet connection and try again.")
+            }
             await checkUserProfile()
         }
         self.isLoading = false
@@ -1640,7 +1817,7 @@ class AuthViewModel: ObservableObject {
             let emailPayload: [String: AnyEncodable] = [
                 "category": AnyEncodable(category),
                 "message": AnyEncodable(cleanMessage),
-                "sender_name": AnyEncodable(user.fullName),
+                "sender_name": AnyEncodable(user.displayFullName),
                 "sender_phone": AnyEncodable(user.phoneNumber)
             ]
 

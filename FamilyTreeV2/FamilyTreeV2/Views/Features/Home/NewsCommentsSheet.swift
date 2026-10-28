@@ -7,6 +7,7 @@ struct NewsCommentsSheet: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
+    @EnvironmentObject var memberVM: MemberViewModel
     let news: NewsPost
     @State private var commentInput = ""
     @State private var isLoadingComments = false
@@ -194,7 +195,7 @@ struct NewsCommentsSheet: View {
                 // قرص «مجسّمات» الموحّد
                 DSStateIcon("person.fill", tint: AppSection.news.ink, size: DS.Icon.section)
                     .accessibilityHidden(true)
-                Text(comment.author_name)
+                Text(memberVM.displayName(id: comment.author_id, stored: comment.author_name, .four))
                     .dsFieldFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
@@ -243,7 +244,7 @@ struct NewsCommentsSheet: View {
             }
 
             Text(comment.content)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.fieldValue)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -269,7 +270,7 @@ struct NewsCommentsSheet: View {
         HStack(alignment: .bottom, spacing: DS.Spacing.sm) {
             TextField(L10n.t("اكتب تعليقك...", "Write a comment..."), text: $commentInput, axis: .vertical)
                 .lineLimit(1...3)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textPrimary)
                 .focused($inputFocused)
                 .padding(.horizontal, DS.Spacing.md)
@@ -296,6 +297,10 @@ struct NewsCommentsSheet: View {
                     isSendingComment = false
                     if success {
                         await MainActor.run { commentInput = "" }
+                    } else if newsVM.lastCommentRejectedAsObjectionable {
+                        // فلتر السيرفر (قائمته في app_config) — نفس تنبيه فلتر الجهاز
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                        showObjectionableAlert = true
                     }
                 }
             }) {

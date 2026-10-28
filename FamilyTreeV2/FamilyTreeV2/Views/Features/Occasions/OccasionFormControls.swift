@@ -99,14 +99,14 @@ struct OccasionOptionTile: View {
                 .frame(width: 36, height: 36)
                 .accessibilityHidden(true)
                 Text(title)
-                    .font(DS.Font.plex(13, weight: .semibold))
+                    .dsFont(.chip)
                     .foregroundColor(DS.Color.textPrimary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
                 if let subtitle {
                     Text(subtitle)
-                        .font(DS.Font.plex(11))
+                        .font(DS.Font.caption2)
                         .foregroundColor(DS.Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineLimit(1)
@@ -143,7 +143,7 @@ struct OccasionChip: View {
                 }
                 Text(title)
             }
-                .font(DS.Font.plex(14, weight: .semibold))
+                .dsFont(.rowTitle)
                 .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -243,7 +243,7 @@ struct OccasionMenuField: View {
                             .accessibilityHidden(true)
                     }
                     Text(currentTitle)
-                        .font(DS.Font.plex(14, weight: .semibold))
+                        .dsFont(.rowTitle)
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                     Spacer(minLength: 0)
@@ -299,7 +299,7 @@ struct OccasionTextCards: View {
                 let isOn = selected == i
                 Button { onSelect(i) } label: {
                     Text(option)
-                        .font(DS.Font.plex(15))
+                        .dsFont(.fieldValue)
                         .foregroundColor(DS.Color.textPrimary)
                         .multilineTextAlignment(.leading)
                         .lineSpacing(3)
@@ -445,7 +445,7 @@ struct OccasionHusseiniyaMenu: View {
                     .font(DS.Font.icon(15, weight: .semibold))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(picked?.name ?? L10n.t("اختر حسينية من القائمة", "Choose a husseiniya from the list"))
-                        .font(DS.Font.plex(14, weight: .semibold))
+                        .dsFont(.rowTitle)
                         .lineLimit(1)
                     if let picked {
                         Text(picked.area)
@@ -485,7 +485,7 @@ struct OccasionRequiredHint: View {
         } icon: {
             Image(systemName: "exclamationmark.circle.fill")
         }
-        .font(DS.Font.caption1.weight(.semibold))
+        .dsFont(.caption)
         .foregroundColor(DS.Color.error)
         .accessibilityAddTraits(.isStaticText)
     }
@@ -509,7 +509,7 @@ struct OccasionNameFormatPicker: View {
         let r = resolution
         let shortest = r.options.last?.count
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            (Text("\(r.element.title): \(r.option.label)").fontWeight(.semibold).foregroundColor(DS.Color.textSecondary)
+            (Text("\(r.element.title): \(r.option.label)").fontWeight(.medium).foregroundColor(DS.Color.textSecondary)
                 + Text(note.isEmpty ? "" : "  · " + note).foregroundColor(DS.Color.textTertiary))
                 .font(DS.Font.caption1)
             if r.options.count > 1 {
@@ -545,12 +545,12 @@ struct OccasionFormatChip: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.Font.plex(14, weight: .semibold))
+                    .dsFont(.rowTitle)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 if !warning.isEmpty {
                     Text(warning)
-                        .font(DS.Font.plex(11, weight: .semibold))
+                        .dsFont(.micro)
                         .foregroundColor(isOn ? DS.Color.textOnPrimary.opacity(0.85) : DS.Color.warning)
                 }
             }
@@ -618,8 +618,7 @@ struct OccasionFieldLabel: View {
 
     var body: some View {
         Text(text)
-            .font(DS.Font.caption1)
-            .fontWeight(.semibold)
+            .dsFont(.caption)
             .foregroundColor(DS.Color.textSecondary)
     }
 }

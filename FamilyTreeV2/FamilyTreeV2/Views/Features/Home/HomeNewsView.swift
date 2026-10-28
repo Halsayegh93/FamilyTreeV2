@@ -49,6 +49,8 @@ struct HomeNewsView: View {
     /// خبر ضُغط عليه في مربّع الرئيسية — تنزل إليه صفحة الأخبار وتبرزه لحظة (طلب المالك)
     @State private var focusNewsId: UUID?
     @State private var highlightedNewsId: UUID?
+    /// صور خبر مفتوحة بملء الشاشة (التكبير والتقليب) — نفس عارض المشاريع والمكتبة
+    @State private var mediaViewer: NewsMediaViewerItem?
 
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
@@ -215,6 +217,17 @@ struct HomeNewsView: View {
             case .news: newsFullPage.dsSectionPage(.news)   // بلون قسم الأخبار مثل إضافة/تعديل الخبر والتعليقات
             }
         }
+        // جلسات الاستخدام: الصفحة تُحسب باسمها ما دامت ظاهرة («التواصل» يُحسب للرئيسية)
+        .appUsageScreen(usageScreen(for: page))
+    }
+
+    private func usageScreen(for page: HomeSubPage) -> AppUsageScreen? {
+        switch page {
+        case .archive: return .library
+        case .projects: return .projects
+        case .news: return .news
+        case .contact: return nil
+        }
     }
 
     // صفحة الأخبار الكاملة (تظهر عند الضغط على مربع الأخبار)
@@ -325,6 +338,10 @@ struct HomeNewsView: View {
             // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
             if selectedMemberForDetails != nil { t.disablesAnimations = true }
         }
+        // صورة الخبر بملء الشاشة — تكبير بالقرصة والتقليب بين صور الخبر
+        .fullScreenCover(item: $mediaViewer) { item in
+            ProjectPhotoViewer(urls: item.urls, startIndex: item.start, section: .news)
+        }
     }
 
     // MARK: - Sub-page Header
@@ -380,22 +397,23 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
-                        primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
-                        quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
+                        AnyView(primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
+                        AnyView(quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
-                    newsBentoCard
+                    AnyView(newsBentoCard)
                         .frame(maxWidth: max(DS.Landscape.homeNewsMinWidth, UIScreen.main.bounds.width * DS.Landscape.homeNewsShare), alignment: .top)
                 }
             } else {
                 // فراغات أقل بين المربّعات (طلب المالك)
+                // حدود AnyView: تُبقي عمق مكدس الرئيسية تحت الحد (كان ٨٠١ ك.ب بعد دمج ٢٠٢٦-١٠-٢٥ — iOS 16 أحوج)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
-                    primaryTilesRow(tileHeight: layout.tileHeight + 12)
-                    quickAccessGrid(tileHeight: layout.tileHeight + 6)
-                    newsBentoCard
+                    AnyView(primaryTilesRow(tileHeight: layout.tileHeight + 12))
+                    AnyView(quickAccessGrid(tileHeight: layout.tileHeight + 6))
+                    AnyView(newsBentoCard)
                 }
             }
         }
@@ -425,7 +443,6 @@ struct HomeNewsView: View {
                 icon: "tree.fill",
                 color: DS.Color.tileTree,
                 deep: DS.Color.tileTreeDeep,
-                imageURL: nil,
                 count: nil,
                 height: tileHeight,
                 cascade: 1,
@@ -437,7 +454,6 @@ struct HomeNewsView: View {
                     icon: AppSection.diwaniyas.symbol,   // «مجلس» الموحّد
                     color: DS.Color.tileDiwaniya,
                     deep: DS.Color.tileDiwaniyaDeep,
-                    imageURL: nil,
                     count: nil,
                     height: tileHeight,
                     cascade: 2,
@@ -452,7 +468,6 @@ struct HomeNewsView: View {
     /// المكتبة / المشاريع / التواصل — المشاريع تختفي إن عُطّلت من الإعدادات.
     private func quickAccessGrid(tileHeight: CGFloat) -> some View {
         let projectsOn = appSettingsVM.settings.projectsEnabled ?? true
-        let projectImageURL: String? = projectsVM.projects.first?.logoUrl
 
         return LazyVGrid(
             columns: Array(
@@ -466,7 +481,6 @@ struct HomeNewsView: View {
                 icon: "books.vertical.fill",
                 color: AppSection.HomeTile.library.fill,
                 deep: AppSection.HomeTile.library.deep,
-                imageURL: nil,
                 count: nil,
                 height: tileHeight,
                 cascade: 3,
@@ -479,7 +493,6 @@ struct HomeNewsView: View {
                     icon: "storefront.fill",
                     color: AppSection.HomeTile.projects.fill,
                     deep: AppSection.HomeTile.projects.deep,
-                    imageURL: projectImageURL,
                     count: projectsVM.projects.count,
                     height: tileHeight,
                     cascade: 4,
@@ -492,7 +505,6 @@ struct HomeNewsView: View {
                 icon: "envelope.fill",
                 color: DS.Color.tileContact,
                 deep: DS.Color.tileContactDeep,
-                imageURL: nil,
                 count: nil,
                 height: tileHeight,
                 cascade: 5,
@@ -507,7 +519,6 @@ struct HomeNewsView: View {
         icon: String,
         color: Color,
         deep: Color,
-        imageURL: String?,
         count: Int?,
         height: CGFloat? = nil,
         /// ترتيب المربّع في دخول الرئيسية (بعد الترحيب ٠، وقبل الأخبار ٦)
@@ -521,8 +532,8 @@ struct HomeNewsView: View {
             action()
         }) {
             ZStack(alignment: .bottomLeading) {
-                tileBackground(color: color, deep: deep, imageURL: imageURL, icon: icon,
-                               badge: (count ?? 0) > 0)
+                // لون المربّع ومجسّمه دائماً — بلا صورة مشروع (طلب المالك ٢٠٢٦-١٠-٢٢)
+                gradientBackground(color: color, deep: deep, icon: icon, badge: (count ?? 0) > 0)
 
                 // تعتيم أسفل المربّع للاسم الأبيض — «الهادئ الفاتح» بلا تعتيم (الاسم داكن فوق اللون الخفيف)
                 if !DS.Theme.isCalm {
@@ -616,21 +627,6 @@ struct HomeNewsView: View {
         .accessibilityValue(isNew ? L10n.t("فيه جديد", "New") : "")
         // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
         .dsCardCascade(cascade, appeared: appeared)
-    }
-
-    /// خلفية المربّع — صورة من رابط أو gradient بلون الفئة مع زخارف.
-    @ViewBuilder
-    private func tileBackground(color: Color, deep: Color, imageURL: String?, icon: String,
-                                badge: Bool = false) -> some View {
-        if let urlStr = imageURL, let url = URL(string: urlStr) {
-            CachedAsyncImage(url: url) { img in
-                img.resizable().scaledToFill()
-            } placeholder: {
-                gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
-            }
-        } else {
-            gradientBackground(color: color, deep: deep, icon: icon, badge: badge)
-        }
     }
 
     private func gradientBackground(color: Color, deep: Color, icon: String, badge: Bool = false) -> some View {
@@ -873,7 +869,7 @@ struct HomeNewsView: View {
                     spacing: DS.Spacing.lg
                 ) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
-                        newsCard(for: news)
+                        newsCard(for: news, index: index)
                             .newsSwipeActions(
                                         id: news.id,
                                         canDelete: canDelete(news),
@@ -890,7 +886,7 @@ struct HomeNewsView: View {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
                 LazyVStack(spacing: DS.Spacing.md) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
-                        newsCard(for: news)
+                        newsCard(for: news, index: index)
                             .newsSwipeActions(
                                 id: news.id,
                                 canDelete: canDelete(news),
@@ -926,7 +922,7 @@ struct HomeNewsView: View {
         authVM.canDeleteNews || (news.ownerId != nil && authVM.currentUser?.id == news.ownerId)
     }
 
-    private func newsCard(for news: NewsPost) -> some View {
+    private func newsCard(for news: NewsPost, index: Int) -> some View {
         HomeNewsCardView(
             postId: news.id,
             authorName: news.author_name,
@@ -966,7 +962,13 @@ struct HomeNewsView: View {
                 if let authorId = news.author_id {
                     blockTarget = BlockTarget(id: authorId, name: news.author_name)
                 }
-            }
+            },
+            onMediaTap: { photo in
+                mediaViewer = NewsMediaViewerItem(urls: news.mediaURLs, start: photo)
+            },
+            // الختم يُطبع مع دخول البطاقات (نفس توقيت `dsCardCascade`)
+            appeared: newsAppeared,
+            cascadeIndex: index
         )
     }
 

@@ -295,8 +295,8 @@ struct AdminTreeEditRequestsView: View {
         let payload = request.treeEditPayload
         let action = payload?.resolvedAction ?? selectedAction
         let tint = color(for: action)
-        let requesterName = memberVM.member(byId: request.requesterId)?.fullName ?? L10n.t("غير معروف", "Unknown")
-        let targetName = payload?.targetMemberName ?? request.member?.displayFullName ?? "—"
+        let requesterName = memberVM.member(byId: request.requesterId)?.displayFullName ?? L10n.t("غير معروف", "Unknown")
+        let targetName = memberVM.treeEditTargetName(payload) ?? request.member?.displayFullName ?? "—"
         // «مسار الموافقات» شغّال: شارة المرحلة وزرّ المسار بدل «موافقة / رفض»
         let flow = adminRequestVM.approvalSnapshot(for: request)
         let showApprove = flow == nil && canApprove(action)
@@ -413,11 +413,15 @@ struct AdminTreeEditRequestsView: View {
                 memberVM: memberVM,
                 snapshot: flow,
                 title: L10n.t(action.arabicLabel, action.englishLabel),
-                subtitle: payload?.targetMemberName ?? request.member?.displayFullName ?? L10n.t("طلب الشجرة", "Tree request"),
+                subtitle: memberVM.treeEditTargetName(payload) ?? request.member?.displayFullName ?? L10n.t("طلب الشجرة", "Tree request"),
                 icon: action.iconName,
                 onExecute: {
                     approvalRequest = nil
-                    Task { await adminRequestVM.approveTreeEditRequest(request: request) }
+                    Task {
+                        await adminRequestVM.approveTreeEditRequest(request: request)
+                        // «لحظة نجاح» (الدفعة ١٠)
+                        AdminApprovalMoment.after(adminRequestVM, title: L10n.t("تم التنفيذ", "Carried out"))
+                    }
                 },
                 onReject: { reason in
                     approvalRequest = nil
@@ -519,10 +523,10 @@ struct AdminTreeEditRequestsView: View {
                 .frame(width: DS.Glyph.md)
                 .accessibilityHidden(true)
             Text(label)
-                .dsFieldFont(.footnote)
-                .foregroundColor(DS.Color.fieldValue)
+                .dsFieldFont(.label)
+                .foregroundColor(DS.Color.fieldLabel)
             Text(value)
-                .dsFont(.chip)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(valueColor)
                 .lineLimit(2)
             Spacer(minLength: 0)

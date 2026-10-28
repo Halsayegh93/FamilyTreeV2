@@ -868,7 +868,7 @@ private struct GuideDoneView: View {
                                             "Next: «\($0)» — or pick from «All chapters»") }
                      ?? L10n.t("صرت تعرف أساسيات التطبيق — استمتع به",
                                "You know the app basics now — enjoy it"))
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .multilineTextAlignment(.center)
             }

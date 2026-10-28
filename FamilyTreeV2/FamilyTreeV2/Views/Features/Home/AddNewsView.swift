@@ -347,6 +347,13 @@ struct AddNewsView: View {
             for image in selectedImages {
                 if let url = await newsVM.uploadNewsImage(image: image, for: authorId) { uploadedURLs.append(url) }
             }
+            // صورة لم تُرفع → لا ننشر بدونها بصمت؛ تبقى الصور في المربّع ليعيد المحاولة أو يلغي
+            if uploadedURLs.count < selectedImages.count {
+                newsVM.newsPostErrorMessage = L10n.t("تعذّر رفع بعض الصور. حاول مرة أخرى.",
+                                                     "Some photos couldn't be uploaded. Please try again.")
+                showPostErrorAlert = true
+                return
+            }
         }
 
         let isPosted = await newsVM.postNews(

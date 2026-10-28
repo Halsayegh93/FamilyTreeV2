@@ -18,7 +18,15 @@ struct RegistrationView: View {
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     /// اختار تاريخه فعلاً؟ — وإلا لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي كأنه تاريخ ميلاده (حدث ٢٠٢٦-١٠-٠٥)
     @State private var birthDateChosen = false
-    @State private var selectedGender: String = "male"
+    /// الجنس مطلوب بلا اختيار مسبق (الدفعة ١٢ — كان «ذكر» ثابتاً فيُسجَّل كل منضم ذكراً): «male» أو «female»
+    @State private var selectedGender: String = ""
+    /// دخول النساء (٢٠٢٦-١٠-٢٤): الأنثى تختار أباها من شجرة الرجال — يُحمل في طلب الانضمام لا في ملفها
+    /// (مكانها شجرة النساء تحت أبيها، تربطها الإدارة)
+    @State private var selectedFather: FamilyMember? = nil
+    @State private var showFatherPicker = false
+    @State private var fatherSearch = ""
+    @State private var fatherResults: [FamilyMember] = []
+    @State private var fatherSearching = false
     @State private var selectedImage: UIImage? = nil
 
     // Animation states
@@ -27,8 +35,6 @@ struct RegistrationView: View {
     @State private var hasAttemptedSubmit = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showConfirmSubmit = false
-    /// الموافقة على شروط الاستخدام (EULA — Guideline 1.2) — شرط لإرسال طلب الانضمام
-    @State private var termsAccepted = false
 
     var body: some View {
         ZStack {
@@ -36,43 +42,39 @@ struct RegistrationView: View {
 
             VStack(spacing: 0) {
                 // Top bar
-                topBar
+                AnyView(topBar)
 
                 ScrollView(showsIndicators: false) {
                     // مسافات أضيق (طلب المالك ٢٠٢٦-١٠-١٩ «أبسط»)
                     VStack(spacing: DS.Spacing.lg) {
                         if topInset > 0 { Color.clear.frame(height: topInset) }
                         // الصورة الشخصية — في الأعلى مثل حسابي
-                        photoSection
+                        AnyView(photoSection)
                             .scaleEffect(headerScale)
                             .opacity(headerOpacity)
 
                         // الحقول — بطاقة القسم الواحدة وحقول المربّعات (نفس «تسجيل عضو جديد» في الإدارة)،
-                        // تدخل بعد الصورة: البيانات ← الشروط ← زر الإرسال
+                        // تدخل بعد الصورة: البيانات ← زر الإرسال
                         VStack(spacing: DS.Spacing.md) {
                             // بلا شارة «مطلوب» — الحقول المطلوبة عليها النجمة الحمراء
                             DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
                                               icon: "person.text.rectangle.fill",
                                               tint: DS.Color.primary,
                                               index: 0) {
-                                nameFieldSection
-                                familyNameSection
-                                birthDateSection
+                                // كل حقل خلف AnyView — مكدس iOS 16 (انظر RootView)
+                                AnyView(nameFieldSection)
+                                AnyView(familyNameSection)
+                                AnyView(birthDateSection)
+                                AnyView(genderSection)
+                                if selectedGender == "female" {
+                                    AnyView(fatherSection)
+                                }
                             }
-
-                            // TODO: gender — re-enable when needed
-                            // genderSection
-                            //     .dsStaggerIn(3)
-
-                            // الموافقة على الشروط — قبل زر الإرسال مباشرة
-                            TermsConsentRow(isAccepted: $termsAccepted,
-                                            showError: hasAttemptedSubmit)
-                                .dsStaggerIn(1)
                         }
                         .padding(.horizontal, DS.Spacing.lg)
 
                         // زر الإرسال
-                        submitButton
+                        AnyView(submitButton)
                             .dsStaggerIn(2)
                     }
                     // الحقول تبدأ بعد الصورة (نفس «بعد الرأس» في المربّعات)
@@ -104,15 +106,14 @@ struct RegistrationView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
+        .dsCenterBox(isPresented: $showFatherPicker) {
+            fatherPickerBox
+        }
         .task {
             await familyNamesVM.fetch()
             familiesFetched = true
         }
         .onAppear {
-            // «تعديل البيانات» من شاشة الانتظار: وافق سابقاً فتبقى الموافقة محدّدة
-            if TermsAgreement.hasAccepted([AccountIdentity.authUserId, authVM.currentUser?.id]) {
-                termsAccepted = true
-            }
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
             // «تقليل الحركة»: الصورة تظهر بتلاشٍ فقط بلا تكبير
             guard !reduceMotion else {
@@ -231,7 +232,7 @@ struct RegistrationView: View {
                         Text(familyName.isEmpty
                              ? L10n.t("اختر عائلتك", "Choose your family")
                              : familyName)
-                            .dsFieldFont(.body)
+                            .dsFieldFont(.fieldValue)
                             .foregroundColor(familyName.isEmpty
                                              ? DS.Color.textTertiary
                                              : DS.Color.textPrimary)
@@ -255,6 +256,16 @@ struct RegistrationView: View {
             if hasAttemptedSubmit && familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 validationError(L10n.t("اختيار العائلة مطلوب", "Choosing a family is required"))
             }
+
+            // ملاحظة الربط — الاسم الأخير هو العائلة المختارة (كانت تحت الجنس المخفي — مكانها تحت العائلة)
+            Text(familyName.isEmpty
+                 ? L10n.t("العائلة التي تختارها تُضاف تلقائياً كاسم أخير",
+                          "The family you choose is added automatically as your last name")
+                 : L10n.t("اسمك الأخير سيكون: \(familyName)",
+                          "Your last name will be: \(familyName)"))
+            .dsFont(.footnote)
+            .foregroundColor(DS.Color.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
 
             // فقط إن جاءت القائمة فارغة فعلاً (بعد انتهاء الجلب بلا خطأ)
             if familiesFetched
@@ -299,20 +310,90 @@ struct RegistrationView: View {
         .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
-    // MARK: - Gender — اختيار الجنس الموحّد (مخفي حالياً)
+    // MARK: - Gender — اختيار الجنس الموحّد (مطلوب، بلا اختيار مسبق — الدفعة ١٢)
     private var genderSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            DSGenderPicker(selection: $selectedGender)
+            DSGenderPicker(selection: $selectedGender, required: true)
 
-            // ملاحظة الربط — الاسم الأخير هو العائلة المختارة
-            Text(familyName.isEmpty
-                 ? L10n.t("العائلة التي تختارها تُضاف تلقائياً كاسم أخير",
-                          "The family you choose is added automatically as your last name")
-                 : L10n.t("اسمك الأخير سيكون: \(familyName)",
-                          "Your last name will be: \(familyName)"))
-            .dsFont(.subtitle)
-            .foregroundColor(DS.Color.textTertiary)
-            .padding(.leading, DS.Spacing.sm)
+            if hasAttemptedSubmit && selectedGender.isEmpty {
+                validationError(L10n.t("اختيار الجنس مطلوب", "Choosing a gender is required"))
+            }
+        }
+        // الأب لغير الأنثى لا يُحمل
+        .onChange(of: selectedGender) { g in
+            if g != "female" { selectedFather = nil }
+        }
+    }
+
+    // MARK: - Father (الأنثى) — صفّ يفتح منتقي الأعضاء الموحّد ببحث السيرفر
+    private var fatherSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Button {
+                if fatherSearch.isEmpty { fatherSearch = suggestedFatherQuery }
+                showFatherPicker = true
+            } label: {
+                DSRow(icon: "figure.and.child.holdinghands", tint: DS.Color.palm,
+                      title: L10n.t("الأب", "Father"),
+                      subtitle: selectedFather?.displayFullName ?? L10n.t("اختاري أباك من الشجرة", "Pick your father from the tree")) {
+                    DSStateIcon("magnifyingglass", tint: DS.Color.primary, size: DS.Icon.row)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(L10n.t("يفتح البحث عن الأب", "Opens the father search"))
+
+            Text(L10n.t("تُربطين بشجرة النساء تحت أبيك — يسهّل على الإدارة قبول طلبك",
+                        "You'll be placed in the women's tree under your father — it helps the admins approve you"))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// اسم الأب المقترح للبحث: الاسم المكتوب بلا الاسم الأول
+    private var suggestedFatherQuery: String {
+        let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+        return parts.count > 1 ? parts.dropFirst().joined(separator: " ") : ""
+    }
+
+    private var fatherPickerBox: some View {
+        DSMemberPickerBox(
+            title: L10n.t("اختيار الأب", "Choose father"),
+            subtitle: L10n.t("من شجرة العائلة", "From the family tree"),
+            icon: "figure.and.child.holdinghands",
+            candidates: fatherResults,
+            search: $fatherSearch,
+            isLoading: fatherSearching,
+            requiresSpecificQuery: true,
+            searchLabel: L10n.t("اسم الأب", "Father's name"),
+            searchPlaceholder: L10n.t("اسم الأب الثلاثي", "Father's three-part name"),
+            hintTitle: L10n.t("اكتبي اسم أبيك الثلاثي", "Type your father's three-part name"),
+            hintMessage: L10n.t("بدون اسم العائلة", "Without the family name"),
+            noMatchTitle: L10n.t("لم نجد هذا الاسم", "Name not found"),
+            emptyMessage: L10n.t("جرّبي الاسم بدون اسم العائلة، أو اتركيه وتربطك الإدارة",
+                                 "Try without the family name, or skip it and the admins will place you"),
+            selectedId: selectedFather?.id,
+            onPick: { m in
+                selectedFather = m
+                showFatherPicker = false
+            },
+            onCancel: { showFatherPicker = false }
+        )
+        // بحث السيرفر بعد توقّف الكتابة قليلاً
+        .task(id: fatherSearch) {
+            let q = fatherSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard q.split(whereSeparator: \.isWhitespace).count >= 2 else {
+                fatherResults = []
+                fatherSearching = false
+                return
+            }
+            fatherSearching = true
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            let found = await authVM.searchFatherCandidates(q)
+            guard !Task.isCancelled else { return }
+            fatherResults = found
+            fatherSearching = false
         }
     }
 
@@ -326,7 +407,7 @@ struct RegistrationView: View {
             let familyLetterCount = trimmedFamily.filter { $0.isLetter }.count
             let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
                        && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
-                       && termsAccepted
+                       && !selectedGender.isEmpty
             let isDisabled = !isValid || authVM.isLoading
 
             DSPrimaryButton(
@@ -341,6 +422,9 @@ struct RegistrationView: View {
                 showConfirmSubmit = true
             }
             .disabled(authVM.isLoading)
+            // معطّل ظاهرياً حتى تكتمل الحقول المطلوبة (ومنها الجنس) — الضغط يُظهر الناقص ولا يُرسل
+            .opacity(isValid || authVM.isLoading ? 1 : DS.Opacity.disabled)
+            .accessibilityHint(isValid ? "" : L10n.t("أكمل الحقول المطلوبة أولاً", "Complete the required fields first"))
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xxl)
             // تأكيد الإرسال — مربّع التطبيق الموحّد بالمنتصف بدل القائمة السفلية
@@ -350,17 +434,16 @@ struct RegistrationView: View {
             ) {
                 Button(L10n.t("مراجعة البيانات", "Review"), role: .cancel) {}
                 Button(L10n.t("إرسال", "Submit")) {
-                    // الموافقة على الشروط تُسجَّل لحساب الدخول الآن، ولملفه بعد إنشائه
-                    TermsAgreement.accept([AccountIdentity.authUserId])
                     Task {
                         await authVM.registerNewUser(
                             firstName: trimmedFull,
                             familyName: trimmedFamily,
                             birthDate: birthDateChosen ? birthDate : nil,
                             gender: selectedGender,
+                            fatherId: selectedGender == "female" ? selectedFather?.id : nil,
+                            fatherName: selectedGender == "female" ? selectedFather?.fullName : nil,
                             avatarImage: selectedImage
                         )
-                        TermsAgreement.accept([authVM.currentUser?.id])
                     }
                 }
             } message: {

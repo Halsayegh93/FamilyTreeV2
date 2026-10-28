@@ -35,9 +35,10 @@ struct FamilyProjectsView: View {
         if isLandscape {
             return [GridItem(.adaptive(minimum: DS.Landscape.gridCardMinWidth, maximum: .infinity), spacing: DS.Spacing.md, alignment: .top)]
         }
+        // بطاقتان صغيرتان في الصف (طلب المالك ٢٠٢٦-١٠-٢٣ «مربعين يم بعض»)
         return [
-            GridItem(.flexible(), spacing: DS.Spacing.md),
-            GridItem(.flexible(), spacing: DS.Spacing.md)
+            GridItem(.flexible(), spacing: DS.Spacing.md, alignment: .top),
+            GridItem(.flexible(), spacing: DS.Spacing.md, alignment: .top)
         ]
     }
 
@@ -134,17 +135,22 @@ struct FamilyProjectsView: View {
                 "Your project has been submitted for review. It will appear after admin approval."
             ))
         }
-        // صفحة المشروع — المربّع الطويل الموحّد من الأسفل (بدل ورقة النظام)
-        .dsTallBox(item: $selectedProject) { project in
+        // تفاصيل المشروع — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
+        // يتمرّر داخله، يُغلق بـ× أو بالضغط خارجه
+        // المربّع صلب (أبيض/سطح الداكن) وما خلفه أغمق (طلب المالك ٢٠٢٦-١٠-٢٣)
+        .dsCenterBox(item: $selectedProject, onBackgroundTap: { selectedProject = nil },
+                     dim: DSCenterPanelDim.strong) { project in
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
         }
         .fullScreenCover(item: $projectToEdit) { project in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 EditProjectView(project: project, didEdit: $didEditProject)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
+                    .environmentObject(memberVM)
                     .dsSectionPage(.projects)
             }
             .background(ClearPresentationBackground())
@@ -259,7 +265,7 @@ struct FamilyProjectsView: View {
                                 } label: {
                                     cardMenuBadge
                                 }
-                                .padding(DS.Spacing.xsm)
+                                .padding(DS.Spacing.xsm)   // داخل زاوية الصورة
                             }
                         }
                         .contextMenu {
@@ -272,6 +278,8 @@ struct FamilyProjectsView: View {
                     }
                 }
                 .padding(.horizontal, DS.Spacing.lg)
+                // البطاقات تبدأ تحت الرأس بمسافة (طلب المالك ٢٠٢٦-١٠-٢٣ — كانت ملاصقة له)، مثل المكتبة
+                .padding(.top, hasToolbarRow ? DS.Spacing.xs : DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxxl)
                 .onAppear { appeared = true }
             }
@@ -311,6 +319,18 @@ struct FamilyProjectsView: View {
                 projectToEdit = project
             } label: {
                 Label(L10n.t("تعديل", "Edit"), systemImage: "pencil")
+            }
+            if project.approvalStatus == "approved" {
+                Button {
+                    Task { await projectsVM.togglePinned(id: project.id) }
+                } label: {
+                    Label(
+                        project.isPinned
+                            ? L10n.t("إلغاء التثبيت", "Unpin")
+                            : L10n.t("تثبيت في الأعلى", "Pin to top"),
+                        systemImage: project.isPinned ? "pin.slash.fill" : "pin.fill"
+                    )
+                }
             }
             Button {
                 Task { await projectsVM.toggleHidden(id: project.id) }
@@ -456,117 +476,10 @@ struct FamilyProjectsView: View {
         )
     }
 
-    // MARK: - Project Card — بطاقة بغلاف مقوّس وشعار بارز (نفس روح صفحة المشروع)
+    // MARK: - Project Card — `ProjectGridCard` (نوع مستقل — حارس المكدس)
 
     private func projectCard(_ project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // غلاف صغير بخلفية قسم المشاريع — بحافة مقوّسة
-            ProjectSectionBackdrop(symbolSize: DS.Glyph.lg)
-            .frame(height: cardCoverHeight)
-            .frame(maxWidth: .infinity)
-            .clipShape(ProjectCoverArc(depth: 18))
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(project.title)
-                    .dsFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "person.fill")
-                        .dsGlyph(DS.Glyph.micro)
-                    Text(project.ownerName)
-                        .dsFont(.caption)
-                        .lineLimit(1)
-                }
-                .foregroundColor(DS.Color.textSecondary)
-
-                if project.hasSocialLinks {
-                    socialIndicators(project: project)
-                        .padding(.top, DS.Spacing.xxs)
-                }
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .padding(.top, cardLogoSize / 2 + DS.Spacing.xxs)
-            .padding(.bottom, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
-        // البطاقة الواحدة (`.dsCard`) + إطار «بانتظار» فوقها
-        .dsCard(padding: nil)
-        .overlay(alignment: .top) { cardLogo(project).offset(y: cardCoverHeight - cardLogoSize / 2 + DS.Spacing.xxs) }
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
-                .strokeBorder(project.approvalStatus == "pending"
-                              ? DS.Color.warning.opacity(DS.Opacity.tintStroke) : .clear,
-                              lineWidth: DS.Border.width)
-        )
-        .overlay(alignment: .topLeading) {
-            if project.approvalStatus == "pending" {
-                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
-            } else if project.isHidden {
-                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
-            }
-        }
-        .opacity(project.approvalStatus == "pending" || project.isHidden ? DS.Opacity.dimmed : 1.0)
-    }
-
-    private var cardCoverHeight: CGFloat { DS.Icon.sizeLg + DS.Spacing.lg }
-    private var cardLogoSize: CGFloat { DS.Icon.state }
-
-    /// شعار المشروع على حافة الغلاف — مربّع بزوايا ناعمة بإطار بلون البطاقة
-    private func cardLogo(_ project: Project) -> some View {
-        Group {
-            if let logoUrl = project.logoUrl, let url = URL(string: logoUrl) {
-                CachedAsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { DS.Color.mutedBackground }
-            } else {
-                // قرص «مجسّمات» الموحّد
-                DSStateIcon("briefcase.fill", tint: AppSection.projects.ink, size: cardLogoSize)
-            }
-        }
-        .frame(width: cardLogoSize, height: cardLogoSize)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.surface, lineWidth: DS.Spacing.xxs)
-        )
-        .dsSubtleShadow()
-    }
-
-    private func statusBadge(icon: String, text: String, color: Color) -> some View {
-        // فوق الغلاف: ممتلئة بلون معناها حتى تُقرأ
-        HStack(spacing: DS.Spacing.xxs) {
-            Image(dsSymbol: icon).dsGlyph(DS.Glyph.micro)
-            Text(text).dsFont(.micro)
-        }
-        .foregroundColor(DS.Color.textOnPrimary)
-        .padding(.horizontal, DS.Spacing.xsm).padding(.vertical, DS.Spacing.xxs)
-        .background(Capsule().fill(color))
-        .padding(DS.Spacing.xs)
-    }
-
-    /// أيقونات المنصات اللي عنده روابط فيها — مؤشّر بصري سريع.
-    private func socialIndicators(project: Project) -> some View {
-        HStack(spacing: DS.Spacing.xs) {
-            if project.phoneNumber?.isEmpty == false    { socialDot(icon: "phone.fill", color: DS.Color.sea) }
-            if project.whatsappNumber?.isEmpty == false { socialDot(icon: "message.fill", color: DS.Color.Social.whatsapp) }
-            if project.instagramUrl?.isEmpty == false   { socialDot(icon: "camera.fill", color: DS.Color.Social.instagram) }
-            if project.twitterUrl?.isEmpty == false     { socialDot(icon: "xmark", color: DS.Color.Social.x) }
-            if project.websiteUrl?.isEmpty == false     { socialDot(icon: "globe", color: DS.Color.info) }
-            if project.locationUrl?.isEmpty == false    { socialDot(icon: "mappin.and.ellipse", color: DS.Color.Social.maps) }
-        }
-    }
-
-    private func socialDot(icon: String, color: Color) -> some View {
-        Image(dsSymbol: icon)
-            .dsGlyph(DS.Glyph.micro)
-            .foregroundColor(color)
-            .frame(width: DS.Icon.inline, height: DS.Icon.inline)
-            .background(Circle().fill(color.opacity(DS.Opacity.tintFill)))
+        ProjectGridCard(project: project)
     }
 
     // MARK: - Empty State
@@ -613,6 +526,85 @@ struct FamilyProjectsView: View {
     }
 }
 
+// MARK: - بطاقة المشروع في القائمة (طلب المالك ٢٠٢٦-١٠-٢٢/٢٣)
+/// بطاقة صغيرة شبه مربّعة (بطاقتان في الصف): صورة المشروع تملأ أعلاها بزوايا ناعمة، وتحتها اسم المشروع
+/// في الوسط فقط — بلا اسم صاحب المشروع وبلا أيقونات الحسابات (تبقى في صفحة المشروع).
+struct ProjectGridCard: View {
+    let project: Project
+
+    /// صورة البطاقة الصغيرة ١٦:١٠ — أقصر من ٤:٣ السابقة (طلب المالك ٢٠٢٦-١٠-٢٣ «أصغر»)
+    static let imageAspect: CGFloat = 16.0 / 10.0
+    /// شعار المشروع حين لا صورة — أكبر (كان ٥٢) فيملأ أغلب ارتفاع الصورة بحاشية ضيّقة (طلب المالك ٢٠٢٦-١٠-٢٣)
+    static let logoSize: CGFloat = 76
+
+    private var isPending: Bool { project.approvalStatus == "pending" }
+    private var imageRadius: CGFloat { max(DS.Card.radius - DS.Spacing.xs, DS.Radius.sm) }
+
+    var body: some View {
+        VStack(spacing: DS.Spacing.xsm) {
+            Color.clear
+                .aspectRatio(Self.imageAspect, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .overlay { ProjectHeroImage(project: project, markSize: Self.logoSize) }
+                .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
+
+            Text(project.title)
+                .dsFont(.rowTitleCompact)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2, reservesSpace: true)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, DS.Spacing.xxs)
+                .padding(.bottom, DS.Spacing.xxs)
+        }
+        // البطاقة الواحدة (`.dsCard`) + إطار «بانتظار» فوقها
+        .dsCard(padding: DS.Spacing.xs)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+                .strokeBorder(isPending ? DS.Color.warning.opacity(DS.Opacity.tintStroke) : .clear,
+                              lineWidth: DS.Border.width)
+        )
+        .overlay(alignment: .topLeading) {
+            if isPending {
+                statusBadge(icon: "clock.fill", text: L10n.t("بانتظار", "Pending"), color: DS.Color.warningFill)
+            } else if project.isHidden {
+                statusBadge(icon: "eye.slash.fill", text: L10n.t("مخفي", "Hidden"), color: DS.Color.slateFill)
+            }
+        }
+        // شارة التثبيت: الزاوية المقابلة (يمين) أسفل زر ••• حتى لا تتزاحم معه ولا مع شارات الحالة
+        .overlay(alignment: .topTrailing) {
+            if project.isPinned && !isPending {
+                pinBadge
+                    .padding(.top, DS.Icon.discMini + DS.Spacing.sm)
+                    .padding(.trailing, DS.Spacing.sm)
+            }
+        }
+        .opacity(isPending || project.isHidden ? DS.Opacity.dimmed : 1.0)
+    }
+
+    /// دبوس صغير ممتلئ بلون القسم — يدلّ على أن البطاقة مثبَّتة في الأعلى.
+    private var pinBadge: some View {
+        Image(systemName: "pin.fill")
+            .dsGlyph(DS.Glyph.micro)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .padding(DS.Spacing.xs)
+            .background(Circle().fill(DS.Color.accent))
+            .accessibilityLabel(L10n.t("مثبّت", "Pinned"))
+    }
+
+    private func statusBadge(icon: String, text: String, color: Color) -> some View {
+        // فوق الصورة: ممتلئة بلون معناها حتى تُقرأ
+        HStack(spacing: DS.Spacing.xxs) {
+            Image(dsSymbol: icon).dsGlyph(DS.Glyph.micro)
+            Text(text).dsFont(.micro)
+        }
+        .foregroundColor(DS.Color.textOnPrimary)
+        .padding(.horizontal, DS.Spacing.xsm).padding(.vertical, DS.Spacing.xxs)
+        .background(Capsule().fill(color))
+        .padding(DS.Spacing.sm)
+    }
+}
+
 // MARK: - Add Project View
 struct AddProjectView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -634,6 +626,8 @@ struct AddProjectView: View {
     @State private var photoImages: [UIImage] = []
     @State private var noExistingPhotos: [String] = []
     @State private var isSaving = false
+    /// بعد المربّع: «هل أنت صاحب المشروع؟» (طلب المالك ٢٠٢٦-١٠-٢٥) — «لا» = بلا اسمه على المشروع
+    @State private var askOwnership = false
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
@@ -670,7 +664,7 @@ struct AddProjectView: View {
             note: authVM.isAdmin ? nil : L10n.t("يظهر لك فوراً، وللجميع بعد موافقة الإدارة", "Visible to you now, to everyone after approval"),
             isBehindExtra: accountsBoxOpen,
             hasUnsavedChanges: hasUnsavedChanges,
-            onSubmit: { Task { await saveProject() } },
+            onSubmit: { askOwnership = true },
             onCancel: { dismiss() }
         ) {
             // ── الهوية: الشعار + الاسم + الوصف ──
@@ -702,15 +696,25 @@ struct AddProjectView: View {
                                       onExtraChange: { accountsBoxOpen = $0 })
             }
         }
+        .dsAlert(L10n.t("هل أنت صاحب المشروع؟", "Are you the project owner?"),
+                 isPresented: $askOwnership, icon: "person.crop.circle.badge.questionmark") {
+            Button(L10n.t("نعم، أنا صاحبه", "Yes, it's mine")) { Task { await saveProject(isOwner: true) } }
+            Button(L10n.t("لا", "No")) { Task { await saveProject(isOwner: false) } }
+            Button(L10n.t("رجوع", "Back"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("إذا اخترت «لا» ما يظهر اسمك على المشروع، والإدارة تحدّد صاحبه.",
+                        "If you choose No, your name won't show on the project; the admins can set its owner."))
+        }
     }
 
-    private func saveProject() async {
+    /// «نعم» = اسمه صاحباً للمشروع؛ «لا» = بلا اسم (يبقى السجل باسمه للتعديل — `owner_id` شرط RLS،
+    /// وتحدّد الإدارة الصاحب من «تعديل المشروع»)
+    private func saveProject(isOwner: Bool) async {
         guard let currentUser = authVM.currentUser else { return }
         isSaving = true
 
-        // المنشئ هو صاحب المشروع (تعيين صاحب آخر صار في تعديل المشروع للإدارة).
         let ownerId = currentUser.id
-        let ownerName = currentUser.fullName
+        let ownerName = isOwner ? currentUser.displayFullName : ""   // بالعائلة المختارة (طلب المالك ٢٠٢٦-١٠-٢٤)
 
         // Upload logo if selected
         var uploadedLogoUrl: String? = nil
@@ -733,6 +737,7 @@ struct AddProjectView: View {
         let success = await projectsVM.addProject(
             ownerId: ownerId,
             ownerName: ownerName,
+            submitterName: currentUser.displayFullName,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description.isEmpty ? nil : description,
             logoUrl: uploadedLogoUrl,

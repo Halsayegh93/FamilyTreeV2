@@ -369,6 +369,63 @@ struct DSAmbientSpin: ViewModifier {
     }
 }
 
+/// نبضة العاجل (الدفعة ١٠ «نبضة للعاجل» — «حالة النظام» حمراء): هالة بلون الحال تتّسع من النقطة وتتلاشى كل `DS.Pulse.period` ث،
+/// على الساعة الهادئة المشتركة (`FTAmbientClock`، ١٥ إطاراً) — لا `repeatForever` ولا مؤقّت. تقف (وتختفي الهالة) حين لا تكون
+/// عاجلة، خارج الشاشة، أثناء التمرير، خلف مربّع (`ftAnimationsPaused`)، ومع «تقليل الحركة»؛ والنقطة/الرمز نفسه ساكن دائماً.
+struct DSUrgentPulse: ViewModifier {
+    let color: Color
+    let active: Bool
+    var side: CGFloat = DS.Pulse.dot
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ftAnimationsPaused) private var paused
+    @State private var onScreen = false
+    /// بداية الدورة — nil = ساكن
+    @State private var start: TimeInterval?
+    @State private var now: TimeInterval = 0
+    @State private var token = FTAmbientClock.Token()
+    private var clock: FTAmbientClock { FTAmbientClock.shared }
+
+    func body(content: Content) -> some View {
+        let q = phase
+        content
+            .background {
+                Circle()
+                    .fill(color)
+                    .frame(width: side, height: side)
+                    .scaleEffect(1 + (DS.Pulse.scale - 1) * CGFloat(1 - (1 - q) * (1 - q)))
+                    .opacity(start == nil ? 0 : DS.Pulse.opacity * (1 - q))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .onAppear { onScreen = true; sync() }
+            .onDisappear { onScreen = false; sync() }
+            .onChange(of: active) { _ in sync() }
+            .onChange(of: paused) { _ in sync() }
+            .onChange(of: reduceMotion) { _ in sync() }
+            .onReceive(clock.$time) { t in if start != nil { now = t } }
+    }
+
+    /// موضع الدورة ٠…١
+    private var phase: Double {
+        guard let start else { return 0 }
+        return max(0, now - start).truncatingRemainder(dividingBy: DS.Pulse.period) / DS.Pulse.period
+    }
+
+    private func sync() {
+        let run = active && onScreen && !reduceMotion && !paused
+        clock.hold(ObjectIdentifier(token), run)
+        start = run ? clock.time : nil
+        now = clock.time
+    }
+}
+
+extension View {
+    /// نبضة هادئة للعاجل على الساعة المشتركة (`DSUrgentPulse`)
+    func dsUrgentPulse(_ color: Color, active: Bool, side: CGFloat = DS.Pulse.dot) -> some View {
+        modifier(DSUrgentPulse(color: color, active: active, side: side))
+    }
+}
+
 /// الساعة الهادئة الواحدة للتطبيق: مؤشّر عرض واحد بمعدّل منخفض يحرّك كل المجسّمات المتنفّسة في تحديث واحد،
 /// ويقف تماماً حين لا يتنفّس أي مجسّم ظاهر (خارج الشاشة، «تقليل الحركة»، خلف مربّع، التطبيق في الخلفية).
 /// وضع `.default`: يسكن أثناء السحب والتمرير (لا يزاحم إطاراته) ويكمل بعده من حيث وقف — زمنه لا يقفز.

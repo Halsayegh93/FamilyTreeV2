@@ -318,7 +318,7 @@ class NewsViewModel: ObservableObject {
                 if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
                     // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
                     let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
-                    let likerName = fromAdmin ? L10n.t("الإدارة", "The admins") : (currentUser?.fullName ?? "")
+                    let likerName = fromAdmin ? L10n.t("الإدارة", "The admins") : (currentUser?.displayFullName ?? "")
                     await notificationVM?.sendPushToMembers(
                         title: L10n.t("إعجاب جديد", "New Like"),
                         body: fromAdmin
@@ -364,10 +364,14 @@ class NewsViewModel: ObservableObject {
         return role == .member || role == .pending
     }
 
+    /// السيرفر رفض آخر تعليق لكلمة غير لائقة (`trg_news_comments_filter`، hint `objectionable`)
+    @Published var lastCommentRejectedAsObjectionable = false
+
     func addNewsComment(to postId: UUID, text: String) async -> Bool {
+        lastCommentRejectedAsObjectionable = false
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let memberId = await authenticatedUserId(),
-              let authorName = currentUser?.fullName else { return false }
+              let authorName = currentUser?.displayFullName else { return false }
 
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else { return false }
@@ -423,6 +427,9 @@ class NewsViewModel: ObservableObject {
 
             return true
         } catch {
+            if (error as? PostgrestError)?.hint == "objectionable" {
+                lastCommentRejectedAsObjectionable = true
+            }
             Log.error("خطأ إضافة تعليق: \(error.localizedDescription)")
             return false
         }
@@ -565,7 +572,10 @@ class NewsViewModel: ObservableObject {
         pollQuestion: String? = nil,
         pollOptions: [String] = [],
         /// نشر باسم الإدارة بدل اسم الكاتب (للإدارة فقط — طلب المالك)
-        asAdminIdentity: Bool = false
+        asAdminIdentity: Bool = false,
+        /// تنبيه الإدارة «منشور جديد» بعد النشر المباشر — false حين يصلهم إشعار الإعلان نفسه للجميع
+        /// («إعلان جديد» في لوحة الإدارة بخياري الأخبار والإشعار معاً — لا إشعاران للإدارة)
+        notifyAdmins: Bool = true
     ) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else {
@@ -583,7 +593,7 @@ class NewsViewModel: ObservableObject {
         let useAdminIdentity = asAdminIdentity && (authVM?.canModerate ?? false)
         let postAuthorName = useAdminIdentity
             ? L10n.t("إدارة العائلة", "Family Admin")
-            : user.fullName
+            : user.displayFullName
         let postAuthorRole = useAdminIdentity
             ? L10n.t("الإدارة", "Admin")
             : user.roleName
@@ -608,7 +618,7 @@ class NewsViewModel: ObservableObject {
 
         do {
             try await supabase.from("news").insert(newPost).execute()
-            let posterName = currentUser?.fullName ?? ""
+            let posterName = currentUser?.displayFullName ?? ""
             if !shouldAutoApprove, currentUser?.role == .member {
                 await notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("منشور بانتظار الموافقة", "Post Pending Approval"),
@@ -620,7 +630,7 @@ class NewsViewModel: ObservableObject {
                     subjectMemberId: user.id
                 )
             }
-            if shouldAutoApprove {
+            if shouldAutoApprove && notifyAdmins {
                 await notificationVM?.notifyAdminsWithPush(
                     title: L10n.t("منشور جديد", "New Post"),
                     body: L10n.t(
@@ -647,7 +657,7 @@ class NewsViewModel: ObservableObject {
                 let legacyPost: [String: AnyEncodable] = [
                     "author_id": AnyEncodable(useAdminIdentity ? Optional<String>.none : user.id.uuidString),
                     "posted_by": AnyEncodable(user.id.uuidString),
-                    "author_name": AnyEncodable(user.fullName),
+                    "author_name": AnyEncodable(user.displayFullName),
                     "author_role": AnyEncodable(user.roleName),
                     "role_color": AnyEncodable(user.role.colorString),
                     "content": AnyEncodable(content),
@@ -869,7 +879,7 @@ class NewsViewModel: ObservableObject {
                 )
             }
 
-            // حركة إدارية — مكانها «سجل النشاط»، مربوطة بصاحب المنشور
+            // حركة إدارية — مكانها «إشعارات الإدارة»، مربوطة بصاحب المنشور
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("حذف منشور", "Post Deleted"),
                 body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
@@ -913,7 +923,7 @@ class NewsViewModel: ObservableObject {
                 .value
 
             delivered = true
-            let reporterName = currentUser?.fullName ?? ""
+            let reporterName = currentUser?.displayFullName ?? ""
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("بلاغ على منشور", "Post Report"),
                 body: L10n.t(

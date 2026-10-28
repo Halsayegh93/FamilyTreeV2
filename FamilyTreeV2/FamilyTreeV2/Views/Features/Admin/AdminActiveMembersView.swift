@@ -7,6 +7,8 @@ import PostgREST
 // تصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧، «أسلوب واحد» ٢٠٢٦-١٠-٠٧): الرأس الملوّن
 // الموحّد (`dsSubPageHeader`) ← صفّ أرقام حيّة (الآن · التطبيق · الموقع) ← ثلاثة أقسام صفوفها
 // `.dsRowBox()`. التحديث كما كان: كل ١٥ ثانية، وبالسحب، وبزر التحديث في الرأس.
+// بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام وزرّ التحديث في الرأس الكحلي، والأقسام بطاقات بيضاء
+// صفوفها مفصولة بخط.
 struct AdminActiveMembersView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -32,27 +34,22 @@ struct AdminActiveMembersView: View {
     private let tint = DS.Color.composerProject
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: DS.Spacing.md) {
-                hero
-
-                // الوضع الأفقي: الأقسام على عمودين
-                AdaptiveCardStack(spacing: DS.Spacing.md) {
-                    nowSection
-                    last24Section
-                    last30Section
-                }
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.md)
-            .padding(.bottom, DS.Spacing.xxxl)
-        }
-        .refreshable { await fetch() }
-        // الرأس الملوّن الموحّد — زرّ التحديث (كان في شريط النظام) صار زرّ الرأس
-        .dsSubPageHeader(L10n.t("النشاط الآن", "Live Activity"),
-                         subtitle: L10n.t("من يستخدم التطبيق والموقع — يتحدّث كل ١٥ ثانية",
-                                          "Who's on the app and the website — refreshes every 15 seconds")) {
-            refreshButton
+        // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام وزرّ التحديث الزجاجي ←
+        // «النشطون الآن» يصعد فوقه ← (٢٠٢٦-١٠-٢٢) النشطون والاتجاه والجلسات (`AdminUsageInsights`) ← «آخر 24 ساعة» ←
+        // «نشطون آخر 30 يوم» (عمودان أفقياً)
+        AdminPage(header: header,
+                  lead: AnyView(nowSection),
+                  content: AnyView(VStack(spacing: DS.Hub.stackSpacing) {
+                      AnyView(AdminUsageInsights())
+                      AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+                          AnyView(last24Section)
+                          AnyView(last30Section)
+                      })
+                  }))
+        .refreshable {
+            async let lists: Void = fetch()
+            async let usage: Void = AdminUsageStore.shared.refresh(force: true)
+            _ = await (lists, usage)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
@@ -65,19 +62,19 @@ struct AdminActiveMembersView: View {
         .onDisappear { refreshTimer?.invalidate() }
     }
 
-    // MARK: - زرّ التحديث (في الرأس الملوّن — طلب المالك: أيقونة صغيرة)
-    private var refreshButton: some View {
-        DSHeaderButton(symbol: "arrow.clockwise", label: L10n.t("تحديث الآن", "Refresh Now")) {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            Task {
-                isRefreshing = true
-                MemberActivityTracker.report("admin", force: true)
-                await fetch()
-                isRefreshing = false
-            }
+    // MARK: - زرّ التحديث (دائرة زجاجية في الرأس الكحلي — طلب المالك: أيقونة صغيرة)
+    /// أثناء التحديث لا يعيد الضغط (كان الزرّ معطّلاً)
+    private func refreshNow() {
+        guard !isRefreshing else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            isRefreshing = true
+            MemberActivityTracker.report("admin", force: true)
+            async let lists: Void = fetch()
+            async let usage: Void = AdminUsageStore.shared.refresh(force: true)
+            _ = await (lists, usage)
+            isRefreshing = false
         }
-        .disabled(isRefreshing)
-        .opacity(isRefreshing ? DS.Opacity.disabled : 1)
     }
 
     // MARK: - بطاقة الرأس
@@ -94,34 +91,39 @@ struct AdminActiveMembersView: View {
 
     private func heroValue(_ n: Int) -> String { didLoadOnce ? "\(n)" : "—" }
 
-    /// الأرقام السريعة — العنوان والوصف في الرأس الملوّن
-    private var hero: some View {
-        DSStatsRow([
-            DSHeroStat(value: heroValue(nowRows.count),
-                       label: L10n.t("الآن", "Now"), icon: "circle.fill"),
-            DSHeroStat(value: heroValue(appCount),
-                       label: L10n.t("التطبيق", "App"), icon: "iphone.gen3"),
-            DSHeroStat(value: heroValue(webCount),
-                       label: L10n.t("الموقع", "Web"), icon: "globe")
-        ], tint: tint)
+    /// الرأس الكحلي: الأرقام السريعة + زرّ «تحديث الآن»
+    private var header: AdminPageHeader {
+        AdminPageHeader(
+            title: L10n.t("الاستخدام", "Usage"),
+            subtitle: L10n.t("من يستخدم التطبيق والموقع — يتحدّث كل ١٥ ثانية",
+                             "Who's on the app and the website — refreshes every 15 seconds"),
+            glyph: "bolt.fill",
+            kpis: [
+                AdminPageKPI(heroValue(nowRows.count), L10n.t("الآن", "Now"), icon: "circle.fill",
+                             tint: nowRows.isEmpty ? DS.Color.textOnPrimary : DS.Hub.kpiMine),
+                AdminPageKPI(heroValue(appCount), L10n.t("التطبيق", "App"), icon: "iphone.gen3"),
+                AdminPageKPI(heroValue(webCount), L10n.t("الموقع", "Web"), icon: "globe")
+            ],
+            actions: [
+                AdminPageAction(symbol: isRefreshing ? "hourglass" : "arrow.clockwise",
+                                label: L10n.t("تحديث الآن", "Refresh Now"),
+                                tap: .action { refreshNow() })
+            ])
     }
 
     // MARK: - الأقسام
 
     // ── النشطون الآن (آخر 5 دقائق) ──
     private var nowSection: some View {
-        DSComposerSection(title: L10n.t("النشطون الآن", "Active Now"),
-                          icon: "dot.radiowaves.left.and.right",
-                          tint: DS.Color.success,
-                          trailing: nowRows.isEmpty ? nil : "\(nowRows.count)",
-                          index: 1) {
+        AdminSectionCard(title: L10n.t("المستخدمون الآن", "Using now"), badge: nowRows.count, badgeTint: DS.Color.success, spacing: 0) {
             if isLoading && nowRows.isEmpty {
                 DSPageLoader(fillsSpace: false)
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, DS.Spacing.md)
             } else if nowRows.isEmpty {
-                inlineEmpty(text: L10n.t("لا يوجد نشاط حالياً", "No one active right now"))
+                inlineEmpty(text: L10n.t("لا أحد يستخدم التطبيق الآن", "No one is using the app right now"))
             } else {
-                VStack(spacing: DS.Spacing.xsm) {
+                AdminRowsCardBody {
                     ForEach(nowRows, id: \.sessionKey) { row in
                         activeNowRow(row)
                     }
@@ -132,15 +134,11 @@ struct AdminActiveMembersView: View {
 
     // ── آخر 24 ساعة (مع نوع الإجراء) ──
     private var last24Section: some View {
-        DSComposerSection(title: L10n.t("آخر 24 ساعة", "Last 24 Hours"),
-                          icon: "clock.arrow.circlepath",
-                          tint: tint,
-                          trailing: "\(actionRows.count)",
-                          index: 2) {
+        AdminSectionCard(title: L10n.t("آخر 24 ساعة", "Last 24 Hours"), badge: actionRows.count, badgeTint: DS.Color.primary, spacing: 0) {
             if actionRows.isEmpty {
-                inlineEmpty(text: L10n.t("لا يوجد نشاط خلال 24 ساعة", "No activity in last 24 hours"))
+                inlineEmpty(text: L10n.t("لا استخدام خلال 24 ساعة", "No use in the last 24 hours"))
             } else {
-                VStack(spacing: DS.Spacing.xsm) {
+                AdminRowsCardBody {
                     ForEach(actionRows, id: \.sessionKey) { row in
                         actionRowView(row)
                     }
@@ -151,15 +149,11 @@ struct AdminActiveMembersView: View {
 
     // ── آخر 30 يوم (كانت 14 — طلب المالك) ──
     private var last30Section: some View {
-        DSComposerSection(title: L10n.t("نشطون آخر 30 يوم", "Last 30 Days"),
-                          icon: "calendar",
-                          tint: tint,
-                          trailing: "\(recentRows.count)",
-                          index: 3) {
+        AdminSectionCard(title: L10n.t("آخر 30 يوماً", "Last 30 Days"), badge: recentRows.count, badgeTint: DS.Color.primary, spacing: 0) {
             if recentRows.isEmpty {
-                inlineEmpty(text: L10n.t("لا يوجد نشاط في آخر 30 يوم", "No activity in last 30 days"))
+                inlineEmpty(text: L10n.t("لا استخدام في آخر 30 يوماً", "No use in the last 30 days"))
             } else {
-                VStack(spacing: DS.Spacing.xsm) {
+                AdminRowsCardBody {
                     ForEach(recentRows, id: \.sessionKey) { row in
                         recentlyActiveRow(row)
                     }
@@ -179,8 +173,8 @@ struct AdminActiveMembersView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(name)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldLabel)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: DS.Spacing.xs) {
@@ -189,8 +183,8 @@ struct AdminActiveMembersView: View {
                         .foregroundColor(iconTint)
                         .accessibilityHidden(true)
                     Text(detail)
-                        .dsFieldFont(.subtitle)
-                        .foregroundColor(DS.Color.fieldValue)
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
                 }
             }
@@ -200,7 +194,7 @@ struct AdminActiveMembersView: View {
             trailing()
         }
         .frame(minHeight: DSBox.fieldMinHeight)
-        .dsRowBox()
+        .padding(.vertical, DS.Spacing.sm)
         .accessibilityElement(children: .combine)
     }
 
@@ -217,7 +211,8 @@ struct AdminActiveMembersView: View {
     private func activeNowRow(_ row: ActiveMemberRow) -> some View {
         // نقطة خضراء فقط لو نشط فعلاً خلال آخر 5 دقائق
         let trulyOnline = row.secondsSinceActive < 300
-        return activityRow(avatarUrl: row.avatarUrl, online: trulyOnline, name: row.fullName,
+        return activityRow(avatarUrl: row.avatarUrl, online: trulyOnline,
+                           name: memberVM.displayName(id: row.memberId, stored: row.fullName, .four),
                            icon: sourceIcon(row.source), iconTint: DS.Color.textSecondary,
                            detail: screenLabel(row.currentScreen, source: row.source)) {
             DSStatusChip(text: secondsLabel(row.secondsSinceActive), tint: DS.Color.success)
@@ -226,7 +221,7 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Action row (24h)
     private func actionRowView(_ row: RecentActionRow) -> some View {
-        activityRow(avatarUrl: row.avatarUrl, online: false, name: row.fullName,
+        activityRow(avatarUrl: row.avatarUrl, online: false, name: memberVM.displayName(id: row.memberId, stored: row.fullName, .four),
                     icon: actionIcon(row.actionKind, source: row.source),
                     iconTint: actionColor(row.actionKind, source: row.source),
                     detail: actionLabel(row)) {
@@ -236,7 +231,7 @@ struct AdminActiveMembersView: View {
 
     // MARK: - Recently active row (no online dot)
     private func recentlyActiveRow(_ row: RecentlyActiveRow) -> some View {
-        activityRow(avatarUrl: row.avatarUrl, online: false, name: row.fullName,
+        activityRow(avatarUrl: row.avatarUrl, online: false, name: memberVM.displayName(id: row.memberId, stored: row.fullName, .four),
                     icon: sourceIcon(row.source), iconTint: DS.Color.textTertiary,
                     detail: screenLabel(row.currentScreen, source: row.source)) {
             timeText(hoursLabel(row.hoursSinceActive))

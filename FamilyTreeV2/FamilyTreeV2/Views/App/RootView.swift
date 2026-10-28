@@ -5,53 +5,68 @@ struct RootView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @ObservedObject private var network = NetworkMonitor.shared
+    /// شاشة «جاري التحقق» تبقى ١٫٢ ث على الأقل عند الفتح (طلب المالك ٢٠٢٦-١٠-٢٥ «وين راحت؟») — نسخة الإصدار
+    /// تتحقق من الجلسة في لحظة فكانت الشاشة تومض وتختفي
+    @State private var splashMinDone = false
 
     var body: some View {
         Group {
+            // كل شاشة خلف AnyView — حدّ نوع يقصّر مكدس البناء الأول (iOS 16 يستهلك مكدساً أكثر لكل طبقة؛
+            // جوال الوالدة آيفون X بقي على «جاري التحقق» لأن «التسجيل» لم تُبنَ — ٢٠٢٦-١٠-٢٤)
+            if !splashMinDone {
+                AnyView(SplashScreenView())
+            } else {
             switch authVM.status {
             case .unauthenticated:
-                LoginView()
+                AnyView(LoginView())
 
             case .checking:
-                SplashScreenView()
+                AnyView(SplashScreenView())
 
             case .authenticatedNoProfile:
-                RegistrationView()
+                AnyView(RegistrationView())
 
             case .pendingApproval:
-                WaitingForApprovalView()
+                AnyView(WaitingForApprovalView())
 
             case .accountFrozen:
-                FrozenAccountView()
+                AnyView(FrozenAccountView())
 
             case .deviceLimitExceeded:
-                DeviceLimitView()
-                    .environmentObject(appSettingsVM)
+                AnyView(DeviceLimitView()
+                    .environmentObject(appSettingsVM))
 
             case .deviceRevoked:
-                DeviceRevokedView()
+                AnyView(DeviceRevokedView()
                     .environmentObject(notificationVM)
-                    .environmentObject(appSettingsVM)
+                    .environmentObject(appSettingsVM))
 
             case .deviceOverLimit:
-                DeviceOverLimitView()
+                AnyView(DeviceOverLimitView()
                     .environmentObject(notificationVM)
-                    .environmentObject(appSettingsVM)
+                    .environmentObject(appSettingsVM))
 
             case .fullyAuthenticated:
                 // التحديث الإجباري — النسخة أقل من الحد الأدنى. المالك مستثنى حتى
                 // لا يقفل نفسه خارج التطبيق لو رفع الحد قبل ما يحدّث جهازه.
                 if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0)
                     && authVM.currentUser?.role != .owner {
-                    ForceUpdateView()
+                    AnyView(ForceUpdateView())
                 } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
-                    MaintenanceModeView()
+                    AnyView(MaintenanceModeView())
                 } else {
-                    MainTabView()
+                    // قبول «الخصوصية والاستخدام» مرة لكل إصدار (app_config.terms_version)
+                    AnyView(MainTabView().termsAcceptanceGate())
                 }
+            }
             }
         }
         .animation(.default, value: authVM.status)
+        .animation(.easeOut(duration: 0.3), value: splashMinDone)
+        .task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            splashMinDone = true
+        }
         // Alert مركزي لأي عملية كتابة بدون اتصال — ViewModels تستدعي
         // NetworkMonitor.shared.requireOnline() اللي يضبط هذا الفلاج.
         .dsAlert(
@@ -149,8 +164,7 @@ struct DeviceRevokedView: View {
 
                 VStack(spacing: DS.Spacing.md) {
                     Text(L10n.t("تم إزالة هذا الجهاز", "Device Removed"))
-                        .font(DS.Font.title2)
-                        .fontWeight(.black)
+                        .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
 
                     Text(L10n.t(

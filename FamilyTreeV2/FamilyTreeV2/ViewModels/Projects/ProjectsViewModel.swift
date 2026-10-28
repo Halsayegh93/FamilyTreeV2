@@ -46,10 +46,11 @@ class ProjectsViewModel: ObservableObject {
                 .execute()
                 .value
 
-            self.projects = response
+            // المثبَّتة أولاً (الأحدث تثبيتاً أولاً) ثم الأحدث إضافة
+            self.projects = Project.pinnedFirst(response)
 
             // حفظ في الكاش
-            CacheManager.shared.save(response, for: .projects, in: cacheSession)
+            CacheManager.shared.save(self.projects, for: .projects, in: cacheSession)
         } catch {
             self.errorMessage = L10n.t("تعذر تحميل المشاريع. حاول مرة أخرى.",
                                        "Failed to load projects. Please try again.")
@@ -60,7 +61,9 @@ class ProjectsViewModel: ObservableObject {
     
     // MARK: - Add
     
-    func addProject(ownerId: UUID, ownerName: String, title: String,
+    /// `ownerName` فارغ = المُرسل ليس صاحب المشروع (سؤال «هل أنت صاحب المشروع؟») — الإدارة تحدّده لاحقاً؛
+    /// `submitterName` اسم المُرسل في إشعار الإدارة (يُغني عن صاحبٍ فارغ)
+    func addProject(ownerId: UUID, ownerName: String, submitterName: String? = nil, title: String,
                     description: String?, logoUrl: String?,
                     websiteUrl: String?, instagramUrl: String?,
                     twitterUrl: String?,
@@ -99,11 +102,12 @@ class ProjectsViewModel: ObservableObject {
             await fetchProjects()
 
             // إشعار للأدمن بطلب جديد
+            let submitter = submitterName ?? ownerName
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.t("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
                 body: L10n.t(
-                    "«\(ownerName)» قدّم مشروع: «\(title)»",
-                    "«\(ownerName)» submitted a project: «\(title)»"
+                    "«\(submitter)» قدّم مشروع: «\(title)»" + (ownerName.isEmpty ? " — ليس صاحبه" : ""),
+                    "«\(submitter)» submitted a project: «\(title)»" + (ownerName.isEmpty ? " — not the owner" : "")
                 ),
                 kind: NotificationKind.projectPending.rawValue,
                 requestType: "project_pending"
@@ -201,8 +205,8 @@ class ProjectsViewModel: ObservableObject {
                     await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم اعتماد مشروع", "Project Approved"),
                         body: L10n.t(
-                            "تم اعتماد مشروع «\(info.title)» لـ «\(info.ownerName)»",
-                            "Project «\(info.title)» for «\(info.ownerName)» was approved"
+                            "تم اعتماد مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
+                            "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was approved"
                         ),
                         kind: NotificationKind.projectApproved.rawValue
                     )
@@ -249,8 +253,8 @@ class ProjectsViewModel: ObservableObject {
                     await self?.notificationVM?.notifyAdminsWithPush(
                         title: L10n.t("تم رفض مشروع", "Project Rejected"),
                         body: L10n.t(
-                            "تم رفض مشروع «\(info.title)» لـ «\(info.ownerName)»",
-                            "Project «\(info.title)» for «\(info.ownerName)» was rejected"
+                            "تم رفض مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
+                            "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was rejected"
                         ),
                         kind: NotificationKind.projectRejected.rawValue
                     )
@@ -340,11 +344,55 @@ class ProjectsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Toggle Pinned (تثبيت في الأعلى — admin only)
+
+    /// تثبيت/إلغاء تثبيت مشروع. متاح للمالك والمدير فقط (والسيرفر يرفض غيرهم).
+    func togglePinned(id: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            Log.warning("تثبيت المشروع مرفوض: الصلاحية للإدارة فقط"); return
+        }
+        guard let idx = projects.firstIndex(where: { $0.id == id }) else { return }
+
+        let oldList = projects
+        let newValue: String? = projects[idx].pinnedAt == nil
+            ? Project.pinTimestampNow() : nil
+        // تحديث تفاؤلي
+        projects[idx].pinnedAt = newValue
+        projects = Project.pinnedFirst(projects)
+
+        do {
+            try await supabase
+                .from("projects")
+                .update(["pinned_at": newValue.map { AnyEncodable($0) } ?? AnyEncodable(Optional<String>.none)])
+                .eq("id", value: id.uuidString)
+                .execute()
+            CacheManager.shared.save(projects, for: .projects, in: cacheSession)
+            Log.info("[Projects] \(newValue != nil ? "تثبيت" : "إلغاء تثبيت"): \(id.uuidString)")
+        } catch {
+            // استرجاع عند الفشل
+            projects = oldList
+            self.errorMessage = L10n.t("تعذر تغيير حالة التثبيت.", "Failed to change pin state.")
+            Log.error("خطأ تثبيت المشروع: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Delete
 
-    func deleteProject(id: UUID) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
-        guard authVM?.isAdmin == true else { Log.warning("حذف المشروع مرفوض: الصلاحية للمدير فقط"); return }
+    /// الحذف للمالك/المدير أو صاحب المشروع (السيرفر يسمح لصاحبه — `projects_delete`).
+    /// كان الحارس للمدير فقط فيرجع بصمت وتُغلق الشاشة كأن الحذف تم.
+    @discardableResult
+    func deleteProject(id: UUID, ownerId: UUID? = nil) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let owner = ownerId
+            ?? (projects + pendingProjects + myPendingProjects).first(where: { $0.id == id })?.ownerId
+        let isProjectOwner = owner != nil && owner == authVM?.currentUser?.id
+        guard authVM?.isAdmin == true || isProjectOwner else {
+            Log.warning("حذف المشروع مرفوض: للإدارة أو صاحب المشروع فقط")
+            self.errorMessage = L10n.t("لا تملك صلاحية حذف هذا المشروع.",
+                                       "You don't have permission to delete this project.")
+            return false
+        }
         do {
             try await supabase
                 .from("projects")
@@ -353,10 +401,14 @@ class ProjectsViewModel: ObservableObject {
                 .execute()
             
             projects.removeAll { $0.id == id }
+            pendingProjects.removeAll { $0.id == id }
+            myPendingProjects.removeAll { $0.id == id }
+            return true
         } catch {
             self.errorMessage = L10n.t("تعذر حذف المشروع.",
                                        "Failed to delete project.")
             Log.error("خطأ حذف المشروع: \(error.localizedDescription)")
+            return false
         }
     }
     

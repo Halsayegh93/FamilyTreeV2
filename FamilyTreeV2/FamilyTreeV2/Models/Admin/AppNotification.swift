@@ -46,7 +46,7 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
 
     /// فكّ ترميز متسامح: أي عطب في `details` (شكل غير متوقّع) يجعلها nil
     /// بدل أن يُفشل الصف كله — ففشل صف واحد كان يُسقط قائمة الإشعارات
-    /// بأكملها (الإشعارات والمستجدات وسجل النشاط تظهر فارغة).
+    /// بأكملها (الإشعارات والمستجدات و«إشعارات الإدارة» تظهر فارغة).
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id            = try c.decode(UUID.self, forKey: .id)

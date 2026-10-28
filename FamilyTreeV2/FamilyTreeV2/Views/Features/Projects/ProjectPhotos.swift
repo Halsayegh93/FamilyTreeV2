@@ -111,38 +111,64 @@ struct ProjectPhotosEditor: View {
     }
 }
 
-/// معرض صور المشروع — فسيفساء: صورة كبيرة + مربّعات جانبية، وآخر مربّع يحمل «+N»
-struct ProjectPhotosMosaic: View {
+/// قسم «الصور» في صفحة المشروع (طلب المالك ٢٠٢٦-١٠-٢٣ الخيار «ب»: الرأس للشعار والاسم فقط، والصور
+/// في قسمها تحت «نبذة عن المشروع» مباشرة): صور كثيرة ← صفحات أفقية تُسحب بزوايا مدوّرة ونقاط صغيرة
+/// تحتها؛ صورة واحدة ← الصورة وحدها بلا نقاط؛ بلا صور ← لا يُرسم القسم (يتحقّق المستدعي).
+/// كل صورة بنسبتها الطبيعية (`scaledToFit` بعرض البطاقة، بلا قصّ): ارتفاع الشريط = أطول الصور نسبةً
+/// حتى سقف `maxHeight` (٧٠٪ من ارتفاع المربّع)، والأقصر تتوسّط على أرضية البطاقة.
+/// الضغط على صورة يفتح العارض بملء الشاشة (`ProjectPhotoViewer`) من تلك الصورة.
+struct ProjectPhotosCarousel: View {
     let urls: [String]
+    /// سقف ارتفاع الصورة — ٧٠٪ من ارتفاع المربّع (لا تأخذ الصورة الطويلة المربّع كله)
+    var maxHeight: CGFloat = 320
+    @State private var page = 0
     @State private var viewerIndex: Int?
+    /// فُتح العارض مرة من هذا المربّع — تُخفى شارة «تكبير»
+    @State private var viewerOpened = false
+    /// نسبة كل صورة (العرض ÷ الارتفاع) بعد تحميلها
+    @State private var aspects: [String: CGFloat] = [:]
+    @State private var width: CGFloat = 0
 
-    /// أقصى ما يُعرض قبل ظهور «+N» على آخر مربّع
-    private let visibleLimit = 3
+    /// ارتفاع الشريط — أطول الصور نسبةً (أصغر عرض÷ارتفاع) بعرض البطاقة حتى السقف؛ قبل التحميل ١٦:١٠
+    private func stripHeight(_ photos: [String]) -> CGFloat {
+        let known = photos.compactMap { aspects[$0] }.filter { $0 > 0 }
+        let aspect = known.min() ?? 1.6
+        guard width > 0 else { return min(maxHeight, 200) }
+        return min(maxHeight, width / aspect)
+    }
+
+    private var photos: [String] { urls.filter { !$0.isEmpty } }
 
     var body: some View {
+        let photos = photos
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
-            DSSectionTitle(title: L10n.t("صور المشروع", "Project Photos"), icon: "photo.on.rectangle.angled",
-                           tint: AppSection.projects.ink, trailing: "\(urls.count)", iconSize: DS.Icon.inline)
+            DSSectionTitle(title: L10n.t("الصور", "Photos"), icon: "photo.on.rectangle.angled",
+                           tint: AppSection.projects.ink, trailing: "\(photos.count)", iconSize: DS.Icon.inline)
 
-            if urls.count == 1 {
-                tile(0, height: 210)
-            } else if urls.count == 2 {
-                HStack(spacing: DS.Spacing.xs) {
-                    tile(0, height: 170)
-                    tile(1, height: 170)
-                }
-            } else {
-                HStack(spacing: DS.Spacing.xs) {
-                    tile(0, height: 210)
-                        .frame(maxWidth: .infinity)
-                    VStack(spacing: DS.Spacing.xs) {
-                        tile(1, height: 101)
-                        tile(2, height: 101, extra: urls.count - visibleLimit)
+            Group {
+                if photos.count == 1 {
+                    photoButton(photos, 0)
+                } else {
+                    TabView(selection: $page) {
+                        ForEach(photos.indices, id: \.self) { idx in
+                            photoButton(photos, idx).tag(idx)
+                        }
                     }
-                    .frame(width: 104)
+                    .tabViewStyle(.page(indexDisplayMode: .never))
                 }
             }
+            .frame(maxWidth: .infinity)
+            .frame(height: stripHeight(photos))
+            .background(GeometryReader { geo in
+                Color.clear
+                    .onAppear { width = geo.size.width }
+                    .onChange(of: geo.size.width) { width = $0 }
+            })
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .animation(DS.Anim.quick, value: aspects.count)
+
+            if photos.count > 1 { pageDots(photos.count) }
         }
         // البطاقة الواحدة (`.dsCard`)
         .dsCard(padding: DS.Spacing.lg)
@@ -150,68 +176,127 @@ struct ProjectPhotosMosaic: View {
             get: { viewerIndex.map { ProjectPhotoIndex(id: $0) } },
             set: { viewerIndex = $0?.id }
         )) { start in
-            ProjectPhotoViewer(urls: urls, startIndex: start.id)
+            ProjectPhotoViewer(urls: photos, startIndex: start.id)
+        }
+        // نِسَب الصور من نفس الكاش (لا تنزيل مكرّر — نفس ما تعرضه الصفحات)
+        .task(id: photos) {
+            for url in photos where aspects[url] == nil {
+                guard let u = URL(string: url),
+                      let img = try? await CachedImageLoader.load(u), img.size.height > 0 else { continue }
+                aspects[url] = img.size.width / img.size.height
+            }
         }
     }
 
-    /// مربّع صورة — `extra` أكبر من صفر يعني بقيّة الصور تحت «+N»
-    private func tile(_ index: Int, height: CGFloat, extra: Int = 0) -> some View {
-        Button { viewerIndex = index } label: {
-            CachedAsyncImage(url: URL(string: urls[index])) { img in
-                img.resizable().scaledToFill()
+    private func photoButton(_ photos: [String], _ idx: Int) -> some View {
+        Button { viewerIndex = idx; viewerOpened = true } label: {
+            CachedAsyncImage(url: URL(string: photos[idx])) { img in
+                img.resizable().scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    // شارة «تكبير» في الوسط — تظهر فقط بعد وصول الصورة ثم تختفي
+                    .overlay { ZoomHintBadge(dismissed: viewerOpened) }
             } placeholder: {
-                DS.Color.mutedBackground
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.mutedBackground)
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
-            .clipped()
-            .overlay {
-                if extra > 0 {
-                    ZStack {
-                        DS.Color.shadowHeavy
-                        Text("+\(extra)")
-                            .dsFont(.statValue)
-                            .foregroundColor(DS.Color.textOnPrimary)
-                    }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(L10n.t("صورة \(index + 1)", "Photo \(index + 1)"))
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.t("صورة \(idx + 1) من \(photos.count)", "Photo \(idx + 1) of \(photos.count)"))
+        .accessibilityHint(L10n.t("اضغط للتكبير", "Tap to enlarge"))
+    }
+
+    /// نقاط الصفحات — صغيرة تحت الصورة بلون القسم، الحالية كبسولة أعرض
+    private func pageDots(_ count: Int) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(0..<count, id: \.self) { idx in
+                Capsule()
+                    .fill(AppSection.projects.ink.opacity(idx == page ? 1 : DS.Opacity.tintStroke))
+                    .frame(width: idx == page ? DS.Spacing.md : DS.Spacing.xsm, height: DS.Spacing.xsm)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(DS.Anim.quick, value: page)
+        .accessibilityHidden(true)
     }
 }
 
-private struct ProjectPhotoIndex: Identifiable { let id: Int }
+struct ProjectPhotoIndex: Identifiable { let id: Int }
 
-/// عارض بملء الشاشة بالسحب بين الصور
-private struct ProjectPhotoViewer: View {
+/// شارة «تكبير» في وسط الصورة القابلة للتكبير (المشاريع والمكتبة — طلب المالك ٢٠٢٦-١٠-٢٣):
+/// دائرة داكنة شفّافة ~٣٦ نقطة برمز أبيض، تختفي تدريجياً بعد ثانيتين، أو فوراً بعد فتح العارض مرة
+struct ZoomHintBadge: View {
+    /// فُتح العارض من هذا المربّع — لا حاجة للتلميح بعدها
+    var dismissed: Bool = false
+    @State private var expired = false
+
+    var body: some View {
+        Image(systemName: "arrow.up.left.and.arrow.down.right")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(Color.black.opacity(0.4)))
+            .opacity(dismissed || expired ? 0 : 1)
+            .animation(.easeOut(duration: 0.4), value: dismissed || expired)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                expired = true
+            }
+    }
+}
+
+/// عارض بملء الشاشة (يستعمله المشاريع والمكتبة): التكبير بالقرصة أو بضغطتين والتحريك وهي مكبّرة،
+/// والسحب بين الصور وهي غير مكبّرة — `ZoomablePhotoPager` (طلب المالك ٢٠٢٦-١٠-٢٣)
+struct ProjectPhotoViewer: View {
     let urls: [String]
     let startIndex: Int
+    /// قسم مؤشّر التحميل — المشاريع، أو المكتبة حين يفتحه عارض الأرشيف
+    var section: AppSection = .projects
     @Environment(\.dismiss) private var dismiss
-    @State private var index = 0
-    @State private var zoomed = false
+    @Environment(\.layoutDirection) private var layoutDirection
+    @State private var index: Int
+    @State private var loaded: Set<Int> = []
+
+    init(urls: [String], startIndex: Int, section: AppSection = .projects) {
+        self.urls = urls
+        self.startIndex = startIndex
+        self.section = section
+        _index = State(initialValue: startIndex)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             DS.Color.overlayDark.ignoresSafeArea()
-            TabView(selection: $index) {
-                ForEach(Array(urls.enumerated()), id: \.offset) { idx, url in
-                    ZoomableImage(onZoomChange: { zoomed = $0 }) {
-                        CachedAsyncImage(url: URL(string: url)) { img in
-                            img.resizable().scaledToFit()
-                        } placeholder: { DSPageLoader(section: .projects) }
-                    }
-                    .tag(idx)
-                }
+
+            ZoomablePhotoPager(urls: urls, startIndex: startIndex,
+                               isRTL: layoutDirection == .rightToLeft,
+                               onIndexChange: { index = $0 },
+                               onLoadedChange: { loaded = $0 })
+                // إحداثيات فيزيائية ثابتة — اتجاه التقليب يحدّده `isRTL` نفسه
+                .environment(\.layoutDirection, .leftToRight)
+                .ignoresSafeArea()
+
+            // دوّارة صغيرة محايدة تحت الصورة حتى تصل فقط — لا مجسّم القسم فوق الصورة
+            if !loaded.contains(index) {
+                ProgressView()
+                    .tint(DS.Color.overlayText)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(L10n.t("جاري التحميل", "Loading"))
             }
-            .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .automatic : .never))
-            .disabled(zoomed)
 
             HStack {
-                Text("\(index + 1) / \(urls.count)")
-                    .dsFont(.rowTitleCompact)
-                    .foregroundColor(DS.Color.overlayText)
+                // «2 من 5» — صورة واحدة بلا عدّاد
+                if urls.count > 1 {
+                    Text(verbatim: L10n.t("\(index + 1) من \(urls.count)", "\(index + 1) of \(urls.count)"))
+                        .dsFont(.rowTitleCompact)
+                        .foregroundColor(DS.Color.overlayText)
+                        .padding(.horizontal, DS.Spacing.md)
+                        .padding(.vertical, DS.Spacing.xs)
+                        .background(Capsule().fill(DS.Color.overlayDark))
+                }
                 Spacer()
                 // زرّ الإغلاق الموحّد فوق الوسائط
                 DSCloseButton(context: .onMedia) { dismiss() }
@@ -219,7 +304,5 @@ private struct ProjectPhotoViewer: View {
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.sm)
         }
-        .onAppear { index = startIndex }
-        .onChange(of: index) { _ in zoomed = false }
     }
 }

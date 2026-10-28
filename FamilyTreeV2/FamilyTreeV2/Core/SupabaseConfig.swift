@@ -74,7 +74,16 @@ struct SupabaseConfig {
         supabaseKey: key,
         options: SupabaseClientOptions(
             auth: .init(emitLocalSessionAsInitialSession: true),
-            global: .init(logger: QuietSupabaseLogger())
+            global: .init(session: requestSession, logger: QuietSupabaseLogger())
         )
     )
+
+    /// مهلة الطلب ٢٥ ث بدل ٦٠ (الافتراضي): طلب بلا رد كان يُبقي شاشة البداية دقيقة كاملة قبل أي محاولة
+    /// بديلة (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). المهلة = أقصى صمت بين حزمتين، فرفع ملف كبير
+    /// على شبكة بطيئة لا ينقطع ما دامت البيانات تتدفق.
+    private static let requestSession: URLSession = {
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = 25
+        return URLSession(configuration: configuration)
+    }()
 }

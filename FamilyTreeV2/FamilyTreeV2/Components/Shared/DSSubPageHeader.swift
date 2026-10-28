@@ -12,8 +12,8 @@ import SwiftUI
 //
 // الاستعمال:
 //  ١) صفحة داخل NavigationStack بشريط النظام (صفحات الإدارة) — سطر واحد على جذر الصفحة، ويُخفى شريط النظام:
-//         AdminDevicesView-body
-//             .dsSubPageHeader(L10n.t("الأجهزة", "Devices"), subtitle: L10n.t("…", "…"))
+//         AdminPushHealthView-body
+//             .dsSubPageHeader(L10n.t("الأجهزة ووصول الإشعارات", "Devices & notification reach"), subtitle: L10n.t("…", "…"))
 //     مع إجراءات (كانت ToolbarItem — تنتقل هنا لأن شريط النظام يختفي):
 //             .dsSubPageHeader(title, subtitle: sub) {
 //                 DSHeaderButton(symbol: "plus", label: L10n.t("إضافة", "Add")) { showAdd = true }
@@ -97,7 +97,7 @@ struct DSSubPageHeader<Trailing: View>: View {
                         .accessibilityHidden(true)
                 }
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
                     Text(title)
                         .font(DSBox.pageTitleFont)
                         .foregroundColor(DS.Color.headerTitle)
@@ -106,7 +106,7 @@ struct DSSubPageHeader<Trailing: View>: View {
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(DSBox.pageSubtitleFont)
-                            .foregroundColor(DS.Color.headerSubtitle)
+                            .foregroundColor(sec.headerSubtitle)
                             // الوصف الطويل سطران (الرأس يطول — `minHeight`) بدل «…» مع مقاسات Apple
                             .lineLimit(compact ? 1 : DSBox.pageSubtitleLines)
                             .minimumScaleFactor(0.8)

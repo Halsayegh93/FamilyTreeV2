@@ -62,7 +62,12 @@ class AppState: ObservableObject {
         sessionRevision = UUID()
     }
 
+    /// آخر حالة وصلت — الحالة نفسها مرة ثانية لا تبني الواجهة من جديد
+    private var lastStatus: AuthViewModel.AuthStatus?
+
     private func updateSession(status: AuthViewModel.AuthStatus, profileId: UUID?) {
+        let statusChanged = lastStatus != status
+        lastStatus = status
         // These states still belong to the same authenticated session. Keep the
         // device list that triggered the gate so the user can remove an old
         // device. Replacing the session models here used to empty that list.
@@ -79,7 +84,8 @@ class AppState: ObservableObject {
 
         guard status == .fullyAuthenticated, let profileId,
               let accountId = authVM.supabase.auth.currentUser?.id else {
-            if activeProfileId != nil || status == .unauthenticated || status == .accountFrozen {
+            // «غير مسجّل» مكرّرة (فحص الجلسة عند الرجوع للتطبيق) كانت تبني الواجهة من جديد فتضيع خانة الرمز
+            if activeProfileId != nil || (statusChanged && (status == .unauthenticated || status == .accountFrozen)) {
                 loadTask?.cancel()
                 loadTask = nil
                 activeProfileId = nil

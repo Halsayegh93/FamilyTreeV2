@@ -20,6 +20,8 @@ struct DSMemberPickerBox: View {
     /// الخصوصية (حسابي): لا تُعرض أسماء حتى يُكتب اسم محدّد بما يكفي (كلمتان أو ٨ أحرف).
     /// false (الإدارة): كل المرشّحين ظاهرون ويُصفّون بالبحث.
     var requiresSpecificQuery: Bool = false
+    /// false = لا أسماء قبل الكتابة (اختيار الأب في «إضافة زوجة/أم» — طلب المالك ٢٠٢٦-١٠-٢٥)، والإرشاد مكانها
+    var listsAllWhenEmpty: Bool = true
     var searchLabel: String = L10n.t("بحث بالاسم", "Search by name")
     var searchPlaceholder: String = L10n.t("الاسم", "Name")
     /// الإرشاد قبل كتابة اسم محدّد (مع `requiresSpecificQuery` فقط)
@@ -34,6 +36,12 @@ struct DSMemberPickerBox: View {
     var onAddByName: ((String) -> Void)? = nil
     /// المختار حالياً — علامة ✓ بدل السهم
     var selectedId: UUID? = nil
+    /// اختيار متعدّد (مستلمو الإعلان، الدفعة ١١): المحدّدون بعلامة ✓ والباقون بدائرة فارغة، والضغط يبدّل
+    /// (`onPick` يضيف/يزيل). nil = اختيار واحد كما كان
+    var selectedIds: Set<UUID>? = nil
+    /// زرّ الإجراء في الشريط (مع الاختيار المتعدّد: «تم (N)») — nil = «إلغاء» وحده كما كان
+    var doneTitle: String? = nil
+    var onDone: (() -> Void)? = nil
     /// تلميح القارئ الصوتي لصفّ المرشّح (مثل «ربطها زوجةً لك»)
     var rowHint: String? = nil
     /// حبر الصورة البديلة — nil = حبر القسم
@@ -41,10 +49,20 @@ struct DSMemberPickerBox: View {
     /// إجراء بديل بالأحمر في شريط المربّع (مثل «إزالة الأم») — nil = بلا
     var removeTitle: String? = nil
     var onRemove: (() -> Void)? = nil
+    /// زرّ صغير تحت النتائج بعد الكتابة («الأب غير موجود؟») — يرسل المكتوب للمضيف (طلب المالك ٢٠٢٦-١٠-٢٥)
+    var missingTitle: String? = nil
+    /// البحث يبدأ من الاسم الأول (`NameSearch.filter(fromFirstName:)`) — منتقي «أبوها»
+    var matchesFromFirstName: Bool = false
+    var onMissing: ((String) -> Void)? = nil
     let onPick: (FamilyMember) -> Void
     let onCancel: () -> Void
 
     @Environment(\.dsSection) private var section
+    /// البحث المؤجَّل قليلاً (١٥٠ م ث بعد آخر حرف) — الكتابة تبقى سلسة ولا تُعاد التصفية مع كل حرف (طلب المالك
+    /// ٢٠٢٦-١٠-٢٥ «في بطء في الكتابة»)
+    @State private var settledSearch = ""
+    /// أقصى ما يُرسم من النتائج بعد الكتابة — «ح» وحدها كانت ترسم مئات الصفوف بصورها
+    private static let maxShown = 50
     /// القوائم الطويلة (مئات الأعضاء) كسولة؛ القصيرة عادية حتى يُقاس ارتفاع المربّع كاملاً
     private static let lazyThreshold = 40
     private static let specificWords = 2
@@ -53,16 +71,20 @@ struct DSMemberPickerBox: View {
     private var ink: Color { tint ?? DS.Color.primary.dsChrome(in: section) }
 
     var body: some View {
-        let query = search.trimmingCharacters(in: .whitespaces)
+        let query = settledSearch.trimmingCharacters(in: .whitespaces)
         let queryWords = query.split(whereSeparator: \.isWhitespace).count
         let queryIsSpecific = queryWords >= Self.specificWords || query.count >= Self.specificLength
-        let list: [FamilyMember] = {
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
+        let matched: [FamilyMember] = {
             if requiresSpecificQuery {
-                return queryIsSpecific ? candidates.filter { $0.fullName.contains(query) } : []
+                return queryIsSpecific ? NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName } : []
             }
-            guard !query.isEmpty else { return candidates }
-            return candidates.filter { $0.fullName.contains(query) || $0.firstName.contains(query) }
+            guard !query.isEmpty else { return listsAllWhenEmpty ? candidates : [] }
+            return NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
         }()
+        // بعد الكتابة: أول ٥٠ فقط وسطر «اكتب أكثر» — القائمة الكاملة بلا بحث (المنتقيات التي تعرض الكل) كما هي
+        let capped = !query.isEmpty && matched.count > Self.maxShown
+        let list = capped ? Array(matched.prefix(Self.maxShown)) : matched
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
             extras.append(DSComposerAction(id: "remove", title: removeTitle, role: .destructive, action: onRemove))
@@ -72,11 +94,12 @@ struct DSMemberPickerBox: View {
             subtitle: subtitle,
             icon: icon,
             tint: DS.Color.actionNavy,
-            actionTitle: "",
-            showsAction: false,
-            canSubmit: false,
+            actionTitle: doneTitle ?? "",
+            actionIcon: "checkmark",
+            showsAction: onDone != nil,
+            canSubmit: onDone != nil,
             extraActions: extras,
-            onSubmit: {},
+            onSubmit: { onDone?() },
             onCancel: onCancel
         ) {
             DSComposerSection(title: L10n.t("البحث", "Search"), icon: "magnifyingglass",
@@ -88,13 +111,13 @@ struct DSMemberPickerBox: View {
             }
             DSComposerSection(title: L10n.t("النتيجة", "Result"), icon: "person.crop.circle",
                               tint: DS.Color.accent,
-                              trailing: requiresSpecificQuery || isLoading || list.isEmpty ? nil : "\(list.count)",
+                              trailing: requiresSpecificQuery || isLoading || matched.isEmpty ? nil : "\(matched.count)",
                               index: 1) {
                 if isLoading {
                     // التحميل الواحد: المجسّم يتنفّس
                     DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
                         .padding(.vertical, DS.Spacing.md)
-                } else if requiresSpecificQuery && !queryIsSpecific {
+                } else if (requiresSpecificQuery && !queryIsSpecific) || (!listsAllWhenEmpty && query.isEmpty) {
                     // الحالة الافتراضية: إرشاد بلا أي أسماء
                     DSEmptyView(hintTitle, message: hintMessage, icon: "magnifyingglass", style: .inline)
                 } else if list.isEmpty {
@@ -116,26 +139,75 @@ struct DSMemberPickerBox: View {
                         ForEach(list) { row($0) }
                     }
                 }
+                if capped {
+                    Text(L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب أكثر لتضييق النتائج",
+                                "Showing the first \(Self.maxShown) of \(matched.count) — type more to narrow"))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                }
             }
+            if let missingTitle, let onMissing, !isLoading {   // ظاهر من البداية (طلب المالك) — قبل الكتابة وبعدها
+                // رابط نصّي بسيط بلا إطار (طلب المالك ٢٠٢٦-١٠-٢٥ «خل الزر أبسط») — مساحة لمس ٤٤
+                Button { onMissing(query) } label: {
+                    Text(missingTitle)
+                        .dsFont(.footnote)
+                        .underline()
+                        .foregroundColor(DS.Color.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        // التأجيل: المسح فوري، والكتابة تُصفّى بعد توقّف قصير
+        .task(id: search) {
+            if search.isEmpty || settledSearch.isEmpty && search.count == 1 && candidates.count < 200 {
+                settledSearch = search; return
+            }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }
+            settledSearch = search
+        }
+        // تجهيز كلمات الأسماء في الخلفية عند الفتح — أول حرف لا ينتظر تطبيع آلاف الأسماء
+        .task(id: candidates.count) {
+            let texts = candidates.map { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
+            await Task.detached(priority: .utility) { for t in texts { _ = NameSearch.words(t) } }.value
         }
     }
 
     private func row(_ m: FamilyMember) -> some View {
         let shownName = m.fullName.isEmpty ? m.firstName : m.displayFullName
-        let selected = m.id == selectedId
+        let multi = selectedIds != nil
+        let selected = selectedIds?.contains(m.id) ?? (m.id == selectedId)
         return Button { onPick(m) } label: {
             HStack(spacing: DS.Spacing.sm) {
                 avatar(m)
-                Text(shownName)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .multilineTextAlignment(.leading)
+                    .saturation(m.isDeceased == true ? 0 : 1)   // المتوفّى: صورة بلا ألوان
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(shownName)
+                        .dsFieldFont(.memberName)
+                        .foregroundColor(DS.Color.fieldValue)
+                        .multilineTextAlignment(.leading)
+                    // «متوفى» بنفس شارة بحث الشجرة (طلب المالك ٢٠٢٦-١٠-٢٥ «إذا كان متوفي حط شكل إنه متوفي»)
+                    if m.isDeceased == true {
+                        DSStatusChip(text: m.isFemale ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
+                                     tint: DS.Color.deceased, size: .mini)
+                    }
+                }
                 Spacer(minLength: 0)
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
                         .dsGlyph(DS.Glyph.xl, weight: .regular)
                         .foregroundColor(ink)
                         .accessibilityHidden(true)   // الاختيار يُقرأ من سمة «مُختار»
+                } else if multi {
+                    // الاختيار المتعدّد: دائرة فارغة بدل السهم (يُحدَّد ولا ينتقل)
+                    Image(systemName: "circle")
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .accessibilityHidden(true)
                 } else {
                     DSChevron()
                 }
@@ -144,7 +216,7 @@ struct DSMemberPickerBox: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         // القارئ الصوتي: الاسم وحده (الصورة والسهم زخرفة)
-        .accessibilityLabel(shownName)
+        .accessibilityLabel(m.isDeceased == true ? shownName + "، " + L10n.t("متوفى", "deceased") : shownName)
         .accessibilityHint(rowHint ?? "")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
