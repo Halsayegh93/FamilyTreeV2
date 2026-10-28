@@ -29,6 +29,7 @@ struct SettingsView: View {
     @State private var showTerms = false
     @State private var showPrivacyDoc = false
     @State private var showDeleteConfirmation = false
+    @State private var showCancelDeletion = false
     /// حذف الحساب جارٍ — طبقة انتظار حتى يكتمل ويُسجَّل الخروج
     @State private var isDeletingAccount = false
     /// وضع العرض: المربّعات الصغيرة بشبكة تكيّفية (`DS.Landscape.compactTileMinWidth`) — العمودي ثلاثة في الصف
@@ -57,10 +58,22 @@ struct SettingsView: View {
                 // حذف الحساب — آخر الصفحة بعيداً عن الاستعمال اليومي: نصّ أحمر صغير بلا تعبئة مع سطر تحذير،
                 // لا زرّ أحمر عريض مثبّت (كان يشبه «تسجيل الخروج» — طلب المالك ٢٠٢٦-١٠-١٠ «نفرّق بالشكل والحجم والمكان»)
                 VStack(spacing: DS.Spacing.xxs) {
-                    DSDangerTextButton(t("حذف الحساب", "Delete Account")) {
-                        showDeleteConfirmation = true
+                    // حذف الحساب طلبٌ تنفّذه الإدارة خلال سبعة أيام (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
+                    if let pending = authVM.pendingDeletionRequest {
+                        Text(t("طلب حذف حسابك قيد المعالجة منذ \(pending.dateText)",
+                               "Your account deletion request is being processed since \(pending.dateText)"))
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                        DSDangerTextButton(t("إلغاء طلب الحذف", "Cancel deletion request"), icon: "arrow.uturn.backward") {
+                            showCancelDeletion = true
+                        }
+                    } else {
+                        DSDangerTextButton(t("حذف الحساب", "Delete Account")) {
+                            showDeleteConfirmation = true
+                        }
                     }
-                    Text(t("حذف نهائي لبياناتك ولا يمكن التراجع عنه.", "Permanently deletes your data — this can't be undone."))
+                    Text(t("يُنفَّذ الحذف خلال سبعة أيام من طلبك.", "Deletion is carried out within seven days of your request."))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .multilineTextAlignment(.center)
@@ -110,26 +123,37 @@ struct SettingsView: View {
         .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView(only: "terms") }
         .dsAlert(t("حذف الحساب", "Delete Account"), isPresented: $showDeleteConfirmation) {
             Button(t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(t("حذف نهائي", "Delete Permanently"), role: .destructive) {
+            Button(t("إرسال طلب الحذف", "Send deletion request"), role: .destructive) {
                 Task {
                     isDeletingAccount = true
-                    _ = await authVM.deleteAccount()
+                    await authVM.requestAccountDeletion()
                     isDeletingAccount = false
                 }
             }
         } message: {
-            // مطابق لما يحذفه السيرفر فعلاً (delete-account)
             Text(t(
-                "سيتم حذف نهائياً:\n• حسابك وبيانات تسجيل الدخول\n• صورتك وسيرتك وبياناتك الشخصية\n• أخبارك وتعليقاتك وما أضفته من محتوى\n\nيبقى اسمك وموضعك في شجرة العائلة حفاظاً على تسلسل النسب. لا يمكن التراجع عن هذا الإجراء.",
-                "This will permanently delete:\n• Your account & login credentials\n• Your photo, life stations and personal details\n• Your posts, comments and other content you added\n\nYour name and place in the family tree stay to keep the lineage intact. This cannot be undone."
+                "سيُرسل طلب حذف حسابك إلى إدارة التطبيق، ويُنفَّذ خلال سبعة أيام كحد أقصى. يُحذف رقمك وبريدك وصورتك ومنشوراتك وتعليقاتك، ويبقى اسمك وموقعك في شجرة العائلة.",
+                "Your deletion request will be sent to the app administration and carried out within seven days at most. Your number, email, photo, posts and comments are deleted; your name and place in the family tree remain."
             ))
+        }
+        .dsAlert(t("إلغاء طلب الحذف؟", "Cancel the deletion request?"), isPresented: $showCancelDeletion) {
+            Button(t("رجوع", "Back"), role: .cancel) {}
+            Button(t("إلغاء طلب الحذف", "Cancel deletion request")) {
+                Task {
+                    isDeletingAccount = true
+                    await authVM.cancelAccountDeletionRequest()
+                    isDeletingAccount = false
+                }
+            }
+        } message: {
+            Text(t("يبقى حسابك كما هو ولن يُحذف.", "Your account stays as it is and won't be deleted."))
         }
         .overlay {
             if isDeletingAccount {
                 // طبقة انتظار: نفس مجسّم التحميل الواحد يتنفّس + النص، فوق غطاء خافت
                 ZStack {
                     DS.Color.hierarchicalSecondary.ignoresSafeArea()
-                    DSPageLoader(t("جاري حذف الحساب…", "Deleting account…"), fillsSpace: false)
+                    DSPageLoader(t("جارٍ الإرسال…", "Sending…"), fillsSpace: false)
                         .padding(DS.Spacing.xl)
                         .dsCard(padding: nil)
                         .padding(.horizontal, DS.Spacing.xxxxl)
@@ -146,6 +170,7 @@ struct SettingsView: View {
             Text(authVM.deleteAccountError ?? "")
         }
         .task { await notificationVM.fetchLinkedDevices() }
+        .task { await authVM.loadAccountDeletionRequest() }
     }
 
     /// بطاقة هوية العائلة (طلب المالك): الصورة، الاسم والدور والرقم، وقلم التعديل في الطرف،
@@ -431,6 +456,12 @@ struct NotificationsAndPrivacyView: View {
     @State private var badgeEnabled: Bool = true
     @State private var isPhoneHidden: Bool = false
     @State private var isBirthDateHidden: Bool = false
+    @State private var isPhotoHidden: Bool = false
+    @State private var skipPhotoHiddenWrite = false
+    /// «بياناتي في الشجرة»: طلب إخفاء/حذف/تصحيح (`request_privacy_change`)
+    @State private var treeDataRequest: TreeDataRequestKind?
+    @State private var treeDataResult: String?
+    @State private var treeDataFailed = false
     /// تغيير برمجي (التعبئة من الملف أو التراجع بعد فشل) — لا يُكتب للسيرفر.
     /// كان كل فتح يكتب، والتراجع يُطلق onChange من جديد (حلقة قد تُظهر رقماً مخفياً)
     @State private var skipPhoneHiddenWrite = false
@@ -527,7 +558,7 @@ struct NotificationsAndPrivacyView: View {
             if showsPrivacy {
                 privacySection
                 // الأعضاء المحظورون — إلغاء الحظر من هنا (Guideline 1.2)
-                BlockedMembersSection(index: privacyIndex + 1)
+                BlockedMembersSection(index: privacyIndex + 2)
             }
         }
         .environment(\.layoutDirection, langManager.layoutDirection)
@@ -535,6 +566,7 @@ struct NotificationsAndPrivacyView: View {
             badgeEnabled = authVM.currentUser?.badgeEnabled ?? true
             setPhoneHiddenSilently(authVM.currentUser?.isPhoneHidden ?? false)
             setBirthHiddenSilently(authVM.currentUser?.isBirthDateHidden ?? false)
+            setPhotoHiddenSilently(authVM.currentUser?.isPhotoHidden ?? false)
         }
         .task {
             // أنواع الإشعارات وحالة الجهاز لجزء الإشعارات فقط
@@ -590,10 +622,42 @@ struct NotificationsAndPrivacyView: View {
                 }
             }
         }
+        .onChange(of: isPhotoHidden) { newValue in
+            if skipPhotoHiddenWrite { skipPhotoHiddenWrite = false; return }
+            guard NetworkMonitor.shared.requireOnline() else {
+                setPhotoHiddenSilently(!newValue)
+                return
+            }
+            Task {
+                let success = await memberVM.updatePhotoHidden(newValue)
+                if !success {
+                    if isPhotoHidden == newValue { setPhotoHiddenSilently(!newValue) }
+                    showUpdateError = true
+                }
+            }
+        }
         .dsAlert(t("خطأ", "Error"), isPresented: $showUpdateError) {
             Button(t("حسناً", "OK")) {}
         } message: {
             Text(t("تعذر تحديث الإعداد. حاول مرة أخرى.", "Failed to update setting. Please try again."))
+        }
+        .dsExtraBox(item: $treeDataRequest) { kind in
+            TreeDataRequestBox(kind: kind,
+                               onSend: { note in
+                                   dsCloseExtra { treeDataRequest = nil }
+                                   Task {
+                                       let result = await PrivacyRequestService.send(kind, note: note)
+                                       treeDataFailed = !result.ok
+                                       treeDataResult = result.message
+                                   }
+                               },
+                               onCancel: { dsCloseExtra { treeDataRequest = nil } })
+        }
+        .dsAlert(treeDataFailed ? t("تعذّر الإرسال", "Not sent") : t("أُرسل طلبك", "Request sent"),
+                 isPresented: Binding(get: { treeDataResult != nil }, set: { if !$0 { treeDataResult = nil } })) {
+            Button(t("حسناً", "OK")) { treeDataResult = nil }
+        } message: {
+            Text(treeDataResult ?? "")
         }
     }
 
@@ -646,7 +710,13 @@ struct NotificationsAndPrivacyView: View {
         isBirthDateHidden = value
     }
 
-    private var privacySection: some View {
+    private func setPhotoHiddenSilently(_ value: Bool) {
+        guard isPhotoHidden != value else { return }
+        skipPhotoHiddenWrite = true
+        isPhotoHidden = value
+    }
+
+    @ViewBuilder private var privacySection: some View {
         DSComposerSection(title: t("الخصوصية", "Privacy"), icon: "lock.fill",
                           tint: DS.Color.accent, index: privacyIndex) {
             VStack(spacing: DS.Spacing.sm) {
@@ -654,12 +724,35 @@ struct NotificationsAndPrivacyView: View {
                           title: t("إخفاء رقم الهاتف", "Hide phone number"),
                           subtitle: t("ما يظهر رقمك للأعضاء", "Members won't see your number"),
                           isOn: $isPhoneHidden)
+                switchRow(icon: "person.crop.circle.badge.xmark", color: DS.Color.accent,
+                          title: t("إخفاء صورتي عن الأعضاء", "Hide my photo from members"),
+                          subtitle: t("لا تظهر صورتك للأعضاء", "Members won't see your photo"),
+                          isOn: $isPhotoHidden)
                 switchRow(icon: "calendar.badge.minus", color: DS.Color.accent,
-                          title: t("إخفاء تاريخ الميلاد", "Hide birth date"),
-                          subtitle: t("ما يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
+                          title: t("إخفاء تاريخ ميلادي عن الأعضاء", "Hide my birth date from members"),
+                          subtitle: t("لا يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
                           isOn: $isBirthDateHidden)
                 sectionNote(t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
                               "Your data stays in the tree but is hidden from members. Admins can still see it."))
+            }
+        }
+        treeDataSection
+    }
+
+    /// «بياناتي في الشجرة» — طلب إخفاء أو حذف أو تصحيح تراجعه الإدارة (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
+    private var treeDataSection: some View {
+        DSComposerSection(title: t("بياناتي في الشجرة", "My data in the tree"), icon: "tree.fill",
+                          tint: DS.Color.palm, index: privacyIndex + 1) {
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(TreeDataRequestKind.allCases) { kind in
+                    DSButton(kind.title, icon: kind.icon,
+                             role: kind == .delete ? .destructive : nil,
+                             tint: kind == .delete ? nil : kind.tint) {
+                        treeDataRequest = kind
+                    }
+                }
+                sectionNote(t("ترسل طلبك إلى الإدارة، ويصلك الرد في الإشعارات.",
+                              "Your request goes to the administration; the reply arrives in notifications."))
             }
         }
     }

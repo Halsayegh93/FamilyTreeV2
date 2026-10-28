@@ -146,17 +146,31 @@ struct RegistrationView: View {
     // MARK: - Photo Section — كاميرا على الصورة مباشرة
     /// دائرة أصغر (٨٨) وتحتها «اختياري» فقط (طلب المالك ٢٠٢٦-١٠-١٩ «أبسط»)
     private var photoSection: some View {
-        DSProfilePhotoPicker(
-            selectedImage: $selectedImage,
-            enableCrop: true,
-            cropShape: .circle,
-            title: L10n.t("الصورة الشخصية", "Profile Photo"),
-            trailing: L10n.t("اختياري", "Optional"),
-            compactEmptyState: true,
-            avatarSize: DS.Icon.photoPickerCompact
-        )
+        VStack(spacing: DS.Spacing.xs) {
+            DSProfilePhotoPicker(
+                selectedImage: $selectedImage,
+                enableCrop: true,
+                cropShape: .circle,
+                title: L10n.t("الصورة الشخصية", "Profile Photo"),
+                trailing: L10n.t("مطلوبة", "Required"),
+                compactEmptyState: true,
+                avatarSize: DS.Icon.photoPickerCompact
+            )
+            if hasAttemptedSubmit && selectedImage == nil {
+                validationError(L10n.t("الصورة الشخصية مطلوبة", "A profile photo is required"))
+            }
+        }
         .padding(.top, DS.Spacing.md)
     }
+
+    // MARK: - العمر (الشروط ٢٠٢٦-١٠-٢٨): دون ١٣ لا حساب، و١٣–١٧ بموافقة ولي الأمر
+
+    private var age: Int? {
+        guard birthDateChosen else { return nil }
+        return Calendar(identifier: .gregorian).dateComponents([.year], from: birthDate, to: Date()).year
+    }
+    private var isUnder13: Bool { (age ?? 99) < 13 }
+    private var needsGuardian: Bool { guard let a = age else { return false }; return a >= 13 && a < 18 }
 
     // MARK: - Name Field — الاسم الرباعي
     private var nameFieldSection: some View {
@@ -291,6 +305,7 @@ struct RegistrationView: View {
 
     // MARK: - Birth Date — صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف (نفس «تسجيل عضو جديد»)
     private var birthDateSection: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
         Button {
             dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
                                 initial: birthDate, allowClear: false) { picked in
@@ -300,7 +315,7 @@ struct RegistrationView: View {
             }
         } label: {
             DSRow(icon: "gift.fill", tint: DS.Color.warning,
-                  title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                  title: L10n.t("تاريخ الميلاد", "Birth Date") + " *",
                   subtitle: birthDateChosen ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
                 DSStateIcon("pencil", tint: DS.Color.primary, size: DS.Icon.row)
             }
@@ -308,6 +323,20 @@ struct RegistrationView: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
+
+            if hasAttemptedSubmit && !birthDateChosen {
+                validationError(L10n.t("تاريخ الميلاد مطلوب", "Birth date is required"))
+            }
+            if isUnder13 && birthDateChosen {
+                validationError(L10n.t("لا يمكن إنشاء حساب لمن هم دون الثالثة عشرة. يمكن لولي أمرك إضافتك إلى شجرة العائلة.",
+                                       "Accounts can't be created for children under 13. Your guardian can add you to the family tree."))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if needsGuardian {
+                DSNoteCard(L10n.t("حسابك يحتاج موافقة ولي أمرك من حسابه في التطبيق قبل تفعيله.",
+                                  "Your account needs your guardian's approval from their account in the app before it is activated."),
+                           icon: "person.2.fill", tint: DS.Color.info)
+            }
+        }
     }
 
     // MARK: - Gender — اختيار الجنس الموحّد (مطلوب، بلا اختيار مسبق — الدفعة ١٢)
@@ -408,6 +437,8 @@ struct RegistrationView: View {
             let isValid = trimmedFull.count >= 2 && trimmedFull.count <= 50 && fullLetterCount >= 2
                        && trimmedFamily.count >= 2 && trimmedFamily.count <= 50 && familyLetterCount >= 2
                        && !selectedGender.isEmpty
+                       && selectedImage != nil
+                       && birthDateChosen && !isUnder13
             let isDisabled = !isValid || authVM.isLoading
 
             DSPrimaryButton(
@@ -438,7 +469,7 @@ struct RegistrationView: View {
                         await authVM.registerNewUser(
                             firstName: trimmedFull,
                             familyName: trimmedFamily,
-                            birthDate: birthDateChosen ? birthDate : nil,
+                            birthDate: birthDate,
                             gender: selectedGender,
                             fatherId: selectedGender == "female" ? selectedFather?.id : nil,
                             fatherName: selectedGender == "female" ? selectedFather?.fullName : nil,

@@ -41,16 +41,25 @@ struct FrozenAccountView: View {
             }
         }
         // تأكيد الحذف — مربّع التطبيق الموحّد بالمنتصف بدل القائمة السفلية
-        .dsAlert(t("حذف الحساب وبياناته نهائياً؟", "Permanently delete your account and personal data?"),
+        .dsAlert(t("حذف الحساب", "Delete Account"),
                  isPresented: $confirmDeletion) {
             Button(t("إلغاء", "Cancel"), role: .cancel) {}
-            Button(t("حذف الحساب", "Delete account"), role: .destructive) {
+            Button(t("إرسال طلب الحذف", "Send deletion request"), role: .destructive) {
                 Task {
                     deletingAccount = true
-                    _ = await authVM.deleteAccount()
+                    await authVM.requestAccountDeletion()
                     deletingAccount = false
                 }
             }
+        } message: {
+            Text(t(
+                "سيُرسل طلب حذف حسابك إلى إدارة التطبيق، ويُنفَّذ خلال سبعة أيام كحد أقصى. يُحذف رقمك وبريدك وصورتك ومنشوراتك وتعليقاتك، ويبقى اسمك وموقعك في شجرة العائلة.",
+                "Your deletion request will be sent to the app administration and carried out within seven days at most. Your number, email, photo, posts and comments are deleted; your name and place in the family tree remain."
+            ))
+        }
+        .task {
+            await authVM.loadSuspension()
+            await authVM.loadAccountDeletionRequest()
         }
         // مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك) — العنوان و«إلغاء» داخل المربّع
         .dsCenterBox(isPresented: $showContactSheet) {
@@ -84,6 +93,18 @@ struct FrozenAccountView: View {
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DS.Spacing.xxl)
+
+                    // سبب الإيقاف من الإدارة (`my_suspension`) ومهلة الاعتراض (الشروط ٢٠٢٦-١٠-٢٨)
+                    if let reason = authVM.suspensionReason {
+                        DSNoteCard(reason, title: t("سبب الإيقاف", "Reason"), icon: "info.circle.fill", tint: DS.Color.warning)
+                            .padding(.horizontal, DS.Spacing.lg)
+                    }
+                    Text(t("يمكنك الاعتراض على هذا القرار عبر البريد info@almohali.com خلال سبعة أيام.",
+                           "You can appeal this decision by emailing info@almohali.com within seven days."))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, DS.Spacing.xxl)
 
                     // اسم المستخدم إذا متوفر
                     if let user = authVM.currentUser {
@@ -123,13 +144,23 @@ struct FrozenAccountView: View {
                 .dsStaggerIn(2)
 
                 if !authVM.isOwner {
-                    // الزرّ الواحد بدور الحذف (كان رابطاً نصّياً أحمر)
-                    DSButton(t("حذف الحساب / استكمال الحذف", "Delete account / resume deletion"),
-                             icon: "trash", role: .destructive, isLoading: deletingAccount) {
-                        confirmDeletion = true
+                    if let pending = authVM.pendingDeletionRequest {
+                        Text(t("طلب حذف حسابك قيد المعالجة منذ \(pending.dateText)",
+                               "Your account deletion request is being processed since \(pending.dateText)"))
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DS.Spacing.lg)
+                            .dsStaggerIn(3)
+                    } else {
+                        // الزرّ الواحد بدور الحذف — طلبٌ تنفّذه الإدارة خلال سبعة أيام
+                        DSButton(t("حذف الحساب", "Delete account"),
+                                 icon: "trash", role: .destructive, isLoading: deletingAccount) {
+                            confirmDeletion = true
+                        }
+                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsStaggerIn(3)
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
-                    .dsStaggerIn(3)
                     if let error = authVM.deleteAccountError {
                         Text(error).dsFont(.subtitle).foregroundStyle(DS.Color.textSecondary)
                     }

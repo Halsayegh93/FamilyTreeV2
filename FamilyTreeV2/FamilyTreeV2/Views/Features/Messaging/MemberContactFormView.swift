@@ -98,6 +98,14 @@ struct MemberContactFormView: View {
                               DSOptionTile($0, title: $0.title, icon: $0.icon, tint: categoryTint($0))
                           },
                           selection: $selectedCategory, columns: ContactCategory.allCases.count)
+            if selectedCategory == .appeal {
+                Text(L10n.t("اعتراض على قرار إداري — نرد خلال ٧ أيام",
+                            "An appeal against an administrative decision — we reply within 7 days"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -318,13 +326,14 @@ struct MemberContactFormView: View {
 // MARK: - التصنيفات الأربعة
 
 enum ContactCategory: CaseIterable {
-    case inquiry, complaint, suggestion, other
+    case inquiry, complaint, suggestion, appeal, other
 
     var title: String {
         switch self {
         case .complaint: return L10n.t("شكوى", "Complaint")
         case .suggestion: return L10n.t("اقتراح", "Suggestion")
         case .inquiry: return L10n.t("استفسار", "Inquiry")
+        case .appeal: return L10n.t("اعتراض", "Appeal")
         case .other: return L10n.t("أخرى", "Other")
         }
     }
@@ -334,6 +343,7 @@ enum ContactCategory: CaseIterable {
         case .complaint: return "exclamationmark.bubble.fill"
         case .suggestion: return "lightbulb.fill"
         case .inquiry: return "questionmark.bubble.fill"
+        case .appeal: return "hand.raised.fill"
         case .other: return "ellipsis.message.fill"
         }
     }
@@ -343,6 +353,7 @@ enum ContactCategory: CaseIterable {
         case .complaint: return DS.Color.sadu
         case .suggestion: return DS.Color.palm
         case .inquiry: return DS.Color.primary
+        case .appeal: return DS.Color.sea
         case .other: return DS.Color.accent
         }
     }
@@ -353,6 +364,7 @@ enum ContactCategory: CaseIterable {
         case .complaint: return "شكوى"
         case .suggestion: return "اقتراح"
         case .inquiry: return "استفسار"
+        case .appeal: return "اعتراض"
         case .other: return "أخرى"
         }
     }

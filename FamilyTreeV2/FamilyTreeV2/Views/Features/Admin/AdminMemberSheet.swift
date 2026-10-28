@@ -34,6 +34,8 @@ struct AdminMemberSheet: View {
     @State private var box: AdminMemberBox?
     @State private var tall: AdminMemberTallBox?
     @State private var confirm: AdminMemberConfirm?
+    /// سبب الإيقاف (اختياري) — يصل للعضو ويظهر في شاشة الحساب الموقوف
+    @State private var suspendReason = ""
     @State private var busy: String?
     @State private var failure: String?
 
@@ -50,7 +52,7 @@ struct AdminMemberSheet: View {
     var body: some View {
         page
             .modifier(AdminMemberSheetBoxes(box: $box, tall: $tall))
-            .modifier(AdminMemberSheetAlerts(confirm: $confirm, failure: $failure, run: run))
+            .modifier(AdminMemberSheetAlerts(confirm: $confirm, failure: $failure, suspendReason: $suspendReason, run: run))
             .onAppear { tree = AdminMemberFacts.TreeContext(memberVM.allMembers) }
             .onChange(of: memberVM.membersVersion) { _ in tree = AdminMemberFacts.TreeContext(memberVM.allMembers) }
             .task(id: ids.indices.contains(position) ? ids[position] : nil) { await refresh() }
@@ -148,8 +150,9 @@ struct AdminMemberSheet: View {
                 if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
             case .suspend, .unsuspend:
                 let target: FamilyMember.MemberStatus = action == .suspend ? .frozen : .active
-                ok = await memberVM.setMemberStatus(memberId: m.id, status: target)
-                if ok { liveStatus = target }
+                ok = await memberVM.setMemberSuspension(memberId: m.id, suspend: action == .suspend,
+                                                        reason: action == .suspend ? suspendReason : nil)
+                if ok { liveStatus = target } else { failure = memberVM.errorMessage }
             case .block:
                 ok = await authVM.banPhone((m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                                            reason: L10n.t("من «بيانات العضو»: \(m.displayFullName)", "From Member details: \(m.displayFullName)"))
@@ -293,7 +296,7 @@ struct AdminMemberSheet: View {
                                   value: frozen ? L10n.t("يعود للدخول إلى التطبيق", "They can sign in again")
                                                 : L10n.t("يمنعه من الدخول مؤقتاً، وبياناته محفوظة", "Blocks sign-in for now; data is kept"),
                                   action: (frozen ? L10n.t("رفع", "Lift") : L10n.t("إيقاف", "Suspend"),
-                                           { confirm = frozen ? .unsuspend : .suspend }),
+                                           { suspendReason = ""; confirm = frozen ? .unsuspend : .suspend }),
                                   busy: busy == AdminMemberConfirm.suspend.id || busy == AdminMemberConfirm.unsuspend.id)
                 }
                 if authVM.canManageBannedPhones && isOther && !phone.isEmpty {
@@ -802,7 +805,8 @@ enum AdminMemberConfirm: Identifiable, Equatable {
     var message: String {
         switch self {
         case .register: return L10n.t("سيتمكن من الدخول للتطبيق برقمه.", "They'll be able to sign in with their number.")
-        case .suspend: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف.", "They can't use the app until the suspension is lifted.")
+        case .suspend: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف. يصله إشعار بالسبب إن كتبته.",
+                                     "They can't use the app until the suspension is lifted. They're notified, with the reason if you add one.")
         case .unsuspend: return L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They'll be able to use the app again.")
         case .block: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُوقف حساب صاحبه.", "This number can't sign up, and its account is suspended.")
         case .unblock: return L10n.t("سيتمكن الرقم من التسجيل مجدداً. الحساب يبقى موقوفاً حتى ترفع إيقافه.",
@@ -854,6 +858,7 @@ private struct AdminMemberSheetBoxes: ViewModifier {
 private struct AdminMemberSheetAlerts: ViewModifier {
     @Binding var confirm: AdminMemberConfirm?
     @Binding var failure: String?
+    @Binding var suspendReason: String
     let run: (AdminMemberConfirm) -> Void
 
     func body(content: Content) -> some View {
@@ -861,6 +866,10 @@ private struct AdminMemberSheetAlerts: ViewModifier {
             .dsAlert(confirm?.title ?? "",
                      isPresented: Binding(get: { confirm != nil }, set: { if !$0 { confirm = nil } }),
                      presenting: confirm) { action in
+                if case .suspend = action {
+                    TextField(L10n.t("سبب الإيقاف (اختياري)", "Reason (optional)"), text: $suspendReason)
+                        .dsAlertField()
+                }
                 Button(action.button, role: action.isDestructive ? .destructive : nil) { run(action) }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { confirm = nil }
             } message: { action in

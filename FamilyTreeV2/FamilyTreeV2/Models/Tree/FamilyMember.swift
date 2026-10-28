@@ -21,6 +21,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     var photoURL: String?
     let isPhoneHidden: Bool?
     let isBirthDateHidden: Bool?
+    /// العضو أخفى صورته عن الأعضاء (`members_masked` يفرّغ الصورة لغيره) — سياسة الخصوصية ٢٠٢٦-١٠-٢٨
+    var isPhotoHidden: Bool? = nil
     let badgeEnabled: Bool?
     var isHiddenFromTree: Bool
     var sortOrder: Int
@@ -125,6 +127,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.photoURL = try container.decodeIfPresent(String.self, forKey: .photoURL)
         self.isPhoneHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhoneHidden)
         self.isBirthDateHidden = try container.decodeIfPresent(Bool.self, forKey: .isBirthDateHidden)
+        self.isPhotoHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhotoHidden)
         self.badgeEnabled = try container.decodeIfPresent(Bool.self, forKey: .badgeEnabled)
         
         self.isHiddenFromTree = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromTree) ?? false
@@ -174,6 +177,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
             && lhs.bio == rhs.bio
             && lhs.isMarried == rhs.isMarried
             && lhs.isPhoneHidden == rhs.isPhoneHidden
+            && lhs.isPhotoHidden == rhs.isPhotoHidden
             && lhs.email == rhs.email
         }
 
@@ -363,6 +367,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case photoURL = "photo_url"
         case isPhoneHidden = "is_phone_hidden"
         case isBirthDateHidden = "is_birth_date_hidden"
+        case isPhotoHidden = "is_photo_hidden"
         case badgeEnabled = "badge_enabled"
         case isHiddenFromTree = "is_hidden_from_tree"
         case sortOrder = "sort_order"

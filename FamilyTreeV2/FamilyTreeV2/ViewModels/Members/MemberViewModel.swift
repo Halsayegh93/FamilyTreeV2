@@ -1625,6 +1625,27 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// إخفاء صورتي عن الأعضاء (`profiles.is_photo_hidden`) — سياسة الخصوصية ٢٠٢٦-١٠-٢٨
+    func updatePhotoHidden(_ isHidden: Bool) async -> Bool {
+        guard let userId = currentUser?.id else { return false }
+        do {
+            try await supabase
+                .from("profiles")
+                .update(["is_photo_hidden": AnyEncodable(isHidden)])
+                .eq("id", value: userId.uuidString)
+                .execute()
+            await fetchSingleMember(id: userId)
+            if var updated = _memberById[userId] {
+                updated.isPhotoHidden = isHidden
+                authVM?.currentUser = updated
+            }
+            return true
+        } catch {
+            Log.error("خطأ تحديث إخفاء الصورة: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func updateBadgeEnabled(_ isEnabled: Bool) async {
         guard let userId = currentUser?.id else { return }
         do {
@@ -2003,6 +2024,33 @@ class MemberViewModel: ObservableObject {
 
     /// تجميد حساب عضو أو إعادة تفعيله — يمنع/يسمح بالدخول للتطبيق
     @discardableResult
+    /// إيقاف الحساب ورفعه من السيرفر (`set_member_suspension`): الحالة + `frozen_reason` + إشعار العضو
+    /// (الشروط ٢٠٢٦-١٠-٢٨) — للمالك والمدير
+    func setMemberSuspension(memberId: UUID, suspend: Bool, reason: String?) async -> Bool {
+        guard authVM?.canFreezeMembers == true else {
+            Log.error("[MEMBER] رُفض الإيقاف: لا توجد صلاحية")
+            return false
+        }
+        nonisolated struct Params: Encodable { let p_member: String; let p_suspend: Bool; let p_reason: String? }
+        let trimmed = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        do {
+            _ = try await supabase
+                .rpc("set_member_suspension",
+                     params: Params(p_member: memberId.uuidString, p_suspend: suspend,
+                                    p_reason: trimmed.isEmpty ? nil : trimmed))
+                .execute()
+            if let index = allMembers.firstIndex(where: { $0.id == memberId }) {
+                allMembers[index].status = suspend ? .frozen : .active
+            }
+            return true
+        } catch {
+            Log.error("[MEMBER] فشل الإيقاف: \(error.localizedDescription)")
+            errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t(
+                "تعذّر تغيير حالة الحساب. حاول مرة أخرى.", "Couldn't change the account status. Please try again."))
+            return false
+        }
+    }
+
     func setMemberStatus(memberId: UUID, status: FamilyMember.MemberStatus) async -> Bool {
         guard authVM?.canEditMembers == true else {
             Log.error("[MEMBER] تم رفض تغيير الحالة: لا توجد صلاحية")

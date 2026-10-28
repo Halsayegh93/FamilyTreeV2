@@ -176,6 +176,12 @@ struct HomeNewsView: View {
             showingContactForm = false   // مربّع التواصل مفتوح؟ يُغلق حتى يظهر مركز الإشعارات
             showingNotifications = true
         }
+        // إشعار «موافقة ولي الأمر» يفتح «حسابي» حيث بطاقة الموافقة
+        .onReceive(NotificationCenter.default.publisher(for: .openProfileTab)) { _ in
+            showingNotifications = false
+            if activeSubPage != nil { activeSubPage = nil }
+            selectedTab = 3
+        }
         // Safety net — لو الـ event وصل قبل ما الـ view يكون mounted
         .onChange(of: notificationVM.pendingJoinDeepLinkRequestId) { newValue in
             guard newValue != nil else { return }

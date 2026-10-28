@@ -1464,29 +1464,109 @@ class AuthViewModel: ObservableObject {
         SharedSessionStore.clear()
     }
 
-    func deleteAccount() async -> Bool {
+    // MARK: - طلب حذف الحساب (سياسة الخصوصية ٢٠٢٦-١٠-٢٨): العضو يطلب، والإدارة تنفّذ خلال سبعة أيام
+
+    /// طلب حذف الحساب المعلّق — nil = لا طلب
+    nonisolated struct AccountDeletionRequest: Decodable, Equatable, Sendable {
+        let id: UUID
+        let createdAt: String?
+        let status: String?
+        enum CodingKeys: String, CodingKey {
+            case id, status
+            case createdAt = "created_at"
+        }
+        /// تاريخ الطلب للعرض «yyyy-MM-dd»
+        var dateText: String {
+            if let d = DateHelper.parse(createdAt) { return DateHelper.format(d) }
+            return String((createdAt ?? "").prefix(10))
+        }
+    }
+    @Published var pendingDeletionRequest: AccountDeletionRequest?
+
+    /// رسالة السيرفر إن كانت عربية، وإلا البديل
+    static func serverMessage(_ error: Error, fallback: String) -> String {
+        if let pg = error as? PostgrestError,
+           pg.message.range(of: "\\p{Arabic}", options: .regularExpression) != nil,
+           L10n.isArabic {
+            return pg.message
+        }
+        return fallback
+    }
+
+    private static var ownerProtectedMessage: String {
+        L10n.t("حساب مالك التطبيق محمي. يلزم نقل الملكية قبل حذفه.",
+               "The owner account is protected. Transfer ownership before deleting it.")
+    }
+
+    func loadAccountDeletionRequest() async {
+        do {
+            let row: AccountDeletionRequest? = try await supabase.rpc("my_account_deletion_request").execute().value
+            pendingDeletionRequest = row
+        } catch {
+            Log.warning("[AccountDeletion] تعذّر جلب الطلب: \(error.localizedDescription)")
+        }
+    }
+
+    /// إرسال طلب حذف الحساب — لا يحذف شيئاً فوراً
+    @discardableResult
+    func requestAccountDeletion() async -> Bool {
         guard !isOwner else {
-            deleteAccountError = L10n.t("حساب مالك التطبيق محمي. يلزم نقل الملكية قبل حذفه.",
-                                       "The owner account is protected. Transfer ownership before deleting it.")
+            deleteAccountError = Self.ownerProtectedMessage
             return false
         }
-        guard !isEndingSession else { return false }
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         deleteAccountError = nil
         defer { isLoading = false }
         do {
-            nonisolated struct DeletionResponse: Decodable { let ok: Bool }
-            let response: DeletionResponse = try await supabase.functions.invoke(
-                "delete-account", options: FunctionInvokeOptions(body: [:] as [String: String])
-            )
-            guard response.ok else { throw NSError(domain: "AccountDeletion", code: 1) }
-            await signOut()
+            let row: AccountDeletionRequest = try await supabase.rpc("request_account_deletion").execute().value
+            pendingDeletionRequest = row
             return true
         } catch {
-            deleteAccountError = L10n.t("لم يكتمل حذف الحساب. حاول مرة أخرى لإكمال التنظيف.",
-                                       "Account deletion is incomplete. Please retry to finish cleanup.")
-            Log.error("Account deletion did not complete")
+            if (error as? PostgrestError)?.hint == "owner_protected" {
+                deleteAccountError = Self.ownerProtectedMessage
+            } else {
+                deleteAccountError = Self.serverMessage(error, fallback: L10n.t(
+                    "تعذّر إرسال طلب الحذف. حاول مرة أخرى.", "Couldn't send the deletion request. Please try again."))
+            }
+            Log.error("[AccountDeletion] فشل إرسال الطلب: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    @discardableResult
+    func cancelAccountDeletionRequest() async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        isLoading = true
+        deleteAccountError = nil
+        defer { isLoading = false }
+        do {
+            _ = try await supabase.rpc("cancel_account_deletion_request").execute()
+            pendingDeletionRequest = nil
+            return true
+        } catch {
+            deleteAccountError = Self.serverMessage(error, fallback: L10n.t(
+                "تعذّر إلغاء طلب الحذف. حاول مرة أخرى.", "Couldn't cancel the deletion request. Please try again."))
+            Log.error("[AccountDeletion] فشل الإلغاء: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    // MARK: - إيقاف الحساب: سبب الإيقاف من السيرفر
+
+    nonisolated struct SuspensionInfo: Decodable, Sendable {
+        let frozen: Bool?
+        let reason: String?
+    }
+    @Published var suspensionReason: String?
+
+    func loadSuspension() async {
+        do {
+            let info: SuspensionInfo? = try await supabase.rpc("my_suspension").execute().value
+            let r = info?.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+            suspensionReason = (r?.isEmpty ?? true) ? nil : r
+        } catch {
+            Log.warning("[Suspension] تعذّر جلب السبب: \(error.localizedDescription)")
         }
     }
 

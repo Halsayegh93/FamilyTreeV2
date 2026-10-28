@@ -101,9 +101,13 @@ struct ProfileView: View {
                                     // الوضع الأفقي: عمودان — يمين (الملف + المعلومات) ويسار (الطلبات + العائلة)
                                     HStack(alignment: .top, spacing: DS.Spacing.md) {
                                         VStack(spacing: DS.Spacing.md) {
-                                            profileHeader(user: currentUser)
-                                                .padding(.top, DS.Spacing.md)
-                                                .dsCardCascade(0, appeared: appeared)
+                                            // موافقة ولي الأمر — أعلى «حسابي» حين يوجد طلب
+                                            VStack(spacing: 0) {
+                                                GuardianRequestsCard()
+                                                profileHeader(user: currentUser)
+                                                    .padding(.top, DS.Spacing.md)
+                                            }
+                                            .dsCardCascade(0, appeared: appeared)
                                             personalInfoSection(user: currentUser)
                                                 .dsCardCascade(1, appeared: appeared)
                                         }
@@ -127,10 +131,13 @@ struct ProfileView: View {
                                     }
                                 } else {
                                     VStack(spacing: DS.Spacing.md) {
-                                        // Profile Header
-                                        profileHeader(user: currentUser)
-                                            .padding(.top, DS.Spacing.md)
-                                            .dsCardCascade(0, appeared: appeared)
+                                        // موافقة ولي الأمر — أعلى «حسابي» حين يوجد طلب، ثم الملف
+                                        VStack(spacing: 0) {
+                                            GuardianRequestsCard()
+                                            profileHeader(user: currentUser)
+                                                .padding(.top, DS.Spacing.md)
+                                        }
+                                        .dsCardCascade(0, appeared: appeared)
 
                                         // معلوماتي — وفيه صلة القرابة (طلب المالك ٢٠٢٦-١٠-٠٢)
                                         personalInfoSection(user: currentUser)

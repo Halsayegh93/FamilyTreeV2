@@ -367,6 +367,8 @@ struct AdminAllRequestsView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests(force: true) }
                 // مراحل طلبات الانضمام (المسار شغّال فقط — وإلا لا طلب)
                 group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
+                // طلبات حذف الحساب والخصوصية (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
+                group.addTask { @MainActor in await adminRequestVM.fetchPolicyRequests() }
             }
             await fetchAllRegistrationMatches()
             recalculateCounts()
@@ -742,7 +744,14 @@ struct AdminAllRequestsView: View {
          adminRequestVM.phoneChangeRequests.count, adminRequestVM.nameChangeRequests.count,
          diwaniyaVM.pendingDiwaniyas.count, adminRequestVM.deceasedRequests.count,
          adminRequestVM.childAddRequests.count, adminRequestVM.photoSuggestionRequests.count,
-         projectsVM.pendingProjects.count, pendingArchiveItems.count, adminRequestVM.treeEditRequests.count]
+         projectsVM.pendingProjects.count, pendingArchiveItems.count, adminRequestVM.treeEditRequests.count,
+         adminRequestVM.policyRequestsCount]
+    }
+
+    /// بطاقات طلبات الحذف والخصوصية: خارج البحث والتحديد، في «الكل» أو مجموعة «الأعضاء»
+    private var showsPolicyRequests: Bool {
+        adminRequestVM.policyRequestsCount > 0 && !isSearching && !isSelectMode
+            && (selectedSection == nil || selectedSection == .members) && selectedTab == .all
     }
 
     /// يبحث الآن (نصّ غير فارغ)
@@ -944,6 +953,7 @@ struct AdminAllRequestsView: View {
             + adminRequestVM.deceasedRequests.count
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.treeEditRequests.count
+            + adminRequestVM.policyRequestsCount
             + photosInTree
         switch scope {
         case .all:     return content + tree - photosInTree
@@ -1128,14 +1138,21 @@ struct AdminAllRequestsView: View {
                     }
                 }
 
+                // طلبات حذف الحساب والخصوصية — بطاقات مستقلّة في «الكل» و«الأعضاء»
+                if showsPolicyRequests {
+                    AdminPolicyRequestsSection(adminRequestVM: adminRequestVM)
+                }
+
                 if isSearching {
                     // البحث يعرض كل طلبات المجموعة المطابقة (أي نوع)
                     allRequestsContent()
                 } else if totalCount == 0 || itemCount(for: selectedTab) == 0 {
-                    emptyState
-                        .padding(.top, DS.Spacing.xs)
-                        .dsStaggerIn(2)
-                        .reviewListRow()
+                    if !showsPolicyRequests {
+                        emptyState
+                            .padding(.top, DS.Spacing.xs)
+                            .dsStaggerIn(2)
+                            .reviewListRow()
+                    }
                 } else if isApprovalFilterActive && currentTabIds.isEmpty {
                     DSEmptyView(L10n.t("لا طلبات هنا", "Nothing here"),
                                 message: L10n.t("لا طلب يطابق هذا الفلتر الحين.", "No request matches this filter right now."),
