@@ -11,22 +11,20 @@ import SwiftUI
 //   «القادم» — بالأيام (اليوم · بكرة · هذا الأسبوع · لاحقاً): وفيات لم يُعلن عنها («إعلان» ← المنشئ على «إعلان وفاة»
 //     جاهزاً) وذكرى الراحلين خلال ٣٠ يوماً (المراقب والمشرف: الذكرى فقط).
 //   «المنشور» (المالك والمدير) — الإعلانات وإعلانات الوفاة في الأخبار، إعلانات التحديث، والإشعارات المرسلة.
-//   أرقام فقط تفتح بيوتها: «تصل الإشعارات إلى N جهازاً» ← الفريق والأمان، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة.
+//   أرقام فقط تفتح بيوتها: «تصل الإشعارات إلى N جهازاً» ← الفريق والأمان (للمالك)، و«N متوفى: لا يوجد تاريخ كامل للوفاة» ←
+//   «إدارة تواريخ الوفاة».
 // لا قراءة جديدة على السيرفر: الأعضاء المحمّلون، `death_announcements`، `scheduled_notifications`، الأخبار، وإشعاراتك.
 
 /// نصوص مشتركة بين الصفحة والمنشئ
 enum AdminOccasionsText {
-    /// «توفي ١٨ أكتوبر» / «توفيت …» — أو «بلا تاريخ وفاة»
+    /// «توفي ١٨ أكتوبر» / «توفيت …» — والتاريخ غير الكامل (السنة فقط، هجري، بلا تاريخ) «لا يوجد تاريخ كامل للوفاة»
+    /// بدل يوم خاطئ (السنة وحدها محفوظة ١ يناير — `DeceasedMemorial.classify`)
     static func deathLine(_ m: FamilyMember) -> String {
         let verb = m.isFemale ? L10n.t("توفيت", "Died") : L10n.t("توفي", "Died")
-        guard let raw = m.deathDate?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-            return L10n.t("بلا تاريخ وفاة", "No death date")
+        guard case let .exact(year, month, day) = DeceasedMemorial.classify(m.deathDate),
+              let date = DeceasedMemorial.gregorian.date(from: DateComponents(year: year, month: month, day: day)) else {
+            return DeathDatesCampaign.noFullDate
         }
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        guard let date = f.date(from: String(raw.prefix(10))) else { return "\(verb) \(raw.prefix(10))" }
         return "\(verb) \(shortDate(date))"
     }
 
@@ -99,8 +97,10 @@ struct AdminOccasionsPage: View {
             group.addTask { @MainActor in if let ids = await AdminTodayFetch.announcedDeathIds() { announced = ids } }
             group.addTask { @MainActor in if newsVM.allNews.isEmpty || force { await newsVM.fetchNews(force: force) } }
             group.addTask { @MainActor in await notificationVM.fetchNotifications(force: force) }
-            // نفس مخزن «الأجهزة ووصول الإشعارات» (الفريق والأمان) — رقم واحد بتعريف واحد في المكانين
-            group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
+            // نفس مخزن «الأجهزة ووصول الإشعارات» (الفريق والأمان — للمالك فقط) — رقم واحد بتعريف واحد في المكانين
+            if authVM.canViewSystemSettings {
+                group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
+            }
         }
     }
 
@@ -573,18 +573,20 @@ struct AdminOccasionsPublishedCard: View {
 
 // MARK: - أرقام فقط تفتح بيوتها
 
-/// «تصل الإشعارات إلى N جهازاً · P٪» ← الفريق والأمان ← «الأجهزة ووصول الإشعارات»، و«N متوفى تاريخ وفاته غير مكتمل» ← العائلة ←
-/// متوفون ← غير مكتمل. لا أوامر هنا — البيت هناك
+/// «تصل الإشعارات إلى N جهازاً · P٪» ← الفريق والأمان ← «الأجهزة ووصول الإشعارات» (للمالك)، و«N متوفى: لا يوجد تاريخ كامل
+/// للوفاة» ← «إدارة تواريخ الوفاة». لا أوامر هنا — البيت هناك
 struct AdminOccasionsNumbersCard: View {
     /// «تصلها الإشعارات» = تسجيل صالح (الفاشل وحده لا تصله — الدفعة ١٤) — نفس رقم «الأجهزة ووصول الإشعارات» ورأس «الفريق والأمان»
     @ObservedObject private var devices = AdminDeviceReachStore.shared
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
 
-    private var incomplete: Int { memberVM.allMembers.filter { $0.role != .pending && AdminMemberFacts.deathIncomplete($0) }.count }
+    /// نفس عدّ «إدارة تواريخ الوفاة» (نطاق «ذكرى الراحلين»)
+    private var incomplete: Int { DeathDatesCampaign.stats(memberVM.allMembers).incomplete }
 
     var body: some View {
-        let showsReach = authVM.canSendNotifications
+        // وصول الإشعارات بيته «الفريق والأمان» — للمالك فقط (٢٠٢٦-١٠-٢٤)
+        let showsReach = authVM.canViewSystemSettings
         let reach = devices.stats.flatMap { $0.total > 0 ? $0 : nil }
         let showsDates = authVM.canEditMembers && incomplete > 0
         if showsReach || showsDates {
@@ -610,15 +612,17 @@ struct AdminOccasionsNumbersCard: View {
                 }
                 if showsReach && showsDates { AdminRowDivider() }
                 if showsDates {
+                    // بيت الاستكمال «إدارة تواريخ الوفاة» (٢٠٢٦-١٠-٢٤)
                     NavigationLink {
                         AdminLazyPage {
-                            AnyView(AdminMembersPage(chip: .deceased, sub: .deathIncomplete)
-                                .adminBackTitle(AdminArea.occasions.title).adminArea(.family))
+                            AnyView(DeathDatesCampaignPage().adminBackTitle(AdminArea.occasions.title).adminArea(.family))
                         }
                     } label: {
                         AdminListRow(icon: "calendar.badge.exclamationmark", tint: DS.Color.warning,
-                                     title: L10n.t("\(incomplete) متوفى تاريخ وفاته غير مكتمل", "\(incomplete) deceased with an incomplete date"),
-                                     subtitle: L10n.t("لا تظهر ذكراهم — الاستكمال في «العائلة»", "No memorial shows — complete them in Family"))
+                                     title: L10n.t("\(incomplete) متوفى: \(DeathDatesCampaign.noFullDate)",
+                                                   "\(incomplete) deceased: \(DeathDatesCampaign.noFullDate)"),
+                                     subtitle: L10n.t("لا تظهر ذكراهم — أكملها من «إدارة تواريخ الوفاة»",
+                                                      "No memorial shows — complete them in Death dates"))
                     }
                     .buttonStyle(.plain)
                 }

@@ -15,8 +15,9 @@ struct LoginView: View {
     @State private var otpTimeRemaining = 0
     @State private var logoScale: CGFloat = 0.94
     @State private var logoOpacity: CGFloat = 0
-    /// «شروط الاستخدام وسياسة الخصوصية» قبل الدخول (Guideline 5.1.1)
+    /// «الخصوصية والاستخدام» قبل الدخول (Guideline 5.1.1)
     @State private var showLegal = false
+    @State private var showLegalTerms = false
 
 
 
@@ -188,25 +189,37 @@ struct LoginView: View {
             .environment(\.dsStaggerBase, DSMotion.sectionsAfterHeader)
     }
 
-    /// سطر صغير أسفل الشاشة يفتح «الخصوصية والشروط»
+    /// سطر واحد صغير أسفل الشاشة: «بالمتابعة توافق على «الخصوصية والاستخدام»» — الاسم يُضغط فيفتح المربّع
+    /// (طلب المالك ٢٠٢٦-١٠-٢٧؛ كان «باستخدامك التطبيق فإنك توافق على شروط الاستخدام وسياسة الخصوصية» بسطرين)
+    /// وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨): «بالمتابعة توافق على سياسة الخصوصية وقواعد الاستخدام»،
+    /// وكل اسم يُضغط فيفتح وثيقته وحدها
     private var legalFooter: some View {
         VStack(spacing: 0) {
-            Text(L10n.t("باستخدامك التطبيق فإنك توافق على", "By using the app you agree to the"))
-                .dsFont(.footnote)
+            Text(L10n.t("بالمتابعة توافق على", "By continuing you agree to the"))
                 .foregroundColor(DS.Color.textTertiary)
-            Button { showLegal = true } label: {
-                Text(L10n.t("شروط الاستخدام وسياسة الخصوصية", "Terms of Use and Privacy Policy"))
-                    .dsFont(.badge)
-                    .foregroundColor(DS.Color.primary)
-                    .padding(.horizontal, DS.Spacing.md)
-                    .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
-                    .contentShape(Rectangle())
+            HStack(spacing: DS.Spacing.xs) {
+                legalLink(L10n.t("سياسة الخصوصية", "Privacy Policy")) { showLegal = true }
+                Text(L10n.t("و", "and")).foregroundColor(DS.Color.textTertiary)
+                legalLink(L10n.t("قواعد الاستخدام", "Terms of Use")) { showLegalTerms = true }
             }
-            .buttonStyle(.plain)
         }
+        .dsFont(.footnote)
         .multilineTextAlignment(.center)
+        .padding(.horizontal, DS.Spacing.md)
         .frame(maxWidth: .infinity)
-        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView() }
+        .dsTallBox(isPresented: $showLegal) { PrivacyPolicyView(only: "privacy") }
+        .dsTallBox(isPresented: $showLegalTerms) { PrivacyPolicyView(only: "terms") }
+    }
+
+    private func legalLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .foregroundColor(DS.Color.primary)
+                .underline()
+                .frame(minHeight: DS.Icon.tapTarget)   // مساحة ضغط ٤٤ (توصية أبل)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// مربّع رقم واحد من رمز التحقق — يبرز المربّع النشط

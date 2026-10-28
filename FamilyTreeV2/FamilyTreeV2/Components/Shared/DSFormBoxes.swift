@@ -157,10 +157,10 @@ struct DSFieldBox<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs + 1) {
             Text(label)
-                .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                 .foregroundColor(DS.Color.fieldLabel)
             content()
-                .dsFieldFont(DSBox.fieldValueSize)
+                .dsFieldFont(DSBox.fieldValueSize, weight: DS.TextRole.fieldValue.weight)
                 .foregroundColor(DS.Color.textPrimary)
                 .dsFieldChrome()
         }

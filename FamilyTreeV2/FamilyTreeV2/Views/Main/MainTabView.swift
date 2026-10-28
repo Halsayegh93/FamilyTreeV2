@@ -19,7 +19,11 @@ struct MainTabView: View {
                 } else {
                     UISelectionFeedbackGenerator().selectionChanged()
                 }
-                selectedTab = newValue
+                if newValue == selectedTab {
+                    selectedTab = newValue
+                } else {
+                    DSScreenCrossfade.run { selectedTab = newValue }
+                }
                 // جلسات الاستخدام: التبويب الجديد قبل ظهور صفحاته (`AppUsageTracker`)
                 AppUsageTracker.shared.setTab(newValue)
                 NotificationCenter.default.post(name: Notification.Name("TabChanged"), object: nil)
@@ -32,6 +36,17 @@ struct MainTabView: View {
         )
     }
     
+    /// ما تمرّره التبويبات لصفحاتها: تبديل التبويب من داخل صفحة (مربّعات الرئيسية مثلاً) بالتلاشي نفسه
+    private var crossfadingTab: Binding<Int> {
+        Binding(
+            get: { selectedTab },
+            set: { newValue in
+                guard newValue != selectedTab else { return }
+                DSScreenCrossfade.run { selectedTab = newValue }
+            }
+        )
+    }
+
     private func tabTitle(_ ar: String, _ en: String) -> String {
         verticalSizeClass == .compact ? "" : L10n.t(ar, en)
     }
@@ -49,14 +64,14 @@ struct MainTabView: View {
             TabView(selection: tabSelection) {
                 // كل تبويب يلوّن ما بداخله بلونه (البيئة + tint) — حتى الصفحات المدفوعة والمربّعات
                 Tab(value: 0) {
-                    AnyView(HomeNewsView(selectedTab: $selectedTab))
+                    AnyView(HomeNewsView(selectedTab: crossfadingTab))
                         .dsSection(.home)
                 } label: {
                     Label(tabTitle("الرئيسية", "Home"), systemImage: AppSection.home.symbol)
                 }
 
                 Tab(value: 1) {
-                    AnyView(TreeTabContainer(selectedTab: $selectedTab))
+                    AnyView(TreeTabContainer(selectedTab: crossfadingTab))
                         .dsSection(.tree)
                 } label: {
                     Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
@@ -64,7 +79,7 @@ struct MainTabView: View {
 
                 if appSettingsVM.settings.diwaniyasEnabled ?? true {
                     Tab(value: 2) {
-                        AnyView(DiwaniyasView(selectedTab: $selectedTab))
+                        AnyView(DiwaniyasView(selectedTab: crossfadingTab))
                             .dsSection(.diwaniyas)
                     } label: {
                         Label(tabTitle("الديوانيات", "Diwaniyas"), systemImage: AppSection.diwaniyas.symbol)
@@ -72,7 +87,7 @@ struct MainTabView: View {
                 }
 
                 Tab(value: 3) {
-                    AnyView(ProfileView(selectedTab: $selectedTab))
+                    AnyView(ProfileView(selectedTab: crossfadingTab))
                         .dsSection(.profile)
                 } label: {
                     Label(tabTitle("حسابي", "Profile"), systemImage: AppSection.profile.symbol)
@@ -80,7 +95,7 @@ struct MainTabView: View {
 
                 if authVM.canModerate {
                     Tab(value: 4) {
-                        AnyView(AdminDashboardView(selectedTab: $selectedTab))
+                        AnyView(AdminDashboardView(selectedTab: crossfadingTab))
                             .dsSection(.admin)
                     } label: {
                         Label(tabTitle("الإدارة", "Admin"), systemImage: AppSection.admin.symbol)
@@ -89,7 +104,7 @@ struct MainTabView: View {
             }
         } else {
         TabView(selection: tabSelection) {
-            AnyView(HomeNewsView(selectedTab: $selectedTab))
+            AnyView(HomeNewsView(selectedTab: crossfadingTab))
                 .dsSection(.home)
                 .tabItem {
                     Image(systemName: selectedTab == 0 ? AppSection.home.symbol : AppSection.home.symbolOutline)
@@ -98,7 +113,7 @@ struct MainTabView: View {
                 .tag(0)
 
             // مغلّف يسمح بالتبديل بين الواجهة الكلاسيكية والتجربة الجديدة
-            AnyView(TreeTabContainer(selectedTab: $selectedTab))
+            AnyView(TreeTabContainer(selectedTab: crossfadingTab))
                 .dsSection(.tree)
                 .tabItem {
                     Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
@@ -107,7 +122,7 @@ struct MainTabView: View {
                 .tag(1)
 
             if appSettingsVM.settings.diwaniyasEnabled ?? true {
-                AnyView(DiwaniyasView(selectedTab: $selectedTab))
+                AnyView(DiwaniyasView(selectedTab: crossfadingTab))
                     .dsSection(.diwaniyas)
                     .tabItem {
                         Image(systemName: selectedTab == 2 ? AppSection.diwaniyas.symbol : AppSection.diwaniyas.symbolOutline)
@@ -116,7 +131,7 @@ struct MainTabView: View {
                     .tag(2)
             }
 
-            AnyView(ProfileView(selectedTab: $selectedTab))
+            AnyView(ProfileView(selectedTab: crossfadingTab))
                 .dsSection(.profile)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? AppSection.profile.symbol : AppSection.profile.symbolOutline)
@@ -125,7 +140,7 @@ struct MainTabView: View {
                 .tag(3)
 
             if authVM.canModerate {
-                AnyView(AdminDashboardView(selectedTab: $selectedTab))
+                AnyView(AdminDashboardView(selectedTab: crossfadingTab))
                     .dsSection(.admin)
                     .tabItem {
                         Image(systemName: selectedTab == 4 ? AppSection.admin.symbol : AppSection.admin.symbolOutline)
@@ -145,25 +160,25 @@ struct MainTabView: View {
         .dsTabBarBackground()
         .onReceive(NotificationCenter.default.publisher(for: .openAdminRequests)) { _ in
             guard authVM.canModerate else { return }
-            withAnimation { selectedTab = 4 }
+            DSScreenCrossfade.run { selectedTab = 4 }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { _ in
             guard authVM.canModerate else { return }
-            withAnimation { selectedTab = 4 }
+            DSScreenCrossfade.run { selectedTab = 4 }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
-            withAnimation { selectedTab = 0 }
+            DSScreenCrossfade.run { selectedTab = 0 }
         }
         // «شجرة النساء» من «العائلة» في لوحة الإدارة — تبويب الشجرة يفتح على النساء
         .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
-            withAnimation { selectedTab = 1 }
+            DSScreenCrossfade.run { selectedTab = 1 }
         }
         // صلة القرابة من أي مكان (تفاصيل العضو، الرابط، الرمز): تاب الشجرة ← شجرة العائلة ← المسار.
         // كان الطلب يضيع خارج تاب الشجرة أو في تبويب النساء (طلب المالك ٢٠٢٦-١٠-٠٢)
         .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { note in
             let info = note.userInfo
             let alreadyOnTree = selectedTab == 1
-            withAnimation { selectedTab = 1 }
+            DSScreenCrossfade.run { selectedTab = 1 }
             // داخل تاب الشجرة: بلا انتظار يُذكر (مثل السابق) — من تاب آخر: حتى تُبنى الشجرة
             DispatchQueue.main.asyncAfter(deadline: .now() + (alreadyOnTree ? 0.15 : 0.6)) {
                 NotificationCenter.default.post(name: .showKinshipPath, object: nil, userInfo: info)

@@ -39,6 +39,9 @@ struct MemberDetailsView: View {
     @State private var showDeleteBioAlert = false
 
     @State private var showEditActions = false
+    /// «إضافة ابن» على عقدته هو — العضو يضيف ابنه بنفسه (قرار المالك ٢٠٢٦-١٠-٢٧)
+    @State private var showSelfAddChild = false
+    /// نموذج الطلب المختار من «طلب تعديل» — «ابن» هنا أبناء ذكور فقط (البنت والزوجة في شجرة النساء)
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
     @State private var reportReason = ""
@@ -144,7 +147,10 @@ struct MemberDetailsView: View {
                 } else {
                     VStack(spacing: 0) {
                     if centered && Self.showsHeaderBand {
-                        memberHeaderBand.readHeight($panelHeaderH)
+                        memberHeaderBand
+                            // السحب لأسفل على الرأس يصغّر المربّع الموسّع
+                            .dsDetailsSwipe(collapses: detent == .large) { _ in setDetailsOpen(false) }
+                            .readHeight($panelHeaderH)
                     }
                     ScrollViewReader { scrollProxy in
                     ScrollView(showsIndicators: false) {
@@ -159,8 +165,8 @@ struct MemberDetailsView: View {
                                     quickActionsRow
                                         .padding(.horizontal, DS.Spacing.lg)
 
-                                    // «تعديل مباشر» داخل التفاصيل نفسها — «طلب تعديل» في الشريط السفلي
-                                    editEntryButton
+                                    // «تعديل مباشر» (أو «طلب إضافة») داخل التفاصيل نفسها — «طلب تعديل» في الشريط السفلي
+                                    roleActionButton
                                         .padding(.horizontal, DS.Spacing.lg)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -218,6 +224,8 @@ struct MemberDetailsView: View {
                                                            value: chromeReady ? geo.size.height + DS.Spacing.lg + panelChromeH : 0)
                                 }
                             )
+                            // السحب لأعلى يوسّع المربّع (مع زرّ «عرض التفاصيل» لا بدله — طلب المالك ٢٠٢٦-١٠-٢٤)
+                            .dsDetailsSwipe(expands: centered && detent != .large) { _ in setDetailsOpen(true) }
 
                             if centered {
                                 // التفاصيل تبقى في مكانها ويُقصّ المربّع فوقها عند الإخفاء —
@@ -227,12 +235,6 @@ struct MemberDetailsView: View {
                                     .allowsHitTesting(detent == .large)
                             } else if detent == .large {
                                 detailsBody
-                            } else {
-                                // تلميح: اسحب لأعلى لعرض المزيد
-                                Text(L10n.t("اسحب لأعلى لعرض التفاصيل", "Swipe up for details"))
-                                    .dsFont(.caption)
-                                    .foregroundColor(DS.Color.textTertiary)
-                                    .padding(.top, DS.Spacing.md)
                             }
 
                             Spacer(minLength: centered ? DS.Spacing.md : 60)
@@ -307,6 +309,10 @@ struct MemberDetailsView: View {
                 }
                 .background(ClearPresentationBackground())
             }
+            .fullScreenCover(isPresented: $showSelfAddChild) {
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { AddChildSheet(member: member) }
+                    .background(ClearPresentationBackground())
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
             if let deletedId = notification.object as? UUID, deletedId == member.id {
@@ -371,15 +377,16 @@ struct MemberDetailsView: View {
 
     // MARK: - Hero Section (Compact circular)
 
-    /// «عرض التفاصيل» / «إخفاء التفاصيل» — يوسّع المربّع أو يصغّره
+    /// «عرض التفاصيل» / «إخفاء التفاصيل» — الزرّ نفسه في الشجرتين (`DSDetailsToggle`، طلب المالك ٢٠٢٦-١٠-٢٤
+    /// «شنو سويت عرض التفاصيل؟»): زرّ واضح بسهم يدور مع التوسيع — والسحب لأعلى/لأسفل يفعل الشيء نفسه
     private var detailsToggleButton: some View {
-        let expanded = detent == .large
-        // رابط نصّي بسهم بلا خلفية (طلب المالك ٢٠٢٦-١٠-٢٤ «غيّر تصميمه») — لا ينافس أزرار التعديل
-        return DSTextLinkButton(expanded ? L10n.t("إخفاء التفاصيل", "Hide details")
-                                         : L10n.t("عرض التفاصيل", "Show details"),
-                                icon: expanded ? "chevron.down" : "chevron.up") {
-            withAnimation(DS.Anim.snappy) { detent = expanded ? .fraction(0.46) : .large }
-        }
+        DSDetailsToggle(isExpanded: detent == .large, tile: true) { setDetailsOpen(detent != .large) }
+    }
+
+    /// التوسيع والتصغير بنابض ارتفاع المربّع نفسه — «تقليل الحركة»: مباشرة
+    private func setDetailsOpen(_ open: Bool) {
+        guard open != (detent == .large) else { return }
+        withAnimation(reduceMotion ? nil : DS.Anim.smooth) { detent = open ? .large : .fraction(0.46) }
     }
 
     private var compactHeroSection: some View {
@@ -423,8 +430,8 @@ struct MemberDetailsView: View {
                 }
             }
 
-            Text(member.displayFullName)
-                .dsFont(.title)
+            DSBalancedText(member.displayFullName)
+                .dsFont(.memberNameTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
@@ -696,7 +703,7 @@ struct MemberDetailsView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(tile.value)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
@@ -741,7 +748,7 @@ struct MemberDetailsView: View {
         // الرقم من الجلب المباشر (الإدارة تملكه محلياً أصلاً). السيرفر يعيد
         // nil للمخفيّ، فغيابه هنا يعني «مخفي» فعلاً لا نقصاً في البيانات.
         // العرض يُعيد nil للرقم المخفيّ، فغيابه هنا يعني «مخفي» فعلاً.
-        if !isDeceased, let phone = m.phoneNumber, !phone.isEmpty {
+        if let phone = m.dsVisiblePhone(viewerId: authVM.currentUser?.id, viewerCanModerate: canMod) {
             rows.append(.init(
                 icon: "phone.fill",
                 label: L10n.t("الهاتف", "Phone"),
@@ -910,7 +917,7 @@ struct MemberDetailsView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(L10n.t("قيد المراجعة", "Under review"))
-                    .dsFieldFont(.subtitle)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
             }
             Spacer(minLength: 0)
@@ -927,9 +934,16 @@ struct MemberDetailsView: View {
         if !member.isDeleted {
             VStack(spacing: DS.Spacing.lg) {
                 HStack(alignment: .top, spacing: DS.Spacing.xxl) {
-                    // «طلب تعديل» / «تعديل مباشر» صارا زرّاً واحداً تحت الاسم (`editEntryButton`) —
-                    // كان الإداري يرى الاثنين هنا معاً
+                    // «تعديل مباشر» / «طلب إضافة» صارا زرّ الدور تحت الاسم (`roleActionButton`)؛ و«طلب تعديل»
+                    // هنا لعرض الشيت وحده (المربّع بالمنتصف يضعه في شريطه السفلي) — لا يضيع من أي عرض
                     if !isViewingSelf {
+                        circleActionButton(
+                            icon: "pencil.and.list.clipboard",
+                            label: L10n.t("طلب تعديل", "Request Edit"),
+                            tint: chromeInk,
+                            filled: true
+                        ) { showEditActions = true }
+
                         // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
                         circleActionButton(
                             icon: "exclamationmark.bubble",
@@ -981,25 +995,35 @@ struct MemberDetailsView: View {
             DSComposerSection(title: L10n.t("اختر نوع الطلب", "Choose Request Type"),
                               icon: "square.grid.2x2.fill",
                               tint: DS.Color.primary) {
-                // صفوف عادية لا LazyVGrid — الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً فيُقصّ آخر صف
-                let actions = availableEditActions
-                VStack(spacing: DS.Spacing.sm) {
-                    ForEach(Array(stride(from: 0, to: actions.count, by: 3)), id: \.self) { start in
-                        let end = min(start + 3, actions.count)
-                        HStack(spacing: DS.Spacing.sm) {
-                            ForEach(actions[start..<end], id: \.rawValue) { action in
-                                editActionCircle(for: action)
-                            }
-                            ForEach(0..<(3 - (end - start)), id: \.self) { _ in
-                                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                            }
-                        }
+                // نفس بطاقات مربّع الإجراءات في شجرة النساء — اثنتان في السطر بلون النوع، و«حذف» بعرض كامل آخراً
+                let actions = availableEditActions.filter { $0 != .delete }
+                DSActionTileGrid {
+                    ForEach(Array(actions.enumerated()), id: \.element.rawValue) { i, action in
+                        DSActionTile(editActionLabel(for: action), subtitle: editActionSubtitle(action),
+                                     icon: action.iconName, tint: editActionTint(action)) { pick(action) }
+                            .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
+                                        y: DSMotion.rise, scale: DSMotion.riseScale)
                     }
+                }
+                if availableEditActions.contains(.delete) {
+                    DSActionTile(editActionLabel(for: .delete), subtitle: editActionSubtitle(.delete),
+                                 icon: TreeEditAction.delete.iconName, tint: DS.Color.error) { pick(.delete) }
                 }
             }
         }
     }
 
+    /// لون بطاقة الطلب بنوعه: الإضافة أخضر العائلة، الوفاة رمادي، والبيانات بلون المربّع
+    private func editActionTint(_ action: TreeEditAction) -> Color {
+        switch action {
+        case .add: return DSMemberKit.addTint
+        case .deceased, .addDeathDate: return DS.Color.textSecondary
+        case .delete: return DS.Color.error
+        default: return chromeInk
+        }
+    }
+
+    /// الطلبات — «إضافة ابن» أولها كما كان (طلب المالك ٢٠٢٦-١٠-٢٥: «طلب إضافة» بشجرة النساء وحدها)
     private var availableEditActions: [TreeEditAction] {
         if member.isDeceased == true {
             return [.add, .editName, .editBirth, .addDeathDate, .addPhoto, .delete]
@@ -1007,23 +1031,35 @@ struct MemberDetailsView: View {
         return [.add, .editName, .editPhone, .editBirth, .addPhoto, .deceased, .delete]
     }
 
-    private func editActionColor(for action: TreeEditAction) -> Color {
+
+    /// نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
+    private func pick(_ action: TreeEditAction, closing: (() -> Void)? = nil) {
+        if let closing { closing() } else { showEditActions = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            pendingEditAction = action
+        }
+    }
+
+    /// سطر «لمن» تحت كل بطاقة طلب (طلب المالك ٢٠٢٦-١٠-٢٥ «حط توضيح») — من اسم العضو المختار
+    private func editActionSubtitle(_ action: TreeEditAction) -> String {
+        let who = "«" + (member.firstName.isEmpty ? member.fullName : member.firstName) + "»"
         switch action {
-        case .add: return DS.Color.palm
-        case .editName: return DS.Color.info
-        case .editPhone: return chromeInk
-        case .editBirth: return DS.Color.palm
-        case .deceased: return DS.Color.textTertiary
-        case .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return chromeInk
-        case .delete: return DS.Color.error
-        case .other: return DS.Color.accent
+        case .add: return L10n.t("ابن لـ", "Son of ") + who
+        case .editName: return L10n.t("اسم ", "Name of ") + who
+        case .editPhone: return L10n.t("رقم ", "Phone of ") + who
+        case .editBirth: return L10n.t("ميلاد ", "Birth of ") + who
+        case .deceased: return L10n.t("وفاة ", "Death of ") + who
+        case .addDeathDate: return L10n.t("تاريخ وفاة ", "Death date of ") + who
+        case .addPhoto: return L10n.t("صورة لـ", "Photo of ") + who
+        case .delete: return L10n.t("حذف ", "Remove ") + who + L10n.t(" من الشجرة", " from the tree")
+        case .other: return who
         }
     }
 
     private func editActionLabel(for action: TreeEditAction) -> String {
         switch action {
-        case .add: return L10n.t("إضافة ابن", "Add Son")
+        // «ابن» (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن») — أبناء ذكور فقط، والسطر تحته يقول لمن
+        case .add: return L10n.t("ابن", "Son")
         case .editName: return L10n.t("تعديل اسم", "Edit Name")
         case .editPhone: return L10n.t("تعديل رقم", "Edit Phone")
         case .editBirth: return L10n.t("تعديل ميلاد", "Edit Birth")
@@ -1033,33 +1069,6 @@ struct MemberDetailsView: View {
         case .delete: return L10n.t("حذف", "Delete")
         case .other: return L10n.t("طلب آخر", "Other")
         }
-    }
-
-    private func editActionCircle(for action: TreeEditAction) -> some View {
-        let tint = editActionColor(for: action)
-        return Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            // نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
-            showEditActions = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                pendingEditAction = action
-            }
-        } label: {
-            // مربّع نوع الطلب — مثل مربّعات التصنيف في «خبر جديد»
-            VStack(spacing: DS.Spacing.xsm) {
-                DSStateIcon(action.iconName, tint: tint, size: DS.Icon.tile, mapsChrome: false)
-                Text(editActionLabel(for: action))
-                    .dsFieldFont(.chip)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.xs)
-            .dsRowBox()
-        }
-        .buttonStyle(DSPressStyle())
-        .accessibilityLabel(editActionLabel(for: action))
     }
 
     /// زر دائري بأيقونة + تسمية قصيرة (بديل الأزرار الممتدة في الأسفل).
@@ -1139,27 +1148,31 @@ struct MemberDetailsView: View {
     /// للأعضاء والإدارة
     private var showsRequestEdit: Bool { !isViewingSelf && !member.isDeleted }
 
-    /// «تعديل مباشر» داخل التفاصيل تحت الاسم — للمالك والمدير والمراقب (`canEditMembers`) فقط
-    @ViewBuilder private var editEntryButton: some View {
+    /// زرّ الدور تحت الاسم (`DSMemberKit`): «تعديل مباشر» ذهبي للمالك والمدير والمراقب (`canEditMembers`)
+    /// والقلم يكتب. «طلب إضافة» في شجرة النساء وحدها (طلب المالك ٢٠٢٦-١٠-٢٥) — هنا «إضافة ابن» داخل «طلب تعديل»
+    @ViewBuilder private var roleActionButton: some View {
         if authVM.canEditMembers && !member.isDeleted {
-            DSSoftPillButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil") {
+            DSLiveButton(L10n.t("تعديل مباشر", "Direct Edit"), icon: "pencil",
+                         tint: DSMemberKit.directTint, motion: .write,
+                         hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), tile: true) {
                 showAdminControl = true
+            }
+        } else if isViewingSelf && !member.isDeleted {
+            DSLiveButton(L10n.t("إضافة ابن", "Add Child"), icon: "plus",
+                         tint: DSMemberKit.directTint, motion: .write,
+                         hint: L10n.t("يضيف ابنك للشجرة", "Adds your child to the tree"), tile: true) {
+                showSelfAddChild = true
             }
         }
     }
 
-    /// صفّ الرأس: «تعديل مباشر» + «عرض التفاصيل» (داخل المربّع) — سطران من «حجم النص» ٢× وأكبر
-    @ViewBuilder private var headerButtons: some View {
-        if dynamicTypeSize >= .xxLarge {
-            VStack(spacing: DSBox.buttonSpacing) {
-                editEntryButton
-                if centered { detailsToggleButton }
-            }
-        } else {
-            HStack(spacing: DSBox.buttonSpacing) {
-                editEntryButton
-                if centered { detailsToggleButton }
-            }
+    /// صفّ الرأس: زرّ الدور + «عرض التفاصيل» بعرضين متساويين — فوق بعض من «حجم النص» ٢× وأكبر (لا يُقصّ النص)
+    private var headerButtons: some View {
+        let layout = dynamicTypeSize >= .xxLarge ? AnyLayout(VStackLayout(spacing: DSBox.buttonSpacing))
+                                                 : AnyLayout(HStackLayout(spacing: DSBox.buttonSpacing))
+        return layout {
+            roleActionButton
+            detailsToggleButton
         }
     }
 
@@ -1243,6 +1256,13 @@ struct MemberDetailsView: View {
             icon: "person.text.rectangle.fill",
             tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy
         )
+        // علم دولة الرقم (غير الكويت) في زاوية الرأس — طلب المالك ٢٠٢٦-١٠-٢٤ «علم السعودية للرقم السعودي»؛
+        // بقاعدة صفّ «الهاتف» نفسها: لا علم إن لم يحقّ للمشاهد رؤية الرقم
+        .overlay(alignment: .trailing) {
+            DSPhoneCountryBadge(phone: member.dsVisiblePhone(viewerId: authVM.currentUser?.id,
+                                                             viewerCanModerate: authVM.canModerate))
+                .padding(.horizontal, DS.Spacing.lg)
+        }
     }
 
     // MARK: - Floating Close Button

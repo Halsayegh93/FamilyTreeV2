@@ -29,6 +29,9 @@ enum AdminReviewDestination: Hashable {
 // بطاقة «تنبيهات» حُذفت: الأربعة صارت «حالة النظام»، والباقي (وفاة لم يُعلن عنها، مشكلات الشجرة للمراقب، خلل إعداد قاعدة
 // البيانات) «يحتاج إجراء» في «إشعارات الإدارة» التي يفتحها الجرس (`AdminNotificationsPage`). «اليوم في العائلة» انتقل لأعلى «المناسبات»،
 // و«نبض العائلة» لأعلى «المؤشرات»، وكل إجراء سريع لأعلى قسمه. كل دور يرى مجاله فقط والقسم الفارغ لا يُرسم (IA.md).
+// «ملمومة» (طلب المالك ٢٠٢٦-١٠-٢٥ — `AdminTodayPager.swift`): رأس التبويبات نفسه (`MainHeaderView`) ثابتاً ولونه يمتد قليلاً
+// تحت المربّع الأول ← «يحتاج انتباهك» بسطر «حالة النظام» صغير، وصفحة ثانية تُسحب «إحصائيات العائلة» ← «الأقسام» بشارة حمراء
+// واحدة على كل قسم فيه ما يُراجَع ← «إدارة الوفيات» تحت الأقسام (`AdminDeathDatesSpot`) ← «صلاحياتي».
 // صفحات الأقسام تُفتح بقيمة في المسار (`.area`) ليستبدلها شريط الأقسام (`AdminAreaRouter`) بلا تراكم.
 // الصلاحيات والوجهات والروابط العميقة كما كانت، والصفحات القديمة تُفتح كما هي.
 
@@ -61,32 +64,32 @@ struct AdminDashboardView: View {
     @ObservedObject private var devices = AdminDeviceReachStore.shared
     /// «ظهور موحّد» (الدفعة ١٠): البطاقات تصعد تباعاً مرة عند الظهور (`dsCardCascade`) — يُضبط في `.task` الموجودة
     @State private var appeared = false
-
-    @Environment(\.dsLandscape) private var landscape
-    @Environment(\.dynamicTypeSize) private var typeSize
+    /// «إحصائيات العائلة» (الصفحة الثانية من «يحتاج انتباهك») — من آخر ما حُمّل، وتتحدّث مع التحميل
+    @State private var familyStats = AdminFamilyStats()
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ZStack(alignment: .top) {
                 DS.Hub.background.ignoresSafeArea()
-                // السحب للأسفل فوق الرأس يكشف كحلياً لا رملياً
-                DS.Hub.bandTop
-                    .frame(height: DS.Hub.ringSide)
-                    .ignoresSafeArea(edges: .top)
-                    .accessibilityHidden(true)
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        todayHeader
+                // الرأس ثابت فوق التمرير كبقية التبويبات (طلب المالك ٢٠٢٦-١٠-٢٥ «حتى الهيدر يكون نفس بقية الهيدرات»)،
+                // ولونه يغطّي شريط الحالة بنفسه
+                VStack(spacing: 0) {
+                    todayHeader
+                    ScrollView(showsIndicators: false) {
                         todayContent
-                            .padding(.top, -DS.Hub.headerOverlap)
+                    }
+                    .refreshable { await loadAllAdminData(force: true) }
+                    .adminHideTopEdgeEffect()
+                    // السحب للتحديث يكشف لون الرأس لا الأبيض (وأفقياً حتى طرف الشاشة كالرأس)
+                    .background(alignment: .top) {
+                        DSHeaderBackground(section: .admin)
+                            .frame(height: AdminTodayMetrics.pullReveal)
+                            .ignoresSafeArea(edges: .horizontal)
+                            .accessibilityHidden(true)
                     }
                 }
-                .refreshable { await loadAllAdminData(force: true) }
-                .adminHideTopEdgeEffect()
             }
-            // منطقة شريط الحالة كحلية دائماً (الرأس يتمرّر، ونص الساعة أبيض)
-            .adminStatusBarCover()
             .navigationDestination(for: AdminReviewDestination.self) { destination in
                 AdminLazyPage { Self.page(for: destination) }
             }
@@ -95,6 +98,8 @@ struct AdminDashboardView: View {
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { note in
             guard let kind = note.userInfo?["kind"] as? String else { return }
+            // صفحات رسائل الدخول للمالك فقط (٢٠٢٦-١٠-٢٤) — إشعارها عند غيره يبقيه على «اليوم»
+            guard authVM.canViewSystemSettings || !AdminNotices.smsKinds.contains(kind) else { return }
             // من الإشعار: «الوارد» نفسه (على الطلب إن عُرف)، أو طلبات الشجرة، أو صفحة رسائل الدخول (ومحاولات الدخول فوقها)
             let requestId = (note.userInfo?["request_id"] as? String).flatMap(UUID.init(uuidString:))
             let destinations: [AdminReviewDestination]
@@ -148,7 +153,13 @@ struct AdminDashboardView: View {
         areaHops += 1
         var path = NavigationPath()
         path.append(AdminReviewDestination.area(area, areaHops))
-        navigationPath = path
+        // من «اليوم»: دفع عادي؛ من قسم إلى قسم (قائمة العنوان): تذوب الصفحة في الأخرى بلا انزلاق
+        guard !navigationPath.isEmpty else { navigationPath = path; return }
+        DSScreenCrossfade.run {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { navigationPath = path }
+        }
     }
 
     // MARK: - التحميل
@@ -176,6 +187,7 @@ struct AdminDashboardView: View {
 
         let isAdmin = authVM.isAdmin
         let isSystem = authVM.canViewSystemSettings
+        let seesStats = authVM.canViewInsights
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
             group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
@@ -189,17 +201,27 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
             group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
-            group.addTask { @MainActor in await authVM.fetchBannedPhones() }
             group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
             if isSystem {
                 group.addTask { @MainActor in await SmsBalanceStore.shared.refresh(force: force) }
+                group.addTask { @MainActor in await authVM.fetchBannedPhones() }
+                group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
             }
             if isAdmin {
                 group.addTask { @MainActor in await notificationVM.fetchScheduledNotifications() }
                 group.addTask { @MainActor in
                     if let ids = await AdminTodayFetch.announcedDeathIds() { announcedIds = ids }
                 }
-                group.addTask { @MainActor in await AdminDeviceReachStore.shared.refresh(force: force) }
+            }
+            // «إحصائيات العائلة»: شجرة النساء و«استخدام التطبيق» من آخر ما حُمّل — ويُجلبان إن لم يُحمَّلا بعد أو بالسحب
+            // (فشل الجلب يُبقي آخر قيمة)
+            if seesStats {
+                if force || WomenStore.cache.isEmpty {
+                    group.addTask { @MainActor in _ = try? await WomenStore.fetch() }
+                }
+                if force || AppUsageStats.cached == nil {
+                    group.addTask { @MainActor in _ = await AppUsageStats.fetch() }
+                }
             }
         }
         recalculate()
@@ -222,21 +244,15 @@ struct AdminDashboardView: View {
         let all = memberVM.allMembers
         var moderator = 0, treeIssues = 0
         let moderatorRoles: Set<FamilyMember.UserRole> = [.owner, .admin, .monitor, .supervisor]
-        var activeIds = Set<UUID>(), fatherIds = Set<UUID>()
-        for m in all where m.role != .pending && m.status != .frozen {
-            activeIds.insert(m.id)
-            if let fid = m.fatherId { fatherIds.insert(fid) }
-        }
+        // «مشكلات الشجرة» بتعريف شريحتها في «العائلة» نفسه (يتيم، بلا اسم، أب مفقود، مخفي، رقم مكرر) — رقم واحد لشارة
+        // «العائلة» وإشعار المراقب والشريحة (٢٠٢٦-١٠-٢٥؛ كان الحساب هنا بلا «رقم مكرر»)
+        let tree = AdminMemberFacts.TreeContext(all)
         for m in all {
             if m.role == .pending { continue }
             if moderatorRoles.contains(m.role) && m.isDeceased != true && m.status != .frozen { moderator += 1 }
-            if m.status != .frozen {
-                let isOrphan = m.fatherId == nil && !fatherIds.contains(m.id)
-                let noName = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || m.fullName == "بدون اسم"
-                let brokenParent = m.fatherId != nil && !activeIds.contains(m.fatherId ?? UUID())
-                if isOrphan || noName || brokenParent || m.isHiddenFromTree { treeIssues += 1 }
-            }
+            if !AdminMemberFacts.problems(m, in: tree).isEmpty { treeIssues += 1 }
         }
+        let stats = authVM.canViewInsights ? AdminFamilyStats.make(members: all) : AdminFamilyStats()
         let total = AdminAllRequestsView.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
@@ -249,6 +265,7 @@ struct AdminDashboardView: View {
             treeIssuesCount = treeIssues
             inboxTotal = total
             recentDeaths = deaths
+            if stats != familyStats { familyStats = stats }
         }
         publishNotices()
     }
@@ -308,55 +325,37 @@ struct AdminDashboardView: View {
     // فينهار التطبيق عند فتح الإدارة (٢٠٢٦-١٠-٢٠؛ المحاكي مكدسه ٨ ميغا فلم يظهر). الحدود تقسم الحلّ إلى أجزاء صغيرة.
     private var todayHeader: AnyView { AnyView(todayHeaderContent) }
 
-    /// رأس مختصر (طلب المالك ٢٠٢٦-١٠-٢٢): التحية وتحتها التاريخ في صفّ واحد مع أزرار الرأس — بلا السطر الذكي ولا «صلاحياتي»
+    /// رأس التبويبات نفسه (طلب المالك ٢٠٢٦-١٠-٢٥ «حتى الهيدر يكون نفس بقية الهيدرات»): أيقونة القسم، «الإدارة» وتحتها
+    /// التحية، وفي الطرف أزرار عارية كجرس الرئيسية — مكبّر صوت «إعلان جديد» (لمن يرسل للأعضاء)، البحث، وجرس «إشعارات
+    /// الإدارة» بعدده الأحمر. نفس الارتفاع والخطوط والحركة والزخرفة (`MainHeaderView`)
     private var todayHeaderContent: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(helloLine)
-                        .dsFont(.hubTitle)
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                    Text(verbatim: AdminTodayText.dayLine())
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Hub.greetingLine)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: DS.Spacing.sm)
+        // «إشعارات الإدارة» (صفحة واحدة: الطلبات ونشاط الفريق والنظام) — العدد = غير المقروء + ما يحتاج إجراء الآن
+        let bell = notificationVM.unreadAdminNoticesCount + derivedNotices.count
+        let canAnnounce = authVM.canSendNotifications
+        return MainHeaderView(selectedTab: $selectedTab, showingNotifications: .constant(false),
+                              title: L10n.t("الإدارة", "Admin"), subtitle: helloLine,
+                              icon: AppSection.admin.symbol, section: .admin, hideNotificationBell: true) {
+            AnyView(HStack(spacing: 0) {
                 // «إعلان جديد» السريع (طلب المالك ٢٠٢٦-١٠-٢٠ «زر سريع و خارجي») — نوع مستقل خلف `AnyView` (حارس المكدس)
-                if authVM.canSendNotifications {
+                if canAnnounce {
                     AnyView(AdminAnnounceLauncher())
                 }
                 NavigationLink { AdminLazyPage { AnyView(AdminSearchView()) } } label: {
-                    AdminGlassCircle(symbol: "magnifyingglass")
+                    AdminHeaderIcon(symbol: "magnifyingglass")
                 }
-                .buttonStyle(DSScaleButtonStyle())
+                .buttonStyle(BounceButtonStyle())
                 .accessibilityLabel(L10n.t("بحث في اللوحة", "Search the dashboard"))
-                // «إشعارات الإدارة» (صفحة واحدة: الطلبات ونشاط الفريق والنظام) — العدد = غير المقروء + ما يحتاج إجراء الآن
-                let bell = notificationVM.unreadAdminNoticesCount + derivedNotices.count
                 NavigationLink {
                     AdminLazyPage { AnyView(AdminNotificationsPage().adminBackTitle(L10n.t("اليوم", "Today"))) }
                 } label: {
-                    AdminGlassCircle(symbol: "bell", count: bell)
+                    AdminHeaderIcon(symbol: "bell", count: bell)
                 }
-                .buttonStyle(DSScaleButtonStyle())
+                .buttonStyle(BounceButtonStyle())
                 .accessibilityLabel(bell > 0
                     ? L10n.t("إشعارات الإدارة، \(bell) جديد", "Admin notifications, \(bell) new")
                     : L10n.t("إشعارات الإدارة", "Admin notifications"))
-            }
-            .frame(minHeight: DS.Hub.glassButton)
+            })
         }
-        .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
-        .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Hub.headerSide)
-        .padding(.top, DS.Hub.headerTop)
-        .padding(.bottom, DS.Hub.headerBottom)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminBandBackground(landscape: landscape)
-        .dsLightStatusBar()
     }
 
     /// إجراء من لوحة «حالة النظام» — يدفع بيت الإشارة في مسار «اليوم»
@@ -379,32 +378,53 @@ struct AdminDashboardView: View {
 
     private var todayContent: AnyView { AnyView(todayContentStack) }
 
+    /// من الأعلى (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة قراب من بعض»): «يحتاج انتباهك» يصعد على لون الرأس ← «الأقسام» ← «إدارة
+    /// الوفيات» ← «صلاحياتي» — بفراغ واحد بينها (`AdminTodayMetrics.stack`). كل بطاقة نوع مستقل خلف `AnyView` (حارس
+    /// المكدس) وتصعد تباعاً (المُعدِّل داخل `AnyView`)
     private var todayContentStack: some View {
-        let items = decisionItems
-        let pills = statusPills
-        return VStack(spacing: DS.Hub.stackSpacing) {
-            // «يحتاج انتباهك» مربّع ثابت واحد يصعد فوق حافة الرأس (طلب المالك ٢٠٢٦-١٠-٢٢: بلا سحب ولا نقاط؛ «إحصاء الأفراد»
-            // انتقل لأعلى «المؤشرات ← العائلة»). سطر «حالة النظام» للمالك والمدير فقط. نوع مستقل خلف `AnyView` (حارس المكدس)،
-            // وكل بطاقة تصعد تباعاً (المُعدِّل داخل `AnyView`)
-            AnyView(AdminAttentionPanel(counts: counts(items), loading: isInitialLoading,
-                                        status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
-                                        open: openStatusHome)
-                .dsCardCascade(0, appeared: appeared))
+        VStack(spacing: AdminTodayMetrics.stack) {
+            AnyView(attentionCard.dsCardCascade(0, appeared: appeared))
             AnyView(areasSection().dsCardCascade(1, appeared: appeared))
+            // «إدارة تواريخ الوفاة» أثناء الحملة، و«ذكرى الراحلين» بعدها — تحت الأقسام (DeathDatesSpot.swift)
+            AnyView(AdminDeathDatesSpot().dsCardCascade(2, appeared: appeared))
             if let guide = scopeGuide {
-                AnyView(AdminScopeLink(guide: guide).dsCardCascade(2, appeared: appeared))
+                AnyView(AdminScopeLink(guide: guide).dsCardCascade(3, appeared: appeared))
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
+        .padding(.top, AdminTodayMetrics.bandGap)
         .padding(.bottom, DS.Spacing.xxxl)
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
         .dsTabBarClearance()
-        // أرضية اللوحة (`DS.Hub.background`) تبدأ تحت ما يصعد من المربّع فوق الرأس
+        .frame(maxWidth: .infinity)
+        // لون الرأس يمتد قليلاً تحت المربّع الأول («عادي يكون متمدد شوي مع المربع الى عليه») ثم أرضية اللوحة — بعرض الشاشة
+        // (أفقياً حتى طرفها تحت النوتش، كالرأس)
         .background(alignment: .top) {
-            DS.Hub.background
-                .padding(.top, DS.Hub.headerOverlap)
-                .accessibilityHidden(true)
+            VStack(spacing: 0) {
+                DSHeaderBackground(section: .admin)
+                    .frame(height: AdminTodayMetrics.bandGap + AdminTodayMetrics.bandOverlap)
+                DS.Hub.background
+            }
+            .ignoresSafeArea(edges: .horizontal)
+            .accessibilityHidden(true)
         }
+    }
+
+    /// «يحتاج انتباهك» بصفحتين تُسحبان: الأرقام الأربعة وسطر «حالة النظام» (المالك والمدير)، ثم «إحصائيات العائلة» لمن يرى
+    /// «المؤشرات» (المالك والمدير — طلب المالك ٢٠٢٦-١٠-٢٥ «وابى صفحة الثانية بالتنبيهات تكون احصائيات العائلة»). المراقب
+    /// والمشرف: الصفحة الأولى وحدها بلا نقاط ولا سحب
+    private var attentionCard: some View {
+        let pills = statusPills
+        let attention = AnyView(AdminAttentionPanel(counts: counts(decisionItems), loading: isInitialLoading,
+                                                    status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
+                                                    open: openStatusHome))
+        var pages = [attention]
+        var titles = [L10n.t("يحتاج انتباهك", "Needs your attention")]
+        if authVM.canViewInsights {
+            pages.append(AnyView(AdminFamilyStatsPage(stats: familyStats)))
+            titles.append(L10n.t("إحصائيات العائلة", "Family statistics"))
+        }
+        return AdminTodayPager(pages: pages, titles: titles)
     }
 
     // MARK: «حالة النظام» (كانت بطاقة «تنبيهات» ثم سطر نقاط ثم شريحة)
@@ -472,6 +492,8 @@ struct AdminDashboardView: View {
                               spoken: later > 0
                                 ? L10n.t("إشعارات مجدولة لاحقاً: \(later)", "Notifications scheduled later: \(later)")
                                 : L10n.t("لا إشعارات مجدولة", "No scheduled notifications")))
+        // الأجهزة من «الفريق والأمان» — للمالك فقط (٢٠٢٦-١٠-٢٤)
+        guard authVM.canViewSystemSettings else { return list }
         // أجهزة لا تصلها الإشعارات = التسجيلات الفاشلة فقط (الدفعة ١٤ «تم غير») — نفس رقم صفحتها. «لم يُفتح منذ 30 يوماً»
         // معلومة في صفحة الأجهزة لا تنبيه هنا
         if let reach = devices.stats {
@@ -499,41 +521,70 @@ struct AdminDashboardView: View {
 
     // MARK: الأقسام
 
-    /// الأقسام الستة: ٣ أعمدة × صفّان — وعمودان مع الخط الكبير جداً، أو حين يرى الدور قسمين أو أربعة (المشرف ٢،
-    /// المراقب ٤: صفوف كاملة بلا خانة فارغة). كل مربّع أيقونة واسم فقط (طلب المالك ٢٠٢٦-١٠-٢٢: بلا سطر وصف) ويحجز سطري
-    /// الاسم فتتساوى المربّعات بلا قياس إضافي (حارس المكدس). كل مربّع يفتح صفحة القسم بقيمة في المسار، فيستبدلها شريط
-    /// الأقسام بلا تراكم
+    /// «الأقسام» (طلب المالك ٢٠٢٦-١٠-٢٤ «الايقونات بالمنتصف مع المسميات»): عنوان صغير ثم مربّعات بالمنتصف — الأيقونة بلون
+    /// القسم فوق والاسم تحتها (`AdminHubTile`)، ٣ أعمدة × صفّان، وعمودان حين يرى الدور قسمين أو أربعة أو مع الخط الكبير
+    /// جداً، وعمود صفوف من أحجام إمكانية الوصول (`AdminTileGrid`). شارة حمراء واحدة بعدد ما يُراجَع على كل قسم فيه شيء
+    /// (طلب المالك ٢٠٢٦-١٠-٢٥ «اي قسم عليه امور نتحقق منها حط عليها شارة حمرة» — `areaCount`)، ولا شارة للصفر. كل مربّع
+    /// يفتح صفحة القسم بقيمة في المسار، فيستبدلها شريط الأقسام بلا تراكم
     private func areasSection() -> some View {
-        let shown = visibleAreas.count
-        let narrow = (typeSize >= .xxxLarge && !landscape) || shown <= 2 || shown == 4
-        let count = narrow ? DS.Hub.areaColumnsLargeText : DS.Hub.areaColumns
-        let columns = Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing), count: count)
+        let areas = visibleAreas
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            LazyVGrid(columns: columns, spacing: AdminGrid.spacing) {
-                ForEach(visibleAreas) { area in
+            AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
+            AdminTileGrid(count: areas.count) {
+                ForEach(Array(areas.enumerated()), id: \.element) { index, area in
                     NavigationLink(value: AdminReviewDestination.area(area, 0)) {
-                        areaTile(area)
+                        AdminHubTile(icon: area.icon, fill: area.fill, title: area.title,
+                                     badge: areaBadge(area), badgeSpoken: areaBadgeSpoken(area),
+                                     index: index, hint: area.subtitle)
                     }
-                    .buttonStyle(DSPressStyle())
+                    .buttonStyle(AdminTilePressStyle())
                 }
             }
         }
     }
 
-    private func areaTile(_ area: AdminArea) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminIconSquare(symbol: area.icon, tint: area.fill, side: DS.Hub.tileIcon,
-                            radius: DS.Hub.tileIconRadius, filled: true, glyph: DS.Glyph.lg)
-            Text(area.title)
-                .dsFont(.hubRow)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(2, reservesSpace: true)
-                .minimumScaleFactor(0.85)
+    /// الشارة على أيقونة القسم: عدد ما يُراجَع فيه الآن — لا شيء قبل التحميل ولا للصفر
+    private func areaBadge(_ area: AdminArea) -> AdminTileBadge.Kind? {
+        guard !isInitialLoading else { return nil }
+        let n = areaCount(area)
+        return n > 0 ? .count(n) : nil
+    }
+
+    /// ما يُراجَع في كل قسم — أرقام حيّة من البيانات المحمّلة أصلاً (بلا جلب جديد)، كل رقم بتعريف بيته:
+    /// • الوارد: ما ينتظر القرار في مجال الدور (= «الكل» في الوارد) + رسائل الأعضاء غير المقروءة
+    /// • المناسبات: وفاة لم يُعلن عنها (المالك والمدير)
+    /// • العائلة: «مشكلات الشجرة» (= شريحتها في صفحة الأعضاء)
+    /// • الفريق والأمان: رصيد رسائل الدخول تحت «منخفض» + «محاولات دخول مريبة» لم تُقرأ (المالك)
+    /// • التطبيق: وضع الصيانة مفعّل (المالك)
+    /// «المؤشرات» للقراءة فقط — بلا شارة
+    private func areaCount(_ area: AdminArea) -> Int {
+        switch area {
+        case .inbox:     return inboxTotal + adminRequestVM.unreadContactMessagesCount
+        case .occasions: return unannounced.count
+        case .family:    return treeIssuesCount
+        case .team:      return securityAlerts
+        case .app:       return authVM.canViewSystemSettings && appSettingsVM.settings.maintenanceMode ? 1 : 0
+        case .metrics:   return 0
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .dsCard(padding: DS.Spacing.md, radius: DS.Hub.tileRadius)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(area.subtitle)
+    }
+
+    /// تنبيهات «الفريق والأمان» للمالك: الرصيد المنخفض (واحد) + كل «محاولات دخول مريبة» لم تُقرأ
+    private var securityAlerts: Int {
+        guard authVM.canViewSystemSettings else { return 0 }
+        let suspicious = notificationVM.notifications.filter { !$0.read && $0.kind == AdminNotices.smsSuspicious }.count
+        return (sms.needsTopUp ? 1 : 0) + suspicious
+    }
+
+    private func areaBadgeSpoken(_ area: AdminArea) -> String? {
+        let n = areaCount(area)
+        switch area {
+        case .inbox:     return L10n.t("\(n) بانتظار القرار أو رسالة لم تُقرأ", "\(n) awaiting a decision or unread")
+        case .occasions: return L10n.t("وفاة لم يُعلن عنها: \(n)", "Deaths not announced: \(n)")
+        case .family:    return L10n.t("مشكلات الشجرة: \(n)", "Tree problems: \(n)")
+        case .team:      return L10n.t("تنبيهات الأمان: \(n)", "Security alerts: \(n)")
+        case .app:       return L10n.t("وضع الصيانة مفعّل", "Maintenance mode is on")
+        case .metrics:   return nil
+        }
     }
 }
 
@@ -588,11 +639,11 @@ struct AdminTodayDoneRow: View {
 
 // MARK: - «يحتاج انتباهك» (المربّع الثابت تحت الرأس)
 
-/// مربّع «يحتاج انتباهك» (الدفعة ٩ لوحة زجاجية في الرأس؛ الدفعة ١٠ صفحة في مربّع يُسحب؛ ٢٠٢٦-١٠-٢٢ مربّع أبيض ثابت واحد
-/// بلا سحب ولا نقاط — «إحصاء الأفراد» انتقل لأعلى «المؤشرات ← العائلة»): العنوان، ثم الأرقام الأربعة بأيقوناتها وأسمائها
+/// «يحتاج انتباهك» — الصفحة الأولى من المربّع الذي يُسحب (`AdminTodayPager`؛ الدفعة ١٠ صفحة في مربّع يُسحب، ٢٠٢٦-١٠-٢٢
+/// مربّع ثابت، ٢٠٢٦-١٠-٢٥ صفحتان من جديد والثانية «إحصائيات العائلة»): العنوان، ثم الأرقام الأربعة بأيقوناتها وأسمائها
 /// (بخطوط رفيعة بينها، تعدّ من الصفر): بانتظار قرارك · عاجل · متأخر ← «الوارد» بفلتره، ورسائل ← رسائل الأعضاء؛ ثم سطر
-/// «حالة النظام» (المالك والمدير فقط) بتعبئة خفيفة من لونه يفتح لوحة الإشارات الأربع. من أحجام إمكانية الوصول الأرقام ٢×٢.
-/// الدفعة ١٣ («الى داخله نكبر»): الأرقام بخط رقم الرأس `hubKPI` وأسماؤها `hubLabel`، وسطر الحالة `hubRow`، وفراغات أضيق.
+/// «حالة النظام» الصغير (المالك والمدير فقط — «حالة النظام نبي صغرهم») يفتح لوحة الإشارات. من أحجام إمكانية الوصول الأرقام
+/// ٢×٢. الصفحة تحشو جانبيها وأعلاها، والمربّع يضيف الأسفل (شريط النقاط).
 /// القارئ الصوتي: حاوية «يحتاج انتباهك» فيها كل رقم زرّاً ثم سطر الحالة
 struct AdminAttentionPanel: View {
     let counts: AdminTodayCounts
@@ -631,13 +682,11 @@ struct AdminAttentionPanel: View {
             numbers
             if let status {
                 AnyView(AdminSystemStatusLine(status: status, open: open))
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous))
             }
         }
-        .padding(DS.Hub.swipePadding)
+        .padding(.horizontal, DS.Hub.swipePadding)
+        .padding(.top, DS.Hub.swipePadding)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous))
-        .adminCard(padding: 0)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.t("يحتاج انتباهك", "Needs your attention"))
     }
@@ -774,33 +823,29 @@ struct AdminSystemStatusLine: View {
     }
 }
 
-/// شكل السطر على البطاقة: رمز الحالة + النص بلون الحالة على تعبئة خفيفة منه (زوايا مدوّرة أسفل الصفحة)، و«⌄» في الطرف
-/// (تعبئة رمادية والنص ثانوي ما دام شيء لم يُحمَّل)
+/// شكل السطر: رمز الحالة الصغير + النص بلون الحالة على تعبئة خفيفة جداً منه، و«⌄» في الطرف (تعبئة رمادية والنص ثانوي ما
+/// دام شيء لم يُحمَّل). أصغر وأخفّ (طلب المالك ٢٠٢٦-١٠-٢٥ «حالة النظام نبي صغرهم» — كان ٤٤ بخط الصفوف ١٥ العريض):
+/// سطر ٢٨ بخط ١٣ (`hubLabel`) ولمس ٤٤ بلا إزاحة (`AdminSlimRow`)
 struct AdminSystemStatusLineLabel: View {
     let status: AdminSystemStatus
 
     var body: some View {
         let tone = status.tone
-        HStack(spacing: DS.Spacing.xsm) {
-            if let icon = Self.icon(tone) {
-                Image(systemName: icon).dsGlyph(DS.Glyph.md, weight: .bold)
-                    // «نبضة للعاجل» (الدفعة ١٠): هالة حمراء هادئة على الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»
-                    .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
+        AdminSlimRow(ink: Self.ink(tone), fill: Self.fill(tone)) {
+            HStack(spacing: DS.Spacing.xsm) {
+                if let icon = Self.icon(tone) {
+                    Image(systemName: icon).dsGlyph(DS.Glyph.sm, weight: .bold)
+                        // «نبضة للعاجل» (الدفعة ١٠): هالة حمراء هادئة على الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»
+                        .dsUrgentPulse(DS.Color.error, active: tone == .urgent)
+                }
+                Text(verbatim: status.title)
+                    .dsFont(.hubLabel)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            // الدفعة ١٣: درجة أكبر (كان `hubButton` Footnote ١٣)
-            Text(verbatim: status.title)
-                .dsFont(.hubRow)
-                .monospacedDigit()
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: DS.Spacing.sm)
-            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.sm, weight: .bold)
+        } trailing: {
+            Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .bold)
         }
-        .foregroundColor(Self.ink(tone))
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
-        .background(Self.fill(tone))
-        .contentShape(Rectangle())
     }
 
     private static func icon(_ tone: AdminSystemStatus.Tone) -> String? {
@@ -825,8 +870,9 @@ struct AdminSystemStatusLineLabel: View {
         base(tone)?.dsReadableGlyph ?? DS.Color.textSecondary
     }
 
+    /// تعبئة خفيفة جداً (كانت ١٤٪ — الآن `tintFillSoft`)
     private static func fill(_ tone: AdminSystemStatus.Tone) -> Color {
-        base(tone).map { $0.opacity(DS.Hub.statusLineFill) } ?? DS.Color.cardBackgroundSoft
+        base(tone).map { $0.opacity(DS.Opacity.tintFillSoft) } ?? DS.Color.cardBackgroundSoft
     }
 }
 

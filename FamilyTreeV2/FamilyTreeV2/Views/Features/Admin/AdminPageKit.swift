@@ -45,7 +45,8 @@ enum AdminPageTap {
 
 /// يغلّف وجهاً بضغطته — الصفحة المدفوعة تأخذ عنوان هذه الصفحة في «رجوع»
 struct AdminTapWrap: View {
-    enum Feel { case press, scale, plain }
+    /// `tile` = ضغطة مربّعات اللوحة (`AdminTilePressStyle` — يصغر وأيقونته تكبر)
+    enum Feel { case press, scale, plain, tile }
 
     let tap: AdminPageTap
     var feel: Feel = .press
@@ -79,6 +80,7 @@ struct AdminTapWrap: View {
         case .press: return AnyView(base.buttonStyle(DSPressStyle()))
         case .scale: return AnyView(base.buttonStyle(DSScaleButtonStyle()))
         case .plain: return AnyView(base.buttonStyle(.plain))
+        case .tile:  return AnyView(base.buttonStyle(AdminTilePressStyle()))
         }
     }
 }

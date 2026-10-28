@@ -185,14 +185,12 @@ struct BranchPickerSheet: View {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if q.isEmpty { return rootChildren }
 
-        return allMembers
-            .filter { m in
-                m.fullName.localizedCaseInsensitiveContains(q)
-            }
+        // البحث الدقيق الواحد (`NameSearch`)
+        return NameSearch.filter(allMembers, query: q) { $0.fullName }
             .map { m in
                 BranchNode(
                     member: m,
-                    displayName: m.fullName,
+                    displayName: m.displayFullName,
                     totalCount: (allDescendants[m.id] ?? 0) + 1,
                     children: []
                 )
@@ -434,7 +432,7 @@ struct BranchPickerSheet: View {
             }
             return BranchNode(
                 member: member,
-                displayName: member.fullName,
+                displayName: member.displayFullName,
                 totalCount: (descendants[member.id] ?? 0) + 1,
                 children: kids
             )

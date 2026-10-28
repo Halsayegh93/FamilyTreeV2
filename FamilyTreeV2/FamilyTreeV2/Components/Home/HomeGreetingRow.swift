@@ -16,7 +16,7 @@ struct HomeGreetingRow: View {
             HStack(alignment: .center, spacing: DS.Spacing.md) {
                 avatar
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
                     // التحية بلون الوقت — كبسولة صغيرة واضحة فوق الاسم
                     HStack(spacing: DS.Spacing.xs) {
                         // رمز الوقت المرسوم (شمس طالعة · شمس الظهر · شمس على البحر · هلال) يتحرّك بهدوء

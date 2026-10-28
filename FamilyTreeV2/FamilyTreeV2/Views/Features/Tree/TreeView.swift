@@ -11,6 +11,11 @@ extension Notification.Name {
 }
 
 // MARK: - ثوابت الشجرة
+/// مستوى تكبير شجرة العائلة الحالي (الملاءمة ثم كل تكبير/تصغير) — شجرة النساء تفتح به (طلب المالك ٢٠٢٦-١٠-٢٧ «نفس مستوى شجرة العائلة»)
+enum TreeSharedZoom {
+    static var familyFit: CGFloat?
+}
+
 private enum TreeConst {
     // Zoom
     static let minScale: CGFloat = 0.2
@@ -63,7 +68,7 @@ private struct FamilyTreeMetrics: Equatable {
 
     init(k: CGFloat) {
         self.k = k
-        nodeW = 124 * k; circleFull = 112 * k; nameH = 32 * k; lifeH = 20 * k
+        nodeW = 124 * k; circleFull = 112 * k; nameH = 44 * k; lifeH = 26 * k   // كبسولة الاسم ٤٢ مثل شجرة النساء (٢٠٢٦-١٠-٢٧)
         hGap = 14 * k; vGap = 48 * k; rowGap = 34 * k
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; canvasPad = 60 * k
     }
@@ -654,6 +659,8 @@ struct TreeView: View {
                 highlightTask = nil
             }
             // «أنت هنا» دائم — يتبع حساب المستخدم الحالي
+            // زوم شجرة العائلة الحالي (بعد التكبير/التصغير باليد أيضاً) — شجرة النساء تفتح عليه (طلب المالك ٢٠٢٦-١٠-٢٧)
+            .onChange(of: scale) { TreeSharedZoom.familyFit = $0 }
             .onChange(of: authVM.currentUser?.id) { newId in
                 currentLocationMemberID = newId
             }
@@ -1458,6 +1465,7 @@ struct TreeView: View {
         // وتمتدّ خارج الشاشة للسحب (اختيار المالك ٢٠٢٦-١٠-٠٨) — بدل أن تصغّرها الملاءمة فيضيع التكبير
         let s = max(0.28, min(maxS, (size.width - 48) / (L.size.width / L.m.k)))
         scale = s; baseScale = s; fittedScale = s
+        TreeSharedZoom.familyFit = size.width > size.height ? nil : s   // شجرة النساء تفتح بنفس المستوى
         offset = centeredOffset(scale: s, in: size, layout: L)
         baseOffset = offset
     }
@@ -1696,6 +1704,8 @@ struct TreeMemberNode: View, Equatable {
 
     // حلقة العقدة وإطار الاسم — لون الرتبة صلباً
     private var borderStroke: Color { nodeAccentColor.opacity(0.9) }
+    /// إطار كبسولة الاسم — رفيع وخفيف مثل شجرة النساء (`tintStroke`)
+    private var nameStroke: Color { nodeAccentColor.opacity(DS.Opacity.tintStroke) }
 
     var body: some View {
             // الوضع التفاعلي — دائري
@@ -1852,51 +1862,38 @@ struct TreeMemberNode: View, Equatable {
                 // والتوسيع له زر مستقل مدخل تحت آخر مربع (شريحة العدد + السهم).
                 Button(action: { if TreeTapGuard.allowsTap { onTap() } }) {
                     Group {
-                        if member.isDeceased ?? false {
-                            // ── المتوفّى: بطاقة واحدة مدمجة — الاسم فوق وشريط السنوات الأحمر تحته ──
-                            VStack(spacing: 0) {
-                                if showName {
-                                    Text(displayName)
-                                        .dsTreeFont(.headline, k)
-                                        .foregroundColor(DS.Color.textPrimary)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.75)
-                                        .padding(.horizontal, DS.Spacing.lg * k)
-                                        .padding(.vertical, DS.Spacing.xs * k)
-                                        .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2 * k)
-                                        .background(DS.Color.surface)
-                                }
+                        // كبسولة الاسم للحي؛ والمتوفّى بطاقة واحدة متصلة: الاسم فوق والسنوات تحته بلا فراغ، بأطراف
+                        // مدوّرة كالكبسولة (طلب المالك ٢٠٢٦-١٠-٢٧ «لا تفصل… متصلتين»)، وخط السنوات أكبر (`treeYears`)
+                        let deceased = member.isDeceased ?? false
+                        let cardShape = RoundedRectangle(cornerRadius: (interactiveLabelHeight + 2 * k) / 2, style: .continuous)
+                        VStack(spacing: 0) {
+                            if showName {
+                                Text(displayName)
+                                    .dsTreeFont(.title3Tree, k)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.55)
+                                    // هامش ثابت على الجانبين في كل الصفوف — الطويل يصغر داخل الكبسولة
+                                    .padding(.horizontal, 10 * k)
+                                    .padding(.vertical, DS.Spacing.xs * k)
+                                    .frame(width: interactiveLabelWidth, height: interactiveLabelHeight + 2 * k)
+                                    .background(DS.Color.surface)
+                            }
+                            if deceased {
                                 Text(getLifeSpan())
-                                    .dsTreeFont(.badge, k)
+                                    .dsTreeFont(.treeYears, k)
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                    .padding(.horizontal, DS.Spacing.md * k)
-                                    // سطر خط الهوية أطول من خط النظام (١٫٥×) — حشوة أصغر فيبقى الشريط ٢١ كما كان
-                                    .padding(.vertical, DS.Spacing.xxs * k)
-                                    // maxWidth يمدّد الشريط الأحمر ليطابق عرض الاسم مهما طال
-                                    .frame(minWidth: interactiveLabelWidth, maxWidth: .infinity, minHeight: 21 * k)
+                                    .minimumScaleFactor(0.6)
+                                    .padding(.horizontal, 12 * k)
+                                    .frame(width: interactiveLabelWidth, height: 26 * k)
                                     .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
                             }
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg * k, style: .continuous))
-                            .modifier(DSClaySkin(radius: DS.Radius.lg * k,
-                                                 eyeRow: showName ? interactiveLabelHeight + 2 * k : nil, section: .tree))
-                            .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg * k, style: .continuous)
-                                .stroke(borderStroke, lineWidth: 2.5 * k))
-                        } else if showName {
-                            Text(displayName)
-                                .dsTreeFont(.headline, k)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                                .padding(.horizontal, DS.Spacing.lg * k)
-                                .padding(.vertical, DS.Spacing.xs * k)
-                                .frame(minWidth: interactiveLabelWidth, minHeight: interactiveLabelHeight + 2 * k)
-                                .background(DS.Color.surface)
-                                .clipShape(Capsule())
-                                .modifier(DSClaySkin(section: .tree))
-                                .overlay(Capsule().stroke(borderStroke, lineWidth: 2.5 * k))
                         }
+                        .clipShape(cardShape)
+                        .modifier(DSClaySkin(radius: (interactiveLabelHeight + 2 * k) / 2,
+                                             eyeRow: deceased && showName ? interactiveLabelHeight + 2 * k : nil, section: .tree))
+                        .overlay(cardShape.stroke(nameStroke, lineWidth: DS.Border.width * k))
                     }
                     .contentShape(Rectangle())
                 }
@@ -1937,7 +1934,7 @@ struct TreeMemberNode: View, Equatable {
     }
 
     private var fullDisplayName: String {
-        let full = member.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let full = member.displayFullName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !full.isEmpty { return full }
         let first = member.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         if !first.isEmpty { return first }
@@ -1955,8 +1952,10 @@ struct TreeMemberNode: View, Equatable {
 
     // مقاسات العقدة × معامل «حجم النص» (k = ١ في الإعداد الافتراضي)
     private var interactiveNodeSize: CGFloat { 105 * k }
-    private var interactiveLabelWidth: CGFloat { 110 * k }
-    private var interactiveLabelHeight: CGFloat { 28 * k }
+    // كبسولة الاسم بمقاس شجرة النساء (طلب المالك ٢٠٢٦-١٠-٢٧ «المربعات نفس النساء شكلها أوضح»): ٤٢ ارتفاعاً بعرض العقدة،
+    // والاسم بخط Title 3 (`title3Tree`) — كانت ٣٠ × ١١٠ بخط Headline
+    private var interactiveLabelWidth: CGFloat { 116 * k }   // أضيق من العقدة (١٢٤) بـ٨ — فراغ واضح متساوٍ بين المربّعات في كل صف
+    private var interactiveLabelHeight: CGFloat { 40 * k }
 
     /// وصف صوتي موحّد للعقدة (VoiceOver): الاسم + الحالة + عدد الأبناء
     var nodeAccessibilityLabel: String {

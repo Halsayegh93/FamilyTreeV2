@@ -758,13 +758,12 @@ struct AdminAllRequestsView: View {
         }
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return items }
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
-        let digits = String(q.filter(\.isNumber))
-        return items.filter { item in
-            let texts = searchTexts(item)
-            if texts.contains(where: { ArabicTextNormalizer.normalizeForSearch($0).contains(needle) }) { return true }
-            return digits.count >= 3 && texts.contains { $0.filter(\.isNumber).contains(digits) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب (والرقم أرقاماً فقط)
+        if NameSearch.isPhoneQuery(q) {
+            let digits = NameSearch.digits(q)
+            return digits.count >= 3 ? items.filter { searchTexts($0).contains { NameSearch.digits($0).contains(digits) } } : []
         }
+        return items.filter { NameSearch.matches(query: q, any: searchTexts($0)) }
     }
 
     /// نصوص البحث لكل طلب: الاسم، مقدّم الطلب، الرقم، القيمة الجديدة، العنوان
@@ -2286,7 +2285,8 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Join Request Row
 
-    /// مطابقة في الشجرة (`NameMatcher`): `score` النسبة ٠…١٠٠، `total` أجزاء اسم المتقدّم، `fuzzy` منها بفرق حرف
+    /// مطابقة في الشجرة (`NameMatcher.linkSuggestions`): `matchCount` عمق التطابق بالترتيب (٢ = الأول + الأب)،
+    /// `score` نسبته ٠…١٠٠ من `total` أجزاء اسم المتقدّم (بلا العائلة)، `fuzzy` لم يعد يُستعمل (صفر)
     typealias JoinMatch = (member: FamilyMember, matchCount: Int, matchedParts: [String], isRegistrationMatch: Bool,
                            score: Int, total: Int, fuzzy: Int)
 
@@ -2468,14 +2468,14 @@ struct AdminAllRequestsView: View {
     }
 
     private func joinMatchRow(match: JoinMatch, pendingMember: FamilyMember) -> some View {
-        // النتيجة الموزونة من `NameMatcher` (الأول أثقل ثم الأب ثم الجد…) — بلا اسم العائلة والروابط
+        // عمق التطابق بالترتيب (الأول ثم الأب ثم الجد…) من أجزاء اسم المتقدّم — بلا اسم العائلة والروابط
         let totalParts = max(match.total, 1)
-        let matchPercent = min(100, max(0, match.score))
+        let birth = match.member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         return HStack(spacing: DS.Spacing.sm) {
-            // نسبة التطابق — الحلقة الصغيرة الموحّدة (الدفعة ١٠)
-            DSRingGauge(progress: Double(matchPercent) / 100, tint: AppSection.admin.ink, size: DS.Ring.small,
-                        center: .percent(matchPercent), ink: AppSection.admin.ink)
+            // كم جزءاً تطابق — الحلقة الصغيرة الموحّدة (الدفعة ١٠) بالعدد في وسطها
+            DSRingGauge(progress: min(1, Double(match.matchCount) / Double(totalParts)), tint: AppSection.admin.ink,
+                        size: DS.Ring.small, center: .count(match.matchCount), ink: AppSection.admin.ink)
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(match.member.displayFullName)
@@ -2484,14 +2484,11 @@ struct AdminAllRequestsView: View {
                     .dsNameLines()
 
                 HStack(spacing: DS.Spacing.xs) {
-                    Text(match.fuzzy > 0
-                         ? L10n.t("\(match.matchCount) من \(totalParts) أسماء متطابقة · \(match.fuzzy) بفرق حرف",
-                                  "\(match.matchCount) of \(totalParts) names match · \(match.fuzzy) one letter off")
-                         : L10n.t("\(match.matchCount) من \(totalParts) أسماء متطابقة",
-                                  "\(match.matchCount) of \(totalParts) names match"))
+                    // السبب: «الاسم الأول + الأب + الجد»
+                    Text(NameMatcher.linkReason(depth: match.matchCount))
                     .dsFieldFont(.footnote)
                     .foregroundColor(DS.Color.fieldValue)
-                    .lineLimit(1)
+                    .lineLimit(2)   // السبب كاملاً ولو بخط كبير
                     .minimumScaleFactor(0.85)
 
                     if match.isRegistrationMatch {
@@ -2499,9 +2496,9 @@ struct AdminAllRequestsView: View {
                     }
                 }
 
-                // رقم الهاتف
-                if let phone = match.member.phoneNumber, !phone.isEmpty {
-                    metaItem("phone.fill", KuwaitPhone.display(phone))
+                // تاريخ الميلاد — يُقارن بتاريخ المنضم (الأقرب أولاً بين المتساويين)
+                if !birth.isEmpty {
+                    metaItem("calendar", birth)
                 }
             }
             .accessibilityElement(children: .combine)
@@ -2593,46 +2590,24 @@ struct AdminAllRequestsView: View {
         return editDistance(Array(na), Array(nb)) <= 1
     }
 
-    /// لستة مرتبة بالأقرب (طلب المالك ٢٠٢٦-١٠-٢٤ «تقريب الاسم اكثر نظم الالية») — `NameMatcher`:
-    /// تطبيع عربي، «عبد الله» = «عبدالله»، بلا اسم العائلة والروابط، مقارنة بالترتيب بوزن أعلى للأول ثم الأب ثم الجد،
-    /// وفرق حرف واحد مقبول. يُعرض من تطابقت أول ٣ أجزاء من اسمه بالترتيب (أو كلها إن كانت أقل)، ومطابقات السيرفر
-    /// (`search_members_by_name` + لقطة التسجيل) تُدمج بلا تكرار متى تطابق الاسم الأول — ثم الكل بالنتيجة.
+    /// لستة مرتّبة صارمة (طلب المالك ٢٠٢٦-١٠-٢٤ «تطلع اسماء ماله شغل بالربط») — `NameMatcher.linkSuggestions`:
+    /// الاسم الأول ثم الأب ثم الجد بالترتيب (الاسم المركّب وحدة)، والعائلة في آخر الاسم ضجيج لا دليل، ولا يُقترح إلا
+    /// من طابق الأول والأب على الأقل — ومطابقات السيرفر (`search_members_by_name` + لقطة التسجيل) بنفس الشرط.
+    /// لا يُقترح من له حساب أو متوفى. الترتيب بعمق التطابق ثم قرب تاريخ الميلاد.
     func orderedMatchList(for member: FamilyMember) -> [JoinMatch] {
         // الأنثى تُربط بشجرة النساء — لا مطابقات (ولا «ربط») من شجرة الرجال
         guard !member.isFemale else { return [] }
-        let families = NameMatcher.familyKeys()
-        let applicant = NameMatcher.chain(member.fullName, families: families)
-        guard !applicant.isEmpty else { return [] }
-
-        // فقط سجلات الشجرة: بدون هاتف + أحياء + لها اسم + مو pending
+        let accounts = AdminAccountsStore.shared
+        // سجلات الشجرة فقط: رجال أحياء لهم اسم، مو pending، وبلا حساب (بلا هاتف، وليس في قائمة الحسابات إن حُمّلت)
         let existingMembers = memberVM.allMembers.filter { m in
-            m.role != .pending && m.id != member.id && m.hasName &&
+            m.role != .pending && m.id != member.id && m.hasName && !m.isFemale &&
             (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            m.isDeceased != true
+            m.isDeceased != true && accounts.info(m.id) == nil
         }
         let serverIds = Set(registrationMatches[member.id] ?? [])
-
-        var scored: [(member: FamilyMember, result: NameMatcher.Result, isServer: Bool)] = []
-        for existing in existingMembers {
-            let isServer = serverIds.contains(existing.id)
-            let result = NameMatcher.compare(applicant, NameMatcher.chain(existing.fullName, families: families))
-            // المحلي: أول ٣ أجزاء بالترتيب · السيرفر: يكفي الاسم الأول (السيرفر وجده بمنطقه)
-            guard result.isStrong || (isServer && result.prefix >= 1) else { continue }
-            scored.append((member: existing, result: result, isServer: isServer))
-        }
-
-        scored.sort { a, b in
-            if a.result.score != b.result.score || a.result.prefix != b.result.prefix {
-                return NameMatcher.ranksBefore(a.result, b.result)
-            }
-            if a.isServer != b.isServer { return a.isServer }
-            return a.member.fullName.localizedStandardCompare(b.member.fullName) == .orderedAscending
-        }
-
-        return scored.prefix(20).map { item in
-            (member: item.member, matchCount: item.result.matched.count, matchedParts: item.result.matched,
-             isRegistrationMatch: item.isServer, score: item.result.percent, total: item.result.total,
-             fuzzy: item.result.fuzzy)
+        return NameMatcher.linkSuggestions(for: member, among: existingMembers, serverIds: serverIds).map { s in
+            (member: s.member, matchCount: s.depth, matchedParts: [], isRegistrationMatch: s.isServer,
+             score: s.total > 0 ? s.depth * 100 / s.total : 0, total: s.total, fuzzy: 0)
         }
     }
 
@@ -2668,7 +2643,7 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: "newspaper.fill",
                              tint: tint,
                              title: L10n.t("خبر", "News"),
-                             subtitle: post.author_name) {
+                             subtitle: memberVM.displayName(id: post.author_id, stored: post.author_name, .full)) {
                 pendingChip(post.timestamp)
             }
 
@@ -2693,7 +2668,7 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: "exclamationmark.triangle.fill",
                              tint: DS.Color.error,
                              title: L10n.t("بلاغ", "Report"),
-                             subtitle: request.member.map { L10n.t("عن: \($0.fullName)", "About: \($0.fullName)") }) {
+                             subtitle: request.member.map { L10n.t("عن: \($0.displayFullName)", "About: \($0.displayFullName)") }) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2710,7 +2685,7 @@ struct AdminAllRequestsView: View {
     private func phoneRow(for request: PhoneChangeRequest) -> some View {
         let currentPhone = KuwaitPhone.display(request.member?.phoneNumber)
         let newPhone = KuwaitPhone.display(request.newValue)
-        let memberName = request.member?.fullName ?? "Member"
+        let memberName = request.member?.displayFullName ?? "Member"
 
         return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "phone.arrow.right",
@@ -2786,7 +2761,7 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.error,
                              title: L10n.t("تسجيل وفاة", "Deceased"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                              "For: \(request.member?.fullName ?? "Member")")) {
+                                              "For: \(request.member?.displayFullName ?? "Member")")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2815,7 +2790,7 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.info,
                              title: L10n.t("إضافة ابن", "Child Add"),
                              subtitle: L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
-                                              "Father: \(request.member?.fullName ?? "Member")")) {
+                                              "Father: \(request.member?.displayFullName ?? "Member")")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2844,7 +2819,7 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.neonBlue,
                              title: L10n.t("اقتراح صورة", "Photo Suggestion"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                              "For: \(request.member?.fullName ?? "Member")")) {
+                                              "For: \(request.member?.displayFullName ?? "Member")")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -2984,7 +2959,7 @@ struct AdminAllRequestsView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(valueColor)
                     .lineLimit(2)
             }
@@ -3725,7 +3700,8 @@ struct AdminAllRequestsView: View {
 
         case .news(let post):
             infoCard(icon: "person.fill", label: L10n.t("الكاتب", "Author"),
-                     value: post.author_name, color: AppSection.admin.ink)
+                     value: memberVM.displayName(id: post.author_id, stored: post.author_name, .full),
+                     color: AppSection.admin.ink)
             infoCard(icon: "tag.fill", label: L10n.t("النوع", "Type"),
                      value: post.type, color: newsTypeColor(post.type))
             longTextCard(icon: "text.alignleft",
@@ -3737,14 +3713,14 @@ struct AdminAllRequestsView: View {
 
         case .report(let request):
             infoCard(icon: "person.fill", label: L10n.t("مقدم البلاغ", "Reporter"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "exclamationmark.bubble.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .phone(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             comparisonCard(
                 oldLabel: L10n.t("الرقم الحالي", "Current"),
                 oldValue: KuwaitPhone.display(request.member?.phoneNumber),
@@ -3790,21 +3766,21 @@ struct AdminAllRequestsView: View {
 
         case .deceased(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .child(let request):
             infoCard(icon: "person.fill", label: L10n.t("الأب", "Father"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .photo(let request):
             infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.fullName ?? "—", color: AppSection.admin.ink)
+                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
             if !(request.details ?? "").isEmpty {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("ملاحظات", "Notes"),
@@ -3818,7 +3794,11 @@ struct AdminAllRequestsView: View {
             infoCard(icon: "briefcase.fill", label: L10n.t("اسم المشروع", "Project"),
                      value: project.title, color: DS.Color.accent)
             infoCard(icon: "person.fill", label: L10n.t("صاحب المشروع", "Owner"),
-                     value: project.ownerName, color: AppSection.admin.ink)
+                     // صاحب فارغ = المُرسل ليس صاحبه — لا يُستبدل باسم المُرسل من معرّفه
+                     value: project.ownerName.trimmingCharacters(in: .whitespaces).isEmpty
+                         ? L10n.t("المُرسل ليس صاحبه — لم يُحدَّد", "Not the sender — not set")
+                         : memberVM.displayName(id: project.ownerId, stored: project.ownerName, .full),
+                     color: AppSection.admin.ink)
             if let desc = project.description, !desc.isEmpty {
                 longTextCard(icon: "doc.text.fill",
                              label: L10n.t("الوصف", "Description"),
@@ -3874,8 +3854,8 @@ struct AdminAllRequestsView: View {
 
         case .treeEdit(let request, let action):
             let payload = request.treeEditPayload
-            let memberName = payload?.targetMemberName
-                ?? request.member?.fullName
+            let memberName = memberVM.treeEditTargetName(payload)
+                ?? request.member?.displayFullName
                 ?? L10n.t("عضو", "Member")
             // مقدّم الطلب هو العضو نفسه (مقارنة كمعرّفات — الآيفون يرسل حروفاً كبيرة) → يظهر مرة
             // واحدة بعنوان «صاحب الطلب» بدل «العضو» + «مقدّم التعديل» (طلب المالك ٢٠٢٦-١٠-٠٧)
@@ -3947,7 +3927,7 @@ struct AdminAllRequestsView: View {
                let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId }) {
                 infoCard(icon: "person.crop.circle.badge.checkmark",
                          label: selfRequest ? L10n.t("صاحب الطلب", "Requester") : L10n.t("مقدّم التعديل", "Requested by"),
-                         value: requester.fullName, color: DS.Color.info)
+                         value: requester.displayFullName, color: DS.Color.info)
             }
             // سبب داخلي من تعديل الملف الشخصي (profile_marital…) لا يُعرض كما هو — عنوانه في رأس المربّع
             if let reason = payload?.reason, !reason.isEmpty, Self.profileReasonTitle(reason) == nil {
@@ -3972,7 +3952,7 @@ struct AdminAllRequestsView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(value)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
@@ -3996,7 +3976,7 @@ struct AdminAllRequestsView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(value)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -4034,7 +4014,7 @@ struct AdminAllRequestsView: View {
                 Spacer(minLength: 0)
             }
             Text(text)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -4056,7 +4036,7 @@ struct AdminAllRequestsView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
                     Text(oldValue)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.fieldValue)
                         .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
                         .fixedSize(horizontal: false, vertical: true)
@@ -4079,7 +4059,7 @@ struct AdminAllRequestsView: View {
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.success)
                     Text(newValue)
-                        .dsFieldFont(.headline)
+                        .dsFieldFont(.fieldValueStrong)
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

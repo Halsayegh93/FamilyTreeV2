@@ -49,6 +49,8 @@ struct HomeNewsView: View {
     /// خبر ضُغط عليه في مربّع الرئيسية — تنزل إليه صفحة الأخبار وتبرزه لحظة (طلب المالك)
     @State private var focusNewsId: UUID?
     @State private var highlightedNewsId: UUID?
+    /// صور خبر مفتوحة بملء الشاشة (التكبير والتقليب) — نفس عارض المشاريع والمكتبة
+    @State private var mediaViewer: NewsMediaViewerItem?
 
     private enum HomeSubPage: Hashable {
         case archive, projects, contact, news
@@ -336,6 +338,10 @@ struct HomeNewsView: View {
             // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
             if selectedMemberForDetails != nil { t.disablesAnimations = true }
         }
+        // صورة الخبر بملء الشاشة — تكبير بالقرصة والتقليب بين صور الخبر
+        .fullScreenCover(item: $mediaViewer) { item in
+            ProjectPhotoViewer(urls: item.urls, startIndex: item.start, section: .news)
+        }
     }
 
     // MARK: - Sub-page Header
@@ -391,22 +397,23 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
-                        primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
-                        quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim))
+                        AnyView(primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
+                        AnyView(quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
-                    newsBentoCard
+                    AnyView(newsBentoCard)
                         .frame(maxWidth: max(DS.Landscape.homeNewsMinWidth, UIScreen.main.bounds.width * DS.Landscape.homeNewsShare), alignment: .top)
                 }
             } else {
                 // فراغات أقل بين المربّعات (طلب المالك)
+                // حدود AnyView: تُبقي عمق مكدس الرئيسية تحت الحد (كان ٨٠١ ك.ب بعد دمج ٢٠٢٦-١٠-٢٥ — iOS 16 أحوج)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
-                    primaryTilesRow(tileHeight: layout.tileHeight + 12)
-                    quickAccessGrid(tileHeight: layout.tileHeight + 6)
-                    newsBentoCard
+                    AnyView(primaryTilesRow(tileHeight: layout.tileHeight + 12))
+                    AnyView(quickAccessGrid(tileHeight: layout.tileHeight + 6))
+                    AnyView(newsBentoCard)
                 }
             }
         }
@@ -862,7 +869,7 @@ struct HomeNewsView: View {
                     spacing: DS.Spacing.lg
                 ) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
-                        newsCard(for: news)
+                        newsCard(for: news, index: index)
                             .newsSwipeActions(
                                         id: news.id,
                                         canDelete: canDelete(news),
@@ -879,7 +886,7 @@ struct HomeNewsView: View {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
                 LazyVStack(spacing: DS.Spacing.md) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
-                        newsCard(for: news)
+                        newsCard(for: news, index: index)
                             .newsSwipeActions(
                                 id: news.id,
                                 canDelete: canDelete(news),
@@ -915,7 +922,7 @@ struct HomeNewsView: View {
         authVM.canDeleteNews || (news.ownerId != nil && authVM.currentUser?.id == news.ownerId)
     }
 
-    private func newsCard(for news: NewsPost) -> some View {
+    private func newsCard(for news: NewsPost, index: Int) -> some View {
         HomeNewsCardView(
             postId: news.id,
             authorName: news.author_name,
@@ -955,7 +962,13 @@ struct HomeNewsView: View {
                 if let authorId = news.author_id {
                     blockTarget = BlockTarget(id: authorId, name: news.author_name)
                 }
-            }
+            },
+            onMediaTap: { photo in
+                mediaViewer = NewsMediaViewerItem(urls: news.mediaURLs, start: photo)
+            },
+            // الختم يُطبع مع دخول البطاقات (نفس توقيت `dsCardCascade`)
+            appeared: newsAppeared,
+            cascadeIndex: index
         )
     }
 

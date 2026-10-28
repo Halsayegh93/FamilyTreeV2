@@ -277,20 +277,30 @@ struct AdminMembersPage: View {
         let base = chip == .verifyLiving ? verifyRows : index.rows(chip, sub)
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return base }
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
-        let digits = AdminMemberFacts.asciiDigits(q)
-        return base.filter { i in
-            let e = index.entries[i]
-            return e.needle.contains(needle) || (digits.count >= 3 && e.digits.contains(digits))
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب (والرقم أرقاماً فقط)
+        if NameSearch.isPhoneQuery(q) {
+            let digits = NameSearch.digits(q)
+            return digits.count >= 3 ? base.filter { index.entries[$0].digits.contains(digits) } : []
         }
+        let words = NameSearch.words(q)
+        var hits: [(order: Int, score: Int, row: Int)] = []
+        for (n, i) in base.enumerated() {
+            if let score = NameSearch.score(queryWords: words, candidateWords: NameSearch.words(index.entries[i].needle)) {
+                hits.append((order: n, score: score, row: i))
+            }
+        }
+        hits.sort { $0.score != $1.score ? $0.score < $1.score : $0.order < $1.order }
+        return hits.map(\.row)
     }
 
     @ViewBuilder
     private var listSection: some View {
         let rows = currentRows
         if chip == .all && sub == .all && !searching {
+            // الفروع الحقيقية فقط (بلا «خارج الفروع») — نفس عدد «إحصائيات العائلة» في «اليوم»
+            let branches = index.branches.filter { $0.id != nil }.count
             AdminSectionLabel(title: L10n.t("حسب الفرع", "By branch"),
-                              trailing: L10n.t("\(index.branches.count) فروع", "\(index.branches.count) branches"))
+                              trailing: L10n.t("\(branches) فروع", "\(branches) branches"))
             ForEach(index.branches) { branch in
                 AnyView(branchCard(branch))
             }
@@ -847,7 +857,7 @@ struct AdminBandSearchField: View {
                 .foregroundColor(DS.Hub.onBandMuted)
                 .accessibilityHidden(true)
             TextField("", text: $text, prompt: Text(placeholder).foregroundColor(DS.Hub.onBandMuted))
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .tint(DS.Color.accentLight)
                 .submitLabel(.search)

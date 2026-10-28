@@ -143,12 +143,14 @@ struct FamilyProjectsView: View {
             ProjectDetailView(project: project)
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
+                .environmentObject(memberVM)
         }
         .fullScreenCover(item: $projectToEdit) { project in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
                 EditProjectView(project: project, didEdit: $didEditProject)
                     .environmentObject(projectsVM)
                     .environmentObject(authVM)
+                    .environmentObject(memberVM)
                     .dsSectionPage(.projects)
             }
             .background(ClearPresentationBackground())
@@ -624,6 +626,8 @@ struct AddProjectView: View {
     @State private var photoImages: [UIImage] = []
     @State private var noExistingPhotos: [String] = []
     @State private var isSaving = false
+    /// بعد المربّع: «هل أنت صاحب المشروع؟» (طلب المالك ٢٠٢٦-١٠-٢٥) — «لا» = بلا اسمه على المشروع
+    @State private var askOwnership = false
 
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isSaving
@@ -660,7 +664,7 @@ struct AddProjectView: View {
             note: authVM.isAdmin ? nil : L10n.t("يظهر لك فوراً، وللجميع بعد موافقة الإدارة", "Visible to you now, to everyone after approval"),
             isBehindExtra: accountsBoxOpen,
             hasUnsavedChanges: hasUnsavedChanges,
-            onSubmit: { Task { await saveProject() } },
+            onSubmit: { askOwnership = true },
             onCancel: { dismiss() }
         ) {
             // ── الهوية: الشعار + الاسم + الوصف ──
@@ -692,15 +696,25 @@ struct AddProjectView: View {
                                       onExtraChange: { accountsBoxOpen = $0 })
             }
         }
+        .dsAlert(L10n.t("هل أنت صاحب المشروع؟", "Are you the project owner?"),
+                 isPresented: $askOwnership, icon: "person.crop.circle.badge.questionmark") {
+            Button(L10n.t("نعم، أنا صاحبه", "Yes, it's mine")) { Task { await saveProject(isOwner: true) } }
+            Button(L10n.t("لا", "No")) { Task { await saveProject(isOwner: false) } }
+            Button(L10n.t("رجوع", "Back"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("إذا اخترت «لا» ما يظهر اسمك على المشروع، والإدارة تحدّد صاحبه.",
+                        "If you choose No, your name won't show on the project; the admins can set its owner."))
+        }
     }
 
-    private func saveProject() async {
+    /// «نعم» = اسمه صاحباً للمشروع؛ «لا» = بلا اسم (يبقى السجل باسمه للتعديل — `owner_id` شرط RLS،
+    /// وتحدّد الإدارة الصاحب من «تعديل المشروع»)
+    private func saveProject(isOwner: Bool) async {
         guard let currentUser = authVM.currentUser else { return }
         isSaving = true
 
-        // المنشئ هو صاحب المشروع (تعيين صاحب آخر صار في تعديل المشروع للإدارة).
         let ownerId = currentUser.id
-        let ownerName = currentUser.fullName
+        let ownerName = isOwner ? currentUser.displayFullName : ""   // بالعائلة المختارة (طلب المالك ٢٠٢٦-١٠-٢٤)
 
         // Upload logo if selected
         var uploadedLogoUrl: String? = nil
@@ -723,6 +737,7 @@ struct AddProjectView: View {
         let success = await projectsVM.addProject(
             ownerId: ownerId,
             ownerName: ownerName,
+            submitterName: currentUser.displayFullName,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             description: description.isEmpty ? nil : description,
             logoUrl: uploadedLogoUrl,

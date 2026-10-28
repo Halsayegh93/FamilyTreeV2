@@ -368,7 +368,7 @@ struct EditProfileView: View {
                     ChangedWordText(word: chosen, changed: true)
                 } else {
                     Text(familyName.isEmpty ? L10n.t("لم تُحدَّد", "Not set") : familyName)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(familyName.isEmpty ? DS.Color.textTertiary : DS.Color.fieldValue)
                         .lineLimit(1)
                 }
@@ -465,7 +465,7 @@ struct EditProfileView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(appliedPhoneDisplay ?? KuwaitPhone.display(member.phoneNumber))
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)
@@ -512,7 +512,7 @@ struct EditProfileView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(birthDateProvided ? birthDateText(birthDate) : L10n.t("لم يُحدَّد", "Not set"))
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(birthDateProvided ? DS.Color.fieldValue : DS.Color.textTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -145,7 +145,7 @@ struct MemberContactFormView: View {
                 ZStack(alignment: .topLeading) {
                     if message.isEmpty {
                         Text(L10n.t("اكتب رسالتك هنا…", "Write your message here…"))
-                            .dsFieldFont(.body)
+                            .dsFieldFont(.fieldValue)
                             .foregroundColor(DS.Color.textTertiary)
                             .padding(.top, DS.Spacing.sm)
                             .padding(.leading, DS.Spacing.xs)
@@ -153,7 +153,7 @@ struct MemberContactFormView: View {
                     }
                     TextEditor(text: $message)
                         .focused($messageFocused)
-                        .dsFieldFont(.body)
+                        .dsFieldFont(.fieldValue)
                         .foregroundColor(DS.Color.textPrimary)
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: DS.Icon.emptyArt, maxHeight: DS.Icon.emptyArt * 1.7)
@@ -194,7 +194,7 @@ struct MemberContactFormView: View {
                     .dsFieldFont(.label)
                     .foregroundColor(replyFocused ? tint : DS.Color.fieldLabel)
                 TextField(L10n.t("بريدك للرد (اختياري)", "Your email for a reply (optional)"), text: $preferredContact)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.textPrimary)
                     .keyboardType(.emailAddress)
                     .textContentType(.emailAddress)

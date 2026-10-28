@@ -107,7 +107,7 @@ struct DSSearchField: View {
                 .foregroundColor(focused ? tint : DS.Color.textTertiary)
                 .accessibilityHidden(true)
             TextField(placeholder, text: $text)
-                .dsFieldFont(.body)
+                .dsFieldFont(.fieldValue)
                 .foregroundColor(DS.Color.textPrimary)
                 .submitLabel(.search)
                 .autocorrectionDisabled()

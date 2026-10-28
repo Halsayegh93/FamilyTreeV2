@@ -49,7 +49,9 @@ struct LinkFatherSheet: View {
             }
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty { return potentialFathers }
-        return potentialFathers.filter { $0.fullName.localizedCaseInsensitiveContains(query) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
+        return NameSearch.filter(potentialFathers, query: query) { $0.fullName }
     }
 
     var body: some View {
@@ -120,7 +122,7 @@ struct LinkFatherSheet: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(father.displayFullName)
-                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .medium)
+                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .semibold : .medium)
                         .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                         .dsNameLines()
                     if father.isDeceased == true {
@@ -659,7 +661,7 @@ struct EditNameSheet: View {
                     .dsFieldFont(.label)
                     .foregroundColor(DS.Color.fieldLabel)
                 Text(phone)
-                    .dsFieldFont(.body)
+                    .dsFieldFont(.fieldValue)
                     .foregroundColor(DS.Color.fieldValue)
                     .monospacedDigit()
                     .environment(\.layoutDirection, .leftToRight)

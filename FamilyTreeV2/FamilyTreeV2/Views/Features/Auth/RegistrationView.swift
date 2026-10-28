@@ -232,7 +232,7 @@ struct RegistrationView: View {
                         Text(familyName.isEmpty
                              ? L10n.t("اختر عائلتك", "Choose your family")
                              : familyName)
-                            .dsFieldFont(.body)
+                            .dsFieldFont(.fieldValue)
                             .foregroundColor(familyName.isEmpty
                                              ? DS.Color.textTertiary
                                              : DS.Color.textPrimary)
@@ -334,7 +334,7 @@ struct RegistrationView: View {
             } label: {
                 DSRow(icon: "figure.and.child.holdinghands", tint: DS.Color.palm,
                       title: L10n.t("الأب", "Father"),
-                      subtitle: selectedFather?.fullName ?? L10n.t("اختاري أباك من الشجرة", "Pick your father from the tree")) {
+                      subtitle: selectedFather?.displayFullName ?? L10n.t("اختاري أباك من الشجرة", "Pick your father from the tree")) {
                     DSStateIcon("magnifyingglass", tint: DS.Color.primary, size: DS.Icon.row)
                 }
                 .contentShape(Rectangle())

@@ -582,68 +582,7 @@ struct DSChipButton: View {
     }
 }
 
-// MARK: - زرّا تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٢٤ «تصميم جديد» لـ«تعديل مباشر» و«عرض التفاصيل»)
-
-/// كبسولة ناعمة: تعبئة خفيفة بلون القسم وإطار رفيع منه، والأيقونة والنص بحبر القسم — إجراء واضح بلا ثقل الممتلئ
-struct DSSoftPillButton: View {
-    let title: String
-    let icon: String
-    var tint: Color = DS.Color.primary
-    let action: () -> Void
-    @Environment(\.dsSection) private var section
-
-    init(_ title: String, icon: String, tint: Color = DS.Color.primary, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.tint = tint
-        self.action = action
-    }
-
-    var body: some View {
-        let ink = tint.dsChrome(in: section)
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xsm) {
-                Image(systemName: icon).dsGlyph(DS.Glyph.md)
-                Text(title).dsFont(.button)
-            }
-            .foregroundColor(ink)
-            .padding(.horizontal, DS.Spacing.lg)
-            .frame(minHeight: DSBox.buttonHeight)
-            .background(Capsule().fill(ink.opacity(DS.Opacity.tintFill)))
-            .overlay(Capsule().strokeBorder(ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(DSPressStyle())
-    }
-}
-
-/// رابط نصّي بسهم — بلا خلفية، للتوسيع والطيّ («عرض التفاصيل» / «إخفاء التفاصيل»)، لمسه ٤٤
-struct DSTextLinkButton: View {
-    let title: String
-    let icon: String
-    let action: () -> Void
-    @Environment(\.dsSection) private var section
-
-    init(_ title: String, icon: String, action: @escaping () -> Void) {
-        self.title = title
-        self.icon = icon
-        self.action = action
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xs) {
-                Text(title).dsFont(.subtitle)
-                Image(systemName: icon).dsGlyph(DS.Glyph.sm)
-            }
-            .foregroundColor(DS.Color.primary.dsChrome(in: section))
-            .frame(minHeight: DS.Icon.tapTarget)
-            .padding(.horizontal, DS.Spacing.sm)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSPressStyle())
-    }
-}
+// زرّا تفاصيل العضو («تعديل مباشر» و«عرض التفاصيل») صارا في `DSMemberKit.swift` (`DSLiveButton`، `DSDetailsToggle`)
 
 // MARK: - عُدّة صفحات النظام المشتركة (كانت `Sys*` في AdminSystemHealthView.swift)
 
@@ -958,8 +897,7 @@ struct DSDangerTextButton: View {
                 Image(systemName: icon)
                     .dsGlyph(DS.Glyph.sm)
                 Text(title)
-                    .dsFont(.callout)
-                    .fontWeight(.semibold)
+                    .dsFont(.rowTitle)
                     .lineLimit(1)
             }
             .fixedSize(horizontal: true, vertical: false)

@@ -97,7 +97,7 @@ struct DSSubPageHeader<Trailing: View>: View {
                         .accessibilityHidden(true)
                 }
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
                     Text(title)
                         .font(DSBox.pageTitleFont)
                         .foregroundColor(DS.Color.headerTitle)

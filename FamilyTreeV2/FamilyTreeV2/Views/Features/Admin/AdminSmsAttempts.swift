@@ -492,7 +492,7 @@ private struct SmsAttemptRowMain: View {
                 NavigationLink {
                     AdminLazyPage {
                         AnyView(SmsNumberDetailsPage(phoneE164: e164, days: days,
-                                                     name: member?.fullName ?? item.name)
+                                                     name: member?.displayFullName ?? item.name)
                             .adminArea(area).adminBackTitle(backTitle))
                     }
                 } label: {
@@ -812,15 +812,14 @@ private struct SmsAttemptsListContent: View {
     private func filtered(_ items: [SmsLoginAttempts.Item]) -> [SmsLoginAttempts.Item] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return items }
-        let needle = ArabicTextNormalizer.normalizeForSearch(q)
-        let digits = KuwaitPhone.normalizeDigits(q).filter(\.isNumber)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب (والرقم أرقاماً فقط)
+        if NameSearch.isPhoneQuery(q) {
+            let digits = NameSearch.digits(q)
+            return items.filter { item in [item.phone, item.phoneE164 ?? ""].contains { NameSearch.digits($0).contains(digits) } }
+        }
         return items.filter { item in
             let names = [item.name, item.profileId.flatMap { memberVM.member(byId: $0)?.fullName }].compactMap { $0 }
-            if !needle.isEmpty, names.contains(where: { ArabicTextNormalizer.normalizeForSearch($0).contains(needle) }) {
-                return true
-            }
-            guard !digits.isEmpty else { return false }
-            return [item.phone, item.phoneE164 ?? ""].contains { $0.filter(\.isNumber).contains(digits) }
+            return NameSearch.matches(query: q, any: names)
         }
     }
 }

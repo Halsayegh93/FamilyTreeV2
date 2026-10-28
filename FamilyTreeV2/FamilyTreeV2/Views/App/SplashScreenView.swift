@@ -102,8 +102,7 @@ struct SplashScreenView: View {
                                 .overlay(alignment: .leading) {
                                     Text(statusText + String(repeating: ".", count: dotCount))
                                 }
-                                .dsFont(.callout)
-                                .fontWeight(.medium)
+                                .dsFont(.calloutMedium)
                                 .foregroundColor(statusColor)
                                 .animation(.none, value: dotCount)
                         }

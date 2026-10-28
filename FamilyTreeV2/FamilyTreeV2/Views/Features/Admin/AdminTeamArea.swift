@@ -7,8 +7,8 @@ import SwiftUI
 //   الرأس: ثلاث إشارات حالة، كل واحدة رقم↗ لبيتها تحت (رصيد رسائل الدخول · التسجيل · وصول الإشعارات)
 //   «فريق الإدارة»: بطاقة بعدد كل دور ← صفحة الفريق (وفيها «صلاحيات الأدوار» ودورك مميّز، و«إضافة» للمالك)
 //   «الدخول والأمان»: رسائل رمز الدخول (KWT SMS) · التسجيل والمنع · الأجهزة ووصول الإشعارات
-// «نطاقي» حُذف للمالك والمدير (سطر «صلاحياتي» في «اليوم» للمراقب والمشرف هو بيته). الصلاحيات كما كانت: الفريق
-// `isAdmin`، والباقي `canViewSystemSettings`.
+// «نطاقي» حُذف للمالك والمدير (سطر «صلاحياتي» في «اليوم» هو بيته). القسم كله للمالك فقط منذ ٢٠٢٦-١٠-٢٤
+// (`canViewSystemSettings` — كان المدير يرى الفريق ويتصفّح الباقي للقراءة).
 
 struct AdminTeamAreaView: View {
     @EnvironmentObject var authVM: AuthViewModel
@@ -30,11 +30,13 @@ struct AdminTeamAreaView: View {
                 }
             }
         } content: {
-            if authVM.isAdmin {
+            if authVM.canViewSystemSettings {
                 AnyView(AdminTeamCard())
             }
             if !tools.isEmpty {
-                AdminToolCards(tools: tools, hints: [:], warnings: sms.needsTopUp ? ["access.sms"] : [])
+                // مربّعات بالمنتصف — الرصيد المنخفض شارة «!» على أيقونة رسائل الدخول (طلب المالك ٢٠٢٦-١٠-٢٤)
+                AdminToolCards(tools: tools, hints: [:], warnings: sms.needsTopUp ? ["access.sms"] : [],
+                               style: .tiles(captions: false))
             }
         }
         // ما يُدفع من الإشارات وبطاقة الفريق يرجع باسم القسم

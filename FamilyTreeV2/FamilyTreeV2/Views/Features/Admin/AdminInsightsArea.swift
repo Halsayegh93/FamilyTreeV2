@@ -26,7 +26,8 @@ struct AdminMetricsAreaView: View {
             if tools.isEmpty {
                 DSEmptyView(L10n.t("لا مؤشرات لدورك هنا", "No insights for your role here"), style: .card)
             } else {
-                AdminToolCards(tools: tools, hints: hints)
+                // مربّعات بالمنتصف بسطر رقمها الحيّ (طلب المالك ٢٠٢٦-١٠-٢٤)
+                AdminToolCards(tools: tools, hints: hints, style: .tiles(captions: true))
             }
         }
         .task { await load() }

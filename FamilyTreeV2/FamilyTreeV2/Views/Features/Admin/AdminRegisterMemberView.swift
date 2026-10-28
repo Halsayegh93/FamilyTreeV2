@@ -235,7 +235,7 @@ struct AdminRegisterMemberView: View {
                             .dsFieldFont(.label)
                             .foregroundColor(DS.Color.fieldLabel)
                         Text(DSDateText.display(birthDate))
-                            .dsFieldFont(DSBox.fieldValueSize, weight: .semibold)
+                            .dsFieldFont(.rowTitle)
                             .foregroundColor(DS.Color.fieldValue)
                     }
                     Spacer(minLength: 0)

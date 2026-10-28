@@ -57,6 +57,19 @@ enum DSMotion {
     static let panelScale: CGFloat = 0.94
     /// نفس نابض الفتح المعتمد للمربّعات
     static let panel = DS.Anim.snappy
+    /// يصعد المربّع من تحت مكانه قليلاً وهو يكبر (طلب المالك ٢٠٢٦-١٠-٢٤ «حركات بالفتح والإغلاق»)
+    static let panelRise: CGFloat = 18
+    /// الإغلاق: يصغر وينزل قليلاً مع تلاشي التعتيم، ثم يُغلق الغطاء بلا انزلاق النظام
+    static let panelOutScale: CGFloat = 0.96
+    static let panelOutDrop: CGFloat = 10
+    static let panelOutDuration: TimeInterval = 0.2
+    static let panelOut = Animation.easeIn(duration: panelOutDuration)
+    /// نافذة الرسائل المستقلّة (`DSPopupPresenter`): تتلاشى بدل الاختفاء المفاجئ
+    static let popupOutDuration: TimeInterval = 0.18
+
+    /// التنقّل بين الشاشات (التبويبات، «العائلة/النساء»، أقسام الإدارة): الشاشة القديمة تذوب في الجديدة
+    /// (`DSScreenCrossfade`) — الرأس الكحلي ثابت بلا ومضة
+    static let screenFade: TimeInterval = 0.3
 
     // ٢) الرأس
     static let iconDelay = 0.06
@@ -299,6 +312,8 @@ struct DSComposer<Content: View>: View {
     /// «رفض» و«حذف نهائي» في تفاصيل الطلب (طلب المالك ٢٠٢٦-١٠-٠٧ «أدمج أزرار الإجراءات مع بوكس
     /// العمل»). فارغ = الشريط كما كان.
     var extraActions: [DSComposerAction] = []
+    /// إجراء آخر وحيد بجانب «إلغاء/إغلاق» في صفّه (بلا إجراء رئيسي) بدل صفّ مستقل فوقه — اختياري لكل مربّع
+    var extraBesideCancel: Bool = false
     /// الإجراء بعرض الشريط في صفّ وحده و«إلغاء» تحته — لنصّ إجراء يقول بالضبط ما سيحدث
     /// («أرسل الحين ← 32 عضو»، منشئ الإعلان، الدفعة ١١). false = الزرّان جنباً إلى جنب كما كانا
     var actionFullRow: Bool = false
@@ -386,7 +401,7 @@ struct DSComposer<Content: View>: View {
                 .foregroundColor(DS.Color.textTertiary)
             }
             // الإجراءات الأخرى — بنفس الزرّ الواحد، زرّان بالصفّ، فوق صفّ «الإجراء / إلغاء»
-            if !extraActions.isEmpty {
+            if !extraActions.isEmpty && inlineExtra == nil {
                 VStack(spacing: DSBox.buttonSpacing) {
                     ForEach(extraRows.indices, id: \.self) { row in
                         HStack(spacing: DSBox.buttonSpacing) {
@@ -406,6 +421,9 @@ struct DSComposer<Content: View>: View {
             } else {
                 HStack(spacing: DSBox.buttonSpacing) {
                     if showsAction { actionButton }
+                    // بلا إجراء رئيسي وإجراء آخر واحد: بجانب «إلغاء/إغلاق» في الصفّ نفسه (طلب المالك ٢٠٢٦-١٠-٢٥
+                    // «حطلي زر الحذف جنب الاغلاق»)
+                    if let inlineExtra { extraButton(inlineExtra) }
                     cancelButton
                 }
                 .buttonStyle(DSPressStyle())
@@ -458,6 +476,12 @@ struct DSComposer<Content: View>: View {
             .modifier(DSReadyGlow(isReady: canSubmit, armed: entranceSettled, cornerRadius: DSBox.buttonRadius))
         }
         .disabled(!canSubmit || isBusy)
+    }
+
+    /// إجراء آخر وحيد في صفّ «إلغاء» — حين لا إجراء رئيسي (والإجراء ليس بعرض كامل)
+    private var inlineExtra: DSComposerAction? {
+        guard extraBesideCancel, !showsAction, extraActions.count == 1, let only = extraActions.first, !only.fullRow else { return nil }
+        return only
     }
 
     /// صفوف الإجراءات الأخرى: زرّان بالصفّ، وما عُلّم `fullRow` وحده بعرض الصفّ (ن-٥ فحص ٢٠٢٦-١٠-٠٧:
@@ -634,7 +658,7 @@ struct DSComposerHeader: View {
 
     /// العنوان ثم الوصف ينسابان من جهة الأيقونة (٦٠ ملّي ثانية بينهما)
     private var titles: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
             Text(title)
                 .font(compact ? DSBox.alertTitleFont : DSBox.titleFont)
                 .foregroundColor(DS.Color.headerTitle)
@@ -646,11 +670,13 @@ struct DSComposerHeader: View {
                 .transition(.opacity)
                 .dsEntrance(delay: DSMotion.titleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
             if !(compact && subtitle.isEmpty) {
-                Text(subtitle)
+                // الاسم الطويل (اسم العضو في مربّعات الطلبات) سطران بدل «…» (طلب المالك ٢٠٢٦-١٠-٢٥)
+                DSBalancedText(subtitle)
                     .font(DSBox.subtitleFont)
                     .foregroundColor(DS.Color.boxHeaderSubtitle)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
                     .dsEntrance(delay: DSMotion.subtitleDelay, x: -DSMotion.textShift, animation: DSMotion.text)
             }
         }
@@ -878,11 +904,11 @@ struct DSComposerField: View {
                 HStack {
                     HStack(spacing: DS.Spacing.xxs) {
                         Text(label)
-                            .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                            .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                             .foregroundColor(focused ? tint : DS.Color.fieldLabel)
                         if required {
                             Text("*")
-                                .dsFieldFont(DSBox.fieldLabelSize, weight: .heavy)
+                                .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                                 .foregroundColor(DS.Color.error)
                                 .accessibilityHidden(true)
                         }
@@ -902,7 +928,7 @@ struct DSComposerField: View {
                         TextField(placeholder, text: $text)
                     }
                 }
-                .dsFieldFont(DSBox.fieldValueSize)
+                .dsFieldFont(DSBox.fieldValueSize, weight: DS.TextRole.fieldValue.weight)
                 .foregroundColor(DS.Color.textPrimary)
                 .keyboardType(keyboard)
                 .autocorrectionDisabled(ltr && !ltrKeepsAutocorrect)
@@ -1435,6 +1461,8 @@ struct DSComposerLogoPicker: View {
 
 /// `.dsCenterBox(isPresented:) { MyBox() }` بدل `.sheet(isPresented:)` — نفس نمط مربّعات
 /// الإضافة: غطاء كامل شفاف + `DSCenterPanel(hugsContent:)` + بلا انزلاق النظام من الأسفل.
+/// الإغلاق بحركة (طلب المالك ٢٠٢٦-١٠-٢٤): الغطاء يبقى حتى يصغر المربّع ويختفي التعتيم
+/// (`DSMotion.panelOut`)، ثم يُغلق بلا انزلاق — كان الغطاء الشفاف ينزلق للأسفل بالمربّع والتعتيم معاً.
 private struct DSCenterBoxModifier<Box: View>: ViewModifier {
     @Binding var isPresented: Bool
     var onDismiss: (() -> Void)?
@@ -1443,17 +1471,38 @@ private struct DSCenterBoxModifier<Box: View>: ViewModifier {
     /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
     @Environment(\.dsSection) private var section
     @Environment(\.ftAnimationsPaused) private var pausedAbove
+    /// الغطاء يبقى بعد أن يصير `isPresented` = false حتى تنتهي حركة خروج المربّع
+    @State private var holding = false
+    @State private var closing = false
 
     func body(content: Content) -> some View {
         content
             // حركة المجسّمات خلف المربّع المفتوح تسكن (لا يُعاد تركيب الصفحة المعتّمة كل إطار — فحص «اللاق»)
-            .environment(\.ftAnimationsPaused, pausedAbove || isPresented)
-            .fullScreenCover(isPresented: $isPresented, onDismiss: onDismiss) {
+            .environment(\.ftAnimationsPaused, pausedAbove || isPresented || holding)
+            .fullScreenCover(isPresented: Binding(get: { isPresented || holding },
+                                                  set: { if !$0 { isPresented = false } }),
+                             onDismiss: onDismiss) {
                 DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true) { box() }
+                    .environment(\.dsPanelDismissing, closing)
                     .dsSection(section ?? AppSection.current)
                     .background(ClearPresentationBackground())
             }
-            .transaction { t in if isPresented { t.disablesAnimations = true } }
+            .transaction { t in if isPresented || holding { t.disablesAnimations = true } }
+            .onAppear { holding = isPresented }
+            .onChange(of: isPresented) { shown in
+                if shown {
+                    closing = false
+                    holding = true
+                } else if holding {
+                    closing = true
+                    DSCoverMotion.closeAfterExit {
+                        // فُتح من جديد أثناء الخروج — يبقى
+                        guard !isPresented else { return }
+                        holding = false
+                        closing = false
+                    }
+                }
+            }
     }
 }
 
@@ -1466,17 +1515,82 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
     /// لون قسم الواجهة التي فتحت المربّع — يُعاد وضعه داخل المربّع
     @Environment(\.dsSection) private var section
     @Environment(\.ftAnimationsPaused) private var pausedAbove
+    /// آخر عنصر عُرض — يبقى أثناء حركة الخروج بعد أن يصير `item` = nil
+    @State private var lastItem: Item? = nil
+    @State private var closing = false
 
     func body(content: Content) -> some View {
         content
             // حركة المجسّمات خلف المربّع المفتوح تسكن (كما في `dsCenterBox(isPresented:)`)
-            .environment(\.ftAnimationsPaused, pausedAbove || item != nil)
-            .fullScreenCover(item: $item, onDismiss: onDismiss) { value in
+            .environment(\.ftAnimationsPaused, pausedAbove || item != nil || lastItem != nil)
+            .fullScreenCover(item: Binding(get: { item ?? lastItem },
+                                           set: { if $0 == nil { item = nil } }),
+                             onDismiss: onDismiss) { value in
                 DSCenterPanel(onBackgroundTap: onBackgroundTap, hugsContent: true, dim: dim) { box(value) }
+                    .environment(\.dsPanelDismissing, closing)
                     .dsSection(section ?? AppSection.current)
                     .background(ClearPresentationBackground())
             }
-            .transaction { t in if item != nil { t.disablesAnimations = true } }
+            .transaction { t in if item != nil || lastItem != nil { t.disablesAnimations = true } }
+            .onAppear { lastItem = item }
+            .onChange(of: item?.id) { _ in
+                if let item {
+                    closing = false
+                    lastItem = item
+                } else if lastItem != nil {
+                    closing = true
+                    DSCoverMotion.closeAfterExit {
+                        guard item == nil else { return }
+                        lastItem = nil
+                        closing = false
+                    }
+                }
+            }
+    }
+}
+
+/// تلاشٍ متقاطع بين شاشتين (طلب المالك ٢٠٢٦-١٠-٢٥ «التنقل بين الشاشات مافيها نعومة»): صورة للشاشة
+/// الحالية فوق النافذة ← التبديل تحتها ← الصورة تتلاشى. كان التبويب الجديد يظهر دفعة واحدة.
+/// لا تعترض اللمس، وتبقى مع «تقليل الحركة» (التلاشي هو البديل الذي توصي به أبل للحركة)
+@MainActor
+enum DSScreenCrossfade {
+    static func run(_ change: () -> Void) {
+        guard let window = appWindow, let snapshot = window.snapshotView(afterScreenUpdates: false) else {
+            change()
+            return
+        }
+        snapshot.frame = window.bounds
+        snapshot.isUserInteractionEnabled = false
+        window.addSubview(snapshot)
+        change()
+        UIView.animate(withDuration: DSMotion.screenFade, delay: 0,
+                       options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState]) {
+            snapshot.alpha = 0
+        } completion: { _ in
+            snapshot.removeFromSuperview()
+        }
+    }
+
+    /// نافذة التطبيق نفسها — لا نافذة الرسائل المستقلّة (`DSPopupPresenter`) فوقها
+    private static var appWindow: UIWindow? {
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { $0.windowLevel == .normal && !$0.isHidden }
+        return windows.first(where: \.isKeyWindow) ?? windows.first
+    }
+}
+
+/// إغلاق الغطاء بلا انزلاق النظام — المربّع نفسه تحرّك داخله (`DSCenterPanel`)
+@MainActor
+enum DSCoverMotion {
+    /// بعد حركة خروج المربّع (`DSMotion.panelOutDuration`)
+    static func closeAfterExit(_ change: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.panelOutDuration) {
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t, change)
+        }
     }
 }
 

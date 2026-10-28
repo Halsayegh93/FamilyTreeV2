@@ -46,7 +46,9 @@ struct LinkToExistingMemberSheet: View {
             let suggestedIds = Set(suggested.map(\.id))
             return all.filter { !suggestedIds.contains($0.id) }
         }
-        return all.filter { $0.fullName.localizedCaseInsensitiveContains(searchText) }
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+
+        return NameSearch.filter(all, query: searchText) { $0.fullName }
     }
 
     /// المقترحون الأحياء غير المعلّقين فقط
@@ -287,7 +289,7 @@ struct LinkToExistingMemberSheet: View {
                 }
                 .accessibilityHidden(true)
                 Text(member.displayFullName)
-                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                    .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .medium : .regular)
                     .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
@@ -764,7 +766,7 @@ struct LinkWomanAccountSheet: View {
                             .accessibilityHidden(true)
                         Text(L10n.t("إضافة بنت جديدة تحت \(fatherDisplayName) باسم «\(trimmedNewName)»",
                                     "Add a new daughter under \(fatherDisplayName) named «\(trimmedNewName)»"))
-                            .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                            .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .medium : .regular)
                             .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
@@ -815,7 +817,7 @@ struct LinkWomanAccountSheet: View {
                 .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(w.fullName)
-                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .bold : .regular)
+                        .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .medium : .regular)
                         .foregroundColor(taken ? DS.Color.textTertiary
                                          : (isSelected ? DS.Color.textPrimary : DS.Color.fieldValue))
                         .multilineTextAlignment(.leading)

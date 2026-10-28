@@ -599,7 +599,7 @@ struct AdminMembersIndex {
             let problems = AdminMemberFacts.problems(m, in: ctx)
             entries.append(Entry(member: m, status: status, usage: info?.usage, gaps: gaps, problems: problems,
                                  branch: heads[m.id], living: oldLiving[m.id],
-                                 needle: ArabicTextNormalizer.normalizeForSearch(m.fullName),
+                                 needle: ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
                                  digits: AdminMemberFacts.asciiDigits(m.phoneNumber ?? "")))
             func addProblems() {
                 guard !problems.isEmpty else { return }
@@ -718,7 +718,8 @@ struct AdminMembersIndex {
     }
 
     /// رأس فرع كل عضو: ابن مباشر لرأس الشجرة (`BranchPickerSheet.familyRoot`) — بالصعود في سلسلة الآباء مع حفظ النتائج
-    private static func branchHeads(_ all: [FamilyMember]) -> [UUID: UUID] {
+    /// (وتقرؤه «إدارة تواريخ الوفاة» لتجميعها بالفرع)
+    static func branchHeads(_ all: [FamilyMember]) -> [UUID: UUID] {
         guard let root = BranchPickerSheet.familyRoot(in: all) else { return [:] }
         var father: [UUID: UUID] = [:]
         for m in all { if let f = m.fatherId { father[m.id] = f } }
