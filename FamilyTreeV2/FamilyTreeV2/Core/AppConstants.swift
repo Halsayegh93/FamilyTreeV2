@@ -44,6 +44,10 @@ enum RequestType: String {
     case deceasedReport = "deceased_report"
     case photoSuggestion = "photo_suggestion"
     case contentReport = "content_report"
+    /// طلب حذف حساب (سياسة الخصوصية ٢٠٢٦-١٠-٢٨) — المالك/المدير ينفّذه بدالة `delete-account`
+    case accountDelete = "account_delete"
+    /// طلب خصوصية: إخفاء/حذف/تصحيح بيانات العضو في الشجرة — المالك/المدير/المراقب
+    case privacyRequest = "privacy_request"
 }
 
 /// أنواع الإشعارات — بدل strings سحرية
@@ -107,6 +111,8 @@ enum NotificationKind: String {
     case contactReply = "contact_reply"
     // بلاغات المحتوى (سياسة Apple UGC)
     case contentReport = "content_report"
+    /// طلب موافقة ولي أمر على حساب قاصر (١٣–١٧) — يصل لولي الأمر ويفتح «حسابي»
+    case guardianConsent = "guardian_consent"
     case test = "test"
 }
 

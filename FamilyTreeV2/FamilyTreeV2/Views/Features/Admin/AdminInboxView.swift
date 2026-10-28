@@ -953,6 +953,8 @@ struct ContactCategoryInfo {
             return .init(title: L10n.t("اقتراح", "Suggestion"), icon: "lightbulb.fill", color: DS.Color.palm)
         case "استفسار", "inquiry", "Inquiry":
             return .init(title: L10n.t("استفسار", "Inquiry"), icon: "questionmark.bubble.fill", color: AppSection.admin.ink)
+        case "اعتراض", "appeal", "Appeal":
+            return .init(title: L10n.t("اعتراض", "Appeal"), icon: "hand.raised.fill", color: DS.Color.sea)
         case "أخرى", "other", "Other":
             return .init(title: L10n.t("أخرى", "Other"), icon: "ellipsis.message.fill", color: DS.Color.accent)
         default:

@@ -22,6 +22,10 @@ class AdminRequestViewModel: ObservableObject {
     @Published var treeEditRequests: [AdminRequest] = []
     @Published var nameChangeRequests: [AdminRequest] = []
     @Published var contactMessages: [AdminRequest] = []
+    /// طلبات حذف الحساب المعلّقة (`account_delete`) — المالك/المدير فقط
+    @Published var accountDeleteRequests: [AdminRequest] = []
+    /// طلبات الخصوصية المعلّقة (`privacy_request`) — المالك/المدير/المراقب
+    @Published var privacyRequests: [AdminRequest] = []
     /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
     @Published var myPendingRequests: [AdminRequest] = []
     /// «مسار الموافقات»: صفوف طلبات الانضمام/الربط المعلّقة (مرحلتها) — تُجلب والمفتاح شغّال فقط
@@ -1649,6 +1653,7 @@ class AdminRequestViewModel: ObservableObject {
             return true
         } catch {
             Log.error("فشل تفعيل الحساب: \(error.localizedDescription)")
+            if handleGuardianRefusal(error, minorId: memberId, treeMemberId: memberId) { return false }
             errorMessage = L10n.t("تعذّر تفعيل الحساب. حاول مرة أخرى.", "Couldn't activate the account. Try again.")
             return false
         }
@@ -1703,6 +1708,9 @@ class AdminRequestViewModel: ObservableObject {
             Log.info("تم قبول العضو بنجاح")
         } catch {
             Log.error("فشل القبول: \(error.localizedDescription)")
+            if !handleGuardianRefusal(error, minorId: memberId, treeMemberId: memberId) {
+                errorMessage = L10n.t("تعذّر قبول العضو. حاول مرة أخرى.", "Couldn't approve the member. Try again.")
+            }
         }
         self.isLoading = false
     }
@@ -1740,8 +1748,10 @@ class AdminRequestViewModel: ObservableObject {
                 let success: Bool
                 let message: String
                 let mergedName: String?
+                /// `guardian_consent_required` / `under_13` للقاصر (الشروط ٢٠٢٦-١٠-٢٨)
+                let hint: String?
                 enum CodingKeys: String, CodingKey {
-                    case success, message
+                    case success, message, hint
                     case mergedName = "merged_name"
                 }
             }
@@ -1768,6 +1778,12 @@ class AdminRequestViewModel: ObservableObject {
                     "تم ربط \(name) بنجاح وتفعيل حسابه.",
                     "Successfully linked \(name) and activated their account."
                 ))
+            } else if response.hint == GuardianConsent.requiredHint {
+                // قاصر ١٣–١٧: لا ربط قبل موافقة ولي الأمر — مربّع «اطلب موافقة ولي الأمر»
+                Log.info("[MERGE] يحتاج موافقة ولي الأمر")
+                self.mergeResult = nil
+                GuardianConsentPresenter.offer(minorId: newMemberId, treeMemberId: existingTreeMemberId,
+                                               message: response.message)
             } else {
                 Log.error("[MERGE] ❌ فشل: \(response.message)")
                 self.mergeResult = .failure(response.message)

@@ -41,8 +41,15 @@ struct FamilyTreeV2App: App {
     /// نقر إشعار KWT SMS («رصيد رسائل الدخول منخفض»، «محاولات دخول مريبة») ← تاب الإدارة ثم صفحة الرسائل (ومحاولات الدخول
     /// فوقها للمريبة). يصل المالك والمدير فقط، والتاب يتحقّق من الصلاحية
     private static func routePushTap(_ object: Any?) {
-        guard let info = object as? [AnyHashable: Any], let kind = info["kind"] as? String,
-              AdminNotices.smsKinds.contains(kind) else { return }
+        guard let info = object as? [AnyHashable: Any], let kind = info["kind"] as? String else { return }
+        // موافقة ولي الأمر ← «حسابي» (بعد أن تستقرّ الواجهة إن فُتح التطبيق من الإشعار)
+        if kind == NotificationKind.guardianConsent.rawValue {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NotificationCenter.default.post(name: .openProfileTab, object: nil)
+            }
+            return
+        }
+        guard AdminNotices.smsKinds.contains(kind) else { return }
         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil, userInfo: ["kind": kind])

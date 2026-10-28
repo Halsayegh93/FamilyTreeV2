@@ -634,7 +634,12 @@ struct NotificationsCenterView: View {
                 }
                 UISelectionFeedbackGenerator().selectionChanged()
             } else {
-                selectedNotification = item
+                if item.kind == NotificationKind.guardianConsent.rawValue {
+                    // موافقة ولي الأمر: القرار في «حسابي» لا في تفاصيل الإشعار
+                    NotificationCenter.default.post(name: .openProfileTab, object: nil)
+                } else {
+                    selectedNotification = item
+                }
                 if isUnread {
                     Task { await notificationVM.markNotificationAsRead(id: item.id) }
                 }
