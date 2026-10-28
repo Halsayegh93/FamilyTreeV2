@@ -1,0 +1,21 @@
+-- تراجع 20261029130000_member_blocks (الجدول يرجع blocked_users بسياساته السابقة حرفياً؛ الصفوف تبقى)
+begin;
+drop function if exists public.block_member(uuid);
+drop function if exists public.unblock_member(uuid);
+drop function if exists public.my_blocked_ids();
+drop view if exists public.blocked_users;
+drop policy if exists member_blocks_select on public.member_blocks;
+drop policy if exists member_blocks_insert on public.member_blocks;
+drop policy if exists member_blocks_delete on public.member_blocks;
+drop policy if exists member_blocks_update on public.member_blocks;
+alter table public.member_blocks drop constraint if exists member_blocks_not_self;
+drop index if exists public.member_blocks_blocked_idx;
+alter table public.member_blocks rename constraint member_blocks_pkey to blocked_users_pkey;
+alter table public.member_blocks rename constraint member_blocks_blocker_id_fkey to blocked_users_blocker_id_fkey;
+alter table public.member_blocks rename constraint member_blocks_blocked_id_fkey to blocked_users_blocked_id_fkey;
+alter table public.member_blocks rename to blocked_users;
+create policy blocked_users_select on public.blocked_users for select using (blocker_id = auth.uid());
+create policy blocked_users_insert on public.blocked_users for insert with check (blocker_id = auth.uid());
+create policy blocked_users_delete on public.blocked_users for delete using (blocker_id = auth.uid());
+grant all on public.blocked_users to anon, authenticated;
+commit;
