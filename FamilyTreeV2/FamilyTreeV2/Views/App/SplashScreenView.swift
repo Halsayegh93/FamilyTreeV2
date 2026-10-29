@@ -23,14 +23,12 @@ struct SplashScreenView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // الشعار القديم (أيقونة التطبيق الدائرية) — طلب المالك ٢٠٢٦-١٠-١٧: يبقى داخل التطبيق حتى يتبدّل
-                // مع الأيقونة الجديدة في تحديث واحد (الشعار المسطّح FamilyLogoNavy جاهز في الأصول)
-                Image("AppIconImage")
+                // الشعار المسطّح «المحمدعلي» (كحلي على الأبيض، كريمي على الأسود) — تبدّل مع أيقونة التطبيق
+                // الجديدة (طلب المالك ٢٠٢٦-١٠-٢٩)؛ بلا دائرة ولا ظل (الهوية)
+                Image("FamilyLogoNavy")
                     .resizable()
-                    .scaledToFill()
-                    .frame(width: DS.Icon.appLogo, height: DS.Icon.appLogo)
-                    .clipShape(Circle())
-                    .dsGlowShadow()
+                    .scaledToFit()
+                    .frame(height: DS.Icon.familyLogo)
                     .padding(DS.Icon.appLogo / 4)
                     .scaleEffect(logoScale)
                     .opacity(logoOpacity)

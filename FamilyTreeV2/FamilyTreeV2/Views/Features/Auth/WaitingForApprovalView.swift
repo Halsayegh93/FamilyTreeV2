@@ -32,14 +32,15 @@ struct WaitingForApprovalView: View {
                 VStack(spacing: DS.Spacing.xl) {
                     Spacer().frame(height: DS.Spacing.sm)
 
-                    // ساعة رملية مصمتة على قرص بلون الإدارة، وخيط رمل ذهبي تنساب فيه لمعة كل ٤ ث
-                    // (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال») — بدل الأيقونة والنقاط
-                    FT5STrial.waiting()
-                    // أصغر قليلاً (`DS.Icon.stateHero` — طلب المالك ٢٠٢٦-١٠-١٩)، ووضع العرض أصغر
-                    // (`DS.Landscape.stateHero`) — الرسمة بمقاسها الثابت فتُصغَّر بالمقياس
-                    .scaleEffect(heroSide / DS.Icon.heroArt)
-                    .frame(width: heroSide, height: heroSide)
-                    .opacity(contentOpacity)
+                    // شعار العائلة المسطّح بدل الساعة الرملية (طلب المالك ٢٠٢٦-١٠-٢٩ مع أيقونة التطبيق الجديدة)؛
+                    // «قيد الانتظار» يبقى في الرأس وشارة البطاقة
+                    Image("FamilyLogoNavy")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: landscape ? heroSide : DS.Icon.familyLogoCompact)
+                        .frame(maxWidth: .infinity)
+                        .opacity(contentOpacity)
+                        .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 
                     // بعد الأيقونة تدخل البطاقة ثم الأزرار واحداً بعد الآخر (dsStaggerIn)
                     // بطاقة المعلومات

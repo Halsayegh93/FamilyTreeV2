@@ -1963,6 +1963,10 @@ extension DS.Icon {
     static let orderBadge: CGFloat = 28
     /// شعار التطبيق الدائري (الدخول، شاشة البداية — وحلقاتها نِسَب منه)
     static let appLogo: CGFloat = 100
+    /// ارتفاع شعار العائلة المسطّح في شاشة البداية والدخول (طلب المالك ٢٠٢٦-١٠-٢٩ «الشعار مو واضح» — كان ١٠٠)
+    static let familyLogo: CGFloat = 150
+    /// الشعار في صفحة الانتظار ووضع العرض
+    static let familyLogoCompact: CGFloat = 120
     /// قرص الحالة الكبير في شاشات ملء الشاشة (الحساب مجمّد، حد الأجهزة، التحديث الإجباري)
     static let stateHero: CGFloat = 110
     /// رسمة شاشة الانتظار (الساعة الرملية)
