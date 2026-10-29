@@ -27,6 +27,8 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
     var approvedAt: Date?
     /// وقت التثبيت — nil = غير مثبَّت. المثبَّتة تظهر أولاً، والأحدث تثبيتاً قبل الأقدم.
     var pinnedAt: Date? = nil
+    /// زرّ الحفظ والمشاركة يظهر على هذا العنصر (يغيّره المالك والمدير — حارس السيرفر)
+    var allowShare: Bool = false
 
     var isPinned: Bool { pinnedAt != nil }
 
@@ -168,6 +170,7 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         case approvedAt     = "approved_at"
         case categoryKey = "category_key"
         case pinnedAt = "pinned_at"
+        case allowShare = "allow_share"
     }
 
     // Decoder متسامح: يفترض القيم الافتراضية للحقول الجديدة (للتوافق مع
@@ -195,5 +198,6 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         approvedAt      = try c.decodeIfPresent(Date.self, forKey: .approvedAt)
         // قبل تطبيق migration التثبيت لا يوجد العمود — يبقى nil
         pinnedAt        = try? c.decodeIfPresent(Date.self, forKey: .pinnedAt)
+        allowShare      = (try? c.decodeIfPresent(Bool.self, forKey: .allowShare)) ?? false
     }
 }

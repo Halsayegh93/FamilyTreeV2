@@ -386,6 +386,31 @@ final class FamilyArchiveViewModel: ObservableObject {
         }
     }
 
+    // MARK: - السماح بالحفظ والمشاركة (لكل عنصر)
+
+    /// يفتح/يقفل زرّ الحفظ والمشاركة على عنصر — للمالك والمدير (والسيرفر يرفض غيرهم)
+    func toggleAllowShare(_ item: ArchiveItem) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
+        guard authVM?.isAdmin == true else {
+            errorMessage = L10n.t("هذا الخيار للإدارة فقط.", "This option is for admins only.")
+            return
+        }
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        let newValue = !items[idx].allowShare
+        items[idx].allowShare = newValue
+        do {
+            try await supabase
+                .from(tableName)
+                .update(["allow_share": newValue])
+                .eq("id", value: item.id.uuidString)
+                .execute()
+        } catch {
+            if let i = items.firstIndex(where: { $0.id == item.id }) { items[i].allowShare = !newValue }
+            errorMessage = L10n.t("تعذّر تغيير السماح بالمشاركة.", "Failed to change sharing.")
+            Log.error("[Archive] خطأ toggleAllowShare: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Batch Operations
 
     /// حذف عدة عناصر دفعة واحدة (للمدراء فقط).

@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 // MARK: - «التطبيق» = الإعدادات نفسها، مجمّعة بمفاتيحها في مكانها (الدفعة ج من «نفّذ كل المقترح»، ٢٠٢٦-١٠-٢٠)
 //
@@ -132,6 +133,12 @@ private struct AdminAppSettingsGroups: View {
                    title: L10n.t("اعتماد الأخبار قبل نشرها", "Approve news before publishing"),
                    subtitle: L10n.t("أخبار الأعضاء تنتظر اعتماد الإدارة", "Members' posts wait for approval"),
                    isOn: s.newsRequiresApproval)
+            AdminControlRow(icon: "eye.slash.fill", tint: AppSection.library.ink,
+                            title: L10n.t("منع لقطة الشاشة في المكتبة", "Block screenshots in the library"),
+                            subtitle: L10n.t("ملفات المكتبة تظهر فارغة في لقطة الشاشة وتسجيلها",
+                                             "Library files show blank in screenshots and recordings"),
+                            control: AnyView(LibraryPolicyControl(key: "library_screen_protection", fallback: "members",
+                                                                  options: LibraryPolicyControl.shieldOptions, canEdit: canEdit)))
         }
     }
 
@@ -275,5 +282,81 @@ private struct AdminAppSettingsGroups: View {
             .tint(AppSection.admin.ink)
             .accessibilityLabel(title)
             .disabled(!canEdit)))
+    }
+}
+
+
+/// منع لقطة الشاشة في المكتبة من التطبيق (طلب المالك ٢٠٢٦-١٠-٢٩ «لقطة الشاشة على الكل»):
+/// `app_config.library_screen_protection` — قائمة أصلية، والحفظ عبر `set_app_config` (المالك).
+/// الحفظ والمشاركة لكل عنصر من قائمته في المكتبة (`family_archive.allow_share`)
+private struct LibraryPolicyControl: View {
+    let key: String
+    let fallback: String
+    let options: [(value: String, title: String)]
+    let canEdit: Bool
+    @ObservedObject private var config = AppConfigValues.shared
+    @State private var saving = false
+    @State private var error: String?
+
+    static let shieldOptions: [(value: String, title: String)] = [
+        ("all", L10n.t("على الجميع", "Everyone")),
+        ("members", L10n.t("على الأعضاء فقط", "Members only")),
+        ("off", L10n.t("مطفأ", "Off"))
+    ]
+
+    private struct Params: Encodable {
+        let p_key: String
+        let p_value: String
+    }
+
+    private var current: String { config.string(key) ?? fallback }
+    private var label: String { options.first { $0.value == current }?.title ?? current }
+
+    var body: some View {
+        Group {
+            if canEdit {
+                Menu {
+                    Picker(selection: Binding(get: { current }, set: { value in
+                        guard value != current else { return }
+                        Task { await save(value) }
+                    })) {
+                        ForEach(options, id: \.value) { Text(verbatim: $0.title).tag($0.value) }
+                    } label: { EmptyView() }
+                    .pickerStyle(.inline)
+                } label: {
+                    HStack(spacing: DS.Spacing.xxs) {
+                        if saving { ProgressView().controlSize(.mini) }
+                        Text(verbatim: label).dsFont(.chip)
+                        Image(systemName: "chevron.up.chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    }
+                    .foregroundColor(DS.Color.accent)
+                    .frame(minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+                }
+                .disabled(saving)
+                .accessibilityLabel(Text(verbatim: label))
+            } else {
+                AdminValueChip(text: label, tint: DS.Color.primary)
+            }
+        }
+        .task { await config.refresh(force: true) }
+        .dsAlert(L10n.t("تعذّر الحفظ", "Couldn't save"), isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(error ?? "")
+        }
+    }
+
+    private func save(_ value: String) async {
+        saving = true
+        defer { saving = false }
+        do {
+            _ = try await SupabaseConfig.client.rpc("set_app_config", params: Params(p_key: key, p_value: value)).execute()
+            await config.refresh(force: true)
+        } catch {
+            if ErrorHelper.isCancellation(error) { return }
+            Log.warning("[CONFIG] تعذّر حفظ \(key): \(error.localizedDescription)")
+            self.error = L10n.t("تأكد من الاتصال وجرّب مرة ثانية.", "Check the connection and try again.")
+        }
     }
 }

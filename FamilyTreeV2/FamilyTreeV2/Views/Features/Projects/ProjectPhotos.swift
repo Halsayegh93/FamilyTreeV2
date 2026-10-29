@@ -254,15 +254,18 @@ struct ProjectPhotoViewer: View {
     let startIndex: Int
     /// قسم مؤشّر التحميل — المشاريع، أو المكتبة حين يفتحه عارض الأرشيف
     var section: AppSection = .projects
+    /// تُحجب الصور عن لقطة الشاشة (المكتبة — `LibraryProtection`)
+    var shielded: Bool = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var index: Int
     @State private var loaded: Set<Int> = []
 
-    init(urls: [String], startIndex: Int, section: AppSection = .projects) {
+    init(urls: [String], startIndex: Int, section: AppSection = .projects, shielded: Bool = false) {
         self.urls = urls
         self.startIndex = startIndex
         self.section = section
+        self.shielded = shielded
         _index = State(initialValue: startIndex)
     }
 
@@ -276,6 +279,7 @@ struct ProjectPhotoViewer: View {
                                onLoadedChange: { loaded = $0 })
                 // إحداثيات فيزيائية ثابتة — اتجاه التقليب يحدّده `isRTL` نفسه
                 .environment(\.layoutDirection, .leftToRight)
+                .screenCaptureShielded(shielded)
                 .ignoresSafeArea()
 
             // دوّارة صغيرة محايدة تحت الصورة حتى تصل فقط — لا مجسّم القسم فوق الصورة

@@ -207,6 +207,13 @@ struct HomeNewsPreviewRow: View {
         return news.mediaURLs.isEmpty ? NewsTypeHelper.displayName(for: news.type) : L10n.t("صورة", "Photo")
     }
 
+    /// الاسم مختصراً: الأول والثاني والثالث والأخير (طلب المالك ٢٠٢٦-١٠-٢٩)
+    private var shortAuthorName: String {
+        let parts = news.author_name.split(separator: " ")
+        guard parts.count > 4, let last = parts.last else { return news.author_name }
+        return (parts.prefix(3) + [last]).joined(separator: " ")
+    }
+
     private var isAdminIdentity: Bool {
         news.author_name == L10n.t("إدارة العائلة", "Family Admin")
             || news.author_name == "إدارة العائلة"
@@ -226,10 +233,19 @@ struct HomeNewsPreviewRow: View {
             avatar
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                // صاحب الخبر فوق نصّه، والنص سطران (طلب المالك ٢٠٢٦-١٠-٢٩)
+                if !news.author_name.isEmpty {
+                    Text(shortAuthorName)
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 Text(previewText)
                     .dsFont(.callout)
                     .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HomeNewsMetaLine(news: news, likes: likes, comments: comments, votes: votes)

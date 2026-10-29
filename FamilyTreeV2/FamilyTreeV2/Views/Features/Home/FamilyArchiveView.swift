@@ -181,8 +181,7 @@ struct FamilyArchiveView: View {
         .dsCenterBox(item: $selectedItem, onBackgroundTap: { selectedItem = nil },
                      dim: DSCenterPanelDim.strong) { item in
             // العارض بملء الشاشة يقلّب بين صور القائمة المعروضة (نفس التصنيف المختار)
-            ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item),
-                              galleryUrls: archiveVM.items(in: selectedCategory).filter(\.isImage).map(\.fileUrl))
+            ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item), isAdmin: authVM.isAdmin)
         }
         .fullScreenCover(item: $itemToEdit) { item in
             DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
@@ -457,6 +456,16 @@ struct FamilyArchiveView: View {
                     )
                 }
                 Button {
+                    Task { await archiveVM.toggleAllowShare(item) }
+                } label: {
+                    Label(
+                        item.allowShare
+                            ? L10n.t("منع الحفظ والمشاركة", "Block save & share")
+                            : L10n.t("السماح بالحفظ والمشاركة", "Allow save & share"),
+                        systemImage: item.allowShare ? "square.and.arrow.down.trianglebadge.exclamationmark" : "square.and.arrow.down"
+                    )
+                }
+                Button {
                     Task { await archiveVM.toggleHidden(item) }
                 } label: {
                     Label(
@@ -555,6 +564,8 @@ struct FamilyArchiveView: View {
             preview(for: item, accent: accent)
                 .frame(width: inner, height: inner * 0.75)   // أكبر ما يمكن مع بقاء البطاقة مربّعة
                 .clipped()
+                // لا تظهر الوثيقة في لقطة الشاشة (`LibraryProtection`)
+                .screenCaptureShielded(LibraryProtection.shieldsCapture(isAdmin: authVM.isAdmin, allowShare: item.allowShare))
                 .clipShape(RoundedRectangle(cornerRadius: imageRadius, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: imageRadius, style: .continuous)
@@ -1149,14 +1160,16 @@ struct ArchiveEditSheet: View {
 struct ArchiveItemViewer: View {
     let item: ArchiveItem
     var uploaderName: String? = nil
-    /// صور القائمة المعروضة — السحب بينها في العارض بملء الشاشة (فارغة = هذه الصورة وحدها)
-    var galleryUrls: [String] = []
+    /// المالك أو المدير — سياسة الحفظ ولقطة الشاشة (`LibraryProtection`)
+    var isAdmin: Bool = false
     @Environment(\.dismiss) private var dismiss
     @State private var showShare = false
     @State private var shareURL: URL? = nil
     @State private var downloading = false
     /// الصورة مكبّرة بملء الشاشة (طلب المالك ٢٠٢٦-١٠-٢٣ «اضغط الصورة تكبر»)
     @State private var showFullImage = false
+    /// قارئ الـ PDF بملء الشاشة: صفحة صفحة بالسحب وشريط مصغّرات تحتها
+    @State private var showReader = false
     /// فُتح العارض مرة — تُخفى شارة «تكبير»
     @State private var viewerOpened = false
     /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
@@ -1166,6 +1179,9 @@ struct ArchiveItemViewer: View {
     private var previewHeight: CGFloat { vSizeClass == .compact ? 110 : 170 }
 
     private var accent: Color { item.categoryColor }
+    /// الحفظ والمشاركة على هذا العنصر وحده — تفتحه الإدارة من قائمة العنصر
+    private var canShare: Bool { item.allowShare }
+    private var shieldsCapture: Bool { LibraryProtection.shieldsCapture(isAdmin: isAdmin, allowShare: item.allowShare) }
 
     // MARK: - صفحة العنصر — «ورقة أرشيف» + بطاقة فهرسة
     //
@@ -1176,11 +1192,14 @@ struct ArchiveItemViewer: View {
             // الرأس الموحّد (`DSSubPageHeader`) بلون المكتبة: × للإغلاق، وزرّ الحفظ/المشاركة في الطرف
             DSSubPageHeader(title: item.title, subtitle: item.categoryDisplayName, section: .library,
                             nav: .close, onBack: { dismiss() }) {
-                DSHeaderButton(symbol: downloading ? "hourglass" : "square.and.arrow.down",
-                               label: L10n.t("حفظ أو مشاركة", "Save or share")) {
-                    Task { await downloadAndShare() }
+                // العرض بملء الشاشة بالضغط على الصورة أو غلاف الكتاب نفسه (لا زرّ في الرأس — طلب المالك ٢٠٢٦-١٠-٢٩)
+                if canShare {
+                    DSHeaderButton(symbol: downloading ? "hourglass" : "square.and.arrow.down",
+                                   label: L10n.t("حفظ أو مشاركة", "Save or share")) {
+                        Task { await downloadAndShare() }
+                    }
+                    .disabled(downloading)
                 }
-                .disabled(downloading)
             }
             .readHeight($headerH)
 
@@ -1203,9 +1222,14 @@ struct ArchiveItemViewer: View {
             // سطح صلب — لا يظهر ما خلفه ولا لون القسم (اللون في الرأس والتصنيف والأزرار فقط — طلب المالك ٢٠٢٦-١٠-٢٣)
             .background(DS.Color.surface.ignoresSafeArea())
         }
+        // كل عنصر وحده — لا تقليب إلى العناصر الأخرى (طلب المالك ٢٠٢٦-١٠-٢٩)
         .fullScreenCover(isPresented: $showFullImage) {
-            let urls = galleryUrls.contains(item.fileUrl) ? galleryUrls : [item.fileUrl]
-            ProjectPhotoViewer(urls: urls, startIndex: urls.firstIndex(of: item.fileUrl) ?? 0, section: .library)
+            ProjectPhotoViewer(urls: [item.fileUrl], startIndex: 0, section: .library, shielded: shieldsCapture)
+        }
+        .fullScreenCover(isPresented: $showReader) {
+            if let url = URL(string: item.fileUrl) {
+                ArchivePDFReader(url: url, title: item.title, shielded: shieldsCapture)
+            }
         }
         .sheet(isPresented: $showShare) {
             if let url = shareURL {
@@ -1220,8 +1244,17 @@ struct ArchiveItemViewer: View {
     private var documentSheet: some View {
         Group {
             if item.isPDF, let url = URL(string: item.fileUrl) {
-                ArchivePDFView(url: url)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                // الغلاف (الصفحة الأولى) — الضغط يفتح القارئ بملء الشاشة
+                Button { showReader = true; viewerOpened = true } label: {
+                    PDFThumbnailView(url: url, fit: true)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay { ZoomHintBadge(dismissed: viewerOpened) }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .accessibilityLabel(L10n.t("فتح الملف", "Open file"))
+                .accessibilityHint(L10n.t("اسحب لتقليب الصفحات", "Swipe to turn pages"))
             } else if item.isImage, let url = URL(string: item.fileUrl) {
                 Button { showFullImage = true; viewerOpened = true } label: {
                     // نفس مصدر البطاقة وكاشها (`CachedImageLoader`) — دوّارة صغيرة حتى تصل، ورمز التصنيف إن تعذّرت
@@ -1247,15 +1280,22 @@ struct ArchiveItemViewer: View {
                 .accessibilityHint(L10n.t("اضغط للتكبير", "Tap to enlarge"))
             } else {
                 // الحالة الموحّدة: مجسّم + عنوان + زرّ الحفظ
-                DSEmptyView(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق", "This file can't be previewed in the app"),
-                            section: .library, icon: "doc.questionmark",
-                            actionTitle: L10n.t("حفظ الملف", "Save file"), actionIcon: "square.and.arrow.down",
-                            compact: true) {
-                    Task { await downloadAndShare() }
+                if canShare {
+                    DSEmptyView(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق", "This file can't be previewed in the app"),
+                                section: .library, icon: "doc.questionmark",
+                                actionTitle: L10n.t("حفظ الملف", "Save file"), actionIcon: "square.and.arrow.down",
+                                compact: true) {
+                        Task { await downloadAndShare() }
+                    }
+                } else {
+                    DSEmptyView(L10n.t("لا يمكن عرض هذا الملف داخل التطبيق", "This file can't be previewed in the app"),
+                                section: .library, icon: "doc.questionmark", compact: true)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // لا تظهر الوثيقة في لقطة الشاشة (`LibraryProtection`)
+        .screenCaptureShielded(shieldsCapture)
         // الورقة = البطاقة الواحدة (`.dsCard`)
         .dsCard()
     }
@@ -1354,35 +1394,6 @@ struct ArchiveItemViewer: View {
 // MARK: - PDF View (UIViewRepresentable)
 
 /// عارض PDF بسيط مبني على PDFKit، يحمّل من URL.
-private struct ArchivePDFView: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        // تكبير أوسع داخل التفاصيل (طلب المالك)
-        view.maxScaleFactor = 6
-        view.minScaleFactor = 0.5
-        view.displayMode = .singlePageContinuous
-        view.displayDirection = .vertical
-        view.backgroundColor = .systemBackground
-
-        Task.detached {
-            // الصور الخاصة: رابط موقَّع إن أمكن (وإلا الأصلي)
-            let fetchURL = await StorageURLResolver.shared.displayURL(for: url)
-            if let data = try? Data(contentsOf: fetchURL),
-               let doc = PDFDocument(data: data) {
-                await MainActor.run {
-                    view.document = doc
-                }
-            }
-        }
-        return view
-    }
-
-    func updateUIView(_ uiView: PDFView, context: Context) {}
-}
-
 // MARK: - Share Sheet
 
 private struct ShareSheet: UIViewControllerRepresentable {
@@ -1403,12 +1414,16 @@ private final class PDFThumbCache {
 /// يولّد ويعرض أول صفحة من ملف PDF كمصغّرة (مع كاش)، ويرجع لأيقونة عند الفشل.
 private struct PDFThumbnailView: View {
     let url: URL
+    /// الغلاف كاملاً بلا قصّ (مربّع العنصر) — البطاقة تملأ إطارها
+    var fit: Bool = false
     @State private var image: UIImage? = nil
     @State private var failed = false
 
     var body: some View {
         Group {
-            if let image {
+            if let image, fit {
+                Image(uiImage: image).resizable().scaledToFit()
+            } else if let image {
                 Color.clear.overlay(
                     Image(uiImage: image).resizable().scaledToFill()
                 )
