@@ -138,7 +138,8 @@ struct HomeNewsCardView: View {
                     roleColor: roleColor,
                     time: postDate.map { NewsKit.timeText($0) } ?? time,
                     seed: seed,
-                    onTap: bylineTap
+                    onTap: bylineTap,
+                    authorId: authorId
                 )
             )
         }
@@ -582,6 +583,8 @@ struct NewsBylineView: View {
     let time: String
     let seed: Int
     let onTap: (() -> Void)?
+    /// كاتب الخبر — شارة «معتمد» إن كان حساب مراجعة
+    var authorId: UUID? = nil
 
     private func name(_ i: Int) -> String { names.indices.contains(i) ? names[i] : (names.last ?? "") }
 
@@ -616,6 +619,7 @@ struct NewsBylineView: View {
                 .dsFont(.newsByline)
                 .foregroundColor(isAdmin ? DS.Color.accent : DS.Color.textSecondary)
                 .lineLimit(1)
+            ReviewVerifiedMark(authorId)
             Text("·")
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)

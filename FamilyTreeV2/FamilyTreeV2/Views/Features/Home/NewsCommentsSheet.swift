@@ -199,6 +199,7 @@ struct NewsCommentsSheet: View {
                     .dsFieldFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
+                ReviewVerifiedMark(comment.author_id)
                 Spacer(minLength: 0)
                 Text(relativeTimeFromISO(comment.created_at))
                     .dsFont(.caption)

@@ -1,33 +1,72 @@
 import Foundation
 
-// MARK: - تقارير العائلة الرسمية (PDF) — البيانات وبناء التقرير (طلب المالك ٢٠٢٦-١٠-٢٠ «رسمي بهوية العائلة»)
+// MARK: - تقارير العائلة الرسمية (PDF) — البيانات وبناء التقرير
 //
-// أربعة تقارير: «سجل العائلة بالفروع» · «ملخّص إحصائي للعائلة» · «المتوفون وذكراهم» · «دليل الهواتف».
-// الصفحة (`AdminReportsView`) تأخذ لقطة من الأعضاء على الخيط الرئيسي (`AdminReportInput.make` — أسماء العرض،
-// تنسيق الهاتف، أسماء الفروع)، ثم يُبنى التقرير (`AdminReportBuilder`) ويُرسم (`AdminReportPDF`) خارج الخيط الرئيسي —
-// لا تجميد مع ~٢٧٠٠ عضو.
+// «مكتبة التقارير» (طلب المالك ٢٠٢٦-١١-٠٢ — الاتجاه «أ» مع «كتاب الفرع» من «ج»): رفّ تقارير بأقسام
+// العائلة · التواصل · الذكرى · البيانات، وكل تقرير يفتح صفحة تصفيته (`AdminReportFilterPage`)، و«كتاب الفرع» بثلاث
+// خطوات (`AdminReportBookWizard`). الأربعة القديمة كما هي بخصوصيتها: «سجل العائلة» · «دليل الهواتف» · «سجل الراحلين» ·
+// «الملخّص»، والجديدة: «شجرة فرع مطبوعة» · «تقرير فرع شامل» · «المسجّلون في التطبيق» · «المقيّدون هذا الشهر» ·
+// «تقويم الذكرى» · «الناقصة بياناتهم».
+// الصفحة تأخذ لقطة من الأعضاء على الخيط الرئيسي (`AdminReportInput.make` — أسماء العرض، تنسيق الهاتف، أسماء الفروع،
+// والتجميع من أدوات صفحة الأعضاء `AdminGrouping` ← `AdminReportGroupPlan`)، ثم يُبنى التقرير (`AdminReportBuilder`)
+// ويُرسم (`AdminReportPDF`) خارج الخيط الرئيسي — لا تجميد مع ~٢٧٠٠ عضو.
 // التعريفات نفسها في اللوحة: الرجال = الشجرة بلا طلبات الانضمام، النساء = إناث شجرة النساء، «عضو مسجّل» = له حساب
 // دخول (`AdminAccountsStore`)، الفروع = أبناء رأس الشجرة المباشرون (`BranchPickerSheet.familyRoot`)، والذكرى من
 // `DeceasedMemorial` (الميلادي فقط).
 // الخصوصية: الهاتف كما وصل من `members_masked`، ومن أخفى رقمه يظهر «مخفي» دائماً — حتى للإدارة (الملف يُشارك خارج
-// التطبيق). تاريخ الميلاد المخفي يظهر «مخفي» كذلك، ويدخل الإحصاءات المجمّعة فقط.
-// نصوص الملف عربية دائماً (كالتصدير السابق) بالمسميات الرسمية (عضو مسجّل، مقيّد في الشجرة، حساب موقوف، بلا رقم هاتف،
-// تاريخ الوفاة غير مكتمل).
+// التطبيق)، ولا تُستنتج دولته منه. الهواتف في «دليل الهواتف» وحده — «كتاب الفرع» وقائمة الحضور بلا هواتف. تاريخ
+// الميلاد المخفي يظهر «مخفي» كذلك، ويدخل الإحصاءات المجمّعة فقط. تاريخ وفاة غير مكتمل = «لا يوجد تاريخ كامل للوفاة».
+// نصوص الملف عربية دائماً بالمسميات الرسمية (عضو مسجّل، مقيّد في الشجرة، حساب موقوف، بلا رقم هاتف).
+// TODO(تقارير مجدولة): تقرير شهري يُرسل تلقائياً يحتاج دالة سيرفر وجدولة وموافقة المالك — غير مبني هنا.
 
-// MARK: - نوع التقرير والتصفية
+// MARK: - نوع التقرير ورفّه
 
 nonisolated enum AdminReportKind: String, CaseIterable, Identifiable, Sendable {
-    case register, stats, memorial, phones
+    case register, tree, branchReport, phones, registered, memorial, calendar, stats, newThisMonth, incomplete
+    /// «كتاب الفرع» — من المعالج فقط (ليس صفّاً في الرفّ)
+    case book
 
     var id: String { rawValue }
+
+    /// أقسام الرفّ بترتيبها
+    enum Shelf: String, CaseIterable, Sendable {
+        case family, contact, memory, data
+    }
+
+    var shelf: Shelf {
+        switch self {
+        case .register, .tree, .branchReport, .book: return .family
+        case .phones, .registered: return .contact
+        case .memorial, .calendar: return .memory
+        case .stats, .newThisMonth, .incomplete: return .data
+        }
+    }
+
+    /// صفوف الرفّ (بلا الكتاب)
+    static let library: [AdminReportKind] = allCases.filter { $0 != .book }
+
+    /// شارة «جديد» في الرفّ
+    var isNew: Bool {
+        switch self {
+        case .register, .phones, .memorial, .stats: return false
+        default: return true
+        }
+    }
 
     /// عنوان الملف (عربي دائماً)
     var pdfTitle: String {
         switch self {
-        case .register: return "سجل العائلة بالفروع"
-        case .stats: return "ملخّص إحصائي للعائلة"
-        case .memorial: return "المتوفون وذكراهم"
+        case .register: return "سجل العائلة"
+        case .tree: return "شجرة الفرع"
+        case .branchReport: return "تقرير فرع شامل"
         case .phones: return "دليل الهواتف"
+        case .registered: return "المسجّلون في التطبيق"
+        case .memorial: return "سجل الراحلين"
+        case .calendar: return "تقويم الذكرى"
+        case .stats: return "الملخّص الإحصائي"
+        case .newThisMonth: return "المقيّدون في الشجرة"
+        case .incomplete: return "الناقصة بياناتهم"
+        case .book: return "كتاب الفرع"
         }
     }
 
@@ -35,28 +74,56 @@ nonisolated enum AdminReportKind: String, CaseIterable, Identifiable, Sendable {
     var fileStem: String {
         switch self {
         case .register: return "سجل-العائلة"
-        case .stats: return "ملخص-احصائي"
-        case .memorial: return "المتوفون-وذكراهم"
+        case .tree: return "شجرة-الفرع"
+        case .branchReport: return "تقرير-فرع"
         case .phones: return "دليل-الهواتف"
+        case .registered: return "المسجلون"
+        case .memorial: return "سجل-الراحلين"
+        case .calendar: return "تقويم-الذكرى"
+        case .stats: return "الملخص"
+        case .newThisMonth: return "المقيدون"
+        case .incomplete: return "الناقصة-بياناتهم"
+        case .book: return "كتاب-الفرع"
         }
     }
 
-    /// البيانات المتاحة للنوع بترتيب شرائح «البيانات:» (= ترتيب الأعمدة من اليمين)
+    // MARK: ما تعرضه صفحة التصفية لكل نوع
+
+    var usesBranch: Bool { self != .stats && self != .book }
+    var usesLife: Bool { self == .register || self == .newThisMonth || self == .incomplete }
+    var usesRegistration: Bool { self == .register || self == .registered }
+    var usesAge: Bool { self == .register || self == .registered || self == .phones }
+    var usesPeriod: Bool { self == .newThisMonth }
+    var usesMissing: Bool { self == .incomplete }
+    var usesPhonesFilter: Bool { self == .phones }
+    var usesMemorialFilter: Bool { self == .memorial }
+    /// التجميع متاح (السجلات والقوائم)
+    var usesGrouping: Bool { [.register, .phones, .registered, .newThisMonth, .incomplete, .branchReport].contains(self) }
+
+    /// البيانات المتاحة للنوع بترتيبها الافتراضي (= ترتيب الأعمدة من اليمين)
     var fields: [AdminReportField] {
         switch self {
-        case .register: return [.name, .branch, .birth, .age, .status, .death, .phone, .registration]
-        case .phones: return [.name, .branch, .phone, .status]
+        case .register: return [.name, .branch, .father, .birth, .age, .status, .death, .registration, .country, .phone]
+        case .phones: return [.name, .branch, .phone, .status, .country]
         case .memorial: return [.name, .death, .anniversary, .ageAtDeath, .branch]
         case .stats: return [.people, .ages, .branches, .registered]
+        case .registered: return [.name, .branch, .registration, .father, .birth, .age, .country]
+        case .newThisMonth: return [.name, .created, .branch, .father, .birth, .status, .registration]
+        case .incomplete: return [.name, .missing, .branch, .father, .birth, .status]
+        case .branchReport: return [.name, .birth, .age, .status, .death, .registration]
+        case .tree, .calendar, .book: return []
         }
     }
 
-    /// لا تُزال: الاسم في كل جدول، والرقم في دليل الهواتف
+    /// لا تُزال: الاسم في كل جدول، والرقم في دليل الهواتف، وما يقوم عليه التقرير
     var lockedFields: Set<AdminReportField> {
         switch self {
-        case .register, .memorial: return [.name]
+        case .register, .memorial, .branchReport: return [.name]
         case .phones: return [.name, .phone]
-        case .stats: return []
+        case .registered: return [.name, .registration]
+        case .newThisMonth: return [.name, .created]
+        case .incomplete: return [.name, .missing]
+        case .stats, .tree, .calendar, .book: return []
         }
     }
 
@@ -67,36 +134,103 @@ nonisolated enum AdminReportKind: String, CaseIterable, Identifiable, Sendable {
         case .phones: return [.name, .phone, .status]
         case .memorial: return [.name, .death, .anniversary]
         case .stats: return [.people, .ages, .branches, .registered]
+        case .registered: return [.name, .branch, .registration]
+        case .newThisMonth: return [.name, .created, .father, .birth]
+        case .incomplete: return [.name, .missing, .father]
+        case .branchReport: return [.name, .birth, .age, .status]
+        case .tree, .calendar, .book: return []
         }
     }
 
-    /// المختار مصحّحاً: ما لا يخص النوع يُترك، والمقفل دائماً — nil = الافتراضي
+    /// المختار مرتّباً: المقفل أولاً بترتيب النوع، ثم المختار بترتيبه المحفوظ — nil = الافتراضي
+    func orderedFields(_ saved: [AdminReportField]?) -> [AdminReportField] {
+        let base = saved ?? fields.filter(defaultFields.contains)
+        var out = fields.filter(lockedFields.contains)
+        for f in base where fields.contains(f) && !out.contains(f) { out.append(f) }
+        return out
+    }
+
+    /// للأقسام (الملخّص): مجموعة بلا ترتيب
     func resolvedFields(_ chosen: Set<AdminReportField>?) -> Set<AdminReportField> {
         (chosen ?? defaultFields).intersection(fields).union(lockedFields)
     }
 }
 
-/// ما يُطبع في التقرير — شرائح «البيانات:» (طلب المالك ٢٠٢٦-١٠-٢٠ «ابى انا اضيف البيانات او اشيل البيانات بشكل بسيط»):
-/// أعمدة الجداول (السجل، الهواتف، المتوفون) أو أقسام الملخّص. الاختيار يُحفظ لكل نوع ولكل مستخدم (`AdminReportsView`).
+/// ما يُطبع في التقرير — أعمدة الجداول أو أقسام الملخّص. الاختيار وترتيبه يُحفظان لكل نوع ولكل مستخدم.
 nonisolated enum AdminReportField: String, CaseIterable, Identifiable, Sendable {
     // أعمدة
-    case name, branch, birth, age, status, death, phone, registration, anniversary, ageAtDeath
+    case name, branch, father, birth, age, status, death, phone, registration, country, created, missing
+    case anniversary, ageAtDeath
     // أقسام الملخّص
     case people, ages, branches, registered
 
     var id: String { rawValue }
 }
 
+/// التجميع (نفس خيارات صفحة الأعضاء — `AdminMemberGrouping`)
+nonisolated enum AdminReportGrouping: String, CaseIterable, Identifiable, Sendable {
+    case branch, father, birthDecade, alphabet, country
+
+    var id: String { rawValue }
+
+    /// اسمه على الغلاف (عربي دائماً)
+    var pdfLabel: String {
+        switch self {
+        case .branch: return "حسب الفرع"
+        case .father: return "حسب الأب"
+        case .birthDecade: return "حسب عقد الميلاد"
+        case .alphabet: return "أبجدياً"
+        case .country: return "حسب الدولة"
+        }
+    }
+}
+
+/// أقسام «كتاب الفرع» بترتيبها في الملف
+nonisolated enum AdminReportBookSection: String, CaseIterable, Identifiable, Sendable {
+    case cover, tree, register, memorial, form, attendance, cards
+    /// «الأعداد» — في «تقرير فرع شامل» فقط
+    case numbers
+
+    var id: String { rawValue }
+
+    /// ما يعرضه المعالج (بلا «الأعداد»)
+    static let wizard: [AdminReportBookSection] = [.cover, .tree, .register, .memorial, .form, .attendance, .cards]
+    /// الافتراضي في المعالج
+    static let wizardDefault: Set<AdminReportBookSection> = [.cover, .tree, .register, .memorial]
+    /// «تقرير فرع شامل»
+    static let branchReport: Set<AdminReportBookSection> = [.cover, .numbers, .tree, .register, .memorial]
+
+    /// عنوان القسم في الملف وفهرسه
+    var pdfTitle: String {
+        switch self {
+        case .cover: return "الغلاف"
+        case .tree: return "شجرة الفرع"
+        case .register: return "سجل الأفراد"
+        case .memorial: return "الراحلون وذكراهم"
+        case .form: return "استمارة استكمال البيانات"
+        case .attendance: return "قائمة الحضور"
+        case .cards: return "بطاقات الأفراد"
+        case .numbers: return "الأعداد"
+        }
+    }
+}
+
 nonisolated struct AdminReportFilter: Equatable, Sendable {
     enum Life: String, CaseIterable, Sendable { case all, living, deceased }
+    /// التسجيل في التطبيق (الأحياء): مسجّل · مقيّد · موقوف
+    enum Registration: String, CaseIterable, Sendable { case all, registered, treeOnly, frozen }
     enum Phones: String, CaseIterable, Sendable { case all, registered, noPhone }
     enum Memorial: String, CaseIterable, Sendable { case all, incomplete }
-    /// فئة العمر (سجل العائلة) — نفس فئات «الفئات العمرية» في الملخّص. العمر = اليوم للحي، وعند الوفاة للمتوفى؛
-    /// تاريخ الميلاد المخفي أو الناقص = «غير معروف» (لا يُستنتج عمر من أخفى ميلاده)
+    /// «المقيّدون»: الفترة من `created_at` بتوقيت الكويت
+    enum Period: String, CaseIterable, Sendable { case thisMonth, lastMonth, last90 }
+    /// «الناقصة بياناتهم»: ما ينقص
+    enum Missing: String, CaseIterable, Sendable { case any, birth, death, photo, father }
+
+    /// فئات العمر — «الفئات العمرية» في الملخّص. العمر = اليوم للحي، وعند الوفاة للمتوفى؛ الميلاد المخفي أو الناقص
+    /// = «غير معروف» (لا يُستنتج عمر من أخفى ميلاده)
     enum Age: String, CaseIterable, Sendable {
         case all, under18, from18to30, from31to50, from51to70, over70, unknown
 
-        /// الفئات المحسوبة (بلا «الكل» و«غير معروف»)
         static let bands: [Age] = [.under18, .from18to30, .from31to50, .from51to70, .over70]
 
         static func band(_ years: Int?) -> Age {
@@ -110,7 +244,6 @@ nonisolated struct AdminReportFilter: Equatable, Sendable {
             }
         }
 
-        /// اسم الفئة في الملف (عربي دائماً): «أقل من 18» · «18–30» … · «غير معروف»
         var label: String {
             switch self {
             case .all: return "كل الأعمار"
@@ -122,16 +255,10 @@ nonisolated struct AdminReportFilter: Equatable, Sendable {
             case .unknown: return "غير معروف"
             }
         }
-
-        /// في سطر النطاق: «18–30 سنة» · «العمر غير معروف»
-        var scopeLabel: String {
-            switch self {
-            case .all: return ""
-            case .unknown: return "العمر غير معروف"
-            default: return "\(label) سنة"
-            }
-        }
     }
+
+    /// سقف شريط العمر — «100+» = بلا حدّ أعلى
+    static let ageCap = 100
 
     /// ما جاء من صفحة الأعضاء («⋯ ← تصدير» بالشريحة والبحث) — لسجل العائلة فقط
     struct Scope: Equatable, Sendable {
@@ -139,14 +266,55 @@ nonisolated struct AdminReportFilter: Equatable, Sendable {
         let title: String
     }
 
-    /// فرع (أي عضو: هو ونسله) — سجل العائلة
+    /// فرع بأي مستوى (هو ونسله) — nil = العائلة كاملة
     var branch: UUID? = nil
     var life: Life = .all
+    var registration: Registration = .all
     var phones: Phones = .all
     var memorial: Memorial = .all
-    /// سجل العائلة
-    var age: Age = .all
+    var period: Period = .thisMonth
+    var missing: Missing = .any
+    /// مدى العمر الحرّ — المدى الكامل = بلا تصفية؛ غيره يستثني «غير معروف»
+    var ageMin: Int = 0
+    var ageMax: Int = AdminReportFilter.ageCap
+    var grouping: AdminReportGrouping = .branch
     var scope: Scope? = nil
+
+    var ageLimited: Bool { ageMin > 0 || ageMax < Self.ageCap }
+
+    /// «18–50 سنة» · «من 18 سنة» · «حتى 50 سنة»
+    var ageLabel: String {
+        switch (ageMin > 0, ageMax < Self.ageCap) {
+        case (true, true): return "\(ageMin)–\(ageMax) سنة"
+        case (true, false): return "من \(ageMin) سنة"
+        case (false, true): return "حتى \(ageMax) سنة"
+        default: return ""
+        }
+    }
+
+    func ageMatches(_ years: Int?) -> Bool {
+        guard ageLimited else { return true }
+        guard let years else { return false }
+        return years >= ageMin && (ageMax >= Self.ageCap || years <= ageMax)
+    }
+}
+
+// MARK: - التجميع (يُحسب على الخيط الرئيسي من `AdminGrouping`)
+
+/// أقسام التقرير بالترتيب: عنوان، مسار (للفرع المتداخل)، عمق، والأعضاء — الملف يأخذ منها من في التصفية فقط
+nonisolated struct AdminReportGroupPlan: Sendable {
+    struct Section: Sendable {
+        let title: String
+        /// «فرع محمد ‹ فرع عبدالله» — المستويات فوق هذا القسم (التجميع بالفرع)
+        let path: String?
+        let depth: Int
+        let ids: [UUID]
+    }
+
+    let grouping: AdminReportGrouping
+    let sections: [Section]
+
+    static let empty = AdminReportGroupPlan(grouping: .branch, sections: [])
 }
 
 // MARK: - اللقطة (تُؤخذ على الخيط الرئيسي)
@@ -169,6 +337,15 @@ nonisolated struct AdminReportPerson: Sendable {
     /// الرقم منسّقاً للعرض — nil = لا رقم في السجل (أو غير ظاهر)
     let phone: String?
     let phoneHidden: Bool
+    /// الدولة من مفتاح الهاتف — nil لمن أخفى رقمه أو بلا رقم
+    let country: String?
+    /// تاريخ القيد في الشجرة (`created_at`)
+    let createdAt: Date?
+    let hasPhoto: Bool
+    /// اسم الأب المختصر (عمود «الأب»)
+    let fatherName: String?
+    /// النسب: «بن فلان بن فلان» (بطاقات الأفراد)
+    let lineage: String
 }
 
 nonisolated struct AdminReportWoman: Sendable {
@@ -184,7 +361,7 @@ nonisolated struct AdminReportInput: Sendable {
     let women: [AdminReportWoman]?
     /// لهم حساب دخول — nil = لم تصل القوائم
     let registered: Set<UUID>?
-    /// أسماء الفروع المخصّصة (رأس الفرع ← الاسم)
+    /// أسماء الفروع المخصّصة (رأس الفرع ← الاسم) — لكل المستويات
     let branchNames: [UUID: String]
     let generatedBy: String
     let date: Date
@@ -192,28 +369,40 @@ nonisolated struct AdminReportInput: Sendable {
     @MainActor
     static func make(members: [FamilyMember], women: [FamilyMember]?, registered: Set<UUID>?,
                      branchName: (UUID) -> String?, generatedBy: String, date: Date = Date()) -> AdminReportInput {
+        var byId: [UUID: FamilyMember] = [:]
+        byId.reserveCapacity(members.count)
+        for m in members { byId[m.id] = m }
         var people: [AdminReportPerson] = []
         people.reserveCapacity(members.count)
+        var names: [UUID: String] = [:]
         // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — `displayFullName` يلحق به اسم العائلة فلا يُكتشف بعده
         for m in members where m.role != .pending && m.hasName {
             let name = m.displayFullName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
             let raw = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let hidden = m.isPhoneHidden == true
+            let country: String? = hidden || raw.isEmpty ? nil : AdminAnnounceKit.iso(m).flatMap { code in
+                KuwaitPhone.supportedCountries.first { $0.isoCode == code }?.nameArabic
+            }
+            let father = m.fatherId.flatMap { byId[$0] }
+            let grand = father?.fatherId.flatMap { byId[$0] }
+            let lineage = [father, grand].compactMap { $0 }
+                .map { "بن \($0.firstName.trimmingCharacters(in: .whitespacesAndNewlines))" }
+                .joined(separator: " ")
+            let photo = [m.avatarUrl, m.photoURL].contains { !($0 ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
             people.append(AdminReportPerson(
                 id: m.id, fatherId: m.fatherId, name: name,
                 firstName: m.firstName.trimmingCharacters(in: .whitespacesAndNewlines),
                 sortOrder: m.sortOrder, birth: m.birthDate, birthHidden: m.isBirthDateHidden == true,
                 deceased: m.isDeceased == true, death: m.deathDate, deathUnknown: m.deathDateUnknown == true,
                 frozen: m.status == .frozen, countable: m.isCountable,
-                phone: raw.isEmpty ? nil : KuwaitPhone.display(raw), phoneHidden: m.isPhoneHidden == true))
+                phone: raw.isEmpty ? nil : KuwaitPhone.display(raw), phoneHidden: hidden,
+                country: country, createdAt: ApprovalWorkflow.date(m.createdAt), hasPhoto: photo,
+                fatherName: father.map { $0.shortFullName.isEmpty ? $0.firstName : $0.shortFullName },
+                lineage: lineage))
+            if let n = branchName(m.id) { names[m.id] = n }
         }
         let root = BranchPickerSheet.familyRoot(in: members)
-        var names: [UUID: String] = [:]
-        if let root {
-            for m in members where m.fatherId == root.id {
-                if let n = branchName(m.id) { names[m.id] = n }
-            }
-        }
         let womenFacts = women.map { list in
             list.filter { $0.isFemale && $0.hasName }.map { AdminReportWoman(deceased: $0.isDeceased == true, birth: $0.birthDate) }
         }
@@ -226,6 +415,10 @@ nonisolated struct AdminReportInput: Sendable {
 
 nonisolated enum AdminReportTone: Sendable {
     case normal, muted, warning, men, women, total, registered, treeOnly
+    /// خانة فارغة تُعبّأ باليد: خطّ منقّط بعد النص (إن وُجد)
+    case blank
+    /// مربّع ☐ يُعلَّم باليد
+    case checkbox
 }
 
 nonisolated struct AdminReportTile: Sendable {
@@ -269,11 +462,13 @@ nonisolated struct AdminReportTable: Sendable {
         var centered: Bool = false
         /// يأخذ ما بقي من العرض (الاسم) — وكل عمود غيره بعرض أطول محتواه (`AdminReportPDF.plan`)
         var fill: Bool = false
+        /// أقلّ عرض (خانة تُعبّأ باليد)
+        var minWidth: Double = 0
     }
 
     struct Row: Sendable {
         let cells: [String]
-        /// لون خلية بعينها (المتوفى خافت، «السنة فقط» كهرماني)
+        /// لون خلية بعينها (المتوفى خافت، «السنة فقط» كهرماني) أو خانة تُعبّأ (`blank`/`checkbox`)
         var tones: [Int: AdminReportTone] = [:]
     }
 
@@ -281,16 +476,18 @@ nonisolated struct AdminReportTable: Sendable {
     var rows: [Row]
     /// صفّ المجموع (عريض)
     var footer: Row? = nil
+    /// سطر المجموع تحت الجدول («المجموع: 7 أفراد — مسجّلون 5 · …»)
+    var summary: String? = nil
+    /// صفوف أعلى (استمارة تُعبّأ باليد)
+    var roomy: Bool = false
 }
 
 /// «شجرة الفروع» المصغّرة: المؤسس ← فروعه الكبرى وعدد أفراد كل فرع
 nonisolated struct AdminReportMiniTree: Sendable {
     struct Node: Sendable {
         let title: String
-        /// سطر صغير تحت العنوان (رأس الفرع، أو فرعه الأب إن كانت العقد فروع الفروع)
         let caption: String?
         let count: Int
-        /// «وغيرها» — بقية الفروع مجموعة
         var isRest: Bool = false
     }
 
@@ -299,34 +496,78 @@ nonisolated struct AdminReportMiniTree: Sendable {
     let nodes: [Node]
 }
 
+/// صفحة من «شجرة الفرع المطبوعة»: عقد بمستويات (الأولى الرأس) — الرسم يوزّعها على عرض الصفحة
+nonisolated struct AdminReportTreeChart: Sendable {
+    struct Node: Sendable {
+        let title: String
+        /// «1918 – 1989» أو «46 فرداً»
+        let caption: String?
+        let deceased: Bool
+        /// له نسل خارج هذه الصفحة (صفحته الخاصة، أو مختصر)
+        let continued: Bool
+        let children: [Int]
+    }
+
+    let title: String
+    let subtitle: String?
+    /// nodes[0] = الرأس
+    let nodes: [Node]
+}
+
+/// بطاقة فرد (بطاقات الأفراد)
+nonisolated struct AdminReportCard: Sendable {
+    let name: String
+    let lineage: String
+    let lines: [String]
+    let deceased: Bool
+}
+
 nonisolated enum AdminReportBlock: Sendable {
     case tiles([AdminReportTile])
-    /// عنوان قسم (فرع) بخط ذهبي — أو عنوان لوحة إحصاء (`panel`)
+    /// عنوان لوحة إحصاء
     case heading(String, subtitle: String?, panel: Bool)
+    /// شريط كريمي لمجموعة (بيت، فرع، شهر…) — `toc`: يدخل الفهرس
+    case band(String, subtitle: String?, toc: Bool)
+    /// قسم كبير يبدأ صفحة جديدة ويدخل الفهرس (أقسام الكتاب، أشهر التقويم)
+    case section(String, subtitle: String?)
+    case pageBreak
     case table(AdminReportTable)
     case note(String, tone: AdminReportTone)
     case rings([AdminReportRing])
-    /// أشرطة أفقية بجزأين (الفروع، الأعمار) + مفتاح الألوان
     case bars([AdminReportBar], firstLabel: String, secondLabel: String?, firstTone: AdminReportTone)
     case split(AdminReportSplit)
     case miniTree(AdminReportMiniTree)
+    /// صفحة شجرة كاملة (تبدأ صفحة جديدة)
+    case treeChart(AdminReportTreeChart)
+    /// صفّ من بطاقتين
+    case cardRow([AdminReportCard])
+    /// خطوط توقيع/تعبئة بأسمائها تحتها («اسم من عبّأها · التاريخ · استلمها»)
+    case signatures([String])
+    /// سطر صغير رمادي
+    case caption(String)
 }
 
 nonisolated struct AdminReportDoc: Sendable {
     let kind: AdminReportKind
-    /// سطر النطاق («كل الفروع · أحياء») — فارغ = بلا تصفية
+    /// سطر النطاق («فرع محمد ‹ فرع عبدالله · أحياء») — فارغ = بلا تصفية
     let scope: String
-    /// عدد الأفراد في التقرير (سطر المعاينة وصفحة الغلاف)
+    /// عدد الأفراد في التقرير (سطر العدد وصفحة الغلاف)
     let count: Int
     /// فقرة الغلاف: ما يحويه التقرير
     let intro: String
     let blocks: [AdminReportBlock]
     let generatedBy: String
     let date: Date
+    /// «حسب الأب» على الغلاف
+    var grouping: String? = nil
+    /// false = بلا غلاف (الكتاب بلا «غلاف»)
+    var cover: Bool = true
+    /// عنوان الملف — nil = عنوان النوع
+    var customTitle: String? = nil
 
-    var title: String { kind.pdfTitle }
+    var title: String { customTitle ?? kind.pdfTitle }
 
-    /// «سجل العائلة · كل الفروع · أحياء — 2,344 فرداً»
+    /// «سجل العائلة · فرع عبدالله · أحياء — 184 فرداً»
     var summaryLine: String {
         let head = scope.isEmpty ? title : "\(title) · \(scope)"
         return "\(head) — \(AdminReportText.people(count))"
@@ -419,9 +660,25 @@ nonisolated enum AdminReportText {
         }
     }
 
+    /// تاريخ الوفاة كما يُطبع: الكامل فقط، وغيره «لا يوجد تاريخ كامل للوفاة» (القاعدة نفسها في «المناسبات»)
+    static func deathDate(_ raw: String?) -> String {
+        if case let .exact(y, m, d) = DeceasedMemorial.classify(raw) {
+            return "\(DeceasedMemorial.dayMonth(day: d, month: m, arabic: true)) \(y)"
+        }
+        return noFullDeathDate
+    }
+
     static func date(_ date: Date, calendar: Calendar) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return "\(DeceasedMemorial.dayMonth(day: c.day ?? 1, month: c.month ?? 1, arabic: true)) \(c.year ?? 0)"
+    }
+
+    /// سنة ميلادية تُطبع في الشجرة (الكامل والسنة وحدها؛ لا الهجري)
+    static func year(_ raw: String?) -> Int? {
+        switch DeceasedMemorial.classify(raw) {
+        case .exact(let y, _, _), .yearOnly(let y): return y
+        default: return nil
+        }
     }
 
     /// الكويت دائماً (ملف رسمي) — التقويم الميلادي
@@ -452,7 +709,6 @@ nonisolated enum AdminReportText {
     }
 
     /// العمر بالسنوات: اليوم للحي، وعند الوفاة للمتوفى (السنة وحدها تُحسب بالسنوات) — nil إن تعذّر
-    /// (لا تاريخ، هجري، وفاة بلا تاريخ، أو خارج 0…129)
     static func age(birth: String?, deceased: Bool, death: String?, deathUnknown: Bool, today: Date,
                     calendar cal: Calendar) -> Int? {
         let born = DeceasedMemorial.classify(birth)
@@ -484,6 +740,7 @@ nonisolated enum AdminReportText {
     static let hidden = "مخفي"
     static let noPhone = "بلا رقم هاتف"
     static let deathIncomplete = "تاريخ الوفاة غير مكتمل"
+    static let noFullDeathDate = "لا يوجد تاريخ كامل للوفاة"
 }
 
 // MARK: - الشجرة (مرور واحد): الترتيب والفروع
@@ -545,23 +802,13 @@ nonisolated struct AdminReportTree {
     }
 
     /// عدد العضو ونسله
-    func count(under id: UUID) -> Int {
-        var n = 0
-        var stack = [id]
-        var seen: Set<UUID> = []
-        while let cur = stack.popLast() {
-            guard seen.insert(cur).inserted else { continue }
-            if byId[cur] != nil { n += 1 }
-            stack.append(contentsOf: kids[cur] ?? [])
-        }
-        return n
-    }
+    func count(under id: UUID) -> Int { subtree(id).count }
 
     func title(ofHead head: AdminReportPerson, names: [UUID: String]) -> String {
         names[head.id] ?? "فرع \(head.firstName.isEmpty ? head.name : head.firstName)"
     }
 
-    /// فرع العضو كما يُطبع في عمود «الفرع» — بنفس عناوين مجموعات `groups`
+    /// فرع العضو كما يُطبع في عمود «الفرع» (الفرع الأول)
     func branchLabel(of p: AdminReportPerson, names: [UUID: String]) -> String {
         if p.id == rootId { return "رأس الشجرة" }
         guard let h = branchOf[p.id], let head = byId[h] else { return "خارج الفروع" }
@@ -578,7 +825,18 @@ nonisolated struct AdminReportTree {
         return out
     }
 
-    /// مجموعات بالفروع: رأس الشجرة ← الفروع بترتيبها ← «خارج الفروع» (بالاسم)
+    /// «فرع محمد ‹ فرع عبدالله» — من ابن الرأس حتى العضو (لسطر النطاق)
+    func path(to id: UUID, names: [UUID: String]) -> String {
+        var chain: [UUID] = [id]
+        var cur = id
+        while let f = byId[cur]?.fatherId, f != rootId, byId[f] != nil, chain.count < BranchPickerSheet.maxTreeDepth {
+            chain.append(f)
+            cur = f
+        }
+        return chain.reversed().compactMap { byId[$0] }.map { title(ofHead: $0, names: names) }.joined(separator: " ‹ ")
+    }
+
+    /// مجموعات بالفروع الأولى: رأس الشجرة ← الفروع بترتيبها ← «خارج الفروع» (بالاسم)
     struct Group {
         let title: String
         let head: AdminReportPerson?
@@ -607,6 +865,38 @@ nonisolated struct AdminReportTree {
         }
         return out
     }
+
+    /// أقسام التقرير من خطّة التجميع: من في `members` فقط، بترتيب الشجرة داخل الفرع/البيت، ومن لم يرد في الخطّة آخراً
+    struct Section {
+        let title: String
+        let path: String?
+        let depth: Int
+        let members: [AdminReportPerson]
+    }
+
+    func sections(_ members: [AdminReportPerson], plan: AdminReportGroupPlan, names: [UUID: String]) -> [Section] {
+        guard !plan.sections.isEmpty else {
+            return groups(members, names: names).map { Section(title: $0.title, path: nil, depth: 0, members: $0.members) }
+        }
+        let byId = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        var placed: Set<UUID> = []
+        var out: [Section] = []
+        let treeOrdered = plan.grouping == .branch || plan.grouping == .father
+        for s in plan.sections {
+            var list = s.ids.compactMap { byId[$0] }
+            guard !list.isEmpty else { continue }
+            if treeOrdered { list.sort { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) } }
+            else { list.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending } }
+            placed.formUnion(list.map(\.id))
+            out.append(Section(title: s.title, path: s.path, depth: s.depth, members: list))
+        }
+        let rest = members.filter { !placed.contains($0.id) }
+        if !rest.isEmpty {
+            out.append(Section(title: "أخرى", path: nil, depth: 0,
+                               members: rest.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }))
+        }
+        return out
+    }
 }
 
 // MARK: - بناء التقارير
@@ -624,31 +914,55 @@ nonisolated struct AdminReportRowBuilder {
     var row: AdminReportTable.Row { .init(cells: cells, tones: tones) }
 }
 
+/// ما يُطلب بناؤه — يُحسب مرة لكل تغيّر في الصفحة
+nonisolated struct AdminReportRequest: Sendable {
+    let kind: AdminReportKind
+    let filter: AdminReportFilter
+    /// الأعمدة بترتيبها (أو أقسام الملخّص)
+    let fields: [AdminReportField]
+    let plan: AdminReportGroupPlan
+    /// أقسام الكتاب («كتاب الفرع» / «تقرير فرع شامل»)
+    var book: Set<AdminReportBookSection> = []
+}
+
 nonisolated enum AdminReportBuilder {
 
-    /// `fields`: ما اختير في «البيانات:» — nil = الافتراضي
-    static func build(_ kind: AdminReportKind, input: AdminReportInput, filter: AdminReportFilter,
-                      fields: Set<AdminReportField>? = nil) -> AdminReportDoc {
+    static func build(_ request: AdminReportRequest, input: AdminReportInput) -> AdminReportDoc {
         let tree = AdminReportTree(input.people, rootId: input.rootId)
-        let chosen = kind.resolvedFields(fields)
-        switch kind {
-        case .register: return register(tree, input, filter, chosen)
-        case .stats: return stats(tree, input, chosen)
-        case .memorial: return memorial(tree, input, filter, chosen)
-        case .phones: return phones(tree, input, filter, chosen)
+        let r = request
+        switch r.kind {
+        case .register: return register(tree, input, r)
+        case .stats: return stats(tree, input, Set(r.kind.resolvedFields(Set(r.fields))))
+        case .memorial: return memorial(tree, input, r.filter, Set(r.fields))
+        case .phones: return phones(tree, input, r)
+        case .registered: return registered(tree, input, r)
+        case .newThisMonth: return newMembers(tree, input, r)
+        case .incomplete: return incomplete(tree, input, r)
+        case .calendar: return calendar(tree, input, r.filter)
+        case .tree: return treeOnly(tree, input, r.filter)
+        case .branchReport: return book(tree, input, r, sections: AdminReportBookSection.branchReport)
+        case .book: return book(tree, input, r, sections: r.book)
         }
     }
 
+    // MARK: أدوات مشتركة
+
     /// الهاتف كما يُطبع: من أخفاه «مخفي» دائماً، ولا رقم «—»
-    private static func phoneText(_ p: AdminReportPerson) -> String {
+    static func phoneText(_ p: AdminReportPerson) -> String {
         p.phoneHidden ? AdminReportText.hidden : (p.phone ?? "—")
     }
 
     /// حالة التسجيل في التطبيق: حساب موقوف · عضو مسجّل · مقيّد في الشجرة («—» إن لم تصل القوائم)
-    private static func registrationText(_ p: AdminReportPerson, _ reg: Set<UUID>?) -> String {
+    static func registrationText(_ p: AdminReportPerson, _ reg: Set<UUID>?) -> String {
         if p.frozen { return AdminReportText.frozen }
         guard let reg else { return "—" }
         return reg.contains(p.id) ? AdminReportText.registered : AdminReportText.treeOnly
+    }
+
+    static func registration(_ p: AdminReportPerson, _ reg: Set<UUID>?) -> AdminReportFilter.Registration? {
+        if p.frozen { return .frozen }
+        guard let reg else { return nil }
+        return reg.contains(p.id) ? .registered : .treeOnly
     }
 
     /// عنوان الفرع المختار (شريحة الفرع وسطر النطاق)
@@ -658,33 +972,22 @@ nonisolated enum AdminReportBuilder {
         return "فرع \(p.map { $0.firstName.isEmpty ? $0.name : $0.firstName } ?? "")"
     }
 
-    // MARK: ١ سجل العائلة بالفروع
-
-    private static func register(_ tree: AdminReportTree, _ input: AdminReportInput,
-                                 _ filter: AdminReportFilter, _ fields: Set<AdminReportField>) -> AdminReportDoc {
-        var pool = tree.pool
-        var scopeParts: [String] = []
-        if let scope = filter.scope {
-            pool = pool.filter { scope.ids.contains($0.id) }
-            scopeParts.append("من صفحة الأعضاء: \(scope.title)")
-        }
+    /// النطاق: الفرع المختار (هو ونسله) أو كل الشجرة، وسطره
+    static func scoped(_ tree: AdminReportTree, _ input: AdminReportInput, _ filter: AdminReportFilter,
+                       _ pool: [AdminReportPerson], parts: inout [String]) -> [AdminReportPerson] {
+        var pool = pool
         if let b = filter.branch {
             let ids = tree.subtree(b)
             pool = pool.filter { ids.contains($0.id) }
-            scopeParts.append(branchTitle(b, input: input))
-        } else if filter.scope == nil {
-            scopeParts.append("كل الفروع")
+            parts.append(tree.byId[b] != nil ? tree.path(to: b, names: input.branchNames) : branchTitle(b, input: input))
+        } else {
+            parts.append("العائلة كاملة")
         }
-        switch filter.life {
-        case .all: break
-        case .living:
-            pool = pool.filter { !$0.deceased }
-            scopeParts.append("أحياء")
-        case .deceased:
-            pool = pool.filter(\.deceased)
-            scopeParts.append("متوفون")
-        }
-        // العمر (مرة واحدة لكل فرد) — المخفي ميلاده بلا عمر
+        return pool
+    }
+
+    /// الأعمار مرة واحدة لكل فرد — المخفي ميلاده بلا عمر
+    static func ages(_ pool: [AdminReportPerson], _ input: AdminReportInput) -> [UUID: Int] {
         let cal = AdminReportText.kuwait
         var ages: [UUID: Int] = [:]
         ages.reserveCapacity(pool.count)
@@ -694,105 +997,239 @@ nonisolated enum AdminReportBuilder {
                 ages[p.id] = a
             }
         }
-        if filter.age != .all {
-            pool = pool.filter { AdminReportFilter.Age.band(ages[$0.id]) == filter.age }
-            scopeParts.append(filter.age.scopeLabel)
+        return ages
+    }
+
+    /// ما ينقص الفرد (الميلاد · تاريخ الوفاة · الصورة · الأب)
+    static func missing(_ p: AdminReportPerson, tree: AdminReportTree) -> [AdminReportFilter.Missing] {
+        var out: [AdminReportFilter.Missing] = []
+        if !p.birthHidden, case .missing = DeceasedMemorial.classify(p.birth) { out.append(.birth) }
+        if p.deceased, !p.deathUnknown {
+            if case .exact = DeceasedMemorial.classify(p.death) {} else { out.append(.death) }
         }
+        if !p.hasPhoto { out.append(.photo) }
+        if p.id != tree.rootId, p.fatherId.flatMap({ tree.byId[$0] }) == nil { out.append(.father) }
+        return out
+    }
 
-        let groups = tree.groups(pool, names: input.branchNames)
+    static func missingLabel(_ m: AdminReportFilter.Missing) -> String {
+        switch m {
+        case .any: return "كل الناقص"
+        case .birth: return "تاريخ الميلاد"
+        case .death: return AdminReportText.noFullDeathDate
+        case .photo: return "الصورة"
+        case .father: return "الأب في الشجرة"
+        }
+    }
+
+    // MARK: الأعمدة الموحّدة (السجل، المسجّلون، المقيّدون، الناقصة بياناتهم)
+
+    static func column(_ f: AdminReportField) -> AdminReportTable.Column {
+        switch f {
+        case .name: return .init(title: "الاسم الكامل", wraps: true, fill: true)
+        case .branch: return .init(title: "الفرع", wraps: true)
+        case .father: return .init(title: "الأب", wraps: true)
+        case .birth: return .init(title: "الميلاد")
+        case .age: return .init(title: "العمر", centered: true)
+        case .status: return .init(title: "الحالة", wraps: true)
+        case .death: return .init(title: "تاريخ الوفاة", wraps: true)
+        case .phone: return .init(title: "رقم الهاتف", ltr: true)
+        case .registration: return .init(title: "التسجيل", wraps: true)
+        case .country: return .init(title: "الدولة")
+        case .created: return .init(title: "قُيّد في")
+        case .missing: return .init(title: "الناقص", wraps: true)
+        case .anniversary: return .init(title: "الذكرى القادمة")
+        case .ageAtDeath: return .init(title: "العمر عند الوفاة", centered: true)
+        case .people, .ages, .branches, .registered: return .init(title: "")
+        }
+    }
+
+    struct CellContext {
+        let tree: AdminReportTree
+        let input: AdminReportInput
+        let ages: [UUID: Int]
+        let fields: [AdminReportField]
+        var missing: [UUID: [AdminReportFilter.Missing]] = [:]
+    }
+
+    static func cell(_ f: AdminReportField, _ p: AdminReportPerson, _ ctx: CellContext) -> (String, AdminReportTone?) {
+        let dim: AdminReportTone? = p.deceased ? .muted : nil
+        switch f {
+        case .name: return (p.name, nil)
+        case .branch: return (ctx.tree.branchLabel(of: p, names: ctx.input.branchNames), nil)
+        case .father: return (p.fatherName ?? "—", nil)
+        case .birth: return (p.birthHidden ? AdminReportText.hidden : (AdminReportText.date(p.birth) ?? "—"), nil)
+        case .age: return (ctx.ages[p.id].map { "\($0)" } ?? "—", dim)
+        case .status:
+            guard p.deceased else { return ("حي", nil) }
+            // بلا عمود «تاريخ الوفاة» يبقى التاريخ مع الحالة — الكامل فقط
+            if !ctx.fields.contains(.death), case let .exact(y, m, d) = DeceasedMemorial.classify(p.death) {
+                return ("متوفى · \(DeceasedMemorial.dayMonth(day: d, month: m, arabic: true)) \(y)", dim)
+            }
+            return ("متوفى", dim)
+        case .death:
+            guard p.deceased else { return ("", nil) }
+            return (p.deathUnknown ? "غير معروف" : AdminReportText.deathDate(p.death), dim)
+        case .phone: return (phoneText(p), p.phoneHidden ? .muted : nil)
+        case .registration:
+            guard !p.deceased else { return ("—", nil) }
+            return (registrationText(p, ctx.input.registered), p.frozen ? .warning : nil)
+        case .country: return (p.country ?? "—", nil)
+        case .created:
+            return (p.createdAt.map { AdminReportText.date($0, calendar: AdminReportText.kuwait) } ?? "—", nil)
+        case .missing:
+            let list = ctx.missing[p.id] ?? missing(p, tree: ctx.tree)
+            return (list.map(missingLabel).joined(separator: " · "), .warning)
+        case .anniversary, .ageAtDeath, .people, .ages, .branches, .registered: return ("", nil)
+        }
+    }
+
+    /// جداول الأقسام: شريط كريمي لكل مجموعة، ثم الجدول بالأعمدة المختارة، وسطر المجموع تحته
+    static func memberSections(_ pool: [AdminReportPerson], ctx: CellContext, plan: AdminReportGroupPlan,
+                               summary: ([AdminReportPerson]) -> String) -> [AdminReportBlock] {
+        let sections = ctx.tree.sections(pool, plan: plan, names: ctx.input.branchNames)
+        // الفهرس: المستوى الأول فقط، وبحدّ معقول
+        let tops = sections.filter { $0.depth == 0 }.count
+        let tocAll = tops <= AdminReportPDF.tocMaxEntries
+        var columns: [AdminReportTable.Column] = [.init(title: "م", centered: true)]
+        columns += ctx.fields.map(column)
+        var blocks: [AdminReportBlock] = []
+        var seq = 0
+        for s in sections {
+            let sub = [s.path, AdminReportText.people(s.members.count)].compactMap { $0 }.joined(separator: " · ")
+            blocks.append(.band(s.title, subtitle: sub, toc: tocAll && s.depth == 0))
+            var table = AdminReportTable(columns: columns, rows: [])
+            table.rows.reserveCapacity(s.members.count)
+            for p in s.members {
+                seq += 1
+                var row = AdminReportRowBuilder()
+                row.add("\(seq)")
+                for f in ctx.fields {
+                    let (text, tone) = cell(f, p, ctx)
+                    row.add(text, tone)
+                }
+                table.rows.append(row.row)
+            }
+            table.summary = summary(s.members)
+            blocks.append(.table(table))
+        }
+        return blocks
+    }
+
+    /// «المجموع: 7 أفراد — أحياء 6 · متوفون 1»
+    static func lifeSummary(_ list: [AdminReportPerson]) -> String {
+        let alive = list.filter { !$0.deceased }.count
+        var s = "المجموع: \(AdminReportText.people(list.count))"
+        if alive != list.count { s += " — أحياء \(AdminReportText.num(alive)) · متوفون \(AdminReportText.num(list.count - alive))" }
+        return s
+    }
+
+    /// «المجموع: 7 أفراد — مسجّلون 5 · مقيّدون 1 · موقوف 1»
+    static func registrationSummary(_ list: [AdminReportPerson], _ reg: Set<UUID>?) -> String {
+        let living = list.filter { !$0.deceased }
+        var s = "المجموع: \(AdminReportText.people(list.count))"
+        guard reg != nil else { return s }
+        var c: [AdminReportFilter.Registration: Int] = [:]
+        for p in living { if let r = registration(p, reg) { c[r, default: 0] += 1 } }
+        s += " — مسجّلون \(AdminReportText.num(c[.registered] ?? 0)) · مقيّدون \(AdminReportText.num(c[.treeOnly] ?? 0))"
+        if let f = c[.frozen], f > 0 { s += " · موقوف \(AdminReportText.num(f))" }
+        return s
+    }
+
+    static func lifeAndAge(_ pool: [AdminReportPerson], _ filter: AdminReportFilter, ages: [UUID: Int],
+                           usesLife: Bool, usesAge: Bool, parts: inout [String]) -> [AdminReportPerson] {
+        var pool = pool
+        if usesLife {
+            switch filter.life {
+            case .all: break
+            case .living:
+                pool = pool.filter { !$0.deceased }
+                parts.append("أحياء")
+            case .deceased:
+                pool = pool.filter(\.deceased)
+                parts.append("متوفون")
+            }
+        }
+        if usesAge, filter.ageLimited {
+            pool = pool.filter { filter.ageMatches(ages[$0.id]) }
+            parts.append(filter.ageLabel)
+        }
+        return pool
+    }
+
+    static func registrationFilter(_ pool: [AdminReportPerson], _ filter: AdminReportFilter, _ reg: Set<UUID>?,
+                                   parts: inout [String]) -> [AdminReportPerson] {
+        guard filter.registration != .all else { return pool }
+        let label: String
+        switch filter.registration {
+        case .registered: label = "مسجّلون"
+        case .treeOnly: label = "مقيّدون في الشجرة"
+        case .frozen: label = "حسابات موقوفة"
+        case .all: label = ""
+        }
+        parts.append(label)
+        return pool.filter { !$0.deceased && registration($0, reg) == filter.registration }
+    }
+
+    // MARK: ١ سجل العائلة
+
+    private static func register(_ tree: AdminReportTree, _ input: AdminReportInput, _ r: AdminReportRequest) -> AdminReportDoc {
+        let filter = r.filter
+        var pool = tree.pool
+        var parts: [String] = []
+        if let scope = filter.scope {
+            pool = pool.filter { scope.ids.contains($0.id) }
+            parts.append("من صفحة الأعضاء: \(scope.title)")
+            if filter.branch != nil { pool = scoped(tree, input, filter, pool, parts: &parts) }
+        } else {
+            pool = scoped(tree, input, filter, pool, parts: &parts)
+        }
+        let ages = ages(pool, input)
+        pool = lifeAndAge(pool, filter, ages: ages, usesLife: true, usesAge: true, parts: &parts)
+        pool = registrationFilter(pool, filter, input.registered, parts: &parts)
+
+        let top = tree.groups(pool, names: input.branchNames)
         let living = pool.filter { !$0.deceased }.count
-        let branchCount = groups.filter { $0.head != nil }.count
-
         var blocks: [AdminReportBlock] = [
             .tiles([AdminReportTile(value: AdminReportText.num(pool.count), label: "الأفراد"),
                     AdminReportTile(value: AdminReportText.num(living), label: "أحياء"),
                     AdminReportTile(value: AdminReportText.num(pool.count - living), label: "متوفون"),
-                    AdminReportTile(value: AdminReportText.num(branchCount), label: "الفروع")])
+                    AdminReportTile(value: AdminReportText.num(top.filter { $0.head != nil }.count), label: "الفروع")])
         ]
-
-        // ملخّص الفروع
-        var summary = AdminReportTable(columns: [
-            .init(title: "الفرع", weight: 0.30, wraps: true),
-            .init(title: "رأس الفرع", weight: 0.34, wraps: true),
-            .init(title: "الأفراد", weight: 0.12, centered: true),
-            .init(title: "أحياء", weight: 0.12, centered: true),
-            .init(title: "متوفون", weight: 0.12, centered: true)
-        ], rows: [])
-        for g in groups {
-            let alive = g.members.filter { !$0.deceased }.count
-            summary.rows.append(.init(cells: [g.title, g.head?.name ?? "—", AdminReportText.num(g.members.count),
-                                              AdminReportText.num(alive), AdminReportText.num(g.members.count - alive)]))
-        }
-        summary.footer = .init(cells: ["المجموع", "", AdminReportText.num(pool.count), AdminReportText.num(living),
-                                       AdminReportText.num(pool.count - living)])
-        if !groups.isEmpty {
+        if pool.isEmpty {
+            blocks.append(.note("لا يوجد أفراد يطابقون هذا النطاق.", tone: .muted))
+        } else if top.count > 1 {
+            var summary = AdminReportTable(columns: [
+                .init(title: "الفرع", weight: 0.30, wraps: true),
+                .init(title: "رأس الفرع", weight: 0.34, wraps: true),
+                .init(title: "الأفراد", weight: 0.12, centered: true),
+                .init(title: "أحياء", weight: 0.12, centered: true),
+                .init(title: "متوفون", weight: 0.12, centered: true)
+            ], rows: [])
+            for g in top {
+                let alive = g.members.filter { !$0.deceased }.count
+                summary.rows.append(.init(cells: [g.title, g.head?.name ?? "—", AdminReportText.num(g.members.count),
+                                                  AdminReportText.num(alive), AdminReportText.num(g.members.count - alive)]))
+            }
+            summary.footer = .init(cells: ["المجموع", "", AdminReportText.num(pool.count), AdminReportText.num(living),
+                                           AdminReportText.num(pool.count - living)])
             blocks.append(.heading("ملخّص الفروع", subtitle: nil, panel: true))
             blocks.append(.table(summary))
-        } else {
-            blocks.append(.note("لا يوجد أفراد يطابقون هذا النطاق.", tone: .muted))
         }
-
-        // الأعمدة المختارة فقط («م» والاسم دائماً) — الاسم يأخذ ما بقي من العرض
-        var columns: [AdminReportTable.Column] = [
-            .init(title: "م", centered: true),
-            .init(title: "الاسم الكامل", wraps: true, fill: true)
-        ]
-        if fields.contains(.branch) { columns.append(.init(title: "الفرع", wraps: true)) }
-        if fields.contains(.birth) { columns.append(.init(title: "الميلاد")) }
-        if fields.contains(.age) { columns.append(.init(title: "العمر", centered: true)) }
-        if fields.contains(.status) { columns.append(.init(title: "الحالة", wraps: true)) }
-        if fields.contains(.death) { columns.append(.init(title: "تاريخ الوفاة")) }
-        if fields.contains(.phone) { columns.append(.init(title: "رقم الهاتف", ltr: true)) }
-        if fields.contains(.registration) { columns.append(.init(title: "التسجيل", wraps: true)) }
-
-        var seq = 0
-        for g in groups {
-            let alive = g.members.filter { !$0.deceased }.count
-            var sub = "\(AdminReportText.people(g.members.count)) · أحياء \(AdminReportText.num(alive)) · متوفون \(AdminReportText.num(g.members.count - alive))"
-            if let head = g.head { sub = "رأس الفرع: \(head.name) — " + sub }
-            blocks.append(.heading(g.title, subtitle: sub, panel: false))
-            var table = AdminReportTable(columns: columns, rows: [])
-            table.rows.reserveCapacity(g.members.count)
-            for p in g.members {
-                seq += 1
-                let death = p.deceased ? (p.deathUnknown ? nil : AdminReportText.date(p.death)) : nil
-                let dim: AdminReportTone? = p.deceased ? .muted : nil
-                var row = AdminReportRowBuilder()
-                row.add("\(seq)")
-                row.add(p.name)
-                if fields.contains(.branch) { row.add(g.title) }
-                if fields.contains(.birth) {
-                    row.add(p.birthHidden ? AdminReportText.hidden : (AdminReportText.date(p.birth) ?? "—"))
-                }
-                if fields.contains(.age) { row.add(ages[p.id].map { "\($0)" } ?? "—", dim) }
-                if fields.contains(.status) {
-                    // بلا عمود «تاريخ الوفاة» يبقى التاريخ مع الحالة كما كان
-                    if p.deceased {
-                        let withDate = fields.contains(.death) ? nil : death.map { "متوفى · \($0)" }
-                        row.add(withDate ?? "متوفى", dim)
-                    } else {
-                        row.add("حي")
-                    }
-                }
-                if fields.contains(.death) {
-                    row.add(p.deceased ? (death ?? (p.deathUnknown ? "غير معروف" : "—")) : "", dim)
-                }
-                if fields.contains(.phone) { row.add(phoneText(p), p.phoneHidden ? .muted : nil) }
-                if fields.contains(.registration) {
-                    row.add(p.deceased ? "—" : registrationText(p, input.registered), p.frozen && !p.deceased ? .warning : nil)
-                }
-                table.rows.append(row.row)
-            }
-            blocks.append(.table(table))
+        let ctx = CellContext(tree: tree, input: input, ages: ages, fields: r.fields)
+        let registrationShown = r.fields.contains(.registration)
+        blocks += memberSections(pool, ctx: ctx, plan: r.plan) {
+            registrationShown ? registrationSummary($0, input.registered) : lifeSummary($0)
         }
-
-        let intro = "يضمّ هذا السجل أفراد شجرة العائلة مرتّبين بالفروع — كل فرع تحت عنوانه ورأسه، والأفراد بترتيب الشجرة"
-            + " (الأب ثم أبناؤه). يبدأ بملخّص أعداد كل فرع."
-        return AdminReportDoc(kind: .register, scope: scopeParts.joined(separator: " · "), count: pool.count,
-                              intro: intro, blocks: blocks, generatedBy: input.generatedBy, date: input.date)
+        let intro = "يضمّ هذا السجل أفراد شجرة العائلة \(r.plan.grouping.pdfLabel)، كل مجموعة تحت شريطها ومجموعها في ذيلها،"
+            + " ويبدأ بملخّص أعداد الفروع."
+        var doc = AdminReportDoc(kind: .register, scope: parts.joined(separator: " · "), count: pool.count,
+                                 intro: intro, blocks: blocks, generatedBy: input.generatedBy, date: input.date)
+        doc.grouping = r.plan.grouping.pdfLabel
+        return doc
     }
 
-    // MARK: ٢ ملخّص إحصائي
+    // MARK: ٢ الملخّص الإحصائي
 
     private static func stats(_ tree: AdminReportTree, _ input: AdminReportInput,
                               _ fields: Set<AdminReportField>) -> AdminReportDoc {
@@ -812,10 +1249,8 @@ nonisolated enum AdminReportBuilder {
             AdminReportTile(value: AdminReportText.num(tree.heads.count), label: "الفروع"),
             AdminReportTile(value: registeredLiving.map(AdminReportText.num) ?? "—", label: "الأعضاء المسجّلون")
         ]))
-        // ما يحويه (فقرة الغلاف) — الأقسام المختارة فقط
         var contents: [String] = []
 
-        // إحصاء الأفراد
         if fields.contains(.people) {
             contents.append("أعداد الأفراد (الإجمالي والرجال والنساء، أحياء ومتوفون)")
             blocks.append(.heading("إحصاء الأفراد", subtitle: "أحياء ومتوفون — الرجال من الشجرة، والنساء من شجرة النساء",
@@ -831,7 +1266,6 @@ nonisolated enum AdminReportBuilder {
             }
         }
 
-        // الفئات العمرية (الأحياء) — نفس فئات تصفية السجل؛ المخفي ميلاده يدخل هذا العدّ المجمّع فقط
         if fields.contains(.ages) {
             contents.append("الفئات العمرية للأحياء")
             let cal = AdminReportText.kuwait
@@ -860,7 +1294,6 @@ nonisolated enum AdminReportBuilder {
                                 firstTone: .total))
         }
 
-        // الفروع: «شجرة الفروع» المصغّرة ثم الأفراد حسب الفرع
         if fields.contains(.branches) {
             contents.append("شجرة الفروع وأفراد كل فرع")
             if let mini = miniTree(tree, input) {
@@ -879,7 +1312,6 @@ nonisolated enum AdminReportBuilder {
             }
         }
 
-        // التسجيل في التطبيق
         if fields.contains(.registered) {
             contents.append("نسبة الأعضاء المسجّلين في التطبيق إلى المقيّدين في الشجرة")
             blocks.append(.heading("التسجيل في التطبيق", subtitle: "الأحياء من رجال الشجرة: من له حساب دخول ومن اسمه في الشجرة فقط",
@@ -892,7 +1324,6 @@ nonisolated enum AdminReportBuilder {
             }
         }
 
-        // «أ، وب، وج»
         let list = contents.enumerated().map { $0.offset == 0 ? $0.element : "و" + $0.element }.joined(separator: "، ")
         let intro = list.isEmpty
             ? "ملخّص بالأرقام: إجمالي الأفراد والأحياء وعدد الفروع والأعضاء المسجّلين."
@@ -905,8 +1336,7 @@ nonisolated enum AdminReportBuilder {
     static let miniTreeMaxNodes = 8
 
     /// المؤسس ← أبناؤه (رؤوس الفروع)، أو أحفاده (فروع الفروع) إن كان أبناؤه أقل من ثلاثة.
-    /// أكثر من ٨: أكبر ٧ بترتيب الشجرة + «وغيرها».
-    private static func miniTree(_ tree: AdminReportTree, _ input: AdminReportInput) -> AdminReportMiniTree? {
+    static func miniTree(_ tree: AdminReportTree, _ input: AdminReportInput) -> AdminReportMiniTree? {
         guard let rootId = tree.rootId, let root = tree.byId[rootId], !tree.heads.isEmpty else { return nil }
         var nodes: [(order: Int, node: AdminReportMiniTree.Node)] = []
         if tree.heads.count >= 3 {
@@ -940,12 +1370,19 @@ nonisolated enum AdminReportBuilder {
                                    nodes: nodes.map(\.node))
     }
 
-    // MARK: ٣ المتوفون وذكراهم
+    // MARK: ٣ سجل الراحلين
 
-    private static func memorial(_ tree: AdminReportTree, _ input: AdminReportInput,
-                                 _ filter: AdminReportFilter, _ fields: Set<AdminReportField>) -> AdminReportDoc {
+    static func memorial(_ tree: AdminReportTree, _ input: AdminReportInput,
+                         _ filter: AdminReportFilter, _ fields: Set<AdminReportField>,
+                         within: Set<UUID>? = nil) -> AdminReportDoc {
         let cal = AdminReportText.kuwait
-        let dead = tree.pool.filter { $0.deceased && $0.countable }
+        var parts: [String] = []
+        var dead = tree.pool.filter { $0.deceased && $0.countable }
+        if let within {
+            dead = dead.filter { within.contains($0.id) }
+        } else {
+            dead = scoped(tree, input, filter, dead, parts: &parts)
+        }
         let names = input.branchNames
 
         struct Full { let p: AdminReportPerson; let kind: DeceasedMemorial.DateKind; let next: DeceasedMemorial.Anniversary? }
@@ -966,7 +1403,6 @@ nonisolated enum AdminReportBuilder {
                 return a != b ? a < b : $0.p.name < $1.p.name
             }
         } else {
-            // بلا عمود الذكرى: الأحدث وفاةً أولاً
             func key(_ k: DeceasedMemorial.DateKind) -> Int {
                 if case let .exact(y, m, d) = k { return y * 10_000 + m * 100 + d }
                 return 0
@@ -977,14 +1413,12 @@ nonisolated enum AdminReportBuilder {
             }
         }
         partial.sort {
-            // غير المعروف (المؤكَّد) آخراً، ثم ترتيب «ناقص تاريخه» نفسه
             if $0.0.deathUnknown != $1.0.deathUnknown { return !$0.0.deathUnknown }
             let a = DeceasedMemorial.missingRank($0.1), b = DeceasedMemorial.missingRank($1.1)
             return (a.group, a.year, $0.0.name) < (b.group, b.year, $1.0.name)
         }
         let soon = full.filter { ($0.next?.daysUntil ?? Int.max) <= DeceasedMemorial.upcomingDays }.count
 
-        /// العمر عند الوفاة — من أخفى ميلاده بلا عمر
         func ageAtDeath(_ p: AdminReportPerson) -> String {
             guard !p.birthHidden,
                   let a = AdminReportText.age(birth: p.birth, deceased: true, death: p.death, deathUnknown: p.deathUnknown,
@@ -1000,13 +1434,10 @@ nonisolated enum AdminReportBuilder {
         ]
         var seq = 0
         if filter.memorial == .all {
-            if showsNext {
-                blocks.append(.heading("الذكرى القادمة", subtitle: "تواريخ الوفاة المكتملة بالميلادي — الأقرب ذكرى أولاً",
-                                       panel: false))
-            } else {
-                blocks.append(.heading("تاريخ الوفاة مكتمل", subtitle: "تواريخ الوفاة المكتملة بالميلادي — الأحدث وفاةً أولاً",
-                                       panel: false))
-            }
+            blocks.append(.band(showsNext ? "الذكرى القادمة" : "تاريخ الوفاة مكتمل",
+                                subtitle: showsNext ? "الأقرب ذكرى أولاً — \(AdminReportText.people(full.count))"
+                                                    : "الأحدث وفاةً أولاً — \(AdminReportText.people(full.count))",
+                                toc: within == nil))
             var columns: [AdminReportTable.Column] = [
                 .init(title: "م", centered: true),
                 .init(title: "الاسم الكامل", wraps: true, fill: true)
@@ -1034,6 +1465,7 @@ nonisolated enum AdminReportBuilder {
                 if fields.contains(.branch) { row.add(tree.branchLabel(of: f.p, names: names)) }
                 table.rows.append(row.row)
             }
+            table.summary = "المجموع: \(AdminReportText.people(full.count))"
             if full.isEmpty {
                 blocks.append(.note("لا توجد تواريخ وفاة مكتملة.", tone: .muted))
             } else {
@@ -1041,10 +1473,9 @@ nonisolated enum AdminReportBuilder {
             }
         }
 
-        blocks.append(.heading(AdminReportText.deathIncomplete,
-                               subtitle: "السنة فقط، أو مكتوب بالهجري، أو بلا تاريخ — يُستكمل من ورقة العضو ← «استكمال تاريخ الوفاة»",
-                               panel: false))
-        // «الملاحظة» دائماً (هي ما ينقص)، و«تاريخ الوفاة» هنا = المسجَّل حالياً
+        blocks.append(.band(AdminReportText.noFullDeathDate,
+                            subtitle: "السنة فقط، أو مكتوب بالهجري، أو بلا تاريخ — \(AdminReportText.people(partial.count))",
+                            toc: within == nil))
         var columns: [AdminReportTable.Column] = [
             .init(title: "م", centered: true),
             .init(title: "الاسم الكامل", wraps: true, fill: true)
@@ -1086,6 +1517,7 @@ nonisolated enum AdminReportBuilder {
             row.add(note, tone)
             table.rows.append(row.row)
         }
+        table.summary = "المجموع: \(AdminReportText.people(partial.count))"
         if partial.isEmpty {
             blocks.append(.note("كل تواريخ الوفاة مكتملة.", tone: .muted))
         } else {
@@ -1093,20 +1525,22 @@ nonisolated enum AdminReportBuilder {
         }
 
         let count = filter.memorial == .all ? dead.count : partial.count
+        parts.append(filter.memorial == .all ? "كل المتوفين" : AdminReportText.noFullDeathDate)
         let intro = "قائمة المتوفين من أفراد الشجرة لمن تاريخ وفاته مكتمل بالميلادي"
             + (showsNext ? " وموعد ذكراه القادمة (الأقرب أولاً)" : "")
-            + "، ثم قسم «تاريخ الوفاة غير مكتمل» لمن سُجّلت سنة وفاته فقط أو كُتبت بالهجري أو لم تُسجَّل."
-        return AdminReportDoc(kind: .memorial,
-                              scope: filter.memorial == .all ? "كل المتوفين" : AdminReportText.deathIncomplete,
-                              count: count, intro: intro, blocks: blocks,
-                              generatedBy: input.generatedBy, date: input.date)
+            + "، ثم قسم «\(AdminReportText.noFullDeathDate)» لمن سُجّلت سنة وفاته فقط أو كُتبت بالهجري أو لم تُسجَّل."
+        return AdminReportDoc(kind: .memorial, scope: parts.joined(separator: " · "), count: count, intro: intro,
+                              blocks: blocks, generatedBy: input.generatedBy, date: input.date)
     }
 
     // MARK: ٤ دليل الهواتف
 
-    private static func phones(_ tree: AdminReportTree, _ input: AdminReportInput,
-                               _ filter: AdminReportFilter, _ fields: Set<AdminReportField>) -> AdminReportDoc {
-        let living = tree.pool.filter { !$0.deceased }
+    private static func phones(_ tree: AdminReportTree, _ input: AdminReportInput, _ r: AdminReportRequest) -> AdminReportDoc {
+        let filter = r.filter
+        var parts: [String] = []
+        var living = scoped(tree, input, filter, tree.pool.filter { !$0.deceased }, parts: &parts)
+        let ages = ages(living, input)
+        living = lifeAndAge(living, filter, ages: ages, usesLife: false, usesAge: true, parts: &parts)
         let reg = input.registered
         // له رقم = في السجل (أو أخفاه صاحبه — يظهر «مخفي» ولا يُطبع)
         let withPhone = living.filter { $0.phone != nil || $0.phoneHidden }
@@ -1128,53 +1562,29 @@ nonisolated enum AdminReportBuilder {
             blocks.append(.note("الأرقام التي أخفاها أصحابها تظهر «مخفي» ولا تُطبع في هذا الملف.", tone: .muted))
         }
 
-        // «الحالة» هنا = التسجيل في التطبيق (عضو مسجّل · مقيّد في الشجرة · حساب موقوف) — كل القائمة أحياء
-        let showsStatus = fields.contains(.status)
-        var seq = 0
         var count = 0
+        let ctx = CellContext(tree: tree, input: input, ages: ages, fields: r.fields)
         if filter.phones != .noPhone {
             if filter.phones == .registered && reg == nil {
                 blocks.append(.note("تعذّر تحميل حالة التسجيل وقت إنشاء التقرير.", tone: .warning))
             }
-            var columns: [AdminReportTable.Column] = [
-                .init(title: "م", centered: true),
-                .init(title: "الاسم الكامل", wraps: true, fill: true)
-            ]
-            if fields.contains(.branch) { columns.append(.init(title: "الفرع", wraps: true)) }
-            columns.append(.init(title: "رقم الهاتف", ltr: true))
-            if showsStatus { columns.append(.init(title: "الحالة", wraps: true)) }
-            for g in tree.groups(listed, names: input.branchNames) {
-                blocks.append(.heading(g.title, subtitle: g.head.map { "رأس الفرع: \($0.name) — \(AdminReportText.people(g.members.count))" }
-                                       ?? AdminReportText.people(g.members.count), panel: false))
-                var table = AdminReportTable(columns: columns, rows: [])
-                for p in g.members {
-                    seq += 1
-                    var row = AdminReportRowBuilder()
-                    row.add("\(seq)")
-                    row.add(p.name)
-                    if fields.contains(.branch) { row.add(g.title) }
-                    row.add(phoneText(p), p.phoneHidden ? .muted : nil)
-                    if showsStatus { row.add(registrationText(p, reg), p.frozen ? .warning : nil) }
-                    table.rows.append(row.row)
-                }
-                blocks.append(.table(table))
-                count += g.members.count
-            }
+            // «الحالة» هنا = التسجيل في التطبيق — كل القائمة أحياء
+            let fields = r.fields.map { $0 == .status ? AdminReportField.registration : $0 }
+            let phoneCtx = CellContext(tree: tree, input: input, ages: ages, fields: fields)
+            blocks += memberSections(listed, ctx: phoneCtx, plan: r.plan) { "المجموع: \(AdminReportText.people($0.count))" }
+            count += listed.count
         }
         if filter.phones != .registered {
-            blocks.append(.heading(AdminReportText.noPhone, subtitle: "أحياء لا رقم لهم في السجل — \(AdminReportText.people(noPhone.count))",
-                                   panel: false))
+            blocks.append(.band(AdminReportText.noPhone, subtitle: "أحياء لا رقم لهم في السجل — \(AdminReportText.people(noPhone.count))",
+                                toc: false))
             if noPhone.isEmpty {
                 blocks.append(.note("لكل الأحياء رقم هاتف.", tone: .muted))
             } else {
-                // قائمة واحدة بلا عناوين فروع — فالفرع عمودها دائماً (كعناوين الفروع في القائمة الأولى)
-                var columns: [AdminReportTable.Column] = [
-                    .init(title: "م", centered: true),
-                    .init(title: "الاسم الكامل", wraps: true, fill: true),
-                    .init(title: "الفرع", wraps: true)
-                ]
-                if showsStatus { columns.append(.init(title: "الحالة", wraps: true)) }
+                var columns: [AdminReportTable.Column] = [.init(title: "م", centered: true), column(.name), column(.branch)]
+                let showsStatus = r.fields.contains(.status)
+                if showsStatus { columns.append(column(.registration)) }
                 var table = AdminReportTable(columns: columns, rows: [])
+                var seq = 0
                 for g in tree.groups(noPhone, names: input.branchNames) {
                     for p in g.members {
                         seq += 1
@@ -1182,25 +1592,29 @@ nonisolated enum AdminReportBuilder {
                         row.add("\(seq)")
                         row.add(p.name)
                         row.add(g.title)
-                        if showsStatus { row.add(registrationText(p, reg), p.frozen ? .warning : nil) }
+                        if showsStatus {
+                            let (t, tone) = cell(.registration, p, ctx)
+                            row.add(t, tone)
+                        }
                         table.rows.append(row.row)
                     }
                 }
+                table.summary = "المجموع: \(AdminReportText.people(noPhone.count))"
                 blocks.append(.table(table))
             }
             count += noPhone.count
         }
 
-        let scope: String
         switch filter.phones {
-        case .all: scope = "كل الأحياء"
-        case .registered: scope = "الأعضاء المسجّلون"
-        case .noPhone: scope = AdminReportText.noPhone
+        case .all: parts.append("كل الأحياء")
+        case .registered: parts.append("الأعضاء المسجّلون")
+        case .noPhone: parts.append(AdminReportText.noPhone)
         }
-        let intro = "أرقام هواتف الأحياء من أفراد الشجرة مرتّبة بالفروع"
-            + (showsStatus ? "، مع حالة كل فرد (عضو مسجّل في التطبيق أو مقيّد في الشجرة)" : "")
+        let intro = "أرقام هواتف الأحياء من أفراد الشجرة \(r.plan.grouping.pdfLabel)"
             + "، ثم قسم «بلا رقم هاتف». من أخفى رقمه يظهر «مخفي» احتراماً لخصوصيته."
-        return AdminReportDoc(kind: .phones, scope: scope, count: count, intro: intro, blocks: blocks,
-                              generatedBy: input.generatedBy, date: input.date)
+        var doc = AdminReportDoc(kind: .phones, scope: parts.joined(separator: " · "), count: count, intro: intro,
+                                 blocks: blocks, generatedBy: input.generatedBy, date: input.date)
+        doc.grouping = r.plan.grouping.pdfLabel
+        return doc
     }
 }

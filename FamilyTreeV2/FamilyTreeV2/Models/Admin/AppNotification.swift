@@ -114,21 +114,125 @@ extension AppNotification {
         /// (حتى لا تُظهر النسخ القديمة «قبول» سريعاً)
         let workflowRequestId: String?
         let workflowStage: String?
+        /// مرسل الإشعار من السيرفر لكل صف جديد: «الإدارة» أو عضو — قد يغيب في الصفوف القديمة
+        let sender: Sender?
+        /// تغييرات الأعضاء (v2، `member_change` و`my_profile_change`): edit/add/delete
+        let action: String?
+        /// الشجرة: main أو women
+        let tree: String?
+        /// العضو المعني بالتغيير
+        let subject: Person?
+        /// من نفّذ التغيير (للإدارة فقط — لا يصل العضو)
+        let actor: Person?
 
         enum CodingKeys: String, CodingKey {
-            case v, changes, type
+            case v, changes, type, sender, action, tree, subject, actor
             case memberId = "member_id"
             case newsId = "news_id"
             case workflowRequestId = "request_id"
             case workflowStage = "stage"
         }
 
+        /// `details.sender` — type = admin | member، والاسم المختصر (قد يكون null)
+        nonisolated struct Sender: Codable, Sendable, Equatable {
+            let type: String?
+            let name: String?
+            let id: String?
+
+            var isAdmin: Bool { type != "member" }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                type = try? c.decodeIfPresent(String.self, forKey: .type)
+                name = try? c.decodeIfPresent(String.self, forKey: .name)
+                id = try? c.decodeIfPresent(String.self, forKey: .id)
+            }
+        }
+
+        /// عضو مذكور في الحمولة (المعني أو المنفّذ)
+        nonisolated struct Person: Codable, Sendable, Equatable {
+            let id: String?
+            let name: String?
+            let isAdmin: Bool?
+
+            enum CodingKeys: String, CodingKey {
+                case id, name
+                case isAdmin = "is_admin"
+            }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                id = try? c.decodeIfPresent(String.self, forKey: .id)
+                name = try? c.decodeIfPresent(String.self, forKey: .name)
+                isAdmin = try? c.decodeIfPresent(Bool.self, forKey: .isAdmin)
+            }
+        }
+
         nonisolated struct ChangeEntry: Codable, Sendable, Equatable, Identifiable {
             let field: String
             let before: String?
             let after: String?
+            /// اسم الحقل جاهزاً من السيرفر (v2) — بدونه نترجم المفتاح محلياً
+            let label: String?
+            /// text | image
+            let kind: String?
+            let beforeUrl: String?
+            let afterUrl: String?
 
             var id: String { field }
+
+            enum CodingKeys: String, CodingKey {
+                case field, before, after, label, kind
+                case beforeUrl = "before_url"
+                case afterUrl = "after_url"
+            }
+
+            init(field: String, before: String?, after: String?,
+                 label: String? = nil, kind: String? = nil,
+                 beforeUrl: String? = nil, afterUrl: String? = nil) {
+                self.field = field
+                self.before = before
+                self.after = after
+                self.label = label
+                self.kind = kind
+                self.beforeUrl = beforeUrl
+                self.afterUrl = afterUrl
+            }
+
+            /// فكّ متسامح: القيم قد تصل أرقاماً أو منطقية (v2) — تتحوّل نصّاً بدل أن يفشل الصف
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                field = (try? c.decodeIfPresent(String.self, forKey: .field)) ?? ""
+                before = Self.looseString(c, .before)
+                after = Self.looseString(c, .after)
+                label = try? c.decodeIfPresent(String.self, forKey: .label)
+                kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+                beforeUrl = try? c.decodeIfPresent(String.self, forKey: .beforeUrl)
+                afterUrl = try? c.decodeIfPresent(String.self, forKey: .afterUrl)
+            }
+
+            private static func looseString(_ c: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> String? {
+                if let s = try? c.decodeIfPresent(String.self, forKey: key) { return s }
+                if let i = try? c.decodeIfPresent(Int.self, forKey: key) { return String(i) }
+                if let d = try? c.decodeIfPresent(Double.self, forKey: key) { return String(d) }
+                if let b = try? c.decodeIfPresent(Bool.self, forKey: key) {
+                    return b ? L10n.t("نعم", "Yes") : L10n.t("لا", "No")
+                }
+                return nil
+            }
+
+            /// اسم الحقل للعرض: من السيرفر أولاً
+            var displayLabel: String {
+                if let label, !label.isEmpty { return label }
+                return NotificationDetails.localizedFieldName(field)
+            }
+
+            /// تغيير صورة — يُعرض بالصورتين لا بالنص
+            var isImage: Bool { kind == "image" || field == "avatar_url" }
+
+            /// رابط الصورة قبل/بعد (v2 في `*_url`، والقديم في القيمة نفسها)
+            var beforeImageURL: String? { beforeUrl ?? (field == "avatar_url" ? before : nil) }
+            var afterImageURL: String? { afterUrl ?? (field == "avatar_url" ? after : nil) }
         }
 
         init(changes: [ChangeEntry], v: Int = 1) {
@@ -139,6 +243,11 @@ extension AppNotification {
             self.newsId = nil
             self.workflowRequestId = nil
             self.workflowStage = nil
+            self.sender = nil
+            self.action = nil
+            self.tree = nil
+            self.subject = nil
+            self.actor = nil
         }
 
         /// حمولة «ما الذي تغيّر» أو حمولة نوع خاص (إعلان وفاة) — الغائب يأخذ قيمة فارغة
@@ -150,9 +259,15 @@ extension AppNotification {
             workflowRequestId = try? c.decodeIfPresent(String.self, forKey: .workflowRequestId)
             workflowStage = try? c.decodeIfPresent(String.self, forKey: .workflowStage)
             changes = (try? c.decodeIfPresent([ChangeEntry].self, forKey: .changes)) ?? []
+            sender = try? c.decodeIfPresent(Sender.self, forKey: .sender)
+            action = try? c.decodeIfPresent(String.self, forKey: .action)
+            tree = try? c.decodeIfPresent(String.self, forKey: .tree)
+            subject = try? c.decodeIfPresent(Person.self, forKey: .subject)
+            actor = try? c.decodeIfPresent(Person.self, forKey: .actor)
             if let version = try? c.decodeIfPresent(Int.self, forKey: .v) {
                 v = version
-            } else if type != nil {
+            } else if type != nil || sender != nil || !changes.isEmpty {
+                // كل صف جديد يحمل `sender` وحده (بلا v ولا نوع) — حمولة صالحة
                 v = 1
             } else {
                 // لا v ولا نوع — شكل غير متوقّع (يبقى السلوك القديم: details = nil)

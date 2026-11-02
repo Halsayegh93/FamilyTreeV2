@@ -188,6 +188,9 @@ struct DSStateIcon: View {
     @Environment(\.dsSection) private var section
     /// وضع العرض: أيقونة الحالة الكبيرة (صفحات التجميد/الأجهزة…) تصغر إلى `DS.Landscape.stateHero`
     @Environment(\.dsLandscape) private var landscape
+    /// داخل المربّعات: رمز رفيع في مربّع خفيف بدل المجسّم (طلب المالك ٢٠٢٦-١١-٠١ «مربعات التطبيق كلها
+    /// تكون نفس الاشعارات») — الأيقونات الكبيرة (حالة فارغة، بطل الصفحة) تبقى مجسّماً
+    @Environment(\.dsInCenterBox) private var inBox
 
     init(_ icon: String, tint: Color = DS.Color.primary, size: CGFloat = DS.Icon.row, mapsChrome: Bool = true) {
         self.icon = icon
@@ -201,9 +204,19 @@ struct DSStateIcon: View {
         // (الدور «أيقونة الحالة الكبيرة» فقط — بقية المقاسات كما هي، والرسوم التي تكبّرها بنفسها لا تتأثر)
         let hero = self.size == DS.Icon.stateHero || self.size == DS.Icon.stateArt
         let size = landscape && hero ? DS.Landscape.stateHero : self.size
-        FT5STrial.stateIcon(icon: icon, tint: shown, size: size)
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        if inBox && !hero && size <= DS.Icon.state {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(shown.opacity(DS.Opacity.tintFill))
+                .frame(width: size, height: size)
+                .overlay(Image(dsSymbol: icon.dsLightSymbol)
+                    .dsGlyph(size * 0.5, weight: .light)
+                    .foregroundColor(shown))
+                .accessibilityHidden(true)
+        } else {
+            FT5STrial.stateIcon(icon: icon, tint: shown, size: size)
+                .frame(width: size, height: size)
+                .accessibilityHidden(true)
+        }
     }
 }
 

@@ -37,7 +37,8 @@ struct AdminAppAreaPage: View {
 /// نصوص الإصدار والوقت (مشتركة بين الرأس والتذييل)
 enum AppVersionText {
     static var short: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0" }
-    static var full: String { short + " (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))" }
+    /// الإصدار الرسمي فقط بلا رقم البناء (طلب المالك ٢٠٢٦-١٠-٣١)
+    static var full: String { short }
 
     static func relative(_ date: Date) -> String {
         let f = RelativeDateTimeFormatter()

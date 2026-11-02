@@ -692,6 +692,7 @@ class AuthViewModel: ObservableObject {
 
         // تحديث last_active_at — يضمن ظهور العضو "نشط" في لوحة الإدارة
         _ = try? await supabase.rpc("touch_last_active").execute()
+        await ReviewCardStore.shared.loadIds()
     }
     
     /// بحث عن مطابقات الاسم في الشجرة — يُرجع قائمة بمعرفات الأعضاء المتطابقين
@@ -1462,6 +1463,7 @@ class AuthViewModel: ObservableObject {
         // (الأندرويد والآيباد…) عند خروج واحد أو إزالة جهاز واحد من الإدارة.
         _ = try? await supabase.auth.signOut(scope: .local)
         StorageURLResolver.shared.reset()
+        ReviewCardStore.shared.reset()
         // Also invalidate saves queued by any work that finished during signOut.
         CacheManager.shared.clearAll()
         SharedSessionStore.clear()

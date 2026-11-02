@@ -27,8 +27,17 @@ struct HomeInfoButton: View {
 
 /// يجعل خلفية fullScreenCover شفافة (يعمل من iOS 16) — مستخدم في مربّع «تجاوز حد التعديلات»
 struct ClearPresentationBackground: UIViewRepresentable {
+    /// يضبط وضع المربّع لحظة دخوله النافذة: SwiftUI يورّث المربّع الجديد الوضع المفروض القديم
+    /// («داكن» ← «حسب الجهاز» أبقى المربّعات الجديدة داكنة — ٢٠٢٦-١١-٠١)
+    final class AppearanceSyncView: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window != nil { AppAppearance.apply(animated: false) }
+        }
+    }
+
     func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+        let view = AppearanceSyncView()
         DispatchQueue.main.async {
             view.superview?.superview?.backgroundColor = .clear
         }

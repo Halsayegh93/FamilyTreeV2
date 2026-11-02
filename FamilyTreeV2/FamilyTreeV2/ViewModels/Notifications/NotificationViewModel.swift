@@ -172,7 +172,7 @@ class NotificationViewModel: ObservableObject {
 
     /// الحد الأقصى للأجهزة — يُقرأ من إعدادات التطبيق أو القيمة الافتراضية
     private var maxDevicesAllowed: Int {
-        appSettingsVM?.settings.maxDevicesPerUser ?? AuthViewModel.maxDevicesPerAccount
+        appSettingsVM?.deviceLimit(isOwner: authVM?.isOwner ?? false) ?? AuthViewModel.maxDevicesPerAccount
     }
     
     // MARK: - Computed Properties
@@ -208,6 +208,8 @@ class NotificationViewModel: ObservableObject {
     private static func isVisibleToUser(_ n: AppNotification, myId: UUID?, isAdmin: Bool) -> Bool {
         // «المستجدات» — تحديثات التطبيق
         if n.kind == "app_update" { return true }
+        // «تغييرات الأعضاء» مكانها «إشعارات الإدارة» وحدها (جرس «اليوم») — لا تُعدّ في جرس المركز
+        if n.kind == "member_change" { return false }
         guard let myId else { return false }
         // إشعارات الإدارة مكانها صفحتها (جرس «اليوم») — لا تُعدّ هنا (مرآة `NotificationsCenterView`)
         if isAdmin, AdminNotices.category(of: n, me: myId) != nil { return false }
@@ -1003,6 +1005,27 @@ class NotificationViewModel: ObservableObject {
             Log.error("[NOTIF] خطأ قراءة متعدد: \(error.localizedDescription)")
             for i in notifications.indices where ids.contains(notifications[i].id) {
                 notifications[i] = notifications[i].withRead(false)
+            }
+            await updateBadgeCount()
+        }
+    }
+
+    /// تعليم كغير مقروء (وضع التحديد — طلب المالك ٢٠٢٦-١١-٠١): نفس كتابة `is_read` على صفوف العضو (RLS نفسها)
+    func markNotificationsAsUnread(ids: Set<UUID>) async {
+        guard !ids.isEmpty else { return }
+        // حماية «قيد القراءة» لا تعيدها مقروءة عند الجلب التالي
+        pendingReadIds.subtract(ids)
+        for i in notifications.indices where ids.contains(notifications[i].id) {
+            notifications[i] = notifications[i].withRead(false)
+        }
+        await updateBadgeCount()
+
+        do {
+            try await supabase.from("notifications").update(["is_read": AnyEncodable(false)]).in("id", values: ids.map(\.uuidString)).execute()
+        } catch {
+            Log.error("[NOTIF] خطأ تعليم كغير مقروء: \(error.localizedDescription)")
+            for i in notifications.indices where ids.contains(notifications[i].id) {
+                notifications[i] = notifications[i].withRead(true)
             }
             await updateBadgeCount()
         }

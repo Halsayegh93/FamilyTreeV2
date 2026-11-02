@@ -235,11 +235,14 @@ struct HomeNewsPreviewRow: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 // صاحب الخبر فوق نصّه، والنص سطران (طلب المالك ٢٠٢٦-١٠-٢٩)
                 if !news.author_name.isEmpty {
-                    Text(shortAuthorName)
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: DS.Spacing.xsm) {
+                        Text(shortAuthorName)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                        ReviewVerifiedMark(news.author_id)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Text(previewText)
                     .dsFont(.callout)

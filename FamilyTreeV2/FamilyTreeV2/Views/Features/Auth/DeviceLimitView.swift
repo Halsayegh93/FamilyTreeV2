@@ -6,7 +6,7 @@ struct DeviceLimitView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-    private var maxDevices: Int { appSettingsVM.settings.maxDevicesPerUser }
+    private var maxDevices: Int { appSettingsVM.deviceLimit(isOwner: authVM.isOwner) }
 
     @State private var showDevicesSheet = false
 
@@ -85,7 +85,7 @@ struct DeviceOverLimitView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-    private var maxDevices: Int { appSettingsVM.settings.maxDevicesPerUser }
+    private var maxDevices: Int { appSettingsVM.deviceLimit(isOwner: authVM.isOwner) }
     private var excessCount: Int { max(0, notificationVM.linkedDevices.count - maxDevices) }
 
     @State private var showDevicesSheet = false
@@ -165,7 +165,7 @@ struct OverLimitDevicesSheet: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-    private var maxDevices: Int { appSettingsVM.settings.maxDevicesPerUser }
+    private var maxDevices: Int { appSettingsVM.deviceLimit(isOwner: authVM.isOwner) }
     private var excessCount: Int { max(0, notificationVM.linkedDevices.count - maxDevices) }
 
     @State private var deviceToRemove: NotificationViewModel.LinkedDevice?
@@ -330,7 +330,7 @@ struct LinkedDevicesSheet: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-    private var maxDevices: Int { appSettingsVM.settings.maxDevicesPerUser }
+    private var maxDevices: Int { appSettingsVM.deviceLimit(isOwner: authVM.isOwner) }
 
     @State private var deviceToRemove: NotificationViewModel.LinkedDevice?
     @State private var isRemoving = false

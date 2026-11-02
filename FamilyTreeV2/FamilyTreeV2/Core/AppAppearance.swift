@@ -22,7 +22,9 @@ enum AppAppearance {
             // المربّعات المفتوحة فوق النافذة (الإعدادات ← المظهر) لا ترث تغيير النافذة: تبقى على وضعها
             // القديم (الجهاز داكن واختار «فاتح» ⇒ بقيت داكنة — بلاغ المالك ٢٠٢٦-١٠-١٠). فيُضبط كلٌّ منها
             // صراحةً — و«حسب الجهاز» يُضبط على وضع الجهاز الفعلي (ترك الضبط فارغاً أبقاها على القديم)
-            let boxStyle = style == .unspecified ? scene.traitCollection.userInterfaceStyle : style
+            // وضع الجهاز من الشاشة لا من المشهد: المشهد قد يحمل الوضع المفروض القديم لحظة التبديل
+            // («داكن» ← «حسب الجهاز» أبقى المربّعات داكنة والجهاز فاتح — ٢٠٢٦-١١-٠١)
+            let boxStyle = style == .unspecified ? scene.screen.traitCollection.userInterfaceStyle : style
             for window in scene.windows {
                 let presented = presentedChain(of: window)
                 guard window.overrideUserInterfaceStyle != style

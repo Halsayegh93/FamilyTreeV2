@@ -551,50 +551,80 @@ struct ApprovalRequestBox<Details: View>: View {
     }
 
     var body: some View {
-        DSComposer(
-            title: title,
-            subtitle: subtitle,
-            icon: icon,
-            tint: DS.Color.actionNavy,
-            actionTitle: primaryTitle,
-            actionIcon: primaryIcon,
-            showsAction: primary != nil,
-            cancelTitle: L10n.t("إغلاق", "Close"),
-            canSubmit: !busy && !adminRequestVM.isLoading,
-            isBusy: busy,
-            onSubmit: runPrimary,
-            onCancel: onClose
-        ) {
-            DSComposerSection(title: L10n.t("مسار الطلب", "Request path"),
-                              icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
-                              tint: DS.Color.actionNavy,
-                              index: 0) {
-                ApprovalPathSummary(snapshot: flow,
-                                    waitingForMe: adminRequestVM.isApprovalWaitingForMe(flow),
-                                    specialistTitle: specialistTitle,
-                                    holderTitle: holderTitle,
-                                    isOwnRequest: isOwn)
-                assignmentRow
-                if adminRequestVM.isEscalatedToMe(flow) {
-                    DSNoteCard(L10n.t("تصعّد لك لتأخره — تقدر تتصرف بدل المختص.",
-                                      "Escalated to you for being late — you can act for the specialist."),
-                               icon: "arrow.up.forward.circle.fill", tint: DS.Color.warning)
+        // شكل مربّع الإشعار الغني نفسه (طلب المالك ٢٠٢٦-١١-٠١ «تصميم مسار الموافقات نفس الاشعارات»):
+        // رأس كحلي بشرائح المرحلة ومقدّم الطلب ← الشرائح ← «رحلة الطلب» ← الملاحظات ← البيانات ← السجل الداخلي
+        // ← القرار ← أزرار متساوية. المنطق والصلاحيات كما كانت.
+        NotificationRichBox(chips: headerChips, tile: headerTile, title: title, subtitle: headerSubtitle,
+                            onClose: onClose, content: AnyView(boxContent))
+            .task {
+                await adminRequestVM.fetchApprovalSteps(for: snapshot.requestId)
+                // «مسار ٢»: الملاحظات الداخلية والردود الجاهزة (جدول غير موجود = تختفي بهدوء)
+                if !adminRequestVM.hidesApprovalNotes(snapshot) {
+                    await adminRequestVM.fetchApprovalNotes(for: snapshot.requestId)
                 }
+                await adminRequestVM.fetchApprovalTemplates()
+            }
+    }
+
+    // MARK: الرأس
+
+    private var requester: FamilyMember? { memberVM.member(byId: flow.requesterId ?? flow.memberId) }
+
+    private var headerTile: NotifBoxTile {
+        if let m = requester { return .member(name: m.firstName, avatarUrl: m.avatarUrl ?? m.photoURL) }
+        return .glyph(icon)
+    }
+
+    private var headerSubtitle: String {
+        [requester?.shortFullName, subtitle].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// شريحتان على الرأس: المرحلة، ثم أهم حالة (بانتظار قرارك › عاجل › تصعّد › متأخر)
+    private var headerChips: [(String, NotifBoxTone)] {
+        var chips: [(String, NotifBoxTone)] = [(stageShort, .gold)]
+        if adminRequestVM.isApprovalWaitingForMe(flow) && !isOwn {
+            chips.append((L10n.t("بانتظار قرارك", "Waiting for you"), .pending))
+        } else if flow.isUrgent {
+            chips.append((L10n.t("عاجل", "Urgent"), .danger))
+        } else if flow.isEscalated {
+            chips.append((L10n.t("تصعّد", "Escalated"), .danger))
+        } else if flow.isLate {
+            chips.append((L10n.t("متأخر", "Late"), .danger))
+        }
+        return chips
+    }
+
+    private var stageShort: String {
+        switch flow.stage {
+        case .review: return L10n.t("عند المختص", "With the specialist")
+        case .info: return L10n.t("بانتظار العضو", "Waiting for the member")
+        case .approve: return L10n.t("عند المدير", "With the manager")
+        case .execute: return L10n.t("معتمد · للتنفيذ", "Approved · to carry out")
+        }
+    }
+
+    // MARK: المحتوى
+
+    private var boxContent: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md + DS.Spacing.xxs) {
+            pathTags
+            assignmentRow
+            if adminRequestVM.isEscalatedToMe(flow) {
+                NotifContextLine(icon: "arrow.up.forward.circle.fill",
+                                 text: L10n.t("تصعّد لك لتأخره — تقدر تتصرف بدل المختص.",
+                                              "Escalated to you for being late — you can act for the specialist."))
+            }
+            NotifJourneyView(steps: journeySteps)
+            flowNotes
+            if isOwn || !adminRequestVM.isApprovalWaitingForMe(flow) {
+                NotifContextLine(icon: "hourglass",
+                                 text: isOwn
+                                    ? L10n.t("هذا طلبك — يعالجه مسؤول آخر.", "This is your request — another admin handles it.")
+                                    : L10n.t("الطلب الحين عند \(holderTitle).", "The request is now with \(holderTitle)."))
             }
 
             details()
-
-            if let steps = adminRequestVM.approvalSteps[flow.requestId], !steps.isEmpty {
-                DSComposerSection(title: L10n.t("سجل الطلب", "Request log"),
-                                  icon: "list.bullet.rectangle.fill",
-                                  tint: DS.Color.actionNavy,
-                                  trailing: "\(steps.count)",
-                                  index: 3) {
-                    ApprovalStepsLog(steps: steps, actorTitle: actorTitle) { step in
-                        step.subjectId.flatMap { memberVM.member(byId: $0)?.firstName }
-                    }
-                }
-            }
+                .environment(\.dsFlatComposerSections, true)
 
             // ملاحظات الإدارة لا تظهر لمن الطلب له أو عنه (إلا المالك) — السيرفر يخفيها عنه أيضاً
             if !adminRequestVM.hidesApprovalNotes(flow) {
@@ -602,31 +632,114 @@ struct ApprovalRequestBox<Details: View>: View {
             }
 
             if primary == .execute {
-                DSNoteCard(L10n.t("اعتمد المدير الطلب — «تنفيذ» يطبّقه كالموافقة المعتادة ويبلّغ العضو.",
-                                  "The manager approved it — «Carry out» applies it like a normal approval and tells the member."),
-                           title: L10n.t("التنفيذ", "Carry out"), icon: "checkmark.seal.fill", tint: DS.Color.success)
+                NotifContextLine(icon: "checkmark.seal.fill",
+                                 text: L10n.t("اعتمد المدير الطلب — «تنفيذ» يطبّقه كالموافقة المعتادة ويبلّغ العضو.",
+                                              "The manager approved it — «Carry out» applies it like a normal approval and tells the member."))
             }
 
             if showsDecisionSection || askOpen {
-                DSComposerSection(title: askOpen ? L10n.t("سؤال العضو", "Ask the member") : noteTitle,
-                                  icon: askOpen ? "questionmark.bubble.fill" : "text.bubble.fill",
-                                  tint: askOpen ? DS.Color.composerDiwaniya : DS.Color.actionNavy, index: 5) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    NotifBoxLabel(text: askOpen ? L10n.t("سؤال العضو", "Ask the member") : noteTitle)
                     decisionContent
                 }
             }
+
+            NotifButtonRow(items: buttonItems)
 
             if !otherActions.isEmpty {
                 otherActionsRow
             }
         }
-        .task {
-            await adminRequestVM.fetchApprovalSteps(for: snapshot.requestId)
-            // «مسار ٢»: الملاحظات الداخلية والردود الجاهزة (جدول غير موجود = تختفي بهدوء)
-            if !adminRequestVM.hidesApprovalNotes(snapshot) {
-                await adminRequestVM.fetchApprovalNotes(for: snapshot.requestId)
+    }
+
+    /// المختص والمسار السريع ومدة المرحلة — شرائح صغيرة على الأبيض
+    private var pathTags: some View {
+        NotifFlow(spacing: DS.Spacing.xsm) {
+            NotifTagChip(text: L10n.t("المختص: \(specialistTitle)", "Specialist: \(specialistTitle)"), tone: .neutral)
+            if flow.fastTrack {
+                NotifTagChip(text: L10n.t("مسار سريع", "Fast track"), tone: .neutral)
             }
-            await adminRequestVM.fetchApprovalTemplates()
+            if flow.isUrgent && headerChips.count > 1 && headerChips[1].1 != .danger {
+                NotifTagChip(text: L10n.t("عاجل", "Urgent"), tone: .danger)
+            }
+            if let since = flow.stageSince ?? flow.createdAt {
+                NotifTagChip(text: L10n.t("في المرحلة \(DateHelper.relativeTime(from: since))",
+                                          "In this stage \(DateHelper.relativeTime(from: since))"), tone: .pending)
+            }
         }
+    }
+
+    /// «رحلة الطلب» من السجل: كل خطوة بمن قام بها ومتى، والمرحلة الحالية آخرها
+    private var journeySteps: [NotifJourneyStep] {
+        var steps: [NotifJourneyStep] = []
+        let log = adminRequestVM.approvalSteps[flow.requestId] ?? []
+        if log.isEmpty {
+            steps.append(NotifJourneyStep(title: L10n.t("قُدّم الطلب", "Submitted"),
+                                          subtitle: flow.createdAt.map(NotifBoxText.long) ?? "",
+                                          tone: .neutral))
+        }
+        for step in log {
+            let subject = step.subjectId.flatMap { memberVM.member(byId: $0)?.firstName }
+            let when = ApprovalWorkflow.date(step.createdAt).map(NotifBoxText.long) ?? ""
+            let note = step.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            steps.append(NotifJourneyStep(title: actorTitle(step) + " " + step.actionTitle(subject: subject),
+                                          subtitle: note.isEmpty ? when : when + "\n«" + note + "»",
+                                          tone: tone(for: step.action)))
+        }
+        steps.append(NotifJourneyStep(title: L10n.t("الآن: ", "Now: ") + flow.stage.title,
+                                      subtitle: flow.stageSince.map(NotifBoxText.relative) ?? "",
+                                      tone: .gold))
+        return steps
+    }
+
+    private func tone(for action: String) -> NotifBoxTone {
+        switch action {
+        case "rejected", "recommend_reject", "escalated": return .danger
+        case "approve", "executed", "recommend_approve": return .success
+        case "request_info", "reminded": return .pending
+        default: return .neutral
+        }
+    }
+
+    /// التوصية وسؤال العضو وردّه وملاحظة المدير — بطاقات الإشعار نفسها
+    @ViewBuilder private var flowNotes: some View {
+        if let approves = flow.recommendsApproval {
+            NotifReplyCard(text: nonEmpty(flow.recommendationNote) ?? L10n.t("بدون ملاحظة", "No note"),
+                           label: approves ? L10n.t("توصية المختص: الموافقة", "Specialist recommends: approve")
+                                           : L10n.t("توصية المختص: الرفض", "Specialist recommends: reject"),
+                           icon: approves ? "hand.thumbsup.fill" : "hand.thumbsdown.fill")
+        }
+        if flow.stage == .info {
+            if let ask = nonEmpty(flow.infoRequest) {
+                NotifReplyCard(text: ask, label: L10n.t("المختص يطلب من العضو", "The specialist asks the member"),
+                               icon: "questionmark.bubble.fill")
+            }
+            if !flow.infoFields.isEmpty {
+                ApprovalRequestedFields(fields: flow.infoFields,
+                                        title: L10n.t("المطلوب من العضو", "Asked from the member"))
+            }
+        } else if !flow.infoReply.values.isEmpty {
+            ApprovalInfoReplyCard(snapshot: flow)
+        }
+        if let managerNote = nonEmpty(flow.approvalNote) {
+            NotifReplyCard(text: managerNote, label: L10n.t("ملاحظة المدير", "Manager's note"), icon: "text.bubble.fill")
+        }
+    }
+
+    private var buttonItems: [NotifButtonRow.Item] {
+        var items: [NotifButtonRow.Item] = []
+        if primary != nil {
+            let kind: NotifBoxButtonKind = (primary == .approve || primary == .execute) ? .approve : .primary
+            items.append(.init(title: busy ? L10n.t("جارٍ…", "Working…") : primaryTitle, kind: kind,
+                               disabled: busy || adminRequestVM.isLoading, action: runPrimary))
+        }
+        items.append(.init(title: L10n.t("إغلاق", "Close"), kind: .secondary, action: onClose))
+        return items
+    }
+
+    private func nonEmpty(_ s: String?) -> String? {
+        let t = s?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return t.isEmpty ? nil : t
     }
 
     // MARK: القرار
@@ -1031,11 +1144,11 @@ struct ApprovalInternalNotes: View {
 
     var body: some View {
         if adminRequestVM.approvalNotesAvailable == true {
-            DSComposerSection(title: L10n.t("ملاحظات الإدارة (لا يراها العضو)", "Admin notes (hidden from the member)"),
-                              icon: "lock.doc.fill",
-                              tint: DS.Color.actionNavy,
-                              trailing: notes.isEmpty ? nil : "\(notes.count)",
-                              index: 4) {
+            // شكل مربّع الإشعار: عنوان صغير ثم الملاحظات والحقل (٢٠٢٦-١١-٠١)
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                NotifBoxLabel(text: notes.isEmpty
+                              ? L10n.t("ملاحظات الإدارة (لا يراها العضو)", "Admin notes (hidden from the member)")
+                              : L10n.t("ملاحظات الإدارة (لا يراها العضو) · \(notes.count)", "Admin notes (hidden from the member) · \(notes.count)"))
                 if !notes.isEmpty {
                     VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                         ForEach(notes) { row($0) }
@@ -1092,8 +1205,8 @@ struct ApprovalInternalNotes: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.xs)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-            .fill(DS.Color.textTertiary.opacity(DS.Opacity.tintFill)))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .fill(DS.Color.cardBackgroundSoft))
     }
 
     private var canSend: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending }

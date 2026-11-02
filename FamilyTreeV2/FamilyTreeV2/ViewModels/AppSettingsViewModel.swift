@@ -108,6 +108,9 @@ class AppSettingsViewModel: ObservableObject {
         albumsEnabled: true
     )
     @Published var isLoading = false
+    /// حدّ أجهزة المالك وحده (`owner_max_devices`، طلب المالك ٢٠٢٦-١٠-٣١) — خارج `AppSettings` حتى لا يكبر
+    /// النوع في المكدس. الباقون على `maxDevicesPerUser`
+    @Published var ownerMaxDevices = 8
     @Published var errorMessage: String?
     @Published var isSaving = false
 
@@ -125,6 +128,12 @@ class AppSettingsViewModel: ObservableObject {
                 self.settings = fetched
                 LanguageManager.shared.applyOfficialLanguage(fetched.defaultLanguage)
             }
+            struct OwnerLimit: Decodable { let owner_max_devices: Int? }
+            if let row = (try? await supabase.from("app_settings").select("owner_max_devices")
+                            .limit(1).execute().value as [OwnerLimit])?.first,
+               let n = row.owner_max_devices {
+                self.ownerMaxDevices = n
+            }
         } catch {
             // إذا الجدول مو موجود، نستخدم القيم الافتراضية
             if isSchemaError(error) {
@@ -133,6 +142,11 @@ class AppSettingsViewModel: ObservableObject {
                 Log.fetchError("خطأ في جلب إعدادات التطبيق", error)
             }
         }
+    }
+
+    /// حدّ الأجهزة لهذا الحساب: المالك على حدّه الخاص، والباقون على الحد العام
+    func deviceLimit(isOwner: Bool) -> Int {
+        isOwner ? ownerMaxDevices : settings.maxDevicesPerUser
     }
 
     /// تحديث إعداد واحد في السيرفر

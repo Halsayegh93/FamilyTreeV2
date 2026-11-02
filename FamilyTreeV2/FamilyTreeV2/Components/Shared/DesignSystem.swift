@@ -137,6 +137,9 @@ enum DS {
         static let cardBorder       = SwiftUI.Color.adaptive(light: "#DCCFB4", dark: "#343A44") // line
         static let cardBorderStrong = SwiftUI.Color.adaptive(light: "#8A7B60", dark: "#6B7380") // line-strong
         static let sectionFill      = SwiftUI.Color.gray.opacity(0.08)
+        /// حقل الإدخال داخل المربّعات — صندوق رمادي بلا إطار يتميّز عن أرضية المربّع في الفاتح والداكن،
+        /// والإطار بلون القسم عند الكتابة فقط (طلب المالك ٢٠٢٦-١١-٠٢ «صندوق رمادي بدون إطار»)
+        static let fieldFill        = SwiftUI.Color.adaptive(light: "#F0F0F2", dark: "#1F2228")
         static let actionRowFill    = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25")
         static let actionRowOverlay = SwiftUI.Color.adaptive(light: "#F2EBDD", dark: "#23272E")
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
@@ -1393,8 +1396,8 @@ enum DSBox {
     // المربّع نفسه
     /// زوايا المربّع نفسه
     static let radius: CGFloat = DS.Radius.xxl
-    /// الرأس الملوّن لمربّع العمل (٨٦ ← ٨٠، `DSComposerHeader`)
-    static let headerHeight: CGFloat = 80
+    /// رأس مربّع العمل (٨٦ ← ٨٠ ← ٦٤ «هيدر المربع شوي نقلله» ٢٠٢٦-١١-٠١، `DSComposerHeader`)
+    static let headerHeight: CGFloat = 64
     /// شريط القسم الرفيع أعلى البطاقات بلا رأس (مثل ربط حساب التواصل)
     static let accentHeight: CGFloat = 4
     /// الرأس المضغوط لمربّع التنبيه/التأكيد (طلب المالك ٢٠٢٦-١٠-٠٧ «أقرب لمربّعات العمل»): نفس رأس العمل
@@ -1508,6 +1511,9 @@ enum DSBox {
 
     // أزرار الرجوع/الإغلاق/الإجراء (`DSNavButtons`): فوق الرأس الملوّن ٤٤ (المضغوط ٣٦)، وفوق السطح ٣٨
     static let navButtonOnColor: CGFloat = 44
+    /// أيقونة القسم في دائرة رأس التبويب («الإدارة» في «اليوم») ورؤوس صفحات الإدارة — `MainHeaderView.leadingIcon`
+    static let headerSymbol: CGFloat = 52
+    static let headerSymbolGlyph: CGFloat = 20
     static let navButtonCompact: CGFloat = 36
     static let navButtonSurface: CGFloat = 38
     static var navGlyph: CGFloat { DS.Glyph.xl }
@@ -2369,6 +2375,10 @@ extension DS {
         static let statusOk = SwiftUI.Color(hex: "#7FD3A2")
         /// نص فوق الشريحة الذهبية المختارة
         static let onGold = SwiftUI.Color(hex: "#1B1407")
+        /// حلقتا «الرجال» و«النساء» في رأس «العائلة» (فوق الكحلي — ثابتة في الوضعين؛ الإجمالي `DS.Color.accentLight`):
+        /// أزرق الرجال وورديّ النساء الفاتحان (درجتا `male`/`female` الداكنتان) ليظهرا على الكحلي
+        static let censusMale = SwiftUI.Color(hex: "#9DC2E7")
+        static let censusFemale = SwiftUI.Color(hex: "#F4B1CB")
         /// قسم «الدخول والأمان» (صدئي من عائلة الكحلي والذهبي)
         static let securityFill = SwiftUI.Color(hex: "#9A3B2E")
 
@@ -2387,6 +2397,10 @@ extension DS {
         static let headerBottom: CGFloat = 46
         static let headerBottomCompact: CGFloat = 20
         static let headerOverlap: CGFloat = 30
+        /// سطر الرأس المطويّ في «العائلة» (الرجوع · العنوان والعدد · البحث · ＋) — أقل ارتفاع، ويكبر مع الخط
+        static let compactBar: CGFloat = 52
+        /// زرّ البحث في السطر المطويّ: مهلة الرجوع لأعلى قبل وضع المؤشر في الحقل (ثوانٍ)
+        static let compactSearchDelay: Double = 0.4
         /// الأزرار الدائرية الزجاجية في الرأس
         static let glassButton: CGFloat = 36
         static let bellDotSize: CGFloat = 8
@@ -2543,4 +2557,49 @@ extension DS.Hub {
 extension DS.TextRole {
     /// الرقم داخل الحلقة الصغيرة — Footnote (١٣) عريض
     static let ringSmall = DS.TextRole(.footnote, weight: .semibold)
+}
+
+// MARK: - ألوان ورق التقارير (PDF) — «الورق الرسمي» (طلب المالك ٢٠٢٦-١١-٠٢، الاتجاه «أ»)
+//
+// الورقة فاتحة دائماً (تُطبع وتُشارك خارج التطبيق) فلا تتبع الوضع الداكن: قيم هوية العائلة الفاتحة نفسها
+// (كحلي #172536، ذهبي #B89A5A، كريمي #F2EBDD) بألوان UIKit للرسم في `UIGraphicsPDFRenderer`. مكان واحد لها.
+extension DS {
+    nonisolated enum Print {
+        private static func rgb(_ hex: UInt32, _ alpha: CGFloat = 1) -> UIColor {
+            UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
+                    blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
+        }
+        /// كحلي العائلة — العناوين، صفّ رأس الجدول، الشعار
+        static let navy = rgb(0x172536)
+        /// كحلي فاتح — سطر النطاق تحت العنوان
+        static let navySoft = rgb(0x5D6672)
+        /// ذهبي المصمم — الإطار المزدوج، الخطوط، وصلات الشجرة
+        static let gold = rgb(0xB89A5A)
+        /// ذهبي النص على الكريمي/الأبيض (gold-text)
+        static let goldText = rgb(0x725D31)
+        /// كريمي المصمم — الغلاف وشريط كل مجموعة
+        static let cream = rgb(0xF2EBDD)
+        /// كريمي خفيف جداً — الصفوف المتناوبة
+        static let creamSoft = rgb(0xFAF6EE)
+        static let paper = UIColor.white
+        /// الخطوط والإطارات (line)
+        static let line = rgb(0xDCCFB4)
+        /// فاصل الصفوف
+        static let rowLine = rgb(0xEDE6D6)
+        static let ink = rgb(0x172536)
+        static let muted = rgb(0x4A5560)
+        static let faint = rgb(0x6B7280)
+        /// مسار الحلقات والأشرطة
+        static let track = rgb(0xE9E4D8)
+        /// المتوفى في الحلقات والأشرطة
+        static let deceased = rgb(0xB4BCC5)
+        /// عقدة المتوفى في الشجرة المطبوعة
+        static let deceasedFill = rgb(0xECEEF1)
+        static let warning = rgb(0x875C0A)
+        static let success = rgb(0x216C4F)
+        static let slate = rgb(0x56606B)
+        static let female = rgb(0x92526F)
+        /// ختم «سرّي» — عنّابي العائلة
+        static let secret = rgb(0x7B414A)
+    }
 }

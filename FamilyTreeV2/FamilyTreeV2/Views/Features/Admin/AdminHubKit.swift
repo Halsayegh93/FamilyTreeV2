@@ -118,6 +118,10 @@ extension View {
 /// الاختيار ينقل مباشرة (المسار يُستبدل). بلا ناقل أو بلا قسم يبقى العنوان نصّاً.
 struct AdminAreaTitleMenu: View {
     let title: String
+    /// العدد بعد العنوان بالذهبي («العائلة ⌄ · 2719» في الرأس المطويّ) — nil = بلا عدد
+    var count: String? = nil
+    /// سطر الرأس المطويّ: العنوان بخط عنوان الصفحة لا عنوان الرأس الكبير
+    var compact: Bool = false
     @EnvironmentObject private var authVM: AuthViewModel
     @Environment(\.adminArea) private var current
 
@@ -139,26 +143,39 @@ struct AdminAreaTitleMenu: View {
             } label: {
                 label(chevron: true)
             }
-            .accessibilityLabel(L10n.t("\(title)، تبديل القسم", "\(title), switch section"))
+            .accessibilityLabel(L10n.t("\(spokenTitle)، تبديل القسم", "\(spokenTitle), switch section"))
             .accessibilityHint(L10n.t("يعرض أقسام اللوحة", "Shows the dashboard sections"))
         } else {
             label(chevron: false)
         }
     }
 
+    private var spokenTitle: String { count.map { "\(title) \($0)" } ?? title }
+
     private func label(chevron: Bool) -> some View {
         HStack(alignment: .center, spacing: DS.Spacing.xsm) {
             Text(title)
-                .dsFont(.hubTitle)
-                .foregroundColor(DS.Color.textOnPrimary)
-                .lineLimit(2)
+                .dsFont(compact ? .pageTitle : .tabTitle)
+                .foregroundColor(DS.Color.headerTitle)
+                .lineLimit(compact ? 1 : 2)
                 .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
+                .fixedSize(horizontal: false, vertical: !compact)
             if chevron {
                 Image(systemName: "chevron.down")
-                    .dsGlyph(DS.Glyph.lg, weight: .bold)
+                    .dsGlyph(compact ? DS.Glyph.md : DS.Glyph.lg, weight: .bold)
                     .foregroundColor(DS.Color.accentLight)
                     .accessibilityHidden(true)
+            }
+            if let count {
+                // النقطة والعدد نصّان منفصلان — نصّ واحد «· 2719» يقلب النقطة بعد العدد في العربية
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(verbatim: "·")
+                    Text(verbatim: count).monospacedDigit()
+                }
+                .dsFont(.hubRow)
+                .foregroundColor(DS.Color.accentLight)
+                .lineLimit(1)
+                .accessibilityHidden(true)
             }
         }
         .contentShape(Rectangle())
@@ -168,27 +185,11 @@ struct AdminAreaTitleMenu: View {
 
 // MARK: الرأس الكحلي
 
-/// خلفية الرأس: تدرّج الكحلي + الحلقة الذهبية الساكنة في الطرف السفلي الأيمن (كما في النموذج «أ»)
+/// خلفية الرأس: لون رأس «اليوم» نفسه (`DSHeaderBackground(section: .admin)` — طلب المالك ٢٠٢٦-١١-٠٢ «ليش الهيدرات أقسام
+/// الادارة مو نفس لوحة الادارة»؛ كانت تدرّج `DS.Hub.band` بحلقة ذهبية)
 struct AdminBandBackground: View {
     var body: some View {
-        DS.Hub.band
-            // الحلقة فوق التدرّج بلا أن تكبّر الرأس — ما يخرج منها يُقصّ بحدوده
-            .overlay(alignment: .bottomTrailing) {
-                ZStack {
-                    Circle()
-                        .stroke(DS.Hub.ringHalo, lineWidth: DS.Hub.ringHaloWidth)
-                        .frame(width: DS.Hub.ringSide + DS.Hub.ringHaloWidth,
-                               height: DS.Hub.ringSide + DS.Hub.ringHaloWidth)
-                    Circle()
-                        .strokeBorder(DS.Hub.ringStroke, lineWidth: DS.Border.width)
-                        .frame(width: DS.Hub.ringSide, height: DS.Hub.ringSide)
-                }
-                .frame(width: 0, height: 0)
-                .offset(x: DS.Hub.ringOffsetX - DS.Hub.ringSide / 2, y: DS.Hub.ringOffsetY - DS.Hub.ringSide / 2)
-            }
-            .clipped()
-            // موضع فيزيائي ثابت (يمين أسفل) في الاتجاهين — زخرفة لا تتبع اتجاه اللغة
-            .environment(\.layoutDirection, .leftToRight)
+        DSHeaderBackground(section: .admin)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
@@ -210,12 +211,11 @@ struct AdminGlassCircle: View {
     var count: Int = 0
 
     var body: some View {
+        // نفس أزرار رأس «اليوم» العارية (`AdminHeaderIcon`): رمز أبيض بلا دائرة
         Image(dsSymbol: symbol)
-            .dsGlyph(DS.Glyph.lg, weight: .semibold)
-            .foregroundColor(DS.Color.textOnPrimary)
-            .frame(width: DS.Hub.glassButton, height: DS.Hub.glassButton)
-            .background(Circle().fill(DS.Hub.glass))
-            .overlay(Circle().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+            .dsGlyph(DS.Glyph.xxl, weight: .semibold)
+            .foregroundStyle(DS.Color.headerGlyph)
+            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
             .overlay(alignment: .topLeading) {
                 if count > 0 {
                     Text(verbatim: count > 99 ? "99+" : "\(count)")
@@ -238,7 +238,7 @@ struct AdminGlassCircle: View {
                         .offset(x: DS.Spacing.xsm, y: DS.Spacing.xsm)
                 }
             }
-            .dsTapArea(width: DS.Hub.glassButton, height: DS.Hub.glassButton)
+            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
     }
 }
 
@@ -256,26 +256,77 @@ struct AdminGlassButton: View {
     }
 }
 
-/// «‹ اليوم» بالذهبي — الرجوع لصفحة اللوحة الأولى
+/// زرّ الرجوع: سهم عارٍ كأزرار رأس «اليوم» — القارئ الصوتي يقرأ اسم ما فُتحت منه الصفحة
 struct AdminBackLink: View {
     var title: String = L10n.t("اليوم", "Today")
+    /// مُبقى للتوافق — الزرّ دائرة بلا نصّ دائماً
+    var showsTitle: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.xxs) {
-                Image(systemName: "chevron.backward")
-                    .dsGlyph(DS.Glyph.lg, weight: .semibold)
-                Text(title)
-                    .dsFont(.chip)
-                    .lineLimit(1)
+        Button(action: action) { AdminGlassCircle(symbol: DSBackButton.symbol) }
+            .buttonStyle(BounceButtonStyle())
+            .accessibilityLabel(L10n.t("رجوع إلى \(title)", "Back to \(title)"))
+    }
+}
+
+/// سطر رأس صفحات الإدارة بشكل رأس «اليوم» (`MainHeaderView`، طلب المالك ٢٠٢٦-١١-٠٢): سهم الرجوع · أيقونة القسم في
+/// دائرة · العنوان وتحته سطر ذهبي · أزرار عارية في الطرف. ما يخصّ الصفحة (حلقات، أرقام، شرائح) يأتي تحته
+struct AdminHeaderLead<Title: View, Trailing: View>: View {
+    var backTitle: String?
+    var onBack: (() -> Void)?
+    let symbol: String
+    var subtitle: String? = nil
+    @ViewBuilder var title: () -> Title
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            if let onBack, let backTitle {
+                AdminBackLink(title: backTitle, action: onBack)
             }
-            .foregroundColor(DS.Color.accentLight)
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
+            AdminHeaderSymbol(symbol: symbol)
+            VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
+                title()
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .dsFont(.pageSubtitle)
+                        .foregroundColor(DS.Color.headerSubtitle)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: DS.Spacing.xs)
+            HStack(spacing: DS.Spacing.sm) { trailing() }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.t("رجوع إلى \(title)", "Back to \(title)"))
+        .frame(minHeight: DS.Icon.tapTarget)
+    }
+}
+
+/// أيقونة القسم في دائرة زجاجية — نفس أيقونة «الإدارة» في رأس «اليوم»
+struct AdminHeaderSymbol: View {
+    let symbol: String
+
+    var body: some View {
+        Image(dsSymbol: symbol)
+            .font(DS.Font.icon(DSBox.headerSymbolGlyph, weight: .bold))
+            .foregroundColor(AppSection.headerInk(for: .admin))
+            .frame(width: DSBox.headerSymbol, height: DSBox.headerSymbol)
+            .background(Circle().fill(DS.Color.headerChipFill))
+            .overlay(Circle().stroke(DS.Color.headerChipStroke, lineWidth: DS.Border.widthBold))
+            .accessibilityHidden(true)
+    }
+}
+
+/// خطّ النقاط تحت سطر الرأس — نفس زخرفة رأس «اليوم»
+struct AdminHeaderOrnament: View {
+    var body: some View {
+        if let ornament = FT5STrial.tabHeaderOrnament(section: "\(AppSection.admin)", tint: AppSection.admin.fill) {
+            ornament
+                .padding(.horizontal, DS.Spacing.xs)
+                .padding(.top, DS.Spacing.sm)
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -318,45 +369,34 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
     @Environment(\.dsLandscape) private var landscape
     /// اسم الصفحة التي فُتحت منها (إن مرّره من دفعها) — يغلب «اليوم» الافتراضي
     @Environment(\.adminBackTitle) private var outerBack
+    /// قسم الصفحة — أيقونته في دائرة الرأس
+    @Environment(\.adminArea) private var area
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                if let backTitle {
-                    AdminBackLink(title: outerBack ?? backTitle) { dismiss() }
-                }
-                Spacer(minLength: DS.Spacing.sm)
-                HStack(spacing: DS.Spacing.sm) { buttons() }
-            }
-            .frame(minHeight: DS.Hub.glassButton)
-
-            HStack(alignment: .center, spacing: DS.Spacing.sm) {
+            AdminHeaderLead(backTitle: backTitle.map { outerBack ?? $0 },
+                            onBack: backTitle == nil ? nil : { dismiss() },
+                            symbol: area?.icon ?? AppSection.admin.symbol, subtitle: subtitle) {
                 // صفحة القسم: العنوان قائمة الأقسام (خلف `AnyView` — حارس المكدس)
                 if isAreaRoot {
                     AnyView(AdminAreaTitleMenu(title: title))
                 } else {
                     Text(title)
-                        .dsFont(.hubTitle)
-                        .foregroundColor(DS.Color.textOnPrimary)
+                        .dsFont(.tabTitle)
+                        .foregroundColor(DS.Color.headerTitle)
                         .lineLimit(2)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.7)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                 }
-                Spacer(minLength: 0)
-                if let badge {
-                    AdminBandChip(text: badge, icon: "eye.fill")
-                }
+            } trailing: {
+                buttons()
             }
-            .padding(.top, DS.Spacing.xsm)
-
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Hub.onBandMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, DSBox.headerLineGap)
+            if let badge {
+                AdminBandChip(text: badge, icon: "eye.fill")
+                    .padding(.top, DS.Spacing.sm)
             }
+            AdminHeaderOrnament()
 
             accessory()
         }
@@ -781,7 +821,7 @@ private struct AdminStatusBarCover: ViewModifier {
             content
                 .frame(width: geo.size.width, height: geo.size.height)
                 .overlay {
-                    DS.Hub.bandTop
+                    DSHeaderBackground(section: .admin)
                         .frame(height: geo.safeAreaInsets.top)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .ignoresSafeArea()
@@ -815,16 +855,46 @@ extension View {
 
 /// هيكل صفحة القسم: الرأس الكحلي ثم المحتوى المتمرّر على أرضية اللوحة — يُخفي شريط النظام
 struct AdminHubPage<Header: View, Content: View>: View {
+    /// طبقة مثبّتة أعلى الصفحة فوق التمرير (الرأس المطويّ في «العائلة») — nil = بلا شيء
+    var pinned: AnyView? = nil
+    /// كل تغيّر فيه يرجع التمرير لأعلى الصفحة (بحركة، وبلا حركة مع «تقليل الحركة»)
+    var topToken: Int = 0
     @ViewBuilder var header: () -> Header
     @ViewBuilder var content: () -> Content
     @Environment(\.dsLandscape) private var landscape
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// «ظهور موحّد لكل الصفحات» (الدفعة ١٠): كل بطاقة في المحتوى تصعد تباعاً مرة عند الظهور (`dsCardCascade`)
     @State private var appeared = false
 
     var body: some View {
+        ScrollViewReader { proxy in
+            scroll
+                .onChange(of: topToken) { _ in
+                    if reduceMotion {
+                        proxy.scrollTo(AdminHubScroll.top, anchor: .top)
+                    } else {
+                        withAnimation(DS.Anim.smooth) { proxy.scrollTo(AdminHubScroll.top, anchor: .top) }
+                    }
+                }
+        }
+        .adminHideTopEdgeEffect()
+        .overlay(alignment: .top) { pinned }
+        .background(alignment: .top) {
+            // السحب للأسفل فوق الرأس يكشف كحلياً لا رملياً
+            DS.Hub.bandTop.frame(height: DS.Hub.ringSide).ignoresSafeArea(edges: .top)
+        }
+        .background(DS.Hub.background.ignoresSafeArea())
+        .adminStatusBarCover()
+        .toolbar(.hidden, for: .navigationBar)
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .onAppear { appeared = true }
+    }
+
+    private var scroll: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 0) {
                 header()
+                    .id(AdminHubScroll.top)
                 _VariadicView.Tree(AdminCascadeLayout(appeared: appeared)) {
                     content()
                 }
@@ -837,17 +907,15 @@ struct AdminHubPage<Header: View, Content: View>: View {
                 .background(DS.Hub.background)
             }
         }
-        .adminHideTopEdgeEffect()
-        .background(alignment: .top) {
-            // السحب للأسفل فوق الرأس يكشف كحلياً لا رملياً
-            DS.Hub.bandTop.frame(height: DS.Hub.ringSide).ignoresSafeArea(edges: .top)
-        }
-        .background(DS.Hub.background.ignoresSafeArea())
-        .adminStatusBarCover()
-        .toolbar(.hidden, for: .navigationBar)
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .onAppear { appeared = true }
+        // ما يقيس موضعه داخل التمرير (الرأس المطويّ) يقيس بهذه المساحة: ٠ = أعلى المنطقة الظاهرة
+        .coordinateSpace(name: AdminHubScroll.space)
     }
+}
+
+/// مفاتيح تمرير صفحة القسم: أعلى الصفحة، ومساحة الإحداثيات التي يقيس بها الرأس موضعه (بديل iOS 16 لـ`onScrollGeometryChange`)
+enum AdminHubScroll {
+    static let top = "adminHubTop"
+    static let space = "adminHubScroll"
 }
 
 /// عمود بطاقات صفحة القسم: كل ابن يصعد ويظهر تباعاً (`dsCardCascade` بترتيبه — أول ٧ والباقي مع السابع)

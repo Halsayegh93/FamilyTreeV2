@@ -70,27 +70,45 @@ struct LegalContent: Codable, Equatable {
 final class LegalContentStore: ObservableObject {
     static let shared = LegalContentStore()
     private static let cacheKey = "legalContent.v1"
+    /// النسخة الإنجليزية (`legal_content_en`) — تُعرض حين تكون لغة التطبيق الإنجليزية (بلاغ المالك ٢٠٢٦-١١-٠١:
+    /// الخصوصية والشروط بقيت عربية بعد تغيير اللغة)
+    private static let cacheKeyEn = "legalContent.en.v1"
 
-    @Published private(set) var content: LegalContent
+    @Published private(set) var contentAr: LegalContent
+    @Published private(set) var contentEn: LegalContent?
+
+    /// النص بلغة التطبيق الحالية — بلا نسخة إنجليزية بعد (أول تشغيل بلا اتصال) يبقى العربي
+    var content: LegalContent {
+        LanguageManager.shared.selectedLanguage == "en" ? (contentEn ?? contentAr) : contentAr
+    }
 
     private init() {
         if let data = UserDefaults.standard.data(forKey: Self.cacheKey),
            let cached = try? JSONDecoder().decode(LegalContent.self, from: data), !cached.sections.isEmpty {
-            content = cached
+            contentAr = cached
         } else {
-            content = .builtIn
+            contentAr = .builtIn
+        }
+        if let data = UserDefaults.standard.data(forKey: Self.cacheKeyEn),
+           let cached = try? JSONDecoder().decode(LegalContent.self, from: data), !cached.sections.isEmpty {
+            contentEn = cached
         }
     }
 
-    /// جلب النسخة الحية — أي خطأ يُبقي المحفوظ
+    /// جلب النسختين الحيّتين — أي خطأ يُبقي المحفوظ
     func refresh() async {
         struct Envelope: Decodable {
-            struct Values: Decodable { let legal_content: LegalContent? }
+            struct Values: Decodable { let legal_content: LegalContent?; let legal_content_en: LegalContent? }
             let values: Values?
         }
-        guard let env: Envelope = try? await SupabaseConfig.client.rpc("app_config_public").execute().value,
-              let fresh = env.values?.legal_content, !fresh.sections.isEmpty else { return }
-        content = fresh
-        if let data = try? JSONEncoder().encode(fresh) { UserDefaults.standard.set(data, forKey: Self.cacheKey) }
+        guard let env: Envelope = try? await SupabaseConfig.client.rpc("app_config_public").execute().value else { return }
+        if let fresh = env.values?.legal_content, !fresh.sections.isEmpty {
+            contentAr = fresh
+            if let data = try? JSONEncoder().encode(fresh) { UserDefaults.standard.set(data, forKey: Self.cacheKey) }
+        }
+        if let fresh = env.values?.legal_content_en, !fresh.sections.isEmpty {
+            contentEn = fresh
+            if let data = try? JSONEncoder().encode(fresh) { UserDefaults.standard.set(data, forKey: Self.cacheKeyEn) }
+        }
     }
 }

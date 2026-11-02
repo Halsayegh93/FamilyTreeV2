@@ -355,8 +355,8 @@ class MemberViewModel: ObservableObject {
             }
             self.currentMemberWomenFamily = entries
         } catch {
-            // الجدول قد لا يكون موجوداً في بعض البيئات — تجاهل بهدوء
-            self.currentMemberWomenFamily = []
+            // تعثّر الجلب (شبكة، إلغاء أثناء السحب للتحديث) لا يمسح ما يظهر — كان يُفرّغ «عائلتي»
+            // فتختفي الأم والزوجة والبنات (بلاغ المالك ٢٠٢٦-١٠-٣١)
             Log.warning("[Women] تعذّر جلب عائلة شجرة النساء: \(error.localizedDescription)")
         }
     }

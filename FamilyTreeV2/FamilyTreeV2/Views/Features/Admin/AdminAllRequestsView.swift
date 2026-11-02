@@ -3186,7 +3186,10 @@ struct AdminAllRequestsView: View {
 
     /// «من: …» — مقدّم الطلب
     private func requesterLine(_ requester: FamilyMember) -> some View {
-        metaItem("person.fill", L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
+        HStack(spacing: DS.Spacing.xsm) {
+            metaItem("person.fill", L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
+            ReviewVerifiedMark(requester.id)
+        }
     }
 
     /// معاينة نصّ الطلب (سطران) — Plex 12 بلون القيم

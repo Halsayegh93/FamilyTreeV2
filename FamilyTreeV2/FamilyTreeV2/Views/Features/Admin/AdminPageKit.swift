@@ -205,19 +205,17 @@ struct AdminPageBand: View {
     var onBack: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dsLandscape) private var landscape
+    @Environment(\.adminArea) private var area
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // بلا شريط أقسام (طلب المالك ٢٠٢٦-١٠-٢٠): الصفحة الداخلية = الرجوع باسم ما فُتحت منه + عنوانها
-            topRow
-            titleRow
-            if let subtitle = header.subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Hub.onBandMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, DS.Spacing.xxs)
+            // بشكل رأس «اليوم» (طلب المالك ٢٠٢٦-١١-٠٢): سهم الرجوع · أيقونة في دائرة · العنوان وتحته الوصف الذهبي · أزرار عارية
+            leadRow
+            if header.readOnly {
+                AdminBandChip(text: AdminPageHeader.readOnlyText, icon: "eye.fill")
+                    .padding(.top, DS.Spacing.sm)
             }
+            AdminHeaderOrnament()
             if !header.kpis.isEmpty {
                 kpiRow.padding(.top, DS.Spacing.lg)
             }
@@ -237,49 +235,25 @@ struct AdminPageBand: View {
         .dsLightStatusBar()
     }
 
-    private var topRow: AnyView {
-        AnyView(HStack(spacing: DS.Spacing.sm) {
-            if header.showsBack {
-                AdminPageBackButton(title: backTitle) {
-                    if let onBack { onBack() } else { dismiss() }
-                }
-            }
-            Spacer(minLength: DS.Spacing.sm)
+    private var leadRow: AnyView {
+        AnyView(AdminHeaderLead(backTitle: header.showsBack ? backTitle : nil,
+                                onBack: header.showsBack ? { if let onBack { onBack() } else { dismiss() } } : nil,
+                                symbol: header.glyph ?? area?.icon ?? AppSection.admin.symbol,
+                                subtitle: header.subtitle) {
+            Text(header.title)
+                .dsFont(.tabTitle)
+                .foregroundColor(DS.Color.headerTitle)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+        } trailing: {
             ForEach(header.actions) { action in
                 AdminTapWrap(tap: action.tap, feel: .scale,
                              label: AnyView(AdminGlassCircle(symbol: action.symbol, dot: action.dot)),
                              accessibilityLabel: action.label)
             }
-        }
-        .frame(minHeight: DS.Hub.glassButton))
-    }
-
-    private var titleRow: AnyView {
-        AnyView(HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            if let glyph = header.glyph {
-                Image(dsSymbol: glyph)
-                    .dsGlyph(DS.Glyph.lg, weight: .semibold)
-                    .foregroundColor(DS.Color.accentLight)
-                    .frame(width: DS.Hub.iconSquare, height: DS.Hub.iconSquare)
-                    .background(RoundedRectangle(cornerRadius: DS.Hub.iconSquareRadius, style: .continuous)
-                        .fill(DS.Hub.glass))
-                    .overlay(RoundedRectangle(cornerRadius: DS.Hub.iconSquareRadius, style: .continuous)
-                        .strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
-                    .accessibilityHidden(true)
-            }
-            Text(header.title)
-                .dsFont(.hubTitle)
-                .foregroundColor(DS.Color.textOnPrimary)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
-            if header.readOnly {
-                AdminBandChip(text: AdminPageHeader.readOnlyText, icon: "eye.fill")
-            }
-        }
-        .padding(.top, DS.Spacing.sm))
+        })
     }
 
     private var kpiRow: AnyView {

@@ -212,17 +212,16 @@ struct AppGuideBox: View {
 
     // MARK: - قسم «عن التطبيق» (محتوى العلامة الأصلي: الأيقونة والاسم والإصدار ومصمّم التطبيق)
 
+    /// الإصدار الرسمي فقط بلا رقم البناء (طلب المالك ٢٠٢٦-١٠-٣١)
     private var appVersion: String {
-        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
-        return b.map { "\(v) (\($0))" } ?? v
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
     /// بطاقتان بلغة أقسام المربّعات: التطبيق (أيقونته الحقيقية + الاسم + الإصدار) ثم «عمل هذا التطبيق»
     private var aboutContent: some View {
         VStack(spacing: DSBox.sectionSpacing) {
             HStack(spacing: DS.Spacing.md) {
-                // أيقونة التطبيق (الشعار القديم) — طلب المالك ٢٠٢٦-١٠-١٧: يبقى حتى يتبدّل مع الأيقونة الجديدة
+                // أيقونة التطبيق الأساسية (كريمي على كحلي — طلب المالك ٢٠٢٦-١٠-٣١)
                 Image("AppIconImage")
                     .resizable()
                     .scaledToFit()

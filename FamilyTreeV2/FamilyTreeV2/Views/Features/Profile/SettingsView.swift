@@ -25,6 +25,8 @@ struct SettingsView: View {
     @State private var showPrivacy = false
     @State private var showAppearance = false
     @State private var showLanguage = false
+    /// «أيقونة التطبيق» (طلب المالك ٢٠٢٦-١٠-٣١)
+    @State private var showAppIcon = false
     @State private var showAbout = false
     @State private var showTerms = false
     @State private var showPrivacyDoc = false
@@ -97,7 +99,7 @@ struct SettingsView: View {
             if let c = authVM.currentUser { EditProfileView(member: c) }
         }
         .dsCenterBox(isPresented: $showLinkedDevices) {
-            LinkedDevicesSettingsSheet().environmentObject(appSettingsVM)
+            LinkedDevicesSettingsSheet().environmentObject(appSettingsVM).environmentObject(authVM)
         }
         .dsTallBox(isPresented: $showNotifications) {   // قائمة إعدادات طويلة — مربّع طويل (توصية أبل)
             NotificationsAndPrivacyView(focus: .notifications)
@@ -117,6 +119,7 @@ struct SettingsView: View {
         .dsCenterBox(isPresented: $showLanguage, onBackgroundTap: { showLanguage = false }) {
             AppearanceSettingsView(focus: .language).environmentObject(appSettingsVM)
         }
+        .dsCenterBox(isPresented: $showAppIcon, onBackgroundTap: { showAppIcon = false }) { AppIconSettingsView() }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
         // قراءة طويلة — مربّع طويل (توصية أبل)؛ وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
         .dsTallBox(isPresented: $showPrivacyDoc) { PrivacyPolicyView(only: "privacy") }
@@ -288,7 +291,7 @@ struct SettingsView: View {
     private var allTiles: [SettingsTile] {
         let byId = Dictionary(uniqueKeysWithValues: (preferenceTiles + accountTiles + helpTiles).map { ($0.id, $0) })
         // «تعديل الملف» أُزيل ٢٠٢٦-١٠-١٠ — يبقى من قلم بطاقة الهوية أعلى الإعدادات
-        let order = ["notifications", "privacy", "appearance", "language", "devices", "privacyDoc", "terms", "about"]
+        let order = ["notifications", "privacy", "appearance", "language", "appIcon", "devices", "privacyDoc", "terms", "about"]
         return order.compactMap { byId[$0] }
     }
 
@@ -302,7 +305,10 @@ struct SettingsView: View {
          SettingsTile(id: "appearance", icon: "circle.lefthalf.filled", color: DS.Color.accent,
                       title: t("المظهر", "Appearance"), value: appearanceLabel) { showAppearance = true },
          SettingsTile(id: "language", icon: "character.bubble.fill", color: chromeInk,
-                      title: t("اللغة", "Language"), value: languageLabel) { showLanguage = true }]
+                      title: t("اللغة", "Language"), value: languageLabel) { showLanguage = true },
+         SettingsTile(id: "appIcon", icon: "apps.iphone", color: DS.Color.accent,
+                      title: t("أيقونة التطبيق", "App Icon"),
+                      value: AppIconChoice.current.title) { showAppIcon = true }]
     }
 
     /// «الحساب»: الأجهزة المرتبطة («تعديل الملف» من قلم بطاقة الهوية)
@@ -344,14 +350,15 @@ struct SettingsView: View {
         }
     }
 
-    /// مربّع إعداد صغير (طلب المالك ٢٠٢٦-١٠-٠٧ «صغّر المربّعات»): قرص مجسّم بحجم أيقونة الصف، العنوان
-    /// بدور مضغوط، والقيمة الحالية تحته بدور التلميح — حشوة أضيق، نفس كثافة مربّعات أدوات لوحة الإدارة.
+    /// مربّع إعداد صغير (طلب المالك ٢٠٢٦-١٠-٠٧ «صغّر المربّعات»): الأيقونة، العنوان بدور مضغوط، والقيمة
+    /// الحالية تحته بدور التلميح — حشوة أضيق، نفس كثافة مربّعات أدوات لوحة الإدارة.
+    /// الأيقونة مربّع عادي بلون خفيف ورمز رفيع بدل القرص المجسّم (طلب المالك ٢٠٢٦-١١-٠١ «بالاعدادات الملف
+    /// الشخصي يكون المربع عادي» + «نرد بتعديل السابق بشكل بسيط»).
     /// `liveNumber`: قيمة رقمية تصل بعد الظهور (مثل عدد الأجهزة) — تتبدّل بلفّة أرقام
     private func valueTile(icon: String, color: Color, title: String, value: String,
                            liveNumber: Bool = false) -> some View {
         VStack(spacing: DS.Spacing.xs) {
-            DSStateIcon(icon, tint: color, size: DS.Icon.row)
-                .accessibilityHidden(true)   // زخرفة — العنوان والقيمة يكفيان
+            SettingsIconSquare(icon: icon, tint: color.dsChrome(in: section).dsReadableGlyph, side: DS.Icon.row)
             Text(title)
                 .dsFont(.rowTitleCompact)
                 .foregroundColor(DS.Color.textPrimary)
@@ -914,6 +921,13 @@ struct NotificationsAndPrivacyView: View {
     }
 
     private func handleMasterNotificationToggle(_ newValue: Bool) {
+        NotificationMasterSwitch.apply(newValue, notificationVM: notificationVM)
+    }
+}
+
+/// تشغيل الإشعارات وإيقافها — مكان واحد لمربّع «الإشعارات» ولسطر «الإعدادات» السريع
+enum NotificationMasterSwitch {
+    static func apply(_ newValue: Bool, notificationVM: NotificationViewModel) {
         Task {
             if newValue {
                 let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -1101,6 +1115,8 @@ struct AppearanceSettingsView: View {
 /// «تقليل الحركة» (توصية أبل): المشهد ثابت على حالته.
 struct AppearanceSkyScene: View {
     let mode: String
+    /// ارتفاع المشهد — ١١٢ في مربّع «المظهر»، أصغر في سطر الإعدادات السريع
+    var height: CGFloat = 112
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.ftAnimationsPaused) private var animationsPaused
 
@@ -1129,7 +1145,7 @@ struct AppearanceSkyScene: View {
                 draw(&ctx, size: size, night: level(at: now), time: now.timeIntervalSinceReferenceDate)
             }
         }
-        .frame(height: 112)
+        .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .strokeBorder(Color.white.opacity(0.18), lineWidth: 1))
@@ -1306,10 +1322,9 @@ struct AppearanceSkyScene: View {
 
 // MARK: - App Version Helper
 private enum AppVersion {
+    /// الإصدار الرسمي فقط بلا رقم البناء (طلب المالك ٢٠٢٦-١٠-٣١)
     static var string: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "\(version) (\(build))"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 }
 
@@ -1462,6 +1477,8 @@ struct PrivacyPolicyView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.openURL) private var openURL
     @ObservedObject private var store = LegalContentStore.shared
+    /// تغيير اللغة يبدّل النص للنسخة الإنجليزية/العربية فوراً
+    @ObservedObject private var langManager = LanguageManager.shared
     /// يبدأ بالخصوصية (أو بالقواعد إن طُلب)
     var startsWithTerms: Bool = false
     /// وثيقة واحدة فقط (`privacy` أو `terms`) بلا تبويبين — صفحتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
@@ -1576,6 +1593,8 @@ struct PrivacyPolicyView: View {
         .onAppear { tab = only ?? (startsWithTerms ? "terms" : "privacy") }
         .task { await store.refresh() }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // النص الطويل يبدأ من أول السطر في اللغتين (الإنجليزي كان ينزاح لليمين)
+        .environment(\.multilineTextAlignment, .leading)
     }
 
     /// مادة واحدة: رمز بلون القسم + العنوان + ملخّصها في سطر، والضغط يفتح المادة كاملة (طلب المالك ٢٠٢٦-١٠-٢٨
@@ -1639,8 +1658,9 @@ struct LinkedDevicesSettingsSheet: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
-    private var maxDevices: Int { appSettingsVM.settings.maxDevicesPerUser }
+    private var maxDevices: Int { appSettingsVM.deviceLimit(isOwner: authVM.isOwner) }
     private var isArabic: Bool { LanguageManager.shared.selectedLanguage == "ar" }
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
@@ -1768,4 +1788,20 @@ struct LinkedDevicesSettingsSheet: View {
     NavigationStack { SettingsView() }
         .environmentObject(AuthViewModel())
         .environmentObject(NotificationViewModel())
+}
+
+/// مربّع أيقونة عادي للإعدادات: لون خفيف وأيقونة رفيعة (الذهبي لرؤوس المربّعات المنبثقة فقط)
+struct SettingsIconSquare: View {
+    let icon: String
+    let tint: Color
+    var side: CGFloat = DS.Icon.rowLarge
+    var body: some View {
+        RoundedRectangle(cornerRadius: side * 0.28, style: .continuous)
+            .fill(tint.opacity(DS.Opacity.tintFill))
+            .frame(width: side, height: side)
+            .overlay(Image(dsSymbol: icon.dsLightSymbol)
+                .dsGlyph(side * 0.5, weight: .light)
+                .foregroundColor(tint))
+            .accessibilityHidden(true)
+    }
 }

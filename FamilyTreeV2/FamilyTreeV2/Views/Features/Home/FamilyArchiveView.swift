@@ -1353,6 +1353,7 @@ struct ArchiveItemViewer: View {
                     Text(L10n.t("أضافه: \(uploaderName)", "Added by: \(uploaderName)"))
                         .dsFont(.caption)
                         .lineLimit(1)
+                    ReviewVerifiedMark(item.uploadedBy)
                 }
                 .foregroundColor(DS.Color.textTertiary)
             }
