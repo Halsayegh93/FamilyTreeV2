@@ -193,8 +193,8 @@ class DiwaniyasViewModel: ObservableObject {
             // إشعار المدراء فقط لو تحتاج موافقة
             if !autoApprove {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("ديوانية جديدة تحتاج موافقة", "New Diwaniya Needs Approval"),
-                    body: L10n.t(
+                    title: L10n.stored("ديوانية جديدة تحتاج موافقة", "New Diwaniya Needs Approval"),
+                    body: L10n.stored(
                         "«\(trimmedOwner)» قدّم ديوانية: «\(trimmedTitle)»",
                         "«\(trimmedOwner)» submitted a diwaniya: «\(trimmedTitle)»"
                     ),
@@ -264,8 +264,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                 if let ownerId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم اعتماد ديوانيتك", "Your Diwaniya Was Approved"),
-                        body: L10n.t("ديوانيتك أصبحت مرئية للجميع", "Your diwaniya is now visible to everyone"),
+                        title: L10n.stored("تم اعتماد ديوانيتك", "Your Diwaniya Was Approved"),
+                        body: L10n.stored("ديوانيتك أصبحت مرئية للجميع", "Your diwaniya is now visible to everyone"),
                         targetMemberIds: [ownerId],
                         kind: NotificationKind.diwaniyaApproved.rawValue
                     )
@@ -273,8 +273,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                 // إشعار للإدارة في "المستجدات"
                 await self?.notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("تم اعتماد ديوانية", "Diwaniya Approved"),
-                    body: L10n.t(
+                    title: L10n.stored("تم اعتماد ديوانية", "Diwaniya Approved"),
+                    body: L10n.stored(
                         "تم اعتماد ديوانية «\(approvedTitle)» لـ «\(ownerName)»",
                         "Diwaniya «\(approvedTitle)» for «\(ownerName)» was approved"
                     ),
@@ -395,8 +395,8 @@ class DiwaniyasViewModel: ObservableObject {
                 // إشعار للمالك بالرفض
                 if let info = diwaniyaInfo {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("لم يتم اعتماد ديوانيتك", "Your Diwaniya Was Not Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("لم يتم اعتماد ديوانيتك", "Your Diwaniya Was Not Approved"),
+                        body: L10n.stored(
                             "ديوانية «\(info.title)» لم يتم اعتمادها. تواصل مع الإدارة لمعرفة السبب.",
                             "«\(info.title)» was not approved. Contact admin for details."
                         ),
@@ -406,8 +406,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                     // إشعار للإدارة في "المستجدات"
                     await self?.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تم رفض ديوانية", "Diwaniya Rejected"),
-                        body: L10n.t(
+                        title: L10n.stored("تم رفض ديوانية", "Diwaniya Rejected"),
+                        body: L10n.stored(
                             "تم رفض ديوانية «\(info.title)» لـ «\(info.ownerName)»",
                             "Diwaniya «\(info.title)» for «\(info.ownerName)» was rejected"
                         ),

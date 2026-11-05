@@ -12,4 +12,8 @@ nonisolated enum L10n {
     static func t(_ ar: String, _ en: String) -> String {
         isArabic ? ar : en
     }
+
+    /// نصّ يُحفظ في السيرفر ويقرؤه غير المرسل (الإشعارات): لغة واحدة، لا لغة جهاز المرسل.
+    /// كان عضو تطبيقه بالإنجليزية يرسل للإدارة «Child Add Request». الإنجليزي يبقى مرجعاً في مكان النداء.
+    static func stored(_ ar: String, _ en: String) -> String { ar }
 }

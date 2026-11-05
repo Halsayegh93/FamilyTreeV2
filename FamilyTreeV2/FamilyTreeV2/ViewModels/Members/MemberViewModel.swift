@@ -892,8 +892,8 @@ class MemberViewModel: ObservableObject {
 
             let adminName = currentUser?.firstName ?? "مدير"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("إضافة عضو جديد", "New Member Added"),
-                body: L10n.t(
+                title: L10n.stored("إضافة عضو جديد", "New Member Added"),
+                body: L10n.stored(
                     "\(adminName) أضاف «\(fullName)» للشجرة العائلية",
                     "\(adminName) added «\(fullName)» to the family tree"
                 ),
@@ -1100,8 +1100,8 @@ class MemberViewModel: ObservableObject {
                 }
                 if requestSent {
                     await notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("طلب إضافة ابن", "Child Add Request"),
-                        body: L10n.t(
+                        title: L10n.stored("طلب إضافة ابن", "Child Add Request"),
+                        body: L10n.stored(
                             "\(firstNameOnly) لـ: \(father.fullName)",
                             "\(firstNameOnly) to: \(father.fullName)"
                         ),
@@ -1193,8 +1193,8 @@ class MemberViewModel: ObservableObject {
             // إشعار العضو بتغيير صورته (إذا المدير غيّرها وليس العضو نفسه)
             if memberId != currentUser?.id {
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تم تحديث صورتك", "Your Photo Was Updated"),
-                    body: L10n.t(
+                    title: L10n.stored("تم تحديث صورتك", "Your Photo Was Updated"),
+                    body: L10n.stored(
                         "قام المشرف بتحديث صورتك الشخصية",
                         "An admin updated your profile photo"
                     ),
@@ -1216,7 +1216,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEditAvatar.rawValue,
-                    title: L10n.t("تحديث صورة", "Photo Update"),
+                    title: L10n.stored("تحديث صورة", "Photo Update"),
                     body: adminEditBody(verb: L10n.t("تم تحديث الصورة الشخصية", "Profile photo updated"), memberId: memberId),
                     changes: [
                         .init(field: "avatar_url", before: oldAvatarUrl, after: urlString)
@@ -1225,10 +1225,10 @@ class MemberViewModel: ObservableObject {
             } else {
                 // العضو غيّر صورته بنفسه → إشعار للمدراء في تاب "المستجدات"
                 // (نتجاوز guard الـ notifyAdminsOfMemberEdit بالاستدعاء المباشر لأن العضو هنا = العامل)
-                let memberName = _memberById[memberId]?.firstName ?? L10n.t("عضو", "member")
+                let memberName = _memberById[memberId]?.firstName ?? L10n.stored("عضو", "member")
                 await notificationVM?.notifyAdminsWithChangesAndPush(
-                    title: L10n.t("تحديث صورة", "Photo Update"),
-                    body: L10n.t(
+                    title: L10n.stored("تحديث صورة", "Photo Update"),
+                    body: L10n.stored(
                         "حدّث «\(memberName)» صورته الشخصية",
                         "«\(memberName)» updated their profile photo"
                     ),
@@ -1552,7 +1552,7 @@ class MemberViewModel: ObservableObject {
             await notifyAdminsOfMemberEdit(
                 memberId: memberId,
                 kind: NotificationKind.adminEdit.rawValue,
-                title: L10n.t("تعديل بيانات عضو", "Member Edit"),
+                title: L10n.stored("تعديل بيانات عضو", "Member Edit"),
                 body: adminEditBody(verb: L10n.t("تم تعديل البيانات", "Profile data updated"), memberId: memberId),
                 changes: changes
             )
@@ -1786,8 +1786,8 @@ class MemberViewModel: ObservableObject {
             // إشعار العضو بتغيير اسمه (إذا المدير غيّره وليس العضو نفسه)
             if memberId != currentUser?.id {
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تم تحديث اسمك", "Your Name Was Updated"),
-                    body: L10n.t(
+                    title: L10n.stored("تم تحديث اسمك", "Your Name Was Updated"),
+                    body: L10n.stored(
                         "تم تحديث اسمك إلى: \(fullName)",
                         "Your name was updated to: \(fullName)"
                     ),
@@ -1810,7 +1810,7 @@ class MemberViewModel: ObservableObject {
                     await notifyAdminsOfMemberEdit(
                         memberId: memberId,
                         kind: NotificationKind.adminEditName.rawValue,
-                        title: L10n.t("تعديل الاسم", "Name Edit"),
+                        title: L10n.stored("تعديل الاسم", "Name Edit"),
                         body: adminEditBody(verb: L10n.t("تم تعديل الاسم", "Name was updated"), memberId: memberId),
                         changes: [
                             .init(field: "full_name", before: oldFullName, after: fullName)
@@ -1982,7 +1982,7 @@ class MemberViewModel: ObservableObject {
             await fetchSingleMember(id: memberId)
 
             // الاسم الرباعي في الإشعار — أوضح من الاسم الأول، أقصر من الكامل
-            let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
+            let memberName = _memberById[memberId]?.fourPartName ?? L10n.stored("عضو", "member")
             let roleName: String = {
                 switch newRole {
                 case .admin, .owner: return L10n.t("مدير", "Admin")
@@ -2010,8 +2010,8 @@ class MemberViewModel: ObservableObject {
                 do {
                     try await supabase.from("notifications").insert(personalPayload).execute()
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("تغيير الصلاحية", "Role Change"),
-                        body: L10n.t(
+                        title: L10n.stored("تغيير الصلاحية", "Role Change"),
+                        body: L10n.stored(
                             "صلاحيتك الآن: «\(roleName)»",
                             "Your role is now: «\(roleName)»"
                         ),
@@ -2083,7 +2083,7 @@ class MemberViewModel: ObservableObject {
             return false
         }
         let oldStatus = _memberById[memberId]?.status
-        let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
+        let memberName = _memberById[memberId]?.fourPartName ?? L10n.stored("عضو", "member")
         let memberEmail = _memberById[memberId]?.email
 
         do {
@@ -2253,7 +2253,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEditPhone.rawValue,
-                    title: L10n.t("تعديل رقم الهاتف", "Phone Update"),
+                    title: L10n.stored("تعديل رقم الهاتف", "Phone Update"),
                     body: adminEditBody(verb: L10n.t("تم تعديل رقم الهاتف", "Phone number updated"), memberId: memberId),
                     changes: [
                         .init(field: "phone_number", before: oldPhone, after: normalizedPhone)
@@ -2383,7 +2383,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEdit.rawValue,
-                    title: L10n.t("تعديل الجنس", "Gender Update"),
+                    title: L10n.stored("تعديل الجنس", "Gender Update"),
                     body: adminEditBody(verb: L10n.t("تم تعديل الجنس", "Gender updated"), memberId: memberId),
                     changes: [
                         .init(field: "gender", before: oldGender, after: gender)
@@ -2422,7 +2422,7 @@ class MemberViewModel: ObservableObject {
             await notifyAdminsOfMemberEdit(
                 memberId: memberId,
                 kind: NotificationKind.adminEditDates.rawValue,
-                title: L10n.t("تعديل تاريخ الميلاد", "Birth Date Update"),
+                title: L10n.stored("تعديل تاريخ الميلاد", "Birth Date Update"),
                 body: adminEditBody(verb: L10n.t("تم تعديل تاريخ الميلاد", "Birth date updated"), memberId: memberId),
                 changes: [
                     .init(field: "birth_date", before: oldBirth, after: birthDate)
@@ -2478,7 +2478,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEditFather.rawValue,
-                    title: L10n.t("تعديل ولي الأمر", "Father Update"),
+                    title: L10n.stored("تعديل ولي الأمر", "Father Update"),
                     body: adminEditBody(verb: L10n.t("تم تعديل ولي الأمر", "Father reference updated"), memberId: memberId),
                     changes: [
                         .init(field: "father_id", before: oldFatherName, after: newFatherName)

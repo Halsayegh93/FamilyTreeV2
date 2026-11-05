@@ -4,6 +4,7 @@ import Supabase
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @FocusState private var isFieldFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
 #if DEBUG
     /// معاينة شاشة تسجيل البيانات بلا رقم جديد — نسخة التطوير فقط
@@ -487,10 +488,25 @@ struct LoginView: View {
             .onTapGesture { isFieldFocused = true }
                 .onAppear {
                     isFieldFocused = true
+                    // التركيز أثناء انتقال الشاشة قد يضيع فلا تفتح لوحة المفاتيح، وبدونها لا يظهر اقتراح الرمز
+                    Task {
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        if otpText.isEmpty { isFieldFocused = true }
+                    }
                     otpText = ""
                     authVM.otpCode = ""
                     // الرجوع لخانة رمز محفوظ يبدأ من الوقت الباقي له (`restorePendingOTPIfAny`)
                     if otpTimeRemaining == 0 { otpTimeRemaining = 300 }
+                }
+                // الرجوع من تطبيق الرسائل: لوحة المفاتيح جاهزة لاقتراح الرمز
+                .onChange(of: scenePhase) { phase in
+                    if phase == .active, otpText.count < 6 { isFieldFocused = true }
+                }
+                // رمز خاطئ: تفرّغ المربّعات وترجع لوحة المفاتيح (كانت تبقى مغلقة فلا يظهر اقتراح الرمز الجديد)
+                .onChange(of: authVM.otpErrorMessage) { message in
+                    guard message != nil else { return }
+                    if authVM.otpCode.isEmpty { otpText = "" }
+                    isFieldFocused = true
                 }
                 .onChange(of: otpText) { newValue in
                     // يقبل الأرقام العربية والفارسية ويحوّلها إنجليزية — نفس حقل الهاتف
@@ -533,6 +549,7 @@ struct LoginView: View {
                              icon: "message.fill",
                              tint: timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary) {
                     authVM.otpCode = ""; otpText = ""
+                    isFieldFocused = true
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
@@ -550,6 +567,7 @@ struct LoginView: View {
                                  icon: "bubble.left.and.bubble.right.fill",
                                  tint: authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea) {
                         authVM.otpCode = ""; otpText = ""
+                        isFieldFocused = true
                         authVM.otpErrorMessage = nil
                         authVM.otpStatusMessage = ""
                         otpTimeRemaining = 300

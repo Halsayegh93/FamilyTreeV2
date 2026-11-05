@@ -177,9 +177,9 @@ final class FamilyArchiveViewModel: ObservableObject {
                 if !isAdmin {
                     let uploader = authVM?.currentUser?.displayName ?? L10n.t("عضو", "A member")
                     await notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("إضافة جديدة للمكتبة تنتظر الموافقة",
+                        title: L10n.stored("إضافة جديدة للمكتبة تنتظر الموافقة",
                                      "New Library Item Needs Approval"),
-                        body: L10n.t("«\(uploader)» أضاف: «\(trimmedTitle)»",
+                        body: L10n.stored("«\(uploader)» أضاف: «\(trimmedTitle)»",
                                     "«\(uploader)» added: «\(trimmedTitle)»"),
                         kind: NotificationKind.archivePending.rawValue,
                         requestId: newItem.id,
@@ -289,16 +289,16 @@ final class FamilyArchiveViewModel: ObservableObject {
             if item.uploadedBy != approverId {
                 if status == .approved {
                     await notificationVM?.sendNotification(
-                        title: L10n.t("تم اعتماد إضافتك للمكتبة", "Your Library Item Was Approved"),
-                        body: L10n.t("«\(item.title)» صار ظاهراً في مكتبة العائلة.",
+                        title: L10n.stored("تم اعتماد إضافتك للمكتبة", "Your Library Item Was Approved"),
+                        body: L10n.stored("«\(item.title)» صار ظاهراً في مكتبة العائلة.",
                                     "«\(item.title)» is now visible in the family library."),
                         targetMemberIds: [item.uploadedBy],
                         kind: NotificationKind.archiveApproved.rawValue
                     )
                 } else if status == .rejected {
                     await notificationVM?.sendNotification(
-                        title: L10n.t("لم يتم اعتماد إضافتك للمكتبة", "Your Library Item Was Not Approved"),
-                        body: L10n.t("«\(item.title)» لم يتم اعتماده. تواصل مع الإدارة لمعرفة السبب.",
+                        title: L10n.stored("لم يتم اعتماد إضافتك للمكتبة", "Your Library Item Was Not Approved"),
+                        body: L10n.stored("«\(item.title)» لم يتم اعتماده. تواصل مع الإدارة لمعرفة السبب.",
                                     "«\(item.title)» was not approved. Contact admin for details."),
                         targetMemberIds: [item.uploadedBy],
                         kind: NotificationKind.archiveRejected.rawValue

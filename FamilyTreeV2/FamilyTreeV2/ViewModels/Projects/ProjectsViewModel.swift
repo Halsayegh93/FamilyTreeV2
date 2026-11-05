@@ -104,8 +104,8 @@ class ProjectsViewModel: ObservableObject {
             // إشعار للأدمن بطلب جديد
             let submitter = submitterName ?? ownerName
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
-                body: L10n.t(
+                title: L10n.stored("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
+                body: L10n.stored(
                     "«\(submitter)» قدّم مشروع: «\(title)»" + (ownerName.isEmpty ? " — ليس صاحبه" : ""),
                     "«\(submitter)» submitted a project: «\(title)»" + (ownerName.isEmpty ? " — not the owner" : "")
                 ),
@@ -193,8 +193,8 @@ class ProjectsViewModel: ObservableObject {
                 // إشعار للمالك
                 if let info = projectInfo {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم اعتماد مشروعك", "Your Project Was Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("تم اعتماد مشروعك", "Your Project Was Approved"),
+                        body: L10n.stored(
                             "مشروع «\(info.title)» أصبح مرئياً للجميع",
                             "Project «\(info.title)» is now visible to everyone"
                         ),
@@ -204,8 +204,8 @@ class ProjectsViewModel: ObservableObject {
 
                     // إشعار للإدارة في "المستجدات"
                     await self?.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تم اعتماد مشروع", "Project Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("تم اعتماد مشروع", "Project Approved"),
+                        body: L10n.stored(
                             "تم اعتماد مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
                             "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was approved"
                         ),
@@ -241,8 +241,8 @@ class ProjectsViewModel: ObservableObject {
                 // إشعار للمالك
                 if let info = projectInfo {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("لم يتم اعتماد مشروعك", "Your Project Was Not Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("لم يتم اعتماد مشروعك", "Your Project Was Not Approved"),
+                        body: L10n.stored(
                             "مشروع «\(info.title)» لم يتم اعتماده. تواصل مع الإدارة لمعرفة السبب.",
                             "Project «\(info.title)» was not approved. Contact admin for details."
                         ),
@@ -252,8 +252,8 @@ class ProjectsViewModel: ObservableObject {
 
                     // إشعار للإدارة في "المستجدات"
                     await self?.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تم رفض مشروع", "Project Rejected"),
-                        body: L10n.t(
+                        title: L10n.stored("تم رفض مشروع", "Project Rejected"),
+                        body: L10n.stored(
                             "تم رفض مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
                             "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was rejected"
                         ),

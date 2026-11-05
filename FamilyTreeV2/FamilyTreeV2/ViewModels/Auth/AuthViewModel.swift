@@ -977,6 +977,8 @@ class AuthViewModel: ObservableObject {
         )
     }
     
+    private var otpVerifyInFlight = false
+
     func verifyOTP() async {
         let cleanCode = otpCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard cleanCode.count == 6 else {
@@ -992,8 +994,23 @@ class AuthViewModel: ObservableObject {
             return
         }
 
+        // التعبئة التلقائية وزرّ التأكيد قد يطلبان معاً: الطلب الثاني بالرمز نفسه يرجع «منتهي» بعد نجاح الأول
+        guard !otpVerifyInFlight else { return }
+        otpVerifyInFlight = true
+        defer { otpVerifyInFlight = false }
+
         self.isLoading = true
         self.otpErrorMessage = nil
+        // الشبكة البطيئة: سطر يقول إن الطلب شغّال بدل زرّ يدور بلا تفسير
+        let slowNotice = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.otpStatusMessage = L10n.t("الاتصال بطيء، لحظات…", "Slow connection, one moment…")
+        }
+        defer {
+            slowNotice.cancel()
+            if otpStatusMessage == L10n.t("الاتصال بطيء، لحظات…", "Slow connection, one moment…") { otpStatusMessage = "" }
+        }
 
         do {
             // التحقق من الرمز عن طريق سوبابيس
@@ -1015,7 +1032,13 @@ class AuthViewModel: ObservableObject {
             
         } catch {
             Log.error("فشل التحقق: \(error.localizedDescription)")
-            self.otpErrorMessage = L10n.t("الرمز غير صحيح أو منتهي. أعد طلب رمز جديد.", "Invalid or expired code. Please request a new one.")
+            if (error as NSError).domain == NSURLErrorDomain || !NetworkMonitor.shared.isConnected {
+                // الرمز ما زال صالحاً: نبقيه ليعيد المحاولة، ولا نقول له إنه غلط
+                self.otpErrorMessage = L10n.t("تعذّر الاتصال. تأكد من الإنترنت واضغط تأكيد الدخول.", "Couldn't connect. Check your internet and tap Verify.")
+            } else {
+                self.otpCode = ""   // تفرّغ المربّعات ليستقبل الحقل الرمز الجديد (`LoginView`)
+                self.otpErrorMessage = L10n.t("الرمز غير صحيح أو منتهي. أعد طلب رمز جديد.", "Invalid or expired code. Please request a new one.")
+            }
         }
         
         self.isLoading = false

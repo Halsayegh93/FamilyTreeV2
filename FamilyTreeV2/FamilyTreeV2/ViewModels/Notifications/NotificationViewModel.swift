@@ -1180,8 +1180,8 @@ class NotificationViewModel: ObservableObject {
 
             let reasonSuffix = trimmedReason.isEmpty ? "" : " — \(trimmedReason)"
             await notifyAdminsWithPush(
-                title: L10n.t("بلاغ على محتوى", "Content Report"),
-                body: L10n.t(
+                title: L10n.stored("بلاغ على محتوى", "Content Report"),
+                body: L10n.stored(
                     "\(reporterName) أبلغ عن \(contentKind): \(contentLabel)\(reasonSuffix)",
                     "\(reporterName) reported a \(contentKind): \(contentLabel)\(reasonSuffix)"
                 ),
@@ -1524,8 +1524,8 @@ class NotificationViewModel: ObservableObject {
                 ]
                 _ = try? await supabase.from("notifications").insert(approvedPayload).execute()
                 await sendPushToMembers(
-                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: L10n.t("مرحباً في عائلة المحمدعلي", "Welcome to the Al-Mohammad Ali family"),
+                    title: L10n.stored("تم قبول طلبك", "Your Request Was Approved"),
+                    body: L10n.stored("مرحباً في عائلة المحمدعلي", "Welcome to the Al-Mohammad Ali family"),
                     kind: "join_approved",
                     targetMemberIds: [requestId]
                 )

@@ -478,8 +478,8 @@ class AdminRequestViewModel: ObservableObject {
                 ? "\(requesterFirstName) submitted a \(actionLabelEn) request"
                 : "\(requesterFirstName) submitted a \(actionLabelEn) request for «\(memberName)»"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
-                body: L10n.t(bodyAr, bodyEn),
+                title: L10n.stored("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
+                body: L10n.stored(bodyAr, bodyEn),
                 kind: NotificationKind.treeEdit.rawValue,
                 requestId: requestId,
                 requestType: RequestType.treeEdit.rawValue
@@ -887,8 +887,8 @@ class AdminRequestViewModel: ObservableObject {
             let deceasedMemberName = memberById(memberId)?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تأكيد وفاة", "Deceased Status Request"),
-                body: L10n.t(
+                title: L10n.stored("طلب تأكيد وفاة", "Deceased Status Request"),
+                body: L10n.stored(
                     "\(requesterDeceasedName) يطلب تأكيد وفاة \(deceasedMemberName)",
                     "\(requesterDeceasedName) requests deceased confirmation for \(deceasedMemberName)"
                 ),
@@ -1077,12 +1077,12 @@ class AdminRequestViewModel: ObservableObject {
 
             // إشعار للمدراء بإضافة الابن
             let parentFullName = parent?.fullName ?? ""
-            let notifBody = L10n.t(
+            let notifBody = L10n.stored(
                 "تم إضافة الابن: «\(firstName)» لـ: «\(parentFullName)»",
                 "Son added: «\(firstName)» to: «\(parentFullName)»"
             )
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تعديل الشجرة", "Tree Update"),
+                title: L10n.stored("تعديل الشجرة", "Tree Update"),
                 body: notifBody,
                 kind: NotificationKind.treeEdit.rawValue
             )
@@ -1299,8 +1299,8 @@ class AdminRequestViewModel: ObservableObject {
 
             let phoneRequesterName = currentUser?.firstName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تغيير رقم الهاتف", "Phone Change Request"),
-                body: L10n.t(
+                title: L10n.stored("طلب تغيير رقم الهاتف", "Phone Change Request"),
+                body: L10n.stored(
                     "\(phoneRequesterName) يطلب تغيير رقم هاتفه",
                     "\(phoneRequesterName) requests a phone number change"
                 ),
@@ -1338,8 +1338,8 @@ class AdminRequestViewModel: ObservableObject {
 
             let requesterFullName = currentUser?.displayFullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تغيير العائلة", "Family Change Request"),
-                body: L10n.t("طلب تغيير عائلة: \(requesterFullName) إلى \(newFamily)",
+                title: L10n.stored("طلب تغيير العائلة", "Family Change Request"),
+                body: L10n.stored("طلب تغيير عائلة: \(requesterFullName) إلى \(newFamily)",
                              "Family change request: \(requesterFullName) to \(newFamily)"),
                 kind: RequestType.familyChange.rawValue,
                 requestId: requestId,
@@ -1377,8 +1377,8 @@ class AdminRequestViewModel: ObservableObject {
 
             let requesterFullName = currentUser?.fullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تغيير الاسم", "Name Change Request"),
-                body: L10n.t(
+                title: L10n.stored("طلب تغيير الاسم", "Name Change Request"),
+                body: L10n.stored(
                     "طلب تغيير اسم: \(requesterFullName) إلى \(newName)",
                     "Name change request: \(requesterFullName) to \(newName)"
                 ),
@@ -1625,8 +1625,8 @@ class AdminRequestViewModel: ObservableObject {
             let memberName = getSafeMemberName(for: memberId)
 
             // إشعار المستخدم بالتفعيل
-            let userTitle = L10n.t("مرحباً بك في العائلة", "Welcome to the Family")
-            let userBody = L10n.t("تم تفعيل حسابك بنجاح — يمكنك الآن استخدام التطبيق", "Your account is now active — you can start using the app")
+            let userTitle = L10n.stored("مرحباً بك في العائلة", "Welcome to the Family")
+            let userBody = L10n.stored("تم تفعيل حسابك بنجاح — يمكنك الآن استخدام التطبيق", "Your account is now active — you can start using the app")
             if let creator = currentUser?.id {
                 let payload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
@@ -1646,8 +1646,8 @@ class AdminRequestViewModel: ObservableObject {
 
             // إشعار المدراء
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تفعيل حساب", "Account Activated"),
-                body: L10n.t(
+                title: L10n.stored("تفعيل حساب", "Account Activated"),
+                body: L10n.stored(
                     "تم تفعيل حساب \(memberName)",
                     "\(memberName)'s account was activated"
                 ),
@@ -1926,18 +1926,18 @@ class AdminRequestViewModel: ObservableObject {
 
         let body: String
         if let fatherName, !fatherName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body = L10n.t(
+            body = L10n.stored(
                 "تم اعتماد انضمامك وربطك بالشجرة مع: \(fatherName)",
                 "Your membership was approved and linked to: \(fatherName)"
             )
         } else {
-            body = L10n.t(
+            body = L10n.stored(
                 "تم اعتماد انضمامك للعائلة بنجاح",
                 "Your family membership was approved successfully"
             )
         }
 
-        let title = L10n.t("مرحباً بك في العائلة", "Welcome to the Family")
+        let title = L10n.stored("مرحباً بك في العائلة", "Welcome to the Family")
 
         let payload: [String: AnyEncodable] = [
             "target_member_id": AnyEncodable(memberId.uuidString),
@@ -1954,8 +1954,8 @@ class AdminRequestViewModel: ObservableObject {
             // Notify admins and supervisors about the new member (خارجي + داخلي)
             let memberName = getSafeMemberName(for: memberId)
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("انضمام عضو جديد", "New Member Joined"),
-                body: L10n.t(
+                title: L10n.stored("انضمام عضو جديد", "New Member Joined"),
+                body: L10n.stored(
                     "\(memberName) انضم لشجرة العائلة",
                     "\(memberName) joined the family tree"
                 ),
@@ -2115,8 +2115,8 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
 
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("حذف عضو", "Member Removed"),
-                body: L10n.t(
+                title: L10n.stored("حذف عضو", "Member Removed"),
+                body: L10n.stored(
                     "تم حذف عضو من شجرة العائلة\n\(deletedName)",
                     "Removed from the family tree\n\(deletedName)"
                 ),
@@ -2300,8 +2300,8 @@ class AdminRequestViewModel: ObservableObject {
 
             // 3. إشعار المدراء
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("اقتراح صورة جديدة", "New Photo Suggestion"),
-                body: L10n.t(
+                title: L10n.stored("اقتراح صورة جديدة", "New Photo Suggestion"),
+                body: L10n.stored(
                     "اقتراح صورة جديدة لـ: \(memberName) تحتاج موافقتكم",
                     "New photo suggestion for: \(memberName) — needs approval"
                 ),
