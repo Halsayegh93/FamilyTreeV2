@@ -2,6 +2,46 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+/// فحص محلي قبل الحفظ — تنبيه يقدر العضو يتجاوزه. التطابق التام يرفضه السيرفر (`child_duplicate`) فلا يُكرَّر هنا
+enum AddChildChecks {
+    /// أقل فرق سنوات بين ميلاد الأب وابنه قبل التنبيه — من السيرفر متى أُضيف مفتاحه (قاعدة الإعدادات من السيرفر)
+    static let minFatherGapKey = "child_father_min_gap_years"
+    static var minFatherGapYears: Int { AppConfigValues.shared.int(minFatherGapKey, default: 12) }
+
+    /// نفس `child_name_key` على السيرفر: بلا مسافات وتشكيل وتطويل، والهمزات والتاء المربوطة والألف المقصورة موحّدة
+    static func serverNameKey(_ name: String) -> String {
+        let folded: [Character: Character] = ["أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ة": "ه", "ى": "ي"]
+        let kept = name.lowercased().unicodeScalars.filter { scalar in
+            !CharacterSet.whitespacesAndNewlines.contains(scalar)
+                && !(0x064B...0x0652).contains(scalar.value)
+                && scalar.value != 0x0640
+        }
+        return String(String(kept).map { folded[$0] ?? $0 })
+    }
+
+    /// ابن مسجّل اسمه قريب من المكتوب (لا مطابق تماماً) — الأول فقط
+    static func nearSon(name: String, among sons: [FamilyMember]) -> FamilyMember? {
+        let typed = NameMatcher.tokens(name).joined(separator: " ")
+        let typedKey = serverNameKey(name)
+        guard !typed.isEmpty else { return nil }
+        return sons.first { son in
+            guard serverNameKey(son.firstName) != typedKey else { return false }
+            let other = NameMatcher.tokens(son.firstName).joined(separator: " ")
+            return other == typed || NameMatcher.isTypo(typed, other)
+        }
+    }
+
+    /// ميلاد الابن قبل مرور الحدّ على ميلاد الأب (أو قبل ميلاده) — سنة الأب الهجرية المكتوبة كميلادية لا تُقارن
+    static func isTooCloseToFather(childBirth: Date, fatherBirth raw: String?) -> Bool {
+        guard let father = NameMatcher.linkBirth(raw) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        guard calendar.component(.year, from: father) >= DeceasedMemorial.minGregorianYear,
+              let earliest = calendar.date(byAdding: .year, value: minFatherGapYears, to: father) else { return false }
+        return childBirth < earliest
+    }
+}
+
 struct AddChildSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -27,6 +67,9 @@ struct AddChildSheet: View {
     @State private var approvalRequestWarning: String? = nil
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+    /// تنبيهات الفحص المحلي — الحفظ بعد «متابعة»
+    @State private var localWarnings: [String] = []
+    @State private var showLocalWarnings = false
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
@@ -58,6 +101,12 @@ struct AddChildSheet: View {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(errorMessage)
+        }
+        .dsAlert(L10n.t("تأكد قبل الحفظ", "Check before saving"), isPresented: $showLocalWarnings, icon: "exclamationmark.triangle.fill") {
+            Button(L10n.t("متابعة", "Continue")) { performSave() }
+            Button(L10n.t("تعديل", "Edit"), role: .cancel) {}
+        } message: {
+            Text(localWarnings.joined(separator: "\n\n"))
         }
         .onAppear {
             if !lastAuthDialingCode.isEmpty {
@@ -183,7 +232,35 @@ struct AddChildSheet: View {
     /// بعد الضغط، فكانت النقرات السريعة تنشئ أكثر من سجل.
     @State private var isSubmitting = false
 
+    /// الفحص المحلي: اسم قريب من ابن مسجّل، أو ميلاد قريب جداً من ميلاد الأب — والعضو يقدر يكمل
+    private var currentWarnings: [String] {
+        var list: [String] = []
+        let name = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if selectedGender != "female" {
+            let sons = memberVM.allMembers.filter { $0.fatherId == member.id && !$0.isFemale }
+            if let son = AddChildChecks.nearSon(name: name, among: sons) {
+                list.append(L10n.t("«\(name)» قريب من اسم ابنك «\(son.firstName)». هل هو شخص ثاني؟",
+                                   "«\(name)» is close to your son's name «\(son.firstName)». Is this a different person?"))
+            }
+        }
+        if birthDateProvided, AddChildChecks.isTooCloseToFather(childBirth: birthDate, fatherBirth: member.birthDate) {
+            list.append(L10n.t("ميلاد الابن قريب جداً من ميلاد الأب.", "The birth date is very close to the father's."))
+        }
+        return list
+    }
+
     private func saveChild() {
+        guard !isSubmitting else { return }
+        let warnings = currentWarnings
+        if warnings.isEmpty {
+            performSave()
+        } else {
+            localWarnings = warnings
+            showLocalWarnings = true
+        }
+    }
+
+    private func performSave() {
         guard !isSubmitting else { return }
         isSubmitting = true
         Task {
@@ -214,6 +291,7 @@ struct AddChildSheet: View {
                 }
             } else {
                 // ذكر → الشجرة العامة (profiles) مع هاتف/صورة، وينعكس تلقائياً لشجرة النساء
+                memberVM.errorMessage = nil   // لا تظهر رسالة قديمة إن رجع بلا محاولة (بلا اتصال)
                 let childId = await memberVM.addChild(
                     firstNameOnly: name,
                     phoneNumber: KuwaitPhone.normalizedForStorage(
@@ -227,7 +305,8 @@ struct AddChildSheet: View {
                     gender: "male"
                 )
                 guard let childId else {
-                    errorMessage = L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
+                    errorMessage = memberVM.errorMessage
+                        ?? L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
                     showErrorAlert = true
                     return
                 }

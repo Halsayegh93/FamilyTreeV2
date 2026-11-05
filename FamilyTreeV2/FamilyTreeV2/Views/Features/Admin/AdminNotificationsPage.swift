@@ -158,7 +158,7 @@ struct AdminNoticeItem: Identifiable, Equatable {
     let icon: String
     let tint: Color
     let title: String
-    let subtitle: String
+    var subtitle: String
     var isUnread = false
     var notificationId: UUID? = nil
     var needsAction = false
@@ -166,6 +166,8 @@ struct AdminNoticeItem: Identifiable, Equatable {
     var target: AdminNoticeTarget = .none
     /// الصفّ الجديد (المرسل + «قبل ← بعد») — «تغييرات الأعضاء»
     var rich: AdminNoticeRich? = nil
+    /// «تمت إضافة ابن»: أزرار «الملف/راجع» · «تنبيه» · «حذف» — `AdminSelfChildNotice.swift`
+    var selfChild: AdminNoticeSelfChild? = nil
 }
 
 /// محتوى الصفّ الجديد لـ«تغييرات الأعضاء»: المرسل («الإدارة · بواسطة: فلان» أو العضو) والتغييرات
@@ -343,6 +345,7 @@ struct AdminNotificationsPage: View {
     @State private var detail: AppNotification?
     @State private var hasLoaded = false
     @State private var appeared = false
+    @State private var selfChildFlow = AdminSelfChildFlow()
 
     static var title: String { L10n.t("إشعارات الإدارة", "Admin notifications") }
 
@@ -366,6 +369,7 @@ struct AdminNotificationsPage: View {
                 withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
             }
             .refreshable { await notificationVM.fetchNotifications(force: true) }
+            .modifier(AdminSelfChildFlowModifier(flow: $selfChildFlow, missingChildren: missingSelfChildren))
     }
 
     // MARK: البيانات
@@ -396,14 +400,67 @@ struct AdminNotificationsPage: View {
             guard let category = AdminNotices.category(of: n, me: me) else { continue }
             var item = Self.item(n, category: category, open: open, canTopUp: canTopUp, canSms: canSms)
             if category == .changes {
+                let isSelfChild = n.details?.selfChild == true
+                // إضافة الابن: نصّ الإشعار (مَن أضاف مَن) بدل «قبل ← بعد»
                 item.rich = AdminNoticeRich(sender: sender(n, style: AdminNoticeRoutes.style(n, category)),
-                                            changes: n.details?.changes ?? [])
+                                            changes: isSelfChild ? [] : (n.details?.changes ?? []))
+                if isSelfChild { applySelfChild(n, to: &item) }
             }
             list.append(item)
         }
         return list.sorted { a, b in
             if a.pinned != b.pinned { return a.pinned }
             return a.date > b.date
+        }
+    }
+
+    /// أدوات صفّ «تمت إضافة ابن». بعد حذف الابن يفرّغ السيرفر `subject_member_id` فيبقى الصفّ سجلّاً بلا أزرار.
+    /// «راجعه» يحتاج إجراء ما دام غير مقروء (مثل «محاولات دخول مريبة»): السيرفر لا يحفظ حالة مراجعة
+    private func applySelfChild(_ n: AppNotification, to item: inout AdminNoticeItem) {
+        guard let childId = n.subjectMemberId else { return }
+        let child = memberVM.member(byId: childId)
+        let father = n.createdBy.flatMap { memberVM.member(byId: $0) }
+        let review = n.details?.review == true
+        let childFullName = child?.shortFullName ?? n.details?.subject?.name ?? ""
+        item.selfChild = AdminNoticeSelfChild(
+            childId: childId,
+            fatherId: n.createdBy,
+            notificationId: n.id,
+            childFirstName: child?.firstName ?? childFullName.split(separator: " ").first.map(String.init) ?? "",
+            childFullName: childFullName,
+            fatherName: father?.shortFullName ?? n.details?.actor?.name ?? n.details?.sender?.name ?? "",
+            review: review,
+            canAlert: authVM.canSendNotifications && n.createdBy != nil,
+            canDelete: authVM.canDeleteMembers && child?.role != .owner && childId != authVM.currentUser?.id)
+        if let year = AdminNoticeSelfChild.birthYear(child?.birthDate) {
+            item.subtitle += L10n.t(" · مواليد \(year)", " · Born \(year)")
+        }
+        if review && !n.read { item.needsAction = true }
+    }
+
+    /// أبناء أُضيفوا بعد آخر تحميل للأعضاء — يُجلبون ليعمل الملف والاسم وسنة الميلاد
+    private var missingSelfChildren: [UUID] {
+        notificationVM.notifications.compactMap { n in
+            guard n.details?.selfChild == true, let id = n.subjectMemberId, memberVM.member(byId: id) == nil else { return nil }
+            return id
+        }
+    }
+
+    /// زرّ في صفّ «تمت إضافة ابن» — كل زرّ بصلاحيته، والصفّ لا يعرض ما لا يملكه الدور
+    private func handleSelfChild(_ action: AdminSelfChildAction, _ notice: AdminNoticeSelfChild) {
+        switch action {
+        case .openProfile:
+            Task {
+                if memberVM.member(byId: notice.childId) == nil { await memberVM.fetchSingleMember(id: notice.childId) }
+                selfChildFlow.sheet = AdminMemberSheetContext(ids: [notice.childId], start: 0)
+                await notificationVM.markNotificationAsRead(id: notice.notificationId)
+            }
+        case .alert:
+            guard notice.canAlert else { return }
+            selfChildFlow.alert = notice
+        case .delete:
+            guard notice.canDelete else { return }
+            selfChildFlow.deleting = notice
         }
     }
 
@@ -562,7 +619,8 @@ struct AdminNotificationsPage: View {
 
     private func row(_ item: AdminNoticeItem, position: DSGroupPosition) -> some View {
         let picked = item.notificationId.map(selectedIds.contains) ?? false
-        return AdminNoticeRow(item: item, selecting: isSelecting, picked: picked, position: position, onTap: { tap(item) })
+        return AdminNoticeRow(item: item, selecting: isSelecting, picked: picked, position: position, onTap: { tap(item) },
+                              onSelfChild: handleSelfChild)
             .dsCardCascade(1, appeared: appeared)
             .adminPageRow(top: 0, bottom: 0)
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -718,6 +776,7 @@ struct AdminNoticeRow: View {
     let picked: Bool
     var position: DSGroupPosition = .single
     let onTap: () -> Void
+    var onSelfChild: ((AdminSelfChildAction, AdminNoticeSelfChild) -> Void)? = nil
 
     private var showsCircle: Bool { selecting && item.notificationId != nil }
 
@@ -730,7 +789,7 @@ struct AdminNoticeRow: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: onTap)
             // بزرّ: يبقى الزرّ عنصراً مستقلاً للقارئ الصوتي
-            .accessibilityElement(children: item.button == nil || selecting ? .combine : .contain)
+            .accessibilityElement(children: (item.button == nil && item.selfChild == nil) || selecting ? .combine : .contain)
             .accessibilityValue(item.isUnread ? L10n.t("جديد", "New") : "")
             .accessibilityAddTraits(item.notificationId != nil ? .isButton : [])
             .accessibilityAddTraits(selecting && picked ? .isSelected : [])
@@ -739,11 +798,17 @@ struct AdminNoticeRow: View {
     /// «تغييرات الأعضاء» بالصفّ الجديد (المرسل · العنوان · «قبل ← بعد»)، والباقي بالصفّ المختصر كما كان
     private var content: AnyView {
         if let rich = item.rich {
-            return AnyView(NotificationRowContent(
+            let row = AnyView(NotificationRowContent(
                 title: item.title, sender: rich.sender, time: Self.relative(item.date), unread: item.isUnread,
                 changes: rich.changes, showsInlineChanges: true, isSelecting: showsCircle, isSelected: picked,
                 tint: AppSection.admin.ink,
-                bodyText: AnyView(DSNoticeText(text: item.subtitle, unread: item.isUnread, lines: 1))))
+                bodyText: AnyView(DSNoticeText(text: item.subtitle, unread: item.isUnread,
+                                               lines: item.selfChild == nil ? 1 : 2))))
+            guard let notice = item.selfChild, let onSelfChild, !selecting else { return row }
+            return AnyView(VStack(alignment: .leading, spacing: 0) {
+                row
+                AdminSelfChildFooter(notice: notice, act: onSelfChild)
+            })
         }
         return AnyView(compactRow)
     }

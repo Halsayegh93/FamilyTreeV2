@@ -44,6 +44,8 @@ final class ReviewCardStore: ObservableObject {
     private var idsLoaded = false
 
     func isReview(_ id: UUID?) -> Bool { id.map { ids.contains($0) } ?? false }
+    /// قُرئت بطاقة هذا الحساب فعلاً — `card == nil` قبلها لا يعني أنه ليس حساب مراجعة
+    func isCardLoaded(for userId: UUID) -> Bool { loadedFor == userId }
 
     func loadIds() async {
         guard !idsLoaded else { return }

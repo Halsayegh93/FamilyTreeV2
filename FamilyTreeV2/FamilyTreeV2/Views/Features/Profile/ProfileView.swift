@@ -403,28 +403,7 @@ struct ProfileView: View {
     /// يرجّع رسالة النتيجة لتُعرض داخل المعاينة.
     @MainActor
     private func changeAvatar(_ image: UIImage, for member: FamilyMember) async -> String {
-        let cooldown = ProfileEditCooldown.shared
-        if cooldown.canEdit(.avatar) {
-            let uploaded = await memberVM.uploadAvatar(image: image, for: member.id)
-            guard uploaded else {
-                return L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again.")
-            }
-            cooldown.recordEdit(.avatar)
-            return L10n.t("تم تغيير الصورة", "Photo changed")
-        }
-        guard let url = await adminRequestVM.uploadPhotoSuggestion(image) else {
-            return L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again.")
-        }
-        let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
-            action: .addPhoto,
-            targetMemberId: member.id.uuidString,
-            targetMemberName: member.fullName,
-            newPhotoUrl: url,
-            notes: L10n.t("تعديل صورة بعد تجاوز حد التعديلات", "Photo edit after reaching the edit limit")
-        ))
-        return ok
-            ? L10n.t("تجاوزت ٣ تغييرات — أُرسلت الصورة للإدارة للموافقة", "Over 3 changes — sent to the admins for approval")
-            : L10n.t("تعذّر إرسال الطلب. حاول مرة ثانية.", "Couldn't send the request. Try again.")
+        await ProfileAvatarChange.run(image, for: member, memberVM: memberVM, adminRequestVM: adminRequestVM).message
     }
 
     // MARK: - Profile Header — Avatar & Info

@@ -15,6 +15,8 @@ final class TermsAcceptanceStore: ObservableObject {
 
     @Published private(set) var needsAcceptance = false
     @Published private(set) var isAccepting = false
+    /// قُرئت الحالة من السيرفر مرة على الأقل — مربّع غيرها (تذكير الصورة) ينتظرها حتى لا يسبق الموافقة
+    @Published private(set) var statusChecked = false
     @Published var errorMessage: String?
     private var required = 0
     /// آخر قراءة للحالة فشلت — المربّع ظاهر و«أوافق» يعيد القراءة أولاً
@@ -37,6 +39,7 @@ final class TermsAcceptanceStore: ObservableObject {
             required = s.required
             statusUnknown = false
             needsAcceptance = s.needs
+            statusChecked = true
         } catch {
             if ErrorHelper.isCancellation(error) { return }
             Log.warning("my_terms_status: \(error.localizedDescription)")

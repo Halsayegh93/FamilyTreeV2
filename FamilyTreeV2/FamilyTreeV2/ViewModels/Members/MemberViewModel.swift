@@ -609,6 +609,18 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    /// رسائل رفض add_family_child لابن العضو حسب `hint` (`20261105110000_self_child_checks`)
+    private static func selfChildAddMessage(hint: String?) -> String {
+        switch hint {
+        case "child_duplicate":
+            return L10n.t("هذا الاسم مسجّل عندك", "This name is already registered under you")
+        case "child_birth_future":
+            return L10n.t("تاريخ الميلاد في المستقبل", "The birth date is in the future")
+        default:
+            return L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.", "Couldn't add the son. Try again.")
+        }
+    }
+
     /// رسائل رفض remove_self_child بالعربي حسب `hint` — حماية الروابط برسالة السيرفر نفسها (تسمّي الابن والعدد)
     private static func removeSelfChildMessage(hint: String?, serverMessage: String?, canDeleteMembers: Bool) -> String {
         switch hint {
@@ -983,7 +995,7 @@ class MemberViewModel: ObservableObject {
                 Log.info("[Family] حدّ اليوم — الابن يُرسل طلباً")
             } catch {
                 Log.error("[Family] ابن مباشر: \(error)")
-                self.errorMessage = L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.", "Couldn't add the son. Try again.")
+                self.errorMessage = Self.selfChildAddMessage(hint: (error as? PostgrestError)?.hint)
                 self.isLoading = false
                 return nil
             }

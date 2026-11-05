@@ -126,9 +126,14 @@ extension AppNotification {
         let subject: Person?
         /// من نفّذ التغيير (للإدارة فقط — لا يصل العضو)
         let actor: Person?
+        /// العضو أضاف ابنه بنفسه («تمت إضافة ابن»): `subject_member_id` = الابن، `created_by` = الأب
+        let selfChild: Bool?
+        /// السيرفر يشكّ في الابن المضاف (اسم كامل أو ميلاد يطابق غيره) — «راجعه»
+        let review: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case v, changes, type, sender, action, tree, subject, actor
+            case v, changes, type, sender, action, tree, subject, actor, review
+            case selfChild = "self_child"
             case memberId = "member_id"
             case newsId = "news_id"
             case workflowRequestId = "request_id"
@@ -250,6 +255,8 @@ extension AppNotification {
             self.tree = nil
             self.subject = nil
             self.actor = nil
+            self.selfChild = nil
+            self.review = nil
         }
 
         /// حمولة «ما الذي تغيّر» أو حمولة نوع خاص (إعلان وفاة) — الغائب يأخذ قيمة فارغة
@@ -266,6 +273,8 @@ extension AppNotification {
             tree = try? c.decodeIfPresent(String.self, forKey: .tree)
             subject = try? c.decodeIfPresent(Person.self, forKey: .subject)
             actor = try? c.decodeIfPresent(Person.self, forKey: .actor)
+            selfChild = try? c.decodeIfPresent(Bool.self, forKey: .selfChild)
+            review = try? c.decodeIfPresent(Bool.self, forKey: .review)
             if let version = try? c.decodeIfPresent(Int.self, forKey: .v) {
                 v = version
             } else if type != nil || sender != nil || !changes.isEmpty {

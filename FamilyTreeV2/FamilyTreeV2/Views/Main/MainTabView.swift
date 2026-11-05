@@ -11,6 +11,8 @@ struct MainTabView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var showNotificationAlert = false
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
+    /// انتهى فحص إذن الإشعارات بعد الفتح — تذكير الصورة ينتظره ولا يسبقه
+    @State private var notificationFlowDone = false
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -216,6 +218,7 @@ struct MainTabView: View {
         .onAppear { refreshUserSafetyState() }
         .onChange(of: authVM.currentUser?.id) { _ in refreshUserSafetyState() }
         .task {
+            defer { notificationFlowDone = true }
             // تتبع أول شاشة عند الفتح
             MemberActivityTracker.report("home")
             // كتالوج العوائل — ليعرض كل اسم بآخره العائلة المختارة
@@ -250,6 +253,8 @@ struct MainTabView: View {
                 "Enable notifications to receive family news and important updates"
             ))
         }
+        // «كمّل ملفك بصورة» — بعد فحص الإشعارات ومربّعه (نوع مستقل: حارس المكدس)
+        .modifier(PhotoReminderGate(blocked: !notificationFlowDone || showNotificationAlert))
     }
 
     /// يربط قائمة المحظورين بالحساب الحالي
