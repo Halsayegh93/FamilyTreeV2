@@ -404,7 +404,7 @@ struct AdminNotificationsPage: View {
                 // إضافة الابن: نصّ الإشعار (مَن أضاف مَن) بدل «قبل ← بعد»
                 item.rich = AdminNoticeRich(sender: sender(n, style: AdminNoticeRoutes.style(n, category)),
                                             changes: isSelfChild ? [] : (n.details?.changes ?? []))
-                if isSelfChild { applySelfChild(n, to: &item) }
+                if isSelfChild { applySelfChild(n, to: &item) } else { applyChangeAlert(n, to: &item) }
             }
             list.append(item)
         }
@@ -436,6 +436,23 @@ struct AdminNotificationsPage: View {
             item.subtitle += L10n.t(" · مواليد \(year)", " · Born \(year)")
         }
         if review && !n.read { item.needsAction = true }
+    }
+
+    /// باقي «تغييرات الأعضاء»: زرّ «تنبيه» لمن غيّر البيانات إذا فيه خطأ (ليس لتعديلاتي أنا)
+    private func applyChangeAlert(_ n: AppNotification, to item: inout AdminNoticeItem) {
+        guard authVM.canSendNotifications, let actor = n.createdBy, actor != authVM.currentUser?.id else { return }
+        let name = n.details?.subject?.name ?? ""
+        item.selfChild = AdminNoticeSelfChild(
+            childId: n.subjectMemberId ?? n.id,
+            fatherId: actor,
+            notificationId: n.id,
+            childFirstName: n.subjectMemberId.flatMap { memberVM.member(byId: $0)?.firstName } ?? name,
+            childFullName: name,
+            fatherName: memberVM.member(byId: actor)?.shortFullName ?? n.details?.actor?.name ?? n.details?.sender?.name ?? "",
+            review: false,
+            canAlert: true,
+            canDelete: false,
+            isGeneral: true)
     }
 
     /// أبناء أُضيفوا بعد آخر تحميل للأعضاء — يُجلبون ليعمل الملف والاسم وسنة الميلاد
@@ -803,7 +820,7 @@ struct AdminNoticeRow: View {
                 changes: rich.changes, showsInlineChanges: true, isSelecting: showsCircle, isSelected: picked,
                 tint: AppSection.admin.ink,
                 bodyText: AnyView(DSNoticeText(text: item.subtitle, unread: item.isUnread,
-                                               lines: item.selfChild == nil ? 1 : 2))))
+                                               lines: (item.selfChild == nil || item.selfChild?.isGeneral == true) ? 1 : 2))))
             guard let notice = item.selfChild, let onSelfChild, !selecting else { return row }
             return AnyView(VStack(alignment: .leading, spacing: 0) {
                 row

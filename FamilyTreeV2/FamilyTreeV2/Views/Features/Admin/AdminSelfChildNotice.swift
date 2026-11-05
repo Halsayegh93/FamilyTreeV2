@@ -17,6 +17,8 @@ struct AdminNoticeSelfChild: Identifiable, Equatable {
     let review: Bool
     let canAlert: Bool
     let canDelete: Bool
+    /// باقي «تغييرات الأعضاء» (طلب المالك «زر للتنبيه إذا في شي خطأ»): زرّ «تنبيه» وحده لمن غيّر البيانات
+    var isGeneral = false
 
     var id: UUID { childId }
 
@@ -39,9 +41,11 @@ struct AdminSelfChildFooter: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            statusLine
+            if !notice.isGeneral { statusLine }
             HStack(spacing: DS.Spacing.xsm) {
-                if notice.review {
+                if notice.isGeneral {
+                    EmptyView()
+                } else if notice.review {
                     pill(L10n.t("راجع", "Review"), style: .navy, action: .openProfile)
                 } else {
                     pill(L10n.t("الملف", "Profile"), style: .soft, action: .openProfile)
@@ -176,8 +180,12 @@ struct AdminChildAlertBox: View {
     @EnvironmentObject private var notificationVM: NotificationViewModel
 
     enum Reason: String, CaseIterable, Identifiable {
-        case duplicateName, wrongName, wrongBirth, notYourSon
+        case duplicateName, wrongName, wrongBirth, notYourSon, badPhoto, wrongData
         var id: String { rawValue }
+
+        static func options(general: Bool) -> [Reason] {
+            general ? [.wrongName, .wrongBirth, .badPhoto, .wrongData] : [.duplicateName, .wrongName, .wrongBirth, .notYourSon]
+        }
 
         var title: String {
             switch self {
@@ -185,12 +193,26 @@ struct AdminChildAlertBox: View {
             case .wrongName:     return L10n.t("الاسم غلط", "Wrong name")
             case .wrongBirth:    return L10n.t("الميلاد غلط", "Wrong birth date")
             case .notYourSon:    return L10n.t("مو ابنك", "Not your son")
+            case .badPhoto:      return L10n.t("الصورة غير مناسبة", "Unsuitable photo")
+            case .wrongData:     return L10n.t("البيانات غلط", "Wrong details")
             }
         }
 
         /// نصّ يُحفظ في الإشعار ويقرؤه الأب
-        func body(child: String) -> String {
+        func body(child: String, general: Bool = false) -> String {
             switch self {
+            case .wrongName where general:
+                return L10n.stored("الاسم «\(child)» يمكن فيه خطأ. راجعه وعدّله.",
+                                   "The name «\(child)» may be misspelled. Please check and correct it.")
+            case .wrongBirth where general:
+                return L10n.stored("تاريخ ميلاد «\(child)» يمكن غلط. راجعه وعدّله.",
+                                   "The birth date of «\(child)» may be wrong. Please check and correct it.")
+            case .badPhoto:
+                return L10n.stored("صورة «\(child)» غير مناسبة. غيّرها لو سمحت.",
+                                   "The photo of «\(child)» isn't suitable. Please change it.")
+            case .wrongData:
+                return L10n.stored("بيانات «\(child)» اللي عدّلتها يمكن فيها خطأ. راجعها وعدّلها.",
+                                   "The details you changed for «\(child)» may be wrong. Please check and correct them.")
             case .duplicateName:
                 return L10n.stored("الاسم «\(child)» يمكن مكرر في الشجرة. تأكد منه، وإذا كان خطأ احذفه من «عائلتي».",
                                    "The name «\(child)» may be a duplicate in the tree. Please check it, and delete it from «My Family» if it's wrong.")
@@ -233,10 +255,10 @@ struct AdminChildAlertBox: View {
         ) {
             DSComposerSection(title: L10n.t("السبب", "Reason"), icon: "tag.fill", tint: DS.Color.primary, index: 0) {
                 NotifFlow {
-                    ForEach(Reason.allCases) { reason in
+                    ForEach(Reason.options(general: notice.isGeneral)) { reason in
                         DSChipButton(reason.title, isSelected: picked == reason) {
                             picked = reason
-                            text = reason.body(child: notice.childFirstName)
+                            text = reason.body(child: notice.childFirstName, general: notice.isGeneral)
                         }
                     }
                 }
