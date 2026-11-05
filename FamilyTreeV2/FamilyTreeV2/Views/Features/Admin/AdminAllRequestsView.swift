@@ -246,14 +246,12 @@ struct AdminAllRequestsView: View {
 
     // Join request states
     @State private var memberToLink: FamilyMember? = nil
-    @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
-    @State private var showMergeConfirm = false
+    /// السجل المختار مسبقاً لكل طلب (زرّ «قارن» في صفّه) — يفتح المقارنة عليه
+    @State private var joinPreselectedRecord: [UUID: UUID] = [:]
     @State private var showMergeSuccess = false
     @State private var mergeSuccessMessage = ""
     /// مطابقات التسجيل من السيرفر (matched_ids من admin_requests)
     @State private var registrationMatches: [UUID: [UUID]] = [:]
-    /// الأعضاء اللي المدير فتح كل المتطابقين حقهم
-    @State private var expandedMatchMembers: Set<UUID> = []
 
     @State private var cachedPendingMembers: [FamilyMember] = []
     private var pendingMembers: [FamilyMember] { cachedPendingMembers }
@@ -559,46 +557,10 @@ struct AdminAllRequestsView: View {
             // طلب الأنثى: المربّع نفسه يفتح «ربط بشجرة النساء» (دخول النساء ٢٠٢٦-١٠-٢٤)
             LinkToExistingMemberSheet(pendingMember: member,
                                       suggested: orderedMatchList(for: member).map(\.member),
-                                      onWomanLinked: { recalculateCounts() })
+                                      onWomanLinked: { recalculateCounts() },
+                                      onMergeFinished: { joinMergeFinished(addedRecord: false) })
                 .environmentObject(memberVM)
                 .environmentObject(adminRequestVM)
-        }
-        .dsAlert(
-            L10n.t("تأكيد الدمج", "Confirm Merge"),
-            isPresented: $showMergeConfirm
-        ) {
-            Button(L10n.t("دمج", "Merge"), role: .destructive) {
-                if let target = mergeTarget {
-                    Task {
-                        await adminRequestVM.mergeMemberIntoTreeMember(
-                            newMemberId: target.pendingMember.id,
-                            existingTreeMemberId: target.treeMember.id
-                        )
-                        await MainActor.run {
-                            if let result = adminRequestVM.mergeResult {
-                                switch result {
-                                case .success(let msg):
-                                    mergeSuccessMessage = msg
-                                case .failure(let msg):
-                                    mergeSuccessMessage = msg
-                                }
-                                showMergeSuccess = true
-                            }
-                            mergeTarget = nil
-                        }
-                    }
-                }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {
-                mergeTarget = nil
-            }
-        } message: {
-            if let target = mergeTarget {
-                Text(L10n.t(
-                    "سيتم ربط حساب \(target.pendingMember.fullName) بسجل \(target.treeMember.fullName) الموجود بالشجرة.",
-                    "This will link \(target.pendingMember.fullName)'s account to \(target.treeMember.fullName)'s tree record."
-                ))
-            }
         }
         .dsAlert(
             {
@@ -1206,7 +1168,7 @@ struct AdminAllRequestsView: View {
                     accentColor: RequestTab.joinRequests.color,
                     approveLabel: L10n.t("ربط", "Link"),
                     approveIcon: "link.badge.plus",
-                    onApprove: { memberToLink = member },
+                    onApprove: { openJoinFlow(member) },
                     onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                     onTap: { selectedDetail = .join(member) }
                 ) {
@@ -2063,7 +2025,7 @@ struct AdminAllRequestsView: View {
             selectableRow(
                 id: member.id, forTab: .joinRequests, accentColor: RequestTab.joinRequests.color,
                 approveLabel: L10n.t("ربط", "Link"), approveIcon: "link.badge.plus",
-                onApprove: { memberToLink = member },
+                onApprove: { openJoinFlow(member) },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                 onTap: { selectedDetail = .join(member) }
             ) { joinRequestRow(for: member) }
@@ -2329,7 +2291,7 @@ struct AdminAllRequestsView: View {
                     Text(member.displayFullName)
                         .dsFieldFont(.headlineCompact)
                         .foregroundColor(DS.Color.fieldLabel)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                     // الأنثى لا تُطابق بشجرة الرجال — سطرها «تُربط بشجرة النساء»
                     if !member.isFemale { joinStatusLine(matches: results.count, fromWeb: fromWeb) }
@@ -2445,28 +2407,52 @@ struct AdminAllRequestsView: View {
         .accessibilityLabel(label)
     }
 
-    /// أقرب تطابق فقط — والباقي بزر «عرض كل المطابقات»
+    /// أقرب تطابق فقط — والباقي داخل الطلب مع المقارنة («عرض المزيد»)
     @ViewBuilder
     private func joinBestMatches(for member: FamilyMember, results: [JoinMatch]) -> some View {
-        let isExpanded = expandedMatchMembers.contains(member.id)
-        let visible = isExpanded ? results : Array(results.prefix(1))
-        VStack(spacing: DS.Spacing.xsm) {
-            ForEach(visible, id: \.member.id) { match in
-                joinMatchRow(match: match, pendingMember: member)
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            if let best = results.first {
+                joinMatchRow(match: best, pendingMember: member)
             }
-            if results.count > 1 && !isExpanded {
-                // الشريحة الموحّدة في وسط السطر
-                DSChipButton(L10n.t("عرض كل المطابقات (\(results.count))",
-                                    "Show all matches (\(results.count))"),
-                             icon: "chevron.down", tint: AppSection.admin.ink) {
-                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
-                        _ = expandedMatchMembers.insert(member.id)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+            if results.count > 1 {
+                Text(L10n.t("و\(results.count - 1) مطابقة أخرى داخل الطلب", "\(results.count - 1) more inside the request"))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
             }
         }
         .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
+    }
+
+    /// يفتح سؤال «هل هو موجود في الشجرة؟» — وطلب الأنثى يبقى «ربط بشجرة النساء»
+    private func openJoinFlow(_ member: FamilyMember, record: UUID? = nil) {
+        if member.isFemale {
+            memberToLink = member
+        } else {
+            joinPreselectedRecord[member.id] = record
+            selectedDetail = .join(member)
+        }
+    }
+
+    /// انتهى الربط من مربّع الطلب أو «ربط بالشجرة»: النتيجة في تنبيه، والفشل يُبقي المربّع مفتوحاً لاختيار غيره.
+    /// `addedRecord`: أُضيف سجل جديد قبل الربط — فلو فشل الربط يبقى السجل في الشجرة ويصير أقرب مطابقة في الطلب
+    private func joinMergeFinished(addedRecord: Bool) {
+        recalculateCounts()
+        switch adminRequestVM.mergeResult {
+        case .success(let message):
+            mergeSuccessMessage = message
+            showMergeSuccess = true
+            selectedDetail = nil
+        case .failure(let message):
+            mergeSuccessMessage = addedRecord
+                ? message + "\n\n" + L10n.t("أُضيف السجل في الشجرة ولم يتم الربط — افتح الطلب واربطه به.",
+                                             "The record was added to the tree but not linked — open the request and link to it.")
+                : message
+            showMergeSuccess = true
+            if addedRecord { selectedDetail = nil }
+        case nil:
+            // قاصر: مربّع «اطلب موافقة ولي الأمر» يظهر بدل النتيجة
+            selectedDetail = nil
+        }
     }
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
@@ -2523,13 +2509,12 @@ struct AdminAllRequestsView: View {
 
             Spacer(minLength: 0)
 
-            // «ربط» — الشريحة الموحّدة ممتلئة بتعبئة القسم
-            DSChipButton(L10n.t("ربط", "Link"), isSelected: true) {
-                mergeTarget = (pendingMember: pendingMember, treeMember: match.member)
-                showMergeConfirm = true
+            // «قارن» يفتح الطلب على هذا السجل — الربط بعد المقارنة والجملة الواضحة
+            DSChipButton(L10n.t("قارن", "Compare"), isSelected: true) {
+                openJoinFlow(pendingMember, record: match.member.id)
             }
-            .accessibilityLabel(L10n.t("ربط بـ \(match.member.displayFullName)",
-                                       "Link to \(match.member.displayFullName)"))
+            .accessibilityLabel(L10n.t("قارن مع \(match.member.displayFullName)",
+                                       "Compare with \(match.member.displayFullName)"))
         }
         // البطاقة الواحدة
         .dsCard(padding: DS.Spacing.sm)
@@ -3299,6 +3284,18 @@ struct AdminAllRequestsView: View {
             if let flow = approvalSnapshot(for: detail) {
                 // «مسار الموافقات» شغّال: نفس البيانات داخل مربّع المسار، والأزرار بحسب الدور والمرحلة
                 approvalDetailBox(detail, meta: meta, flow: flow)
+            } else if isMenJoin(detail) {
+                // طلب الرجل: «ربط بهذا» / «إضافة وربط» في الشريط بحسب الجواب على السؤال
+                JoinRequestComposer(
+                    title: meta.title,
+                    subtitle: meta.timestamp ?? L10n.t("تفاصيل الطلب", "Request Details"),
+                    icon: meta.icon,
+                    isBusy: adminRequestVM.isLoading,
+                    extraActions: detailExtraActions(for: detail),
+                    onClose: { selectedDetail = nil }
+                ) {
+                    detailBoxContent(detail, meta: meta)
+                }
             } else {
                 DSComposer(
                     title: meta.title,
@@ -3393,11 +3390,29 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// تفاصيل طلب الانضمام — مرتّبة ومحترمة (طلب المالك ٢٠٢٦-١٠-٠١):
-    /// بطاقة الشخص (صورته، اسمه، طريقة تسجيله) ← «بيانات المنضم» صفوفاً بعنوان وقيمة
-    /// ← «في الشجرة» (المطابقات بزر «ربط» أو «اسم جديد») ← «الإجراءات». وقت الطلب في الرأس فقط.
+    /// تفاصيل طلب الانضمام: الرجل = السؤال الواحد (`JoinRequestFlowView`)، والأنثى كما كانت. وقت الطلب في الرأس فقط.
     @ViewBuilder
     private func joinDetailContent(_ member: FamilyMember) -> some View {
+        if member.isFemale {
+            womanJoinDetailContent(member)
+        } else {
+            // السؤال الواحد (طلب المالك ٢٠٢٦-١١-٠٥) — نوع مستقل خلف `AnyView` (حارس المكدس)
+            AnyView(JoinRequestFlowView(
+                memberVM: memberVM,
+                adminRequestVM: adminRequestVM,
+                member: member,
+                suggestions: orderedMatchList(for: member).map { JoinSuggestion(member: $0.member, depth: $0.matchCount) },
+                preselectedRecord: joinPreselectedRecord[member.id],
+                lockedNote: joinLockedNote(for: member),
+                inlinePrimary: adminRequestVM.approvalSnapshot(forRowId: member.id) != nil,
+                onFinished: { joinMergeFinished(addedRecord: $0) }
+            ))
+        }
+    }
+
+    /// طلب الأنثى كما كان: بطاقة الشخص ← بياناتها ← «في شجرة النساء» (زرّ المربّع «ربط بشجرة النساء»)
+    @ViewBuilder
+    private func womanJoinDetailContent(_ member: FamilyMember) -> some View {
         let results = orderedMatchList(for: member)
         let fromWeb = member.registrationPlatform == "web"
         let uname = member.username?.trimmingCharacters(in: .whitespaces) ?? ""
@@ -3408,10 +3423,11 @@ struct AdminAllRequestsView: View {
         VStack(spacing: DS.Spacing.xsm) {
             joinPersonAvatar(member, ring: results.isEmpty ? DS.Color.warning : DS.Color.success, size: DS.Icon.avatarLarge)
                 .padding(.bottom, DS.Spacing.xxs)
-            Text(member.fullName)
+            Text(member.displayFullName)
                 .dsFont(.title)
                 .foregroundColor(DS.Color.fieldLabel)
                 .multilineTextAlignment(.center)
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: DS.Spacing.xs) {
                 Image(systemName: fromWeb ? "globe" : "iphone")
@@ -3472,35 +3488,37 @@ struct AdminAllRequestsView: View {
             .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
         }
 
-        // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد. الأنثى: شجرة النساء (زرّ المربّع «ربط بشجرة النساء»)
-        if member.isFemale {
-            DSComposerSection(title: L10n.t("في شجرة النساء", "In the women's tree"),
-                              icon: "figure.stand.dress",
-                              tint: DS.Color.female,
-                              index: 2) {
-                DSNoteCard(L10n.t("تُربط بعقدتها في شجرة النساء تحت أبيها، أو تُضاف بنتاً جديدة له — من «ربط بشجرة النساء».",
-                                  "She's linked to her node in the women's tree under her father, or added as his new daughter — via «Link to women's tree»."),
-                           icon: "link.badge.plus", tint: DS.Color.female)
-            }
-        } else {
-            DSComposerSection(title: L10n.t("في الشجرة", "In the tree"),
-                              icon: results.isEmpty ? "sparkles" : "person.2.fill",
-                              tint: results.isEmpty ? DS.Color.warning : DS.Color.success,
-                              trailing: results.isEmpty ? nil : "\(results.count)",
-                              index: 2) {
-                if results.isEmpty {
-                    // الملاحظة الموحّدة
-                    DSNoteCard(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
-                                      "No matching name in the tree — linking adds them as a new member."),
-                               icon: "person.badge.plus", tint: DS.Color.warning)
-                } else {
-                    VStack(spacing: DS.Spacing.xsm) {
-                        ForEach(results, id: \.member.id) { match in
-                            joinMatchRow(match: match, pendingMember: member)
-                        }
-                    }
-                }
-            }
+        // ٣) شجرة النساء — الربط من زرّ المربّع «ربط بشجرة النساء»
+        DSComposerSection(title: L10n.t("في شجرة النساء", "In the women's tree"),
+                          icon: "figure.stand.dress",
+                          tint: DS.Color.female,
+                          index: 2) {
+            DSNoteCard(L10n.t("تُربط بعقدتها في شجرة النساء تحت أبيها، أو تُضاف بنتاً جديدة له — من «ربط بشجرة النساء».",
+                              "She's linked to her node in the women's tree under her father, or added as his new daughter — via «Link to women's tree»."),
+                       icon: "link.badge.plus", tint: DS.Color.female)
+        }
+    }
+
+    private func isMenJoin(_ detail: RequestDetail) -> Bool {
+        if case .join(let member) = detail { return !member.isFemale }
+        return false
+    }
+
+    /// لماذا لا يُربط الآن — nil = مسموح. نفس شرط `trg_zz_admin_request_workflow`: والمسار شغّال، يُنفَّذ في «التنفيذ»
+    /// للمختص، أو في «الاعتماد» بتجاوز المالك/المدير. بدونه يرفض السيرفر الربط، وبعد إضافة سجل جديد يبقى السجل وحده
+    private func joinLockedNote(for member: FamilyMember) -> String? {
+        guard canApprove(.joinRequests) else {
+            return L10n.t("للاطلاع فقط — الربط للمالك والمدير والمراقب.", "View only — linking is for the owner, admins and monitors.")
+        }
+        guard let flow = adminRequestVM.approvalSnapshot(forRowId: member.id) else { return nil }
+        let locked = adminRequestVM.isApprovalDecisionLocked(flow)
+        switch flow.stage {
+        case .execute where adminRequestVM.canActAsApprovalSpecialist(flow) && !locked:
+            return nil
+        case .approve where adminRequestVM.isApprovalManager && !adminRequestVM.isOwnApprovalRequest(flow) && !locked:
+            return nil
+        default:
+            return L10n.t("الربط بعد اعتماد الطلب في مسار الموافقات.", "Linking comes after the request is approved in the approval path.")
         }
     }
 
@@ -3686,7 +3704,7 @@ struct AdminAllRequestsView: View {
         switch detail {
         case .join(let member):
             infoCard(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full Name"),
-                     value: member.fullName, color: AppSection.admin.ink)
+                     value: member.displayFullName, color: AppSection.admin.ink)
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
                          value: KuwaitPhone.display(phone), color: DS.Color.sea)
