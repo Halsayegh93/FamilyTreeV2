@@ -5,7 +5,9 @@ struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var langManager = LanguageManager.shared
-    @State private var selectedTab = 0
+    /// آخر تبويب يُحفظ مع حالة النافذة: إن سكّر النظام التطبيق بالخلفية (امتلاء الذاكرة) يرجع لنفس التبويب
+    /// بدل الرئيسية (طلب المالك ٢٠٢٦-١٠-٣١). الإغلاق اليدوي بالسحب يمسحها فيبدأ من الرئيسية كالعادة.
+    @SceneStorage("mainTab") private var selectedTab = 0
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var showNotificationAlert = false
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
@@ -191,6 +193,12 @@ struct MainTabView: View {
         // وجلسات الاستخدام (`AppUsageTracker` → `log_app_session`): للحساب المفعّل فقط — تبدأ مع التبويبات
         // وتُترك بلا إرسال عند الخروج منها
         .onAppear {
+            // تبويب محفوظ لم يعد متاحاً (الإدارة بلا صلاحية، الديوانيات مطفأة) → الرئيسية
+            if (selectedTab == 4 && !authVM.canModerate)
+                || (selectedTab == 2 && !(appSettingsVM.settings.diwaniyasEnabled ?? true))
+                || !(0...4).contains(selectedTab) {
+                selectedTab = 0
+            }
             AppSection.current = selectedSection
             AppUsageTracker.shared.start(tab: selectedTab)
         }

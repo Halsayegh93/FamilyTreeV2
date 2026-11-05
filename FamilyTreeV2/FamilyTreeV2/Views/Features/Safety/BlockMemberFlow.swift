@@ -4,7 +4,7 @@ import UIKit
 // MARK: - حظر عضو (Guideline 1.2 — «حظر المستخدمين المسيئين»)
 //
 // `.dsBlockMemberFlow(target:)` — نفس رسائل «إبلاغ» الموحّدة (dsAlert): تأكيد الحظر ثم
-// الحظر على الجهاز (BlockedMembersStore) + بلاغ تلقائي للإدارة + رسالة «تم الحظر».
+// الحظر (BlockedMembersStore → `block_member` على السيرفر، والسيرفر نفسه يبلّغ الإدارة) + رسالة «تم الحظر».
 // إن كان العضو محظوراً مسبقاً تعرض «إلغاء الحظر» بدلها.
 // `BlockedMembersSection` — قسم «الأعضاء المحظورون» في «الإشعارات والخصوصية» لإلغاء الحظر.
 
@@ -27,10 +27,11 @@ private struct BlockMemberFlowModifier: ViewModifier {
     @Binding var target: BlockTarget?
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
-    @EnvironmentObject private var notificationVM: NotificationViewModel
     @ObservedObject private var store = BlockedMembersStore.shared
     /// اسم من حُظر للتو — يعرض «تم الحظر»
     @State private var blockedName: String?
+    /// السيرفر رفض الحظر (عضو في الإدارة مثلاً) — أُلغي الحظر المحلي
+    @State private var blockRefused = false
 
     private var targetIsBlocked: Bool {
         guard let target else { return false }
@@ -71,6 +72,12 @@ private struct BlockMemberFlowModifier: ViewModifier {
                     "You won't see content from “\(blockedName ?? "")” anymore. You can unblock them from Settings → Notifications & Privacy."
                 ))
             }
+            .dsAlert(L10n.t("تعذّر الحظر", "Couldn't Block"), isPresented: $blockRefused) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(L10n.t("لا يمكن حظر هذا العضو. إن كان هناك إساءة فاستعمل «إبلاغ».",
+                            "This member can't be blocked. If there's abuse, use “Report”."))
+            }
     }
 
     private func block(_ t: BlockTarget) {
@@ -79,6 +86,8 @@ private struct BlockMemberFlowModifier: ViewModifier {
 
         var ids = [t.id]
         var names = [t.name] + t.otherNames
+        /// معرّف ملف العضو للسيرفر (`block_member`) — الملف إن عُرف، وإلا المعرّف كما وصل
+        var profileId = t.id
         // اربط الاسم بملف العضو في الشجرة (إن وُجد) — التعليق يُحفظ بمعرّف الدخول
         // والخبر بمعرّف الملف، فنحفظ الاثنين ليختفي كل محتواه
         if let member = memberVM.member(byId: t.id) {
@@ -91,6 +100,7 @@ private struct BlockMemberFlowModifier: ViewModifier {
             }
             if matches.count == 1, let member = matches.first {
                 ids.append(member.id)
+                profileId = member.id
                 names += [member.fullName, member.displayFullName]
             }
         }
@@ -100,23 +110,20 @@ private struct BlockMemberFlowModifier: ViewModifier {
             ids: ids,
             names: names,
             selfIds: [me?.id, AccountIdentity.authUserId].compactMap { $0 },
-            selfNames: [me?.fullName, me?.displayFullName].compactMap { $0 }
+            selfNames: [me?.fullName, me?.displayFullName].compactMap { $0 },
+            primary: profileId
         )
         guard didBlock else { return }   // لا يحظر المستخدم نفسه أبداً
 
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         let name = t.name
-        let contentId = t.id
-        // بلاغ صامت للإدارة بالخلفية — شرط أبل ١.٢ (الحظر يُبلغ المطوّر)؛ الحظر نفسه فوري بلا موافقة،
-        // ورسائل العضو لا تذكر الإدارة (طلب المالك ٢٠٢٦-١٠-٠٩ «بلاغ صامت»)
+        // الحظر على السيرفر — السيرفر نفسه يرفع البلاغ للإدارة ويُشعرها (لا بلاغ من التطبيق، ٢٠٢٦-١٠-٢٩)
         Task {
-            _ = await notificationVM.reportContent(
-                contentKind: L10n.t("عضو محظور", "blocked member"),
-                contentLabel: name,
-                contentId: contentId,
-                reason: L10n.t("حظره أحد الأعضاء بسبب الإساءة — يرجى مراجعة محتواه وحسابه",
-                               "Blocked by a member for abuse — please review their content and account")
-            )
+            let result = await store.blockOnServer(profileId)
+            if result == .notAllowed || result == .selfBlock {
+                blockedName = nil
+                blockRefused = true
+            }
         }
         // بعد إغلاق رسالة التأكيد
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { blockedName = name }
@@ -136,7 +143,14 @@ private struct BlockMemberFlowModifier: ViewModifier {
 struct BlockedMembersSection: View {
     var index: Int = 0
     @ObservedObject private var store = BlockedMembersStore.shared
+    @EnvironmentObject private var memberVM: MemberViewModel
     @State private var entryToUnblock: BlockedMembersStore.Entry?
+
+    /// الاسم المحفوظ، أو اسمه من الشجرة لمدخل وصل من السيرفر بلا اسم
+    private func name(_ entry: BlockedMembersStore.Entry) -> String {
+        if !entry.name.isEmpty { return entry.name }
+        return memberVM.member(byId: entry.id)?.displayFullName ?? L10n.t("عضو", "Member")
+    }
 
     var body: some View {
         DSComposerSection(title: L10n.t("الأعضاء المحظورون", "Blocked Members"),
@@ -172,8 +186,8 @@ struct BlockedMembersSection: View {
             }
             Button(L10n.t("رجوع", "Back"), role: .cancel) { entryToUnblock = nil }
         } message: { entry in
-            Text(L10n.t("ستظهر لك أخبار «\(entry.name)» وتعليقاته مرة أخرى.",
-                        "Posts and comments from “\(entry.name)” will be visible to you again."))
+            Text(L10n.t("ستظهر لك أخبار «\(name(entry))» وتعليقاته مرة أخرى.",
+                        "Posts and comments from “\(name(entry))” will be visible to you again."))
         }
     }
 
@@ -182,21 +196,23 @@ struct BlockedMembersSection: View {
             DSFieldIcon(name: "person.crop.circle.badge.xmark", tint: DS.Color.error)
                 .accessibilityHidden(true)   // زخرفة
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(entry.name)
+                Text(name(entry))
                     .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .dsNameLines()
-                Text(L10n.t("محظور منذ \(Self.dateText(entry.blockedAt))",
-                            "Blocked since \(Self.dateText(entry.blockedAt))"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(1)
+                if entry.hasDate {
+                    Text(L10n.t("محظور منذ \(Self.dateText(entry.blockedAt))",
+                                "Blocked since \(Self.dateText(entry.blockedAt))"))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: DS.Spacing.xs)
             // الشريحة الواحدة (لون القسم)
             DSChipButton(L10n.t("إلغاء الحظر", "Unblock")) { entryToUnblock = entry }
                 .fixedSize()
-                .accessibilityLabel(L10n.t("إلغاء حظر \(entry.name)", "Unblock \(entry.name)"))
+                .accessibilityLabel(L10n.t("إلغاء حظر \(name(entry))", "Unblock \(name(entry))"))
         }
         .dsRowBox()
     }

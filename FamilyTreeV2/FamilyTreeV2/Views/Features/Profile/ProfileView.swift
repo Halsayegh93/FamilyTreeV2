@@ -54,6 +54,8 @@ struct ProfileView: View {
     private var isLandscape: Bool { vSizeClass == .compact }
 
     var user: FamilyMember? { authVM.currentUser }
+    /// حساب مراجعة Apple: بطاقة الزائر مكان الملف و«معلوماتي»، وبلا «عائلتي» (اختيار المالك «ب» ٢٠٢٦-١٠-٣٠)
+    @ObservedObject private var reviewCard = ReviewCardStore.shared
 
     /// عائلة شجرة النساء (الأم/الزوجة/الأبناء) تظهر فقط عند «متزوج».
     private var isCurrentUserMarried: Bool { authVM.currentUser?.isMarried ?? false }
@@ -102,21 +104,28 @@ struct ProfileView: View {
                                     HStack(alignment: .top, spacing: DS.Spacing.md) {
                                         VStack(spacing: DS.Spacing.md) {
                                             // موافقة ولي الأمر — أعلى «حسابي» حين يوجد طلب
-                                            VStack(spacing: 0) {
-                                                GuardianRequestsCard()
-                                                profileHeader(user: currentUser)
-                                                    .padding(.top, DS.Spacing.md)
+                                            if let card = reviewCard.card {
+                                                ReviewAccountPassCard(info: card, phone: currentUser.phoneNumber)
+                                                    .dsCardCascade(0, appeared: appeared)
+                                            } else {
+                                                VStack(spacing: 0) {
+                                                    GuardianRequestsCard()
+                                                    profileHeader(user: currentUser)
+                                                        .padding(.top, DS.Spacing.md)
+                                                }
+                                                .dsCardCascade(0, appeared: appeared)
+                                                personalInfoSection(user: currentUser)
+                                                    .dsCardCascade(1, appeared: appeared)
                                             }
-                                            .dsCardCascade(0, appeared: appeared)
-                                            personalInfoSection(user: currentUser)
-                                                .dsCardCascade(1, appeared: appeared)
                                         }
                                         .frame(maxWidth: .infinity)
 
                                         VStack(spacing: DS.Spacing.md) {
                                             myRequestsSection
                                                 .dsCardCascade(2, appeared: appeared)
-                                            if isWomanAccount {
+                                            if reviewCard.card != nil {
+                                                EmptyView()
+                                            } else if isWomanAccount {
                                                 womenPositionSection
                                                     .dsCardCascade(4, appeared: appeared)
                                             } else {
@@ -132,23 +141,30 @@ struct ProfileView: View {
                                 } else {
                                     VStack(spacing: DS.Spacing.md) {
                                         // موافقة ولي الأمر — أعلى «حسابي» حين يوجد طلب، ثم الملف
-                                        VStack(spacing: 0) {
-                                            GuardianRequestsCard()
-                                            profileHeader(user: currentUser)
-                                                .padding(.top, DS.Spacing.md)
-                                        }
-                                        .dsCardCascade(0, appeared: appeared)
+                                        if let card = reviewCard.card {
+                                            ReviewAccountPassCard(info: card, phone: currentUser.phoneNumber)
+                                                .dsCardCascade(0, appeared: appeared)
+                                        } else {
+                                            VStack(spacing: 0) {
+                                                GuardianRequestsCard()
+                                                profileHeader(user: currentUser)
+                                                    .padding(.top, DS.Spacing.md)
+                                            }
+                                            .dsCardCascade(0, appeared: appeared)
 
-                                        // معلوماتي — وفيه صلة القرابة (طلب المالك ٢٠٢٦-١٠-٠٢)
-                                        personalInfoSection(user: currentUser)
-                                            .dsCardCascade(1, appeared: appeared)
+                                            // معلوماتي — وفيه صلة القرابة (طلب المالك ٢٠٢٦-١٠-٠٢)
+                                            personalInfoSection(user: currentUser)
+                                                .dsCardCascade(1, appeared: appeared)
+                                        }
 
                                         // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
                                         myRequestsSection
                                             .dsCardCascade(2, appeared: appeared)
 
                                         // حساب امرأة: «موقعي في شجرة النساء» بدل «عائلتي» (روابطه من شجرة الرجال)
-                                        if isWomanAccount {
+                                        if reviewCard.card != nil {
+                                            // حساب المراجعة غير مرتبط بالشجرة — بلا «عائلتي»
+                                        } else if isWomanAccount {
                                             womenPositionSection
                                                 .dsCardCascade(4, appeared: appeared)
                                         } else {
@@ -171,12 +187,18 @@ struct ProfileView: View {
                                        value: adminRequestVM.myPendingRequests.map(\.id))
                         } // closes ScrollView
                         .refreshable {
-                            await memberVM.fetchAllMembers(force: true)
-                            await memberVM.fetchChildren(for: currentUser.id)
-                            await adminRequestVM.fetchMyPendingRequests(force: true)
-                            if isWomanAccount { await loadWomenPosition() }
+                            // مهمة مستقلة: إلغاء السحب (تحديث الشاشة أثناءه) كان يقطع الجلب في نصّه
+                            // فتختفي أسماء «عائلتي» (بلاغ المالك ٢٠٢٦-١٠-٣١)
+                            let uid = currentUser.id
+                            await Task { @MainActor in
+                                await memberVM.fetchAllMembers(force: true)
+                                await memberVM.fetchChildren(for: uid)
+                                await adminRequestVM.fetchMyPendingRequests(force: true)
+                                if isWomanAccount { await loadWomenPosition() }
+                            }.value
                         }
                         .task {
+                            await reviewCard.load(for: currentUser.id)
                             if isWomanAccount { await loadWomenPosition() }
                             isLoadingChildren = true
                             await memberVM.fetchChildren(for: currentUser.id)
@@ -953,7 +975,15 @@ struct ProfileView: View {
                 },
                 onAdd: { name, hidden in
                     let ok = await memberVM.addSelfWife(name: name, hidden: hidden)
-                    if ok { showWifeSource = false; return nil }
+                    if ok {
+                        showWifeSource = false
+                        if memberVM.lastSelfRelativeAwaitingApproval {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                treeDaughterDoneMessage = WomenStore.sentForApprovalMessage
+                            }
+                        }
+                        return nil
+                    }
                     return memberVM.errorMessage ?? L10n.t("تعذّرت الإضافة.", "Couldn't add.")
                 },
                 onCancel: { showWifeSource = false },
@@ -1004,7 +1034,12 @@ struct ProfileView: View {
                                 },
                                 onAdd: { name in
                                     showMotherOptions = false
-                                    Task { await memberVM.addSelfMother(name: name) }
+                                    Task {
+                                        let ok = await memberVM.addSelfMother(name: name)
+                                        if ok && memberVM.lastSelfRelativeAwaitingApproval {
+                                            treeDaughterDoneMessage = WomenStore.sentForApprovalMessage
+                                        }
+                                    }
                                 },
                                 onTree: {
                                     showMotherOptions = false
@@ -2089,11 +2124,13 @@ private struct ProfileWifeFamilyBox: View {
         Task {
             do {
                 let kind = relation == .mother ? "mother" : "wife"
-                try await WomenStore.addOrLinkSelfRelative(kind: kind, fatherId: father.id, womanId: womanId, name: name)
+                let newId = try await WomenStore.addOrLinkSelfRelative(kind: kind, fatherId: father.id, womanId: womanId, name: name)
                 Log.info("[Women] add_or_link_self_relative \(kind) \(womanId == nil ? "new" : "link")")
                 // نفس التحديث بعد اختيار الأم وإضافتها
                 await memberVM.fetchWomenFamily(for: me.id)
                 busy = false
+                // nil = أُرسلت للإدارة (`relative_add`) — تظهر بعد الموافقة
+                guard newId != nil else { onDone(WomenStore.sentForApprovalMessage); return }
                 onDone(relation == .mother ? L10n.t("صارت أمك في «عائلتي».", "She's now your mother in «My family».")
                                            : L10n.t("صارت زوجتك في «عائلتي».", "She's now your wife in «My family»."))
             } catch {

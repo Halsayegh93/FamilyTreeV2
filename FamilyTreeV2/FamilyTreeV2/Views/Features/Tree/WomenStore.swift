@@ -275,10 +275,28 @@ enum WomenStore {
     }
 
     // ── إدارة العضو لعائلته الخاصة (الأم/الزوجة) عبر دوال السيرفر ──────────
-    static func addSelfWife(name: String, hidden: Bool = false) async throws {
-        try await SupabaseConfig.client
+    //
+    // منذ ٢٠٢٦-١٠-٢٩ (`self_relative_requires_approval`): لغير الإدارة ترجع الدوال الثلاث (`add_self_wife`،
+    // `add_self_mother`، `add_or_link_self_relative`) NULL = «أُرسل طلباً للإدارة» (`relative_add`) — لا عقدة بعد،
+    // فلا نداء يحتاج المعرّف. nil هنا = بانتظار الموافقة.
+
+    /// عنوان ونص «أُرسل للإدارة» بعد إضافة قريبة تنتظر الموافقة
+    static let sentForApprovalTitle = L10n.t("تم إرسال الطلب", "Request sent")
+    static let sentForApprovalMessage = L10n.t("أُرسل طلبك للإدارة، وستظهر بعد الموافقة.",
+                                               "Your request was sent to the administration; she'll appear once approved.")
+
+    /// رد دالة ترجع uuid أو NULL (أو لا شيء) — nil لأي رد بلا معرّف
+    static func optionalId(_ data: Data) -> UUID? {
+        let text = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\" \n\r\t"))
+        return UUID(uuidString: text)
+    }
+
+    @discardableResult
+    static func addSelfWife(name: String, hidden: Bool = false) async throws -> UUID? {
+        optionalId(try await SupabaseConfig.client
             .rpc("add_self_wife", params: ["p_name": AnyEncodable(name),
-                                           "p_hidden": AnyEncodable(hidden)]).execute()
+                                           "p_hidden": AnyEncodable(hidden)]).execute().data)
     }
 
     /// إخفاء/إظهار زوجة العضو في الشجرة — مقيَّد بزوجاته هو (RPC ذاتي).
@@ -287,9 +305,10 @@ enum WomenStore {
             .rpc("set_self_wife_hidden", params: ["p_wife_id": AnyEncodable(wifeId.uuidString),
                                                   "p_hidden": AnyEncodable(hidden)]).execute()
     }
-    static func addSelfMother(name: String) async throws {
-        try await SupabaseConfig.client
-            .rpc("add_self_mother", params: ["p_name": AnyEncodable(name)]).execute()
+    @discardableResult
+    static func addSelfMother(name: String) async throws -> UUID? {
+        optionalId(try await SupabaseConfig.client
+            .rpc("add_self_mother", params: ["p_name": AnyEncodable(name)]).execute().data)
     }
     /// ربط أنثى موجودة زوجةً للعضو نفسه (RPC set_self_wife — مقيّدة على عقدته).
     static func setSelfWife(wifeId: UUID) async throws {
@@ -297,37 +316,28 @@ enum WomenStore {
             .rpc("set_self_wife", params: ["p_wife_id": AnyEncodable(wifeId.uuidString)]).execute()
     }
     /// «إضافة أخت» — بنت جديدة تحت أبي العضو نفسه (RPC add_or_link_self_relative، طلب المالك ٢٠٢٦-١٠-٢٤:
-    /// الأخت تُضاف من الشجرة فقط لا من الملف الشخصي). المفاتيح الأربعة كلها تُرسل (null صريحة).
+    /// الأخت تُضاف من الشجرة فقط لا من الملف الشخصي). المفاتيح الأربعة كلها تُرسل (null صريحة). nil = بانتظار الموافقة
     @discardableResult
-    static func addSelfSister(fatherId: UUID, name: String) async throws -> UUID {
-        let params: [String: AnyEncodable] = [
-            "p_kind": AnyEncodable("sister"),
-            "p_father_id": AnyEncodable(fatherId.uuidString),
-            "p_woman_id": AnyEncodable(Optional<String>.none),
-            "p_name": AnyEncodable(name)
-        ]
-        let newId: UUID = try await SupabaseConfig.client
-            .rpc("add_or_link_self_relative", params: params).execute().value
-        return newId
+    static func addSelfSister(fatherId: UUID, name: String) async throws -> UUID? {
+        try await addOrLinkSelfRelative(kind: "sister", fatherId: fatherId, womanId: nil, name: name)
     }
     /// «إضافة زوجة» من العائلة للعضو نفسه (نفس الدالة بنوع 'wife'، مقيّدة على عقدته): `womanId` = بنت موجودة لأبيها
     /// تُربط زوجةً له، وإلا `name` = بنت جديدة تحت أبيها ثم تُربط. السيرفر يرفض المتزوجة بغيره وغير بنات الأب.
     @discardableResult
-    static func addOrLinkSelfWife(fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID {
+    static func addOrLinkSelfWife(fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID? {
         try await addOrLinkSelfRelative(kind: "wife", fatherId: fatherId, womanId: womanId, name: name)
     }
-    /// نفس الدالة بنوعها ('wife' أو 'mother') — الأم: البنت تصير أمّه وزوجةً لأبيه
+    /// نفس الدالة بنوعها ('wife' أو 'mother' أو 'sister') — الأم: البنت تصير أمّه وزوجةً لأبيه. nil = بانتظار الموافقة
     @discardableResult
-    static func addOrLinkSelfRelative(kind: String, fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID {
+    static func addOrLinkSelfRelative(kind: String, fatherId: UUID, womanId: UUID?, name: String?) async throws -> UUID? {
         let params: [String: AnyEncodable] = [
             "p_kind": AnyEncodable(kind),
             "p_father_id": AnyEncodable(fatherId.uuidString),
             "p_woman_id": AnyEncodable(womanId?.uuidString),   // null صريح
             "p_name": AnyEncodable(name)                         // null صريح
         ]
-        let wifeId: UUID = try await SupabaseConfig.client
-            .rpc("add_or_link_self_relative", params: params).execute().value
-        return wifeId
+        return optionalId(try await SupabaseConfig.client
+            .rpc("add_or_link_self_relative", params: params).execute().data)
     }
     static func setSelfMother(motherId: UUID?) async throws {
         try await SupabaseConfig.client

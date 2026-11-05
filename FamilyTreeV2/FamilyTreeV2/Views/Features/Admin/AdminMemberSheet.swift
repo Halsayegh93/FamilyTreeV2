@@ -59,52 +59,68 @@ struct AdminMemberSheet: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
+    /// هيكل المربّع الموحّد (`DSComposer`، طلب المالك ٢٠٢٦-١١-٠١ «وحّد المربّعات»): الرأس الكحلي بدائرة العضو مكان
+    /// المربّع الذهبي، العنوان اسمه والوصف حالته، و«إغلاق» تحت بدل × — الأقسام والأوامر كما هي
     private var page: AnyView {
         guard let m = member else {
-            return AnyView(VStack(spacing: DS.Spacing.lg) {
-                closeRow
+            return AnyView(DSComposer(
+                title: L10n.t("العضو غير موجود", "Member not found"),
+                subtitle: L10n.t("بيانات العضو", "Member details"),
+                icon: "person.fill.questionmark",
+                tint: DS.Color.actionNavy,
+                actionTitle: "",
+                showsAction: false,
+                cancelTitle: L10n.t("إغلاق", "Close"),
+                canSubmit: false,
+                onSubmit: {},
+                onCancel: { dismiss() }
+            ) {
                 DSEmptyView(L10n.t("العضو غير موجود", "Member not found"),
                             message: L10n.t("ربما حُذف أو تغيّر — ارجع للقائمة", "It may have been deleted — go back to the list"),
                             style: .card)
-                Spacer(minLength: 0)
-            }
-            .padding(DS.Spacing.lg)
-            .background(DS.Hub.background.ignoresSafeArea()))
+            })
         }
         let facts = AdminMemberSheetFacts(member: m, all: memberVM.allMembers, byId: memberVM.member(byId:), tree: tree,
                                           account: accounts.info(m.id), accountsReady: accounts.loaded,
                                           liveStatus: liveStatus)
-        return AnyView(ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
-                AnyView(AdminMemberSheetHero(member: m, facts: facts, onClose: { dismiss() }))
-                if authVM.canEditMembers && (!facts.gaps.isEmpty || !facts.problems.isEmpty) {
-                    AnyView(fixesCard(m, facts))
-                }
-                AnyView(AdminMemberDataSection(member: m, facts: facts, canEdit: authVM.canEditMembers,
-                                               open: { box = $0 }, openTall: { tall = $0 }))
-                AnyView(AdminMemberLineageSection(member: m, facts: facts, canEdit: authVM.canEditMembers,
-                                                  canManageChildren: authVM.canEditMembers && authVM.currentUser?.role != .monitor,
-                                                  open: { tall = $0 }, ask: { confirm = $0 },
-                                                  openWomen: openWomenTree))
-                if m.isDeceased != true {
-                    AnyView(accountSection(m, facts))
-                }
-                AnyView(footer(m))
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.lg)
-            .padding(.bottom, DS.Spacing.xxxl)
-            .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
-            .frame(maxWidth: .infinity)
-        }
-        .background(DS.Hub.background.ignoresSafeArea()))
+        return AnyView(DSComposer(
+            title: m.shortFullName.isEmpty ? L10n.t("بلا اسم", "No name") : m.shortFullName,
+            subtitle: facts.status?.title ?? L10n.t("بيانات العضو", "Member details"),
+            icon: "person.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: false,
+            headerTile: .member(name: m.fullName, avatarUrl: m.avatarUrl),
+            headerTileMuted: m.isDeceased == true,
+            onSubmit: {},
+            onCancel: { dismiss() }
+        ) {
+            AnyView(sections(m, facts))
+        })
     }
 
-    private var closeRow: some View {
-        HStack {
-            Spacer(minLength: 0)
-            DSCloseButton { dismiss() }
+    /// أقسام الورقة بترتيبها السابق — داخل محتوى المربّع (يتمرّر فيه)
+    private func sections(_ m: FamilyMember, _ facts: AdminMemberSheetFacts) -> some View {
+        VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+            AnyView(AdminMemberSheetHero(member: m, facts: facts))
+            if authVM.canEditMembers && (!facts.gaps.isEmpty || !facts.problems.isEmpty) {
+                AnyView(fixesCard(m, facts))
+            }
+            AnyView(AdminMemberDataSection(member: m, facts: facts, canEdit: authVM.canEditMembers,
+                                           open: { box = $0 }, openTall: { tall = $0 }))
+            AnyView(AdminMemberLineageSection(member: m, facts: facts, canEdit: authVM.canEditMembers,
+                                              canManageChildren: authVM.canEditMembers && authVM.currentUser?.role != .monitor,
+                                              open: { tall = $0 }, ask: { confirm = $0 },
+                                              openWomen: openWomenTree))
+            if m.isDeceased != true {
+                AnyView(accountSection(m, facts))
+            }
+            AnyView(footer(m))
         }
+        .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: الإجراءات
@@ -489,45 +505,34 @@ struct AdminMemberSheetFacts {
 
 // MARK: - الرأس
 
+/// أعلى محتوى الورقة: النسب والفرع، الشرائح (الاستخدام، الدور)، اتصال/واتساب — الصورة والاسم والحالة في رأس المربّع
 struct AdminMemberSheetHero: View {
     let member: FamilyMember
     let facts: AdminMemberSheetFacts
-    let onClose: () -> Void
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
-                DSMemberAvatar(name: member.fullName, avatarUrl: member.avatarUrl, size: DS.Icon.avatarLarge,
-                               roleColor: facts.status == .registered ? DS.Color.palm : DS.Color.slate)
-                    .grayscale(member.isDeceased == true ? 1 : 0)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(member.shortFullName.isEmpty ? L10n.t("بلا اسم", "No name") : member.shortFullName)
-                        .dsFont(.pageTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityAddTraits(.isHeader)
-                    Text(verbatim: [member.displayFullName, facts.branchTitle(appSettingsVM)].compactMap { $0 }.joined(separator: " · "))
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                // الاسم في الرأس وفي «البيانات» — هنا الفرع وحده (طلب المالك ٢٠٢٦-١١-٠١ «الاسم مكرر»)
+                if let branch = facts.branchTitle(appSettingsVM) {
+                    Text(verbatim: branch)
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
-                    OccasionFlowLayout(spacing: DS.Spacing.xs) {
-                        if let status = facts.status {
-                            DSStatusChip(text: status.title, icon: status.icon, tint: status.tint)
-                        }
-                        if let usage = facts.usageSub {
-                            DSStatusChip(text: usage.title, tint: usage == .usingApp ? DS.Color.info : DS.Color.warning)
-                        }
-                        if [.owner, .admin, .monitor, .supervisor].contains(member.role) {
-                            DSStatusChip(text: member.roleName, tint: member.roleColor)
-                        }
+                }
+                // الحالة في وصف الرأس — لا تتكرّر هنا شريحةً (طلب المالك ٢٠٢٦-١١-٠١)
+                OccasionFlowLayout(spacing: DS.Spacing.xs) {
+                    if let usage = facts.usageSub {
+                        DSStatusChip(text: usage.title, tint: usage == .usingApp ? DS.Color.info : DS.Color.warning)
+                    }
+                    if [.owner, .admin, .monitor, .supervisor].contains(member.role) {
+                        DSStatusChip(text: member.roleName, tint: member.roleColor)
                     }
                 }
-                Spacer(minLength: 0)
-                DSCloseButton(action: onClose)
             }
+            .padding(.horizontal, DS.Spacing.sm)
             if member.isDeceased != true, let phone = member.phoneNumber, !AdminMemberFacts.isBlank(phone) {
                 HStack(spacing: DS.Spacing.sm) {
                     AdminPillButton(title: L10n.t("اتصال", "Call"), icon: "phone.fill", style: .soft,

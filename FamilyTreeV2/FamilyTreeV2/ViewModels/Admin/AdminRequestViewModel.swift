@@ -26,6 +26,8 @@ class AdminRequestViewModel: ObservableObject {
     @Published var accountDeleteRequests: [AdminRequest] = []
     /// طلبات الخصوصية المعلّقة (`privacy_request`) — المالك/المدير/المراقب
     @Published var privacyRequests: [AdminRequest] = []
+    /// «إضافة قريبة» المعلّقة (`relative_add`) — المالك/المدير/المراقب
+    @Published var relativeAddRequests: [AdminRequest] = []
     /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
     @Published var myPendingRequests: [AdminRequest] = []
     /// «مسار الموافقات»: صفوف طلبات الانضمام/الربط المعلّقة (مرحلتها) — تُجلب والمفتاح شغّال فقط
@@ -244,7 +246,7 @@ class AdminRequestViewModel: ObservableObject {
     /// ومربّع «إعلان وفاة». الفشل = لا شيء طُبّق والطلب على حاله، مع رسالة واضحة.
     /// - silent: القبول الجماعي لإضافة الأبناء بلا إشعارات (كما كان).
     @discardableResult
-    private func decideOnServer(_ requestId: UUID, approve: Bool, reason: String? = nil, silent: Bool = false) async -> DecisionResult? {
+    func decideOnServer(_ requestId: UUID, approve: Bool, reason: String? = nil, silent: Bool = false) async -> DecisionResult? {
         nonisolated struct Overrides: Encodable { let silent: Bool }
         nonisolated struct Params: Encodable {
             let p_request_id: String
@@ -314,6 +316,8 @@ class AdminRequestViewModel: ObservableObject {
             return L10n.t("هذا النوع من الطلبات لا يُعالج من هنا.", "This request type can't be handled here.")
         case "family_links_protected":
             return serverMessage ?? L10n.t("لا يمكن الحذف: مرتبط بأفراد في العائلة.", "Can't delete: linked to family members.")
+        case "requester_gone":
+            return L10n.t("صاحب الطلب لم يعد موجوداً — ارفض الطلب.", "The requester no longer exists — reject the request.")
         // «مسار الموافقات» (advance_admin_request، والموافقة المباشرة والمفتاح شغّال)
         case "approval_needs_manager":
             return L10n.t("الطلب يحتاج اعتماد المدير قبل التنفيذ", "The request needs the manager's approval before it's carried out")

@@ -8,6 +8,9 @@ struct WaitingForApprovalView: View {
     @State private var pulseOpacity: CGFloat = 0.6
     @State private var contentOpacity: CGFloat = 0
     @State private var showContactSheet = false
+    /// «حذف حسابي» (متطلّب أبل) — تأكيد ثم `delete-account` ثم الخروج
+    @State private var showDeleteConfirm = false
+    @State private var showDeleteResult = false
     /// «تقليل الحركة» (توصية أبل): بلا دوران ولا نبض ولا قفز متكرر
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsLandscape) private var landscape
@@ -29,14 +32,15 @@ struct WaitingForApprovalView: View {
                 VStack(spacing: DS.Spacing.xl) {
                     Spacer().frame(height: DS.Spacing.sm)
 
-                    // ساعة رملية مصمتة على قرص بلون الإدارة، وخيط رمل ذهبي تنساب فيه لمعة كل ٤ ث
-                    // (طلب المالك ٢٠٢٦-١٠-٠٥ «أبسط وأقوى وباعتدال») — بدل الأيقونة والنقاط
-                    FT5STrial.waiting()
-                    // أصغر قليلاً (`DS.Icon.stateHero` — طلب المالك ٢٠٢٦-١٠-١٩)، ووضع العرض أصغر
-                    // (`DS.Landscape.stateHero`) — الرسمة بمقاسها الثابت فتُصغَّر بالمقياس
-                    .scaleEffect(heroSide / DS.Icon.heroArt)
-                    .frame(width: heroSide, height: heroSide)
-                    .opacity(contentOpacity)
+                    // شعار العائلة المسطّح بدل الساعة الرملية (طلب المالك ٢٠٢٦-١٠-٢٩ مع أيقونة التطبيق الجديدة)؛
+                    // «قيد الانتظار» يبقى في الرأس وشارة البطاقة
+                    Image("FamilyLogoNavy")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: landscape ? heroSide : DS.Icon.familyLogoCompact)
+                        .frame(maxWidth: .infinity)
+                        .opacity(contentOpacity)
+                        .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 
                     // بعد الأيقونة تدخل البطاقة ثم الأزرار واحداً بعد الآخر (dsStaggerIn)
                     // بطاقة المعلومات
@@ -63,6 +67,38 @@ struct WaitingForApprovalView: View {
         .dsCenterBox(isPresented: $showContactSheet) {
             MemberContactFormView()
                 .environmentObject(authVM)
+        }
+        .dsAlert(L10n.t("حذف حسابي", "Delete My Account"), isPresented: $showDeleteConfirm) {
+            Button(L10n.t("حذف نهائي", "Delete"), role: .destructive) { performDelete() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+        } message: {
+            Text(L10n.t("سيُحذف حسابك وطلب انضمامك وبياناتك نهائياً، ولا يمكن التراجع. هل تريد المتابعة؟",
+                        "Your account, join request and data will be permanently deleted. This can't be undone. Continue?"))
+        }
+        .dsAlert(deleteResultTitle, isPresented: $showDeleteResult) {
+            Button(L10n.t("حسناً", "OK")) { authVM.deleteAccountError = nil }
+        } message: {
+            Text(deleteResultMessage)
+        }
+    }
+
+    private var deleteResultTitle: String {
+        authVM.deleteAccountError == nil ? L10n.t("تم إرسال طلب الحذف", "Deletion Requested")
+                                         : L10n.t("تعذّر الحذف", "Couldn't Delete")
+    }
+
+    private var deleteResultMessage: String {
+        authVM.deleteAccountError ?? L10n.t("ستحذف الإدارة حسابك خلال سبعة أيام.",
+                                            "The admins will delete your account within seven days.")
+    }
+
+    private func performDelete() {
+        Task {
+            let deleted = await authVM.deletePendingAccount()
+            // نجح = خرج المستخدم؛ وإلا خطأ أو تحويل لطلب حذف → رسالة
+            if !deleted, authVM.deleteAccountError != nil || authVM.pendingDeletionRequest != nil {
+                showDeleteResult = true
+            }
         }
     }
 
@@ -98,7 +134,7 @@ struct WaitingForApprovalView: View {
 
     // MARK: - Action Buttons
     /// زر رئيسي «تحديث حالة الطلب»، وتحته مربّعان جنب بعض «تعديل البيانات» و«تواصل مع الإدارة»، و«تسجيل الخروج»
-    /// رابط هادئ آخر الصفحة (طلب المالك ٢٠٢٦-١٠-١٩). «حذف الحساب» انشال من هنا — بإعدادات الملف الشخصي (قرار المالك).
+    /// رابط هادئ آخر الصفحة (طلب المالك ٢٠٢٦-١٠-١٩). «حذف حسابي» رابط أحمر هادئ تحته (متطلّب أبل ٢٠٢٦-١٠-٢٩).
     private var actionButtons: some View {
         VStack(spacing: DS.Spacing.md) {
             DSPrimaryButton(
@@ -132,6 +168,20 @@ struct WaitingForApprovalView: View {
             }
             .buttonStyle(DSPressStyle())
             .dsStaggerIn(3)
+
+            Button {
+                showDeleteConfirm = true
+            } label: {
+                Label(L10n.t("حذف حسابي", "Delete My Account"), systemImage: "trash")
+                    .dsFont(.chip)
+                    .foregroundColor(DS.Color.error)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .frame(minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(DSPressStyle())
+            .disabled(authVM.isLoading)
+            .dsStaggerIn(4)
         }
         .padding(.horizontal, DS.Spacing.xl)
         .padding(.bottom, DS.Spacing.xl)

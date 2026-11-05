@@ -460,16 +460,14 @@ struct DSOptionTileIcon: View {
 
     var body: some View {
         let ink = (tint ?? DS.Color.primary).dsChrome(in: section).dsReadableGlyph
-        if selected {
-            // رمز أبيض فوق القرص المختار ← التعبئة الثابتة للون (الهوية: الأبيض مقروء في الداكن)
-            DSStateIcon(icon, tint: ink.dsSolidFill, size: DS.Icon.sizeSm, mapsChrome: false)
-        } else {
-            Image(dsSymbol: icon)
-                .dsGlyph(DS.Glyph.lg)
-                .foregroundColor(ink)
-                .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-                .background(Circle().fill(ink.opacity(DS.Opacity.tintFill)))
-        }
+        // مربّع برمز رفيع مثل مربّع الإشعار (طلب المالك ٢٠٢٦-١١-٠١): المختار بلونه ممتلئاً والرمز أبيض
+        Image(dsSymbol: icon.dsLightSymbol)
+            .dsGlyph(DS.Glyph.lg, weight: .light)
+            .foregroundColor(selected ? DS.Color.textOnPrimary : ink)
+            .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
+            .background(RoundedRectangle(cornerRadius: DS.Icon.sizeSm * 0.3, style: .continuous)
+                .fill(selected ? ink.dsSolidFill : ink.opacity(DS.Opacity.tintFill)))
+            .accessibilityHidden(true)
     }
 }
 

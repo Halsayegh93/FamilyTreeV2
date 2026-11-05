@@ -811,8 +811,11 @@ struct ProjectDetailView: View {
     /// صاحب المشروع — كبسولة تحت الاسم بدل بطاقة مستقلّة (الشارة الموحّدة)
     private var ownerChip: some View {
         // اسم صاحبه بالعائلة المختارة (المحفوظ نصّ وقت الإنشاء) — رباعي يتّسع للكبسولة
-        DSStatusChip(text: memberVM.displayName(id: project.ownerId, stored: project.ownerName, .four),
-                     icon: "person.fill", tint: AppSection.projects.ink)
+        HStack(spacing: DS.Spacing.xsm) {
+            DSStatusChip(text: memberVM.displayName(id: project.ownerId, stored: project.ownerName, .four),
+                         icon: "person.fill", tint: AppSection.projects.ink)
+            ReviewVerifiedMark(project.ownerId)
+        }
     }
 
     // MARK: - إجراءات سريعة
@@ -885,7 +888,7 @@ struct ProjectDetailView: View {
                     .dsFont(.chip)
                     .foregroundColor(AppSection.projects.ink)
                 Text(text)
-                    .dsFont(.body)
+                    .dsReadingFont()
                     .foregroundColor(DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }

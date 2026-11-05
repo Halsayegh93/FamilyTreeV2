@@ -38,6 +38,17 @@ enum AdminMemberStatus: Equatable {
         }
     }
 
+    /// شارة الصفّ المختصرة في قائمة «العائلة» (مسجّل · مقيّد · موقوف · متوفى)
+    var shortTitle: String {
+        switch self {
+        case .pendingJoin: return L10n.t("قيد المراجعة", "Under review")
+        case .registered:  return L10n.t("مسجّل", "Registered")
+        case .treeOnly:    return L10n.t("مقيّد", "In tree")
+        case .frozen:      return L10n.t("موقوف", "Suspended")
+        case .deceased:    return L10n.t("متوفى", "Deceased")
+        }
+    }
+
     var icon: String {
         switch self {
         case .pendingJoin: return "person.badge.clock"
@@ -132,7 +143,9 @@ enum AdminMemberProblem: String, CaseIterable, Identifiable {
 
 // MARK: - الشرائح
 
-/// شرائح صفحة الأعضاء (بدل الصفحات السبع القديمة)
+/// شرائح صفحة الأعضاء (بدل الصفحات السبع القديمة). منذ التبسيط (طلب المالك ٢٠٢٦-١١-٠٢، `samples/simplify`) الظاهر أربع
+/// فقط (`shown`): الكل · مسجّلون · متوفون · ناقصة — و«ناقصة» (`gaps`) = اتحاد البيانات الناقصة ومشكلات الشجرة و«تحقق من
+/// الأحياء». الحالات الأخرى باقية لقوائم الفهرس ولمن يفتح الصفحة عليها من مكان آخر (`shownChip` يحوّلها)
 enum AdminMemberChip: String, CaseIterable, Identifiable {
     case all, registered, treeOnly, deceased, verifyLiving, gaps, problems
 
@@ -145,8 +158,20 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
         case .treeOnly:     return L10n.t("مقيّدون في الشجرة", "In the tree only")
         case .deceased:     return L10n.t("متوفون", "Deceased")
         case .verifyLiving: return L10n.t("تحقق من الأحياء", "Check the living")
-        case .gaps:         return L10n.t("بيانات ناقصة", "Missing data")
+        case .gaps:         return L10n.t("ناقصة", "Incomplete")
         case .problems:     return L10n.t("مشكلات الشجرة", "Tree problems")
+        }
+    }
+
+    /// الشرائح الظاهرة في «العائلة» بالترتيب
+    static let shown: [AdminMemberChip] = [.all, .registered, .deceased, .gaps]
+
+    /// الشريحة الظاهرة المقابلة — «مقيّدون» ضمن «الكل»، والمشكلات و«تحقق من الأحياء» ضمن «ناقصة»
+    var shownChip: AdminMemberChip {
+        switch self {
+        case .treeOnly:               return .all
+        case .problems, .verifyLiving: return .gaps
+        default:                      return self
         }
     }
 
@@ -571,12 +596,8 @@ struct AdminMembersIndex {
         index.accountsReady = accountsReady
         index.built = !all.isEmpty
         index.pendingJoin = all.filter { $0.role == .pending }.count
-        let pool = all.filter { $0.role != .pending }.sorted {
-            let a = $0.firstName.trimmingCharacters(in: .whitespaces)
-            let b = $1.firstName.trimmingCharacters(in: .whitespaces)
-            if a != b { return a.localizedStandardCompare(b) == .orderedAscending }
-            return $0.fullName.localizedStandardCompare($1.fullName) == .orderedAscending
-        }
+        // أبجدياً بالحروف العربية المطبّعة (الهمزات على الألف ألفاً — `AdminGrouping.alphabetical`): كل القوائم بهذا الترتيب
+        let pool = AdminGrouping.alphabetical(all.filter { $0.role != .pending })
         let ctx = AdminMemberFacts.TreeContext(all)
         let heads = branchHeads(all)
         // «تحقق من الأحياء»: من له حساب دخول حيّ قطعاً (حين تصل القوائم)

@@ -23,6 +23,8 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     let isBirthDateHidden: Bool?
     /// العضو أخفى صورته عن الأعضاء (`members_masked` يفرّغ الصورة لغيره) — سياسة الخصوصية ٢٠٢٦-١٠-٢٨
     var isPhotoHidden: Bool? = nil
+    /// «إظهار آخر ظهوري ونشاطي» (`profiles.activity_visible`، ٢٠٢٦-١٠-٢٩) — nil = لم يصل (افتراضه ظاهر)
+    var activityVisible: Bool? = nil
     let badgeEnabled: Bool?
     var isHiddenFromTree: Bool
     var sortOrder: Int
@@ -128,6 +130,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.isPhoneHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhoneHidden)
         self.isBirthDateHidden = try container.decodeIfPresent(Bool.self, forKey: .isBirthDateHidden)
         self.isPhotoHidden = try container.decodeIfPresent(Bool.self, forKey: .isPhotoHidden)
+        self.activityVisible = try container.decodeIfPresent(Bool.self, forKey: .activityVisible)
         self.badgeEnabled = try container.decodeIfPresent(Bool.self, forKey: .badgeEnabled)
         
         self.isHiddenFromTree = try container.decodeIfPresent(Bool.self, forKey: .isHiddenFromTree) ?? false
@@ -178,6 +181,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
             && lhs.isMarried == rhs.isMarried
             && lhs.isPhoneHidden == rhs.isPhoneHidden
             && lhs.isPhotoHidden == rhs.isPhotoHidden
+            && lhs.activityVisible == rhs.activityVisible
             && lhs.email == rhs.email
         }
 
@@ -368,6 +372,7 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         case isPhoneHidden = "is_phone_hidden"
         case isBirthDateHidden = "is_birth_date_hidden"
         case isPhotoHidden = "is_photo_hidden"
+        case activityVisible = "activity_visible"
         case badgeEnabled = "badge_enabled"
         case isHiddenFromTree = "is_hidden_from_tree"
         case sortOrder = "sort_order"

@@ -678,7 +678,7 @@ class NewsViewModel: ObservableObject {
                 }
             } else {
                 Log.error("خطأ في نشر الخبر: \(error.localizedDescription)")
-                newsPostErrorMessage = "تعذر نشر الخبر: \(error.localizedDescription)"
+                newsPostErrorMessage = ObjectionableText.message(for: error) ?? "تعذر نشر الخبر: \(error.localizedDescription)"
             }
         }
 
@@ -765,7 +765,7 @@ class NewsViewModel: ObservableObject {
                 }
             } else {
                 Log.error("خطأ تعديل الخبر: \(error.localizedDescription)")
-                newsPostErrorMessage = "تعذر تعديل الخبر: \(error.localizedDescription)"
+                newsPostErrorMessage = ObjectionableText.message(for: error) ?? "تعذر تعديل الخبر: \(error.localizedDescription)"
             }
         }
 

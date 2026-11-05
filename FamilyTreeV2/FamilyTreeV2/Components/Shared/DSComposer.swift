@@ -317,6 +317,10 @@ struct DSComposer<Content: View>: View {
     /// الإجراء بعرض الشريط في صفّ وحده و«إلغاء» تحته — لنصّ إجراء يقول بالضبط ما سيحدث
     /// («أرسل الحين ← 32 عضو»، منشئ الإعلان، الدفعة ١١). false = الزرّان جنباً إلى جنب كما كانا
     var actionFullRow: Bool = false
+    /// مربّع الرأس بدل الرمز الذهبي — دائرة العضو في «بيانات العضو» (nil = الرمز الذهبي `icon`)
+    var headerTile: NotifBoxTile? = nil
+    /// دائرة العضو بالرمادي (المتوفى) — كما كانت في رأس «بيانات العضو»
+    var headerTileMuted: Bool = false
     let onSubmit: () -> Void
     let onCancel: () -> Void
     @ViewBuilder let content: () -> Content
@@ -340,7 +344,9 @@ struct DSComposer<Content: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DSComposerHeader(title: title, subtitle: subtitle, icon: icon, tint: boxTint)
+            // بلا × في الرأس — زرّ «إلغاء/إغلاق» تحت يكفي (طلب المالك ٢٠٢٦-١١-٠١)
+            DSComposerHeader(title: title, subtitle: subtitle, icon: icon, tint: boxTint,
+                             tile: headerTile, tileMuted: headerTileMuted)
                 .readHeight($headerH)
 
             ScrollView(showsIndicators: false) {
@@ -348,6 +354,8 @@ struct DSComposer<Content: View>: View {
                 VStack(spacing: DSBox.sectionSpacing) { content() }
                     .environment(\.dsBoxTint, boxTint)   // تنسيق الألوان: ما بداخل المربّع بلونه
                     .environment(\.dsInCenterBox, true) // حقول المربّعات أصغر قليلاً (طلب المالك)
+                    // الأقسام عناوين صغيرة بلا بطاقة — شكل مربّع الإشعار (٢٠٢٦-١١-٠١)
+                    .environment(\.dsFlatComposerSections, true)
                     .padding(.horizontal, contentPadding)
                     .padding(.top, DSBox.contentTop)
                     .padding(.bottom, DSBox.contentBottom)
@@ -569,6 +577,12 @@ struct DSComposerHeader: View {
     let tint: Color
     /// النسخة المضغوطة لمربّعات التنبيه والتأكيد — نفس الرأس بأبعاد `DSBox.compact…` (رأس واحد للنوعين)
     var compact: Bool = false
+    /// زرّ × في طرف الرأس مثل مربّع الإشعار (٢٠٢٦-١١-٠١) — nil = بلا زرّ (التنبيهات، الأوراق)
+    var onClose: (() -> Void)? = nil
+    /// مربّع الرأس بدل الرمز الذهبي (دائرة العضو) — nil = الرمز الذهبي `icon`
+    var tile: NotifBoxTile? = nil
+    /// الدائرة بالرمادي (المتوفى)
+    var tileMuted: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsSection) private var section
@@ -578,91 +592,46 @@ struct DSComposerHeader: View {
     private var dense: Bool { compact || landscape }
 
     var body: some View {
-        // الكحلي ← لون القسم. طرفا التدرّج لونان مصمتان (الأساسي ← الأفتح) بدل شفافية ٠٫٧٢:
-        // كانت تفتّح الرأس فوق الخلفية البيضاء فينزل الوصف الأبيض الصغير عن ٤٫٥:١
-        let tint = self.tint.dsChromeFill(in: section)
-        // التسلسل: الأيقونة تقفز ← العنوان ← الوصف (DSMotion)
-        return HStack(spacing: dense ? DS.Spacing.sm + 2 : DS.Spacing.md) {
-            iconBadge
+        // شكل مربّع الإشعار الغني لكل المربّعات (طلب المالك ٢٠٢٦-١١-٠١ «ابى كل المربعات بنفس النظام بكل الواجهات
+        // مع ايقونات الخفيفة وهيدر المربع شوي نقلله»): كحلي متدرّج ثابت، مربّع ذهبي برمز رفيع، عنوان أبيض ووصف
+        // كريمي — بلا مجسّم ولا نسخة مائلة ولا هالة. ألوان المعاني (رفض/حذف…) في الأزرار تحت لا في الرأس
+        HStack(spacing: dense ? DS.Spacing.sm + 2 : DS.Spacing.md) {
+            NotifBoxTileView(tile: tile ?? .glyph(icon),
+                             side: compact ? DSBox.compactHeaderIcon : (landscape ? DS.Landscape.boxHeaderIcon : DSBox.composerIcon))
+                .grayscale(tileMuted ? 1 : 0)
+                .modifier(DSIconPop())
             titles
             Spacer(minLength: 0)
-        }
-        .padding(.horizontal, dense ? DSBox.alertPadding : DS.Spacing.lg)
-        .padding(.vertical, DSBox.headerVerticalPadding)
-        .frame(maxWidth: .infinity)
-        // الشكل القديم للرأس لكن أصغر قليلاً (طلب المالك ٢٠٢٦-١٠-٠٦ «خل شكله القديم بس شوي أصغر»): ٨٠ بدل ٨٦
-        // — والمضغوط (التنبيه/التأكيد، وكل رأس في وضع العرض) ٥٦. حدّ أدنى: يطول مع خط الجهاز وعنوان التنبيه
-        // على سطرين (مقاسات Apple، طلب المالك ٢٠٢٦-١٠-٠٨) بدل أن يُقصّ
-        .frame(minHeight: compact ? DSBox.compactHeaderHeight : (landscape ? DS.Landscape.boxHeaderHeight : DSBox.headerHeight))
-        .background {
-            // المجسّم نفسه كبيراً ومائلاً وشفافاً في الطرف الآخر من الرأس (طلب المالك ٢٠٢٦-١٠-٠٧
-            // «أيقونة الشكل على جنب مائلة شفافة حجم أكبر بالاتجاه الثاني») — زخرفة فقط، تُقصّ بحدود الرأس
-            // ولا تغيّر مقاسه
-            FT5STrial.headerIcon(icon: icon, tint: tint)
-                .frame(width: dense ? DS.Landscape.boxWatermark : 118, height: dense ? DS.Landscape.boxWatermark : 118)
-                .rotationEffect(.degrees(-18))
-                .opacity(DS.Theme.isCalm ? DS.Theme.calmWatermarkOpacity : (dense ? DSBox.compactWatermarkOpacity : 0.22))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-                .offset(x: dense ? 12 : 18, y: dense ? 10 : 14)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-                .id("wm-\(icon)")
-                .transition(.opacity)
-        }
-        .clipped()
-        .background {
-            if DS.Theme.isCalm {
-                // «الهادئ الفاتح»: لون المربّع خفيفاً (قسمه أو معناه) بنص داكن — بلا تعتيم ولا هالة
-                tint.dsCalmTint
-                    .ignoresSafeArea(edges: .horizontal)
-            } else {
-            // Color.clear بمقاس الرأس تماماً — الطبقات فوقه لا تغيّر مقاسه (الهالة ١٥٠ أطول من الرأس)
-            Color.clear
-                .overlay {
-                    LinearGradient(colors: [tint, tint.dsHeroLight],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                }
-                // الداكن: ألوان الأنواع فاتحة فيه — طبقة تعتيم تحفظ وضوح النص الأبيض
-                .overlay { if colorScheme == .dark { Color.black.opacity(0.3) } }
-                // هالة ناعمة في الطرف الآخر
-                .overlay { halo }
-                .clipped()
-            // المربّع الطويل (ورقة بعرض الشاشة) أفقياً: اللون يمتدّ تحت النوتش — داخل المربّع الوسطي لا أثر له
-            .ignoresSafeArea(edges: .horizontal)
+            if let onClose, !DS.Theme.isCalm {
+                DSRichBoxCloseButton(action: onClose)
             }
         }
-        // القارئ الصوتي: الرأس يُقرأ عنواناً واحداً (العنوان ثم الوصف)، والزخارف تُتجاهل
-        .accessibilityElement(children: .ignore)
+        .padding(.horizontal, dense ? DSBox.alertPadding : DS.Spacing.lg)
+        .padding(.vertical, dense ? DSBox.headerVerticalPadding : DS.Spacing.md)
+        .frame(maxWidth: .infinity)
+        // حدّ أدنى: يطول مع خط الجهاز بدل أن يُقصّ
+        .frame(minHeight: compact ? DSBox.compactHeaderHeight : (landscape ? DS.Landscape.boxHeaderHeight : DSBox.headerHeight))
+        .background {
+            if DS.Theme.isCalm {
+                tint.dsChromeFill(in: section).dsCalmTint
+                    .ignoresSafeArea(edges: .horizontal)
+            } else {
+                DSRichBoxBand()
+            }
+        }
+        // القارئ الصوتي: الرأس يُقرأ عنواناً واحداً (العنوان ثم الوصف) + زرّ الإغلاق إن وُجد
+        .accessibilityElement(children: onClose == nil ? .ignore : .contain)
         .accessibilityLabel(subtitle.isEmpty ? title : "\(title)، \(subtitle)")
         .accessibilityAddTraits(.isHeader)
-        .animation(.easeInOut(duration: 0.35), value: tint)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: icon)
-    }
-
-    private var halo: some View {
-        Circle()
-            .fill(Color.white.opacity(0.10))
-            .frame(width: 150, height: 150)
-            .blur(radius: 22)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .offset(x: -30, y: -60)
-    }
-
-    /// الدائرة الزجاجية: قفزة بنابض لطيف مع دوران صغير يستقر
-    private var iconBadge: some View {
-        // الشكل القديم: المجسّم نفسه أيقونة الرأس بلا قرص (أصغر قليلاً: ٤٤ بدل ٤٨)
-        TrialHeaderIcon(icon: icon, tint: tint.dsChromeFill(in: section),
-                        side: compact ? DSBox.compactHeaderIcon : (landscape ? DS.Landscape.boxHeaderIcon : DSBox.composerIcon))
-        .modifier(DSIconPop())
     }
 
     /// العنوان ثم الوصف ينسابان من جهة الأيقونة (٦٠ ملّي ثانية بينهما)
     private var titles: some View {
         VStack(alignment: .leading, spacing: DSBox.headerLineGap) {
             Text(title)
-                .font(compact ? DSBox.alertTitleFont : DSBox.titleFont)
-                .foregroundColor(DS.Color.headerTitle)
-                // المضغوط: عنوان التنبيه قد يطول — سطران ثم يصغر قليلاً
+                .font(DSBox.alertTitleFont)
+                .foregroundColor(DS.Theme.isCalm ? DS.Color.headerTitle : DS.Color.textOnPrimary)
                 .lineLimit(compact ? 2 : nil)
                 .minimumScaleFactor(compact ? 0.85 : 1)
                 .fixedSize(horizontal: false, vertical: compact)
@@ -672,8 +641,8 @@ struct DSComposerHeader: View {
             if !(compact && subtitle.isEmpty) {
                 // الاسم الطويل (اسم العضو في مربّعات الطلبات) سطران بدل «…» (طلب المالك ٢٠٢٦-١٠-٢٥)
                 DSBalancedText(subtitle)
-                    .font(DSBox.subtitleFont)
-                    .foregroundColor(DS.Color.boxHeaderSubtitle)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Theme.isCalm ? DS.Color.boxHeaderSubtitle : DS.Color.headerSubtitleOnTile)
                     .lineLimit(2)
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
@@ -782,8 +751,22 @@ struct DSComposerSection<Content: View>: View {
     @Environment(\.dsStaggerBase) private var staggerBase
     @Environment(\.dsBoxTint) private var boxTint
     @Environment(\.dsSection) private var section
+    /// داخل مربّع بشكل الإشعار الغني («مسار الموافقات») — القسم عنوان صغير بلا بطاقة
+    @Environment(\.dsFlatComposerSections) private var flat
 
     var body: some View {
+        if flat && isOpen == nil {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
+                content()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            cardBody
+        }
+    }
+
+    private var cardBody: some View {
         // أبعاد بطاقة القسم من الهيكل الموحّد `DSBox`
         VStack(alignment: .leading, spacing: DSBox.sectionInnerSpacing) {
             if let isOpen {
@@ -828,8 +811,10 @@ struct DSComposerSection<Content: View>: View {
     /// عنوان القسم: أيقونة بدائرة + العنوان + نص جانبي (+ سهم للقسم القابل للطي)
     private func headerRow(chevronUp: Bool?) -> some View {
         HStack(spacing: DSBox.sectionInnerSpacing) {
-            DSStateIcon(icon, tint: tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph,
-                        size: DSBox.sectionIcon, mapsChrome: false)
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.lg, weight: .light)
+                .foregroundColor(tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph)
+                .frame(width: DSBox.sectionIcon, height: DSBox.sectionIcon)
                 // أيقونة القسم تتفتّح بعد صعود بطاقتها بقليل — نفس لغة أيقونة الرأس
                 .modifier(DSIconPop(delay: DSMotion.staggerDelay(index, base: staggerBase) + 0.08,
                                     fromScale: 0.6, fromAngle: 0))
@@ -850,6 +835,16 @@ struct DSComposerSection<Content: View>: View {
                     .rotationEffect(.degrees(chevronUp ? 180 : 0))
             }
         }
+    }
+}
+
+private struct DSFlatComposerSectionsKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// أقسام `DSComposerSection` بلا بطاقة — عنوان صغير ثم المحتوى (مربّعات بشكل الإشعار الغني)
+    var dsFlatComposerSections: Bool {
+        get { self[DSFlatComposerSectionsKey.self] }
+        set { self[DSFlatComposerSectionsKey.self] = newValue }
     }
 }
 
@@ -887,6 +882,15 @@ struct DSComposerField: View {
         let tint = fill.dsReadableGlyph
         let side: CGFloat = inBox ? DSFieldMetrics.boxIconSize : DS.Icon.row
         return HStack(alignment: multiline ? .top : .center, spacing: DS.Spacing.sm) {
+            // داخل المربّعات: رمز رفيع بلا مجسّم مثل `DSFieldIcon` (طلب المالك ٢٠٢٦-١١-٠١ «ايقونات الخفيفة»)
+            if inBox {
+                Image(dsSymbol: icon.dsLightSymbol)
+                    .dsGlyph(side * 0.6, weight: focused ? .regular : .light)
+                    .foregroundColor(tint)
+                    .frame(width: side, height: side)
+                    .scaleEffect(iconPop ? 1.08 : 1)
+                    .accessibilityHidden(true)
+            } else {
             // عند التركيز تبقى الأيقونة المملوءة الحالية — وإلا رسم الاتجاه
             TrialArt(make: { focused ? nil : FT5STrial.stateIcon(icon: icon, tint: tint, size: side) }) {
             // عند التركيز: القرص ممتلئ بلون المربّع والرمز أبيض
@@ -900,6 +904,7 @@ struct DSComposerField: View {
             }
                 .frame(width: side, height: side)
                 .scaleEffect(iconPop ? 1.08 : 1)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     HStack(spacing: DS.Spacing.xxs) {
@@ -939,11 +944,9 @@ struct DSComposerField: View {
         }
         .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.sm + 2)
         .padding(.vertical, inBox ? DSBox.fieldVerticalPadding : DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-            .strokeBorder(focused ? tint.opacity(0.65) : DS.Color.textTertiary.opacity(0.15),
-                          lineWidth: focused ? 1.5 : 1))
-        .trialCardSkin(radius: DS.Radius.md)
+            .strokeBorder(focused ? tint.opacity(0.65) : .clear, lineWidth: 1.5))
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
         .animation(.easeInOut(duration: 0.2), value: focused)
@@ -1020,7 +1023,17 @@ struct DSFieldIcon: View {
     @Environment(\.dsSection) private var section
     var body: some View {
         let glyph = tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph
-        DSStateIcon(name, tint: glyph, size: inBox ? DSFieldMetrics.boxIconSize : DS.Icon.row, mapsChrome: false)
+        let side = inBox ? DSFieldMetrics.boxIconSize : DS.Icon.row
+        if inBox {
+            // داخل المربّعات: رمز رفيع بلا مجسّم (طلب المالك ٢٠٢٦-١١-٠١ «ايقونات الخفيفة»)
+            Image(dsSymbol: name.dsLightSymbol)
+                .dsGlyph(side * 0.6, weight: .light)
+                .foregroundColor(glyph)
+                .frame(width: side, height: side)
+                .accessibilityHidden(true)
+        } else {
+            DSStateIcon(name, tint: glyph, size: side, mapsChrome: false)
+        }
     }
 }
 
@@ -1119,17 +1132,24 @@ struct DSExtraBox<Content: View>: View {
                 .onTapGesture { close(onCancel) }
 
             // نفس تسلسل المربّعات: الأيقونة تقفز ← العنوان ← المحتوى يصعد ← الأزرار آخراً
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            // رأس كحلي بشكل مربّع الإشعار (٢٠٢٦-١١-٠١) ثم المحتوى والأزرار
+            VStack(alignment: .leading, spacing: 0) {
                 headerRow
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.md)
+                    .background(DSRichBoxBand())
 
-                VStack(alignment: .leading, spacing: DS.Spacing.md) { content() }
-                    .dsLandscapeFitScroll()
-                    .dsEntrance(delay: 0.2, y: DSMotion.rise, scale: DSMotion.riseScale)
+                VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) { content() }
+                        .environment(\.dsFlatComposerSections, true)
+                        .dsLandscapeFitScroll()
+                        .dsEntrance(delay: 0.2, y: DSMotion.rise, scale: DSMotion.riseScale)
 
-                buttonsRow
-                    .dsEntrance(delay: 0.28, y: DSMotion.footerRise, animation: DSMotion.footer)
+                    buttonsRow
+                        .dsEntrance(delay: 0.28, y: DSMotion.footerRise, animation: DSMotion.footer)
+                }
+                .padding(DS.Spacing.lg + 2)
             }
-            .padding(DS.Spacing.lg + 2)
             .frame(maxWidth: landscape ? DS.Landscape.extraBoxMaxWidth : 380)
             .background(DS.Color.background)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous))
@@ -1138,10 +1158,6 @@ struct DSExtraBox<Content: View>: View {
                     .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.2) : Color.black.opacity(0.06),
                                   lineWidth: colorScheme == .dark ? 1.25 : 1)
             )
-            .overlay(alignment: .top) {
-                // خط لون القسم أعلى المربّع
-                Capsule().fill(fillTint).frame(width: 44, height: 4).padding(.top, 7)
-            }
             .shadow(color: .black.opacity(0.3), radius: 26, x: 0, y: 12)
             .padding(.horizontal, DS.Spacing.xl)
             .padding(.vertical, landscape ? DS.Landscape.panelMargin : 0)
@@ -1158,20 +1174,20 @@ struct DSExtraBox<Content: View>: View {
 
     private var headerRow: some View {
         HStack(spacing: DS.Spacing.sm + 2) {
-            DSStateIcon(icon, tint: fillTint.dsReadableGlyph, size: DSBox.composerIcon, mapsChrome: false)
+            NotifBoxTileView(tile: .glyph(icon))
             .modifier(DSIconPop())
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).dsFont(.title).foregroundColor(DS.Color.textPrimary)
+                Text(title).dsFont(.headline).foregroundColor(DS.Color.textOnPrimary)
                     .dsEntrance(delay: 0.12, x: -8, animation: DSMotion.text)
                 if let subtitle {
-                    Text(subtitle).dsFont(.subtitle).foregroundColor(DS.Color.textSecondary)
+                    Text(subtitle).dsFont(.footnote).foregroundColor(DS.Color.headerSubtitleOnTile)
                         .dsEntrance(delay: 0.17, x: -8, animation: DSMotion.text)
                 }
             }
             Spacer(minLength: 0)
             if let onBack {
                 // زر الرجوع الموحّد فوق السطح (DSNavButtons)
-                DSBackButton(action: onBack)
+                DSBackButton(context: .onColor, action: onBack)
             }
         }
     }
@@ -1711,10 +1727,8 @@ private struct DSRowBoxModifier: ViewModifier {
         content
             .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.sm + 2)
             .padding(.vertical, inBox ? DSBox.fieldVerticalPadding : DS.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(DS.Color.textTertiary.opacity(0.15), lineWidth: 1))
-            .trialCardSkin(radius: DS.Radius.md)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
+
     }
 }
 

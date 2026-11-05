@@ -20,7 +20,11 @@ import Combine
 
 /// تصنيف إشعارات الإدارة — المصدر الواحد لمركز الإشعارات (يستبعدها) ولهذه الصفحة وعدّاد جرس «اليوم»
 enum AdminNotices {
-    enum Category: String { case action, team, system }
+    /// `changes` = «تغييرات الأعضاء» (`member_change` من السيرفر، طلب المالك ٢٠٢٦-١١-٠١) — هنا وحدها، لا في المركز العام
+    enum Category: String { case action, team, system, changes }
+
+    /// تغييرات بيانات الأعضاء (v2: قبل ← بعد لكل حقل، والمنفّذ)
+    static let memberChangeKind = "member_change"
 
     /// طلبات تنتظر قراراً (انضمام، شجرة، وفاة، بلاغ، محتوى بانتظار الاعتماد، رسالة عضو…)
     static let requestKinds: Set<String> = [
@@ -108,6 +112,8 @@ enum AdminNotices {
         // تنبيهات KWT SMS إدارية دائماً (تصل المالك والمدير فقط) — قبل قاعدة «ما يخصّني»
         if securityKinds.contains(n.kind) { return .action }
         if systemKinds.contains(n.kind) { return .system }
+        // «تغييرات الأعضاء» إدارية دائماً — قبل قاعدة «ما يخصّني» (العضو يصله `my_profile_change` في «إشعاراتي»)
+        if n.kind == memberChangeKind { return .changes }
         // ما يخصّني أنا (تعديل على بياناتي، طلب عنّي) يبقى في «الإشعارات» — كما كان
         if let me, n.subjectMemberId == me, n.createdBy != me { return nil }
         if requestKinds.contains(n.kind) { return .action }
@@ -155,6 +161,14 @@ struct AdminNoticeItem: Identifiable, Equatable {
     var needsAction = false
     var button: String? = nil
     var target: AdminNoticeTarget = .none
+    /// الصفّ الجديد (المرسل + «قبل ← بعد») — «تغييرات الأعضاء»
+    var rich: AdminNoticeRich? = nil
+}
+
+/// محتوى الصفّ الجديد لـ«تغييرات الأعضاء»: المرسل («الإدارة · بواسطة: فلان» أو العضو) والتغييرات
+struct AdminNoticeRich: Equatable {
+    let sender: NotificationSenderInfo
+    let changes: [AppNotification.NotificationDetails.ChangeEntry]
 }
 
 /// الحالات المشتقة («يحتاج إجراء» الآن) — يكتبها «اليوم» من حالته، ويقرؤها الجرس والصفحة
@@ -227,6 +241,8 @@ enum AdminNoticeRoutes {
     static func style(_ n: AppNotification, _ category: AdminNotices.Category) -> (icon: String, tint: Color) {
         let kind = n.kind
         switch category {
+        case .changes:
+            return ("person.text.rectangle", DS.Color.accent)
         case .system:
             return ("ellipsis.message.fill", DS.Color.warning)
         case .action:
@@ -293,13 +309,14 @@ struct AdminNotificationsPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all, action, team, system
+        case all, action, changes, team, system
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .all:    return L10n.t("الكل", "All")
             case .action: return L10n.t("يحتاج إجراء", "Needs action")
+            case .changes: return L10n.t("تغييرات الأعضاء", "Member changes")
             case .team:   return L10n.t("نشاط الفريق", "Team activity")
             case .system: return L10n.t("النظام", "System")
             }
@@ -308,6 +325,7 @@ struct AdminNotificationsPage: View {
             switch self {
             case .all:    return "square.grid.2x2.fill"
             case .action: return "exclamationmark.circle.fill"
+            case .changes: return "pencil.line"
             case .team:   return "person.2.fill"
             case .system: return "gearshape.fill"
             }
@@ -334,7 +352,8 @@ struct AdminNotificationsPage: View {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) { deleteSelected() }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             }
-            .dsCenterBox(item: $detail) { n in
+            // تفاصيل الإشعار المربّع الغني بمنتصف الشاشة — نفسه في مركز الإشعارات (طلب المالك ٢٠٢٦-١١-٠١)
+            .dsCenterBox(item: $detail, onBackgroundTap: { detail = nil }) { n in
                 AnyView(detailBox(n))
             }
             .task {
@@ -372,7 +391,12 @@ struct AdminNotificationsPage: View {
         var list = store.derived
         for n in notificationVM.notifications {
             guard let category = AdminNotices.category(of: n, me: me) else { continue }
-            list.append(Self.item(n, category: category, open: open, canTopUp: canTopUp, canSms: canSms))
+            var item = Self.item(n, category: category, open: open, canTopUp: canTopUp, canSms: canSms)
+            if category == .changes {
+                item.rich = AdminNoticeRich(sender: sender(n, style: AdminNoticeRoutes.style(n, category)),
+                                            changes: n.details?.changes ?? [])
+            }
+            list.append(item)
         }
         return list.sorted { a, b in
             if a.pinned != b.pinned { return a.pinned }
@@ -408,7 +432,7 @@ struct AdminNotificationsPage: View {
                 item.button = L10n.t("شحن الرصيد", "Top up")
                 item.target = .sms
             }
-        case .team:
+        case .team, .changes:
             break
         }
         return item
@@ -418,6 +442,7 @@ struct AdminNotificationsPage: View {
         switch f {
         case .all:    return true
         case .action: return item.needsAction
+        case .changes: return item.category == .changes
         case .team:   return item.category == .team
         case .system: return item.category == .system
         }
@@ -567,7 +592,8 @@ struct AdminNotificationsPage: View {
             }
             return
         }
-        detail = notificationVM.notifications.first { $0.id == id }
+        let n = notificationVM.notifications.first { $0.id == id }
+        detail = n
         if item.isUnread { Task { await notificationVM.markNotificationAsRead(id: id) } }
     }
 
@@ -620,15 +646,62 @@ struct AdminNotificationsPage: View {
         Task { await notificationVM.deleteNotifications(ids: ids) }
     }
 
+    /// المرسل — المصدر الواحد مع مركز الإشعارات (الصفوف القديمة: اسم المنفّذ أو «الإدارة»)
+    private func sender(_ n: AppNotification, style: (icon: String, tint: Color)) -> NotificationSenderInfo {
+        let legacy = n.createdBy.flatMap { memberVM.member(byId: $0) }?.shortFullName ?? L10n.t("الإدارة", "Admin")
+        return NotificationSenderInfo.resolve(n, isStaff: true, kindIcon: style.icon, legacyName: legacy,
+                                              member: { memberVM.member(byId: $0) })
+    }
+
+    private func categoryTitle(_ n: AppNotification, _ category: AdminNotices.Category) -> (title: String, icon: String) {
+        switch category {
+        case .action:
+            return (AdminNotices.securityKinds.contains(n.kind) ? L10n.t("تنبيه أمني", "Security alert")
+                                                                : L10n.t("طلب", "Request"),
+                    Filter.action.icon)
+        case .changes: return (Filter.changes.title, Filter.changes.icon)
+        case .team:    return (Filter.team.title, Filter.team.icon)
+        case .system:  return (Filter.system.title, Filter.system.icon)
+        }
+    }
+
     private func detailBox(_ n: AppNotification) -> some View {
         let category = AdminNotices.category(of: n, me: authVM.currentUser?.id) ?? .system
         let style = AdminNoticeRoutes.style(n, category)
-        let kind: Filter = category == .action ? .action : category == .team ? .team : .system
-        let actionTitle = AdminNotices.securityKinds.contains(n.kind) ? L10n.t("تنبيه أمني", "Security alert") : L10n.t("طلب", "Request")
-        return AdminNoticeDetailBox(item: n, icon: style.icon, tint: style.tint,
-                                    categoryTitle: category == .action ? actionTitle : kind.title,
-                                    categoryIcon: kind.icon)
-            .environmentObject(memberVM)
+        let cat = categoryTitle(n, category)
+        let subject = NotificationDetailParts.subjectMember(n, member: { memberVM.member(byId: $0) })
+        let body = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        return NotificationDetailBox(
+            notification: n,
+            isStaff: true,
+            sender: sender(n, style: style),
+            kindLabel: cat.title,
+            kindIcon: style.icon,
+            time: AdminNoticeRow.relative(n.createdDate),
+            quote: body.isEmpty ? nil : AnyView(Text(body).dsFont(.body).foregroundColor(DS.Color.textPrimary)),
+            changes: n.details?.changes ?? [],
+            subjectMember: subject,
+            subjectName: n.details?.subject?.name ?? subject?.shortFullName,
+            onClose: { detail = nil },
+            onOpenProfile: { detail = nil },
+            onOpenRequest: { rid in
+                detail = nil
+                // «الوارد» على الطلب نفسه — نفس مسار نقر الإشعار في «اليوم»
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
+                                                    userInfo: ["kind": n.kind, "request_id": rid.uuidString])
+                }
+            },
+            onOpenNews: { nid in
+                detail = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    NotificationCenter.default.post(name: .openNewsPost, object: nil, userInfo: ["id": nid])
+                }
+            }
+        )
+        .environmentObject(authVM)
+        .environmentObject(memberVM)
+        .environmentObject(adminRequestVM)
     }
 }
 
@@ -646,6 +719,33 @@ struct AdminNoticeRow: View {
     private var showsCircle: Bool { selecting && item.notificationId != nil }
 
     var body: some View {
+        content
+            .dsGroupedRow(position, radius: DS.Hub.cardRadius,
+                          dividerInset: DSNoticeMetrics.dividerInset(icon: item.rich == nil ? DS.Hub.iconSquare : DS.Icon.avatar,
+                                                                     selecting: item.rich == nil && showsCircle),
+                          highlight: selecting && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onTap)
+            // بزرّ: يبقى الزرّ عنصراً مستقلاً للقارئ الصوتي
+            .accessibilityElement(children: item.button == nil || selecting ? .combine : .contain)
+            .accessibilityValue(item.isUnread ? L10n.t("جديد", "New") : "")
+            .accessibilityAddTraits(item.notificationId != nil ? .isButton : [])
+            .accessibilityAddTraits(selecting && picked ? .isSelected : [])
+    }
+
+    /// «تغييرات الأعضاء» بالصفّ الجديد (المرسل · العنوان · «قبل ← بعد»)، والباقي بالصفّ المختصر كما كان
+    private var content: AnyView {
+        if let rich = item.rich {
+            return AnyView(NotificationRowContent(
+                title: item.title, sender: rich.sender, time: Self.relative(item.date), unread: item.isUnread,
+                changes: rich.changes, showsInlineChanges: true, isSelecting: showsCircle, isSelected: picked,
+                tint: AppSection.admin.ink,
+                bodyText: AnyView(DSNoticeText(text: item.subtitle, unread: item.isUnread, lines: 1))))
+        }
+        return AnyView(compactRow)
+    }
+
+    private var compactRow: some View {
         DSNoticeRow(title: item.title, time: item.pinned ? "" : Self.relative(item.date), unread: item.isUnread,
                     tint: AppSection.admin.ink) {
             HStack(spacing: DSNoticeMetrics.selectGap) {
@@ -668,16 +768,6 @@ struct AdminNoticeRow: View {
                     .fixedSize()
             }
         }
-        .dsGroupedRow(position, radius: DS.Hub.cardRadius,
-                      dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Hub.iconSquare, selecting: showsCircle),
-                      highlight: selecting && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
-        // بزرّ: يبقى الزرّ عنصراً مستقلاً للقارئ الصوتي
-        .accessibilityElement(children: item.button == nil || selecting ? .combine : .contain)
-        .accessibilityValue(item.isUnread ? L10n.t("جديد", "New") : "")
-        .accessibilityAddTraits(item.notificationId != nil ? .isButton : [])
-        .accessibilityAddTraits(selecting && picked ? .isSelected : [])
     }
 
     private static let formatter: RelativeDateTimeFormatter = {
@@ -686,224 +776,8 @@ struct AdminNoticeRow: View {
         return f
     }()
 
-    private static func relative(_ date: Date) -> String {
+    static func relative(_ date: Date) -> String {
         formatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
         return formatter.localizedString(for: date, relativeTo: Date())
-    }
-}
-
-// MARK: - مربّع التفاصيل (كان «تفاصيل الحركة» في سجل التعديلات)
-
-/// تفاصيل إشعار واحد: ما تغيّر (قبل ← بعد)، النص، ومعلومات السجل (التصنيف، الوقت، تخصّ، نفّذها).
-/// مربّع عرض بنفس تصميم المربّعات: رأس بلون النوع، أقسام تدخل تباعاً، و«إغلاق» أسفل المربّع.
-struct AdminNoticeDetailBox: View {
-    let item: AppNotification
-    let icon: String
-    let tint: Color
-    let categoryTitle: String
-    let categoryIcon: String
-
-    @EnvironmentObject var memberVM: MemberViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    private var subject: FamilyMember? { item.subjectMemberId.flatMap(memberVM.member(byId:)) }
-    private var actor: FamilyMember? { item.createdBy.flatMap(memberVM.member(byId:)) }
-
-    private static let fullFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .full
-        f.timeStyle = .short
-        return f
-    }()
-    private var fullDate: String {
-        Self.fullFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return Self.fullFormatter.string(from: item.createdDate)
-    }
-
-    private var changes: [AppNotification.NotificationDetails.ChangeEntry] { item.details?.changes ?? [] }
-
-    /// لون الرأس — درجة داكنة من لون النوع حتى يُقرأ النص الأبيض
-    private var headerTint: Color {
-        if tint == DS.Color.error { return DS.Color.error }
-        if tint == DS.Color.slate || tint == DS.Color.textSecondary { return DS.Color.textSecondary }
-        if tint == DS.Color.success || tint == DS.Color.palm { return DS.Color.composerProject }
-        if tint == DS.Color.warning || tint == DS.Color.accent { return DS.Color.composerLibrary }
-        return DS.Color.actionNavy
-    }
-
-    private var bodyIndex: Int { changes.isEmpty ? 0 : 1 }
-    private var infoIndex: Int { bodyIndex + (item.body.isEmpty ? 0 : 1) }
-
-    var body: some View {
-        DSComposer(
-            title: item.title,
-            subtitle: categoryTitle,
-            icon: icon,
-            tint: headerTint,
-            actionTitle: "",
-            showsAction: false,
-            cancelTitle: L10n.t("إغلاق", "Close"),
-            canSubmit: false,
-            onSubmit: {},
-            onCancel: { dismiss() }
-        ) {
-            if !changes.isEmpty { changesSection }
-            if !item.body.isEmpty { bodySection }
-            infoSection
-        }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-    }
-
-    private var changesSection: some View {
-        DSComposerSection(title: L10n.t("ما تغيّر", "What changed"), icon: "arrow.left.arrow.right",
-                          tint: DS.Color.accent, trailing: "\(changes.count)", index: 0) {
-            VStack(spacing: DS.Spacing.sm) {
-                ForEach(changes) { ch in AdminNoticeChangeLine(change: ch) }
-            }
-        }
-    }
-
-    private var bodySection: some View {
-        DSComposerSection(title: L10n.t("التفاصيل", "Details"), icon: "text.alignright",
-                          tint: AppSection.admin.ink, index: bodyIndex) {
-            Text(item.body)
-                .dsFieldFont(.fieldValue)
-                .foregroundColor(DS.Color.fieldValue)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .dsRowBox()
-        }
-    }
-
-    private var infoSection: some View {
-        DSComposerSection(title: L10n.t("معلومات السجل", "Record info"), icon: "info.circle.fill",
-                          tint: DS.Color.textSecondary, index: infoIndex) {
-            VStack(spacing: DS.Spacing.sm) {
-                infoRow(icon: categoryIcon, tint: tint, L10n.t("التصنيف", "Category"), categoryTitle)
-                infoRow(icon: "calendar.badge.clock", tint: DS.Color.warning, L10n.t("الوقت", "Time"), fullDate)
-                if let subject {
-                    infoRow(icon: "person.fill", tint: AppSection.admin.ink, L10n.t("تخصّ", "About"), subject.shortFullName)
-                }
-                if let actor {
-                    infoRow(icon: "person.fill.checkmark", tint: DS.Color.success, L10n.t("نفّذها", "By"), actor.shortFullName)
-                }
-            }
-        }
-    }
-
-    private func infoRow(icon: String, tint: Color, _ label: String, _ value: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: icon, tint: tint)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(label)
-                    .dsFieldFont(.label)
-                    .foregroundColor(DS.Color.fieldLabel)
-                Text(value)
-                    .dsFieldFont(.fieldValue)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .dsRowBox()
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// سطر «ما تغيّر»: اسم الحقل + القيمة قبل ← بعد (والصور مصغّرات)
-private struct AdminNoticeChangeLine: View {
-    let change: AppNotification.NotificationDetails.ChangeEntry
-
-    private var isPhoto: Bool {
-        change.field == "avatar_url" || change.field == "cover_url" || change.field == "photo_url"
-    }
-
-    private func display(_ v: String?) -> String {
-        let t = (v ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.isEmpty ? L10n.t("بلا", "None") : t
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: isPhoto ? "photo.fill" : "pencil", tint: DS.Color.accent)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(AppNotification.NotificationDetails.localizedFieldName(change.field))
-                    .dsFieldFont(.label)
-                    .foregroundColor(DS.Color.fieldLabel)
-                if isPhoto {
-                    HStack(spacing: DS.Spacing.md) {
-                        photoThumb(change.before, label: L10n.t("قبل", "Before"), faded: true)
-                        arrow
-                        photoThumb(change.after, label: L10n.t("بعد", "After"), faded: false)
-                        Spacer(minLength: 0)
-                    }
-                } else {
-                    HStack(spacing: DS.Spacing.xsm) {
-                        Text(display(change.before))
-                            .dsFont(.callout)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .strikethrough(true, color: DS.Color.textTertiary.opacity(DS.Opacity.selectedStroke))
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                        arrow
-                        Text(display(change.after))
-                            .dsFont(.rowTitleCompact)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(3)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(L10n.t("قبل: \(display(change.before))، بعد: \(display(change.after))",
-                                               "Before: \(display(change.before)), after: \(display(change.after))"))
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dsRowBox()
-    }
-
-    private var arrow: some View {
-        Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
-            .dsGlyph(DS.Glyph.xs)
-            .foregroundColor(DS.Color.textTertiary)
-            .accessibilityHidden(true)
-    }
-
-    private func photoThumb(_ urlString: String?, label: String, faded: Bool) -> some View {
-        let trimmed = (urlString ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return VStack(spacing: DS.Spacing.xxs) {
-            Group {
-                if let url = URL(string: trimmed), !trimmed.isEmpty {
-                    CachedAsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: {
-                        Rectangle().fill(DS.Color.surface)
-                    }
-                } else {
-                    ZStack {
-                        Rectangle().fill(DS.Color.surface)
-                        Image(systemName: "person.crop.circle.badge.xmark")
-                            .dsGlyph(DS.Glyph.md, weight: .regular)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-            }
-            .frame(width: DSBox.photoTile, height: DSBox.photoTile)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
-                    .strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width)
-            )
-            .opacity(faded ? DS.Opacity.disabled : 1)
-            .accessibilityHidden(true)
-            Text(label)
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-        }
     }
 }

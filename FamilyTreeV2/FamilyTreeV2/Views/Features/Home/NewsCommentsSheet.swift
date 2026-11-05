@@ -142,8 +142,8 @@ struct NewsCommentsSheet: View {
         .dsAlert(L10n.t("تعليق غير لائق", "Inappropriate comment"), isPresented: $showObjectionableAlert) {
             Button(L10n.t("تعديل التعليق", "Edit comment"), role: .cancel) {}
         } message: {
-            Text(L10n.t("يحتوي تعليقك على ألفاظ غير لائقة، ولا يُسمح بنشرها في التطبيق. عدّل التعليق ثم أرسله.",
-                        "Your comment contains inappropriate language, which isn't allowed in the app. Please edit it and send again."))
+            // نص السيرفر (`blocked_words_message_general`) إن وُجد — نفسه لكل الحفظ
+            Text(ObjectionableText.message)
         }
         // زر الإرسال والرسائل بلون قسم الأخبار ما دامت الورقة ظاهرة
         .dsSectionPage(.news)
@@ -199,6 +199,7 @@ struct NewsCommentsSheet: View {
                     .dsFieldFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(1)
+                ReviewVerifiedMark(comment.author_id)
                 Spacer(minLength: 0)
                 Text(relativeTimeFromISO(comment.created_at))
                     .dsFont(.caption)
@@ -244,7 +245,7 @@ struct NewsCommentsSheet: View {
             }
 
             Text(comment.content)
-                .dsFieldFont(.fieldValue)
+                .dsReadingFont()
                 .foregroundColor(DS.Color.fieldValue)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)

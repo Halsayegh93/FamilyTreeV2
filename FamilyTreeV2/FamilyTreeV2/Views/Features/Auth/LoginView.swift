@@ -275,13 +275,11 @@ struct LoginView: View {
     private var logoSection: some View {
         VStack(spacing: DS.Spacing.xl) {
             // الشعار المسطّح «المحمدعلي»: كحلي على الفاتح، كريمي في الداكن — بلا دائرة ولا ظل (الهوية)
-            // الشعار القديم (أيقونة التطبيق الدائرية) — طلب المالك ٢٠٢٦-١٠-١٧: يبقى حتى يتبدّل مع الأيقونة الجديدة
-            Image("AppIconImage")
+            // تبدّل مع أيقونة التطبيق الجديدة (طلب المالك ٢٠٢٦-١٠-٢٩)
+            Image("FamilyLogoNavy")
                 .resizable()
-                .scaledToFill()
-                .frame(width: logoHeight * 1.25, height: logoHeight * 1.25)
-                .clipShape(Circle())
-                .dsSubtleShadow()
+                .scaledToFit()
+                .frame(height: isLandscape ? DS.Icon.familyLogoCompact : DS.Icon.familyLogo)
                 .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
 #if DEBUG
                 // ضغطة مطوّلة على الشعار تفتح شاشة تسجيل البيانات للمعاينة

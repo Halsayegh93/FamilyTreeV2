@@ -102,8 +102,8 @@ struct HomeNewsView: View {
                             // تجاهل التغيّرات الدقيقة حتى لا تُعاد الحسابات بلا داعٍ
                             if abs(newWidth - contentWidth) > 1 { contentWidth = newWidth }
                         }
-                        // بلا ارتداد مطّاطي عند السحب باليد (متاح من iOS 16.4)
-                        .modifier(NoBounceIfAvailable())
+                        // السحب للأسفل يحدّث دائماً حتى لو المحتوى أقصر من الشاشة — كان منع الارتداد
+                        // («basedOnSize») يُبطل السحب للتحديث على الآيفون (بلاغ المالك ٢٠٢٦-١٠-٣١)
                         .refreshable {
                             await refreshNews(notifyIfNew: true, force: true)
                             await newDots.refresh(userId: authVM.currentUser?.id, force: true)
@@ -175,6 +175,14 @@ struct HomeNewsView: View {
             if activeSubPage != nil { activeSubPage = nil }
             showingContactForm = false   // مربّع التواصل مفتوح؟ يُغلق حتى يظهر مركز الإشعارات
             showingNotifications = true
+        }
+        // «فتح الخبر» من مربّع تفاصيل الإشعار: يُغلق المركز وتُفتح الأخبار على الخبر
+        .onReceive(NotificationCenter.default.publisher(for: .openNewsPost)) { note in
+            guard let id = note.userInfo?["id"] as? UUID else { return }
+            showingNotifications = false
+            selectedTab = 0
+            focusNewsId = id
+            openNewsPage()
         }
         // إشعار «موافقة ولي الأمر» يفتح «حسابي» حيث بطاقة الموافقة
         .onReceive(NotificationCenter.default.publisher(for: .openProfileTab)) { _ in
@@ -1043,16 +1051,6 @@ private struct HomeWidthKey: PreferenceKey {
 }
 
 // MARK: - أيقونة الهيدر — Glass circle
-private struct NoBounceIfAvailable: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(iOS 16.4, *) {
-            content.scrollBounceBehavior(.basedOnSize)
-        } else {
-            content
-        }
-    }
-}
-
 /// تفتّح مشاهد مربّعات الرئيسية مرة واحدة لكل تشغيل (لا يتكرر مع كل رجوع للرئيسية)
 enum HomeTileEntrance {
     static var played = false

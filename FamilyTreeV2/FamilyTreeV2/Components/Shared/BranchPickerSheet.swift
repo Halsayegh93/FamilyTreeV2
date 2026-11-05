@@ -23,6 +23,9 @@ struct BranchPickerSheet: View {
     var canRename: Bool = false
     /// حفظ الاسم (nil = حذفه والرجوع للاسم الافتراضي) — المُستدعي يحفظه على السيرفر
     var onRename: (UUID, String?) -> Void = { _, _ in }
+    /// كل المستويات: كل فرع يتوسّع لأبنائه حتى آخر الشجرة (صفحة «العائلة» و«إدارة تواريخ الوفاة» — طلب المالك ٢٠٢٦-١١-٠٢)؛
+    /// false (الافتراضي، بقية الاستدعاءات) = ثلاثة مستويات كما كانت
+    var allLevels: Bool = false
     var onSelect: (UUID) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
@@ -44,7 +47,7 @@ struct BranchPickerSheet: View {
         let member: FamilyMember
         let displayName: String      // اسم العرض (قد يختلف عن member.fullName للفروع الإضافية)
         let totalCount: Int          // العضو نفسه + ذرّيته
-        let children: [BranchNode]   // مستوى واحد بس
+        let children: [BranchNode]   // أبناؤه فروعاً (ثلاثة مستويات، أو كلها مع `allLevels`)
         var id: UUID { member.id }
     }
 
@@ -339,8 +342,9 @@ struct BranchPickerSheet: View {
 
     private func computeTree() async {
         let members = allMembers
+        let deep = allLevels
         let result = await Task.detached(priority: .userInitiated) {
-            return Self.buildTree(from: members)
+            return Self.buildTree(from: members, allLevels: deep)
         }.value
 
         await MainActor.run {
@@ -358,16 +362,29 @@ struct BranchPickerSheet: View {
     }
 
     /// رأس الشجرة — عبدالله المحمدعلي (وإلا أول من لا أب له). صفحة الأعضاء تجمع بأبنائه المباشرين (الفروع)
+    /// رأس الشجرة = من بلا أب (أو أبوه خارج القائمة) وتحته أكبر ذرّية — لا بالاسم: الرأس الحقيقي اليوم
+    /// «المحمدعلي» وأبناؤه الخمسة فروعه، والقاعدة القديمة بالاسم أخرجت ١٦٩٤ عضواً «خارج الفروع» (٢٠٢٦-١١-٠٢)
     nonisolated static func familyRoot(in members: [FamilyMember]) -> FamilyMember? {
-        members.first { m in
-            m.fatherId == nil &&
-            m.fullName.contains("عبدالله") && m.fullName.contains("المحمدعلي")
-        } ?? members.first { m in
-            m.fullName.trimmingCharacters(in: .whitespaces) == "عبدالله المحمدعلي"
-        } ?? members.first { $0.fatherId == nil }
+        let ids = Set(members.map(\.id))
+        var children: [UUID: [UUID]] = [:]
+        for m in members { if let f = m.fatherId, ids.contains(f) { children[f, default: []].append(m.id) } }
+        func size(_ id: UUID) -> Int {
+            var count = 0, stack = [id], seen: Set<UUID> = []
+            while let cur = stack.popLast() {
+                guard seen.insert(cur).inserted else { continue }
+                count += 1
+                stack.append(contentsOf: children[cur] ?? [])
+            }
+            return count
+        }
+        return members.filter { $0.fatherId.map { !ids.contains($0) } ?? true }
+            .max { size($0.id) < size($1.id) }
     }
 
-    nonisolated static func buildTree(from members: [FamilyMember]) -> TreeBuildResult {
+    /// سقف العمق في وضع «كل المستويات» (الشجرة الحقيقية أقل بكثير)
+    nonisolated static let maxTreeDepth = 60
+
+    nonisolated static func buildTree(from members: [FamilyMember], allLevels: Bool = false) -> TreeBuildResult {
         // 1) خريطة الأبناء حسب الأب
         var childrenByFather: [UUID: [FamilyMember]] = [:]
         for m in members {
@@ -417,7 +434,12 @@ struct BranchPickerSheet: View {
         func node(for member: FamilyMember, depth: Int) -> BranchNode {
             let kids: [BranchNode]
             // depth 0 = ابن مباشر لعبدالله، depth 1 = حفيد، depth 2 = ابن حفيد
-            if depth == 0 {
+            if allLevels {
+                // كل المستويات: أبناء كل فرع حتى آخر الشجرة (العمق مفتاح داخلي فقط؛ سقف يحمي من حلقة آباء خاطئة)
+                kids = depth >= maxTreeDepth ? [] : (childrenByFather[member.id] ?? [])
+                    .map { node(for: $0, depth: depth + 1) }
+                    .sorted { $0.member.sortOrder < $1.member.sortOrder }
+            } else if depth == 0 {
                 // دائماً نولّد أبناء (المستوى 2)
                 kids = (childrenByFather[member.id] ?? [])
                     .map { node(for: $0, depth: 1) }

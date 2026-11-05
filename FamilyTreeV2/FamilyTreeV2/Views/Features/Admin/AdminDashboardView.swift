@@ -912,24 +912,29 @@ struct AdminSystemStatusPanel: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        Group {
-            if typeSize.isAccessibilitySize {
-                ScrollView(showsIndicators: false) { list }
-            } else {
-                // بارتفاعها كاملاً (لا تنضغط الصفوف إن ضاق المكان — النافذة تختار جهة تتّسع لها)
-                list.fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 0) {
+            // الرأس المضغوط الموحّد (رأس التنبيهات `DSComposerHeader(compact:)`، طلب المالك ٢٠٢٦-١١-٠١ «وحّد المربّعات»)
+            // بدل العنوان الرمادي الصغير — والكحلي يمتدّ تحت سهم النافذة المنبثقة فلا يظهر السهم بلون آخر
+            DSComposerHeader(title: L10n.t("حالة النظام", "System status"), subtitle: "",
+                             icon: "waveform.path.ecg", tint: DS.Color.actionNavy, compact: true)
+                .background(alignment: .top) {
+                    if !DS.Theme.isCalm { DSRichBoxBand().ignoresSafeArea(edges: .top) }
+                }
+            Group {
+                if typeSize.isAccessibilitySize {
+                    ScrollView(showsIndicators: false) { list }
+                } else {
+                    // بارتفاعها كاملاً (لا تنضغط الصفوف إن ضاق المكان — النافذة تختار جهة تتّسع لها)
+                    list.fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
+        .frame(width: typeSize.isAccessibilitySize ? DS.Hub.statusPanelWidthLarge : DS.Hub.statusPanelWidth)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.t("حالة النظام", "System status"))
-                .dsFont(.sectionTitle)
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.bottom, DS.Spacing.xxs)
             // الحالات السليمة لا تُعرض (الصيانة مطفأة، لا مجدول، لا أجهزة فاشلة): تبقى الأرقام المهمة فقط.
             // الرصيد يبقى ظاهراً دائماً (حتى وهو سليم)
             let shown = pills.filter { $0.level != .ok || $0.home == .sms }
@@ -946,8 +951,7 @@ struct AdminSystemStatusPanel: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.vertical, DS.Spacing.md)
-        .frame(width: typeSize.isAccessibilitySize ? DS.Hub.statusPanelWidthLarge : DS.Hub.statusPanelWidth,
-               alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func row(_ pill: AdminStatusPill) -> some View {

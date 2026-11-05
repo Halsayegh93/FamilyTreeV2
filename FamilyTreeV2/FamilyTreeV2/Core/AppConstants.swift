@@ -48,6 +48,9 @@ enum RequestType: String {
     case accountDelete = "account_delete"
     /// طلب خصوصية: إخفاء/حذف/تصحيح بيانات العضو في الشجرة — المالك/المدير/المراقب
     case privacyRequest = "privacy_request"
+    /// إضافة قريبة من «عائلتي» (زوجة/أم/أخت) بانتظار الموافقة — يكتبها السيرفر نفسه (٢٠٢٦-١٠-٢٩)،
+    /// والقرار بـ `decide_admin_request`
+    case relativeAdd = "relative_add"
 }
 
 /// أنواع الإشعارات — بدل strings سحرية

@@ -333,7 +333,10 @@ struct AdminTreeEditRequestsView: View {
                 detailLines(for: request, payload: payload, action: action)
 
                 if !selfRequest {
-                    metaLine(icon: "person.fill", text: L10n.t("مقدم الطلب: ", "Requester: ") + requesterName)
+                    HStack(spacing: DS.Spacing.xsm) {
+                        metaLine(icon: "person.fill", text: L10n.t("مقدم الطلب: ", "Requester: ") + requesterName)
+                        ReviewVerifiedMark(request.requesterId)
+                    }
                 }
 
                 if let createdAt = request.createdAt, !createdAt.isEmpty {

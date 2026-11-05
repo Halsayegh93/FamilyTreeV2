@@ -856,7 +856,7 @@ struct MemberDetailsView: View {
                     .foregroundColor(DS.Color.textPrimary)
                 if !station.details.isEmpty {
                     Text(station.details)
-                        .dsFieldFont(.subtitle)
+                        .dsReadingFont(.readingSecondary)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

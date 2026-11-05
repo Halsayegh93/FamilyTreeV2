@@ -28,6 +28,32 @@ nonisolated struct PrivacyRequestDetails: Decodable, Sendable {
     }
 }
 
+/// تفاصيل «إضافة قريبة» (`details` نص JSON: {v, rpc, args, kind, name, requester_id, summary})
+nonisolated struct RelativeAddDetails: Decodable, Sendable {
+    let kind: String?
+    let name: String?
+    let summary: String?
+
+    static func parse(_ details: String?) -> RelativeAddDetails? {
+        guard let data = details?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(RelativeAddDetails.self, from: data)
+    }
+
+    /// «إضافة زوجة: …» من السيرفر، وإلا من النوع والاسم
+    var summaryText: String {
+        if let s = summary?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }
+        let kindText: String
+        switch kind {
+        case "wife": kindText = L10n.t("إضافة زوجة", "Add wife")
+        case "mother": kindText = L10n.t("إضافة أم", "Add mother")
+        case "sister": kindText = L10n.t("إضافة أخت", "Add sister")
+        default: kindText = L10n.t("إضافة قريبة", "Add relative")
+        }
+        guard let n = name?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty else { return kindText }
+        return "\(kindText): \(n)"
+    }
+}
+
 /// صف يُتجاوز إن لم يُقرأ — نوع جديد أو عمود ناقص لا يُسقط القائمة كلها
 private nonisolated struct LossyAdminRequest: Decodable, Sendable {
     let value: AdminRequest?
@@ -60,16 +86,21 @@ extension AdminRequestViewModel {
         (authVM?.isAdmin ?? false) || authVM?.currentUser?.role == .monitor
     }
 
+    /// «إضافة قريبة»: مجال طلبات الشجرة (المالك/المدير/المراقب — `can_handle_admin_request`)
+    var canHandleRelativeAdd: Bool { canHandlePrivacyRequests }
+
     /// عدد طلبات السياسة الظاهرة في «الوارد»
-    var policyRequestsCount: Int { accountDeleteRequests.count + privacyRequests.count }
+    var policyRequestsCount: Int { accountDeleteRequests.count + privacyRequests.count + relativeAddRequests.count }
 
     func fetchPolicyRequests() async {
         var types: [String] = []
         if canHandleAccountDeletion { types.append(RequestType.accountDelete.rawValue) }
         if canHandlePrivacyRequests { types.append(RequestType.privacyRequest.rawValue) }
+        if canHandleRelativeAdd { types.append(RequestType.relativeAdd.rawValue) }
         guard !types.isEmpty else {
             accountDeleteRequests = []
             privacyRequests = []
+            relativeAddRequests = []
             return
         }
         do {
@@ -84,6 +115,7 @@ extension AdminRequestViewModel {
             let all = rows.compactMap(\.value)
             accountDeleteRequests = all.filter { $0.requestType == RequestType.accountDelete.rawValue }
             privacyRequests = all.filter { $0.requestType == RequestType.privacyRequest.rawValue }
+            relativeAddRequests = all.filter { $0.requestType == RequestType.relativeAdd.rawValue }
         } catch {
             Log.fetchError("فشل جلب طلبات الحذف والخصوصية", error)
         }
@@ -134,6 +166,20 @@ extension AdminRequestViewModel {
                 "تعذّر رفض الطلب. حاول مرة أخرى.", "Couldn't reject the request. Please try again."))
             return false
         }
+    }
+
+    // MARK: «إضافة قريبة»
+
+    /// قبول/رفض «إضافة قريبة» عبر `decide_admin_request` (القبول يُنشئ العقدة ويرجع `new_member_id`)
+    func decideRelativeAdd(_ request: AdminRequest, approve: Bool, reason: String?) async -> Bool {
+        guard canHandleRelativeAdd, NetworkMonitor.shared.requireOnline() else { return false }
+        isLoading = true
+        defer { isLoading = false }
+        // الخطأ (ومنه `requester_gone`) في `errorMessage` من `decideOnServer`
+        guard await decideOnServer(request.id, approve: approve, reason: reason) != nil else { return false }
+        relativeAddRequests.removeAll { $0.id == request.id }
+        if approve { _ = try? await WomenStore.fetch() }
+        return true
     }
 
     // MARK: طلبات الخصوصية

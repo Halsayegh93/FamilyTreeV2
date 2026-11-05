@@ -259,6 +259,7 @@ struct DiwaniyasView: View {
                         Text(item.ownerName)
                             .dsFont(.callout)
                             .foregroundColor(DS.Color.textSecondary)
+                        ReviewVerifiedMark(item.ownerId)
                     }
                 }
 
