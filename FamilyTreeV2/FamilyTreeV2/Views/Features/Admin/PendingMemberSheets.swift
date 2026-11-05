@@ -28,9 +28,6 @@ struct LinkToExistingMemberSheet: View {
     var suggested: [FamilyMember] = []
     /// بعد ربط حساب أنثى بشجرة النساء (المربّع نفسه يحوّلها) — لتحديث القوائم
     var onWomanLinked: (() -> Void)? = nil
-    /// انتهى «ربط بالشجرة» — لعرض النتيجة (`mergeResult`) وتحديث القوائم
-    var onMergeFinished: (() -> Void)? = nil
-    @ObservedObject private var accounts = AdminAccountsStore.shared
 
     @State private var searchText = ""
     @State private var selectedMember: FamilyMember? = nil
@@ -106,14 +103,15 @@ struct LinkToExistingMemberSheet: View {
                         existingTreeMemberId: target.id
                     )
                     dismiss()
-                    onMergeFinished?()
                 }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
             if let target = selectedMember {
-                // الجملة الواضحة نفسها في مربّع الطلب: من يدخل على أي سجل، وأبوه وإخوته، وتنبيه عند الاختلاف
-                Text(JoinLinkPlan(applicant: pendingMember, record: target, memberVM: memberVM, accounts: accounts).confirmText)
+                Text(L10n.t(
+                    "سيُربط حساب \(pendingMember.displayFullName) بسجل \(target.fullName) الموجود بالشجرة.\nسيحتفظ بموقعه وأبنائه وبياناته.",
+                    "Account \(pendingMember.displayFullName) will be linked to \(target.fullName)'s existing tree record. Position, children and data will be preserved."
+                ))
             }
         }
     }
@@ -208,7 +206,7 @@ struct LinkToExistingMemberSheet: View {
                 Text(name)
                     .dsFieldFont(.headline)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
@@ -294,7 +292,7 @@ struct LinkToExistingMemberSheet: View {
                     .dsFieldFont(DSBox.fieldValueSize, weight: isSelected ? .medium : .regular)
                     .foregroundColor(isSelected ? DS.Color.textPrimary : DS.Color.fieldValue)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(3)
+                    .lineLimit(2)
                 Spacer(minLength: 0)
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
@@ -823,7 +821,7 @@ struct LinkWomanAccountSheet: View {
                         .foregroundColor(taken ? DS.Color.textTertiary
                                          : (isSelected ? DS.Color.textPrimary : DS.Color.fieldValue))
                         .multilineTextAlignment(.leading)
-                        .lineLimit(3)
+                        .lineLimit(2)
                     if let caption {
                         Text(caption)
                             .dsFont(.caption)

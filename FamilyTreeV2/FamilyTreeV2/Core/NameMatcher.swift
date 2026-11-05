@@ -276,8 +276,8 @@ extension NameMatcher {
             let chainB = linkChain(m.nameUnits, noise: m.familyName.map { noise.union([linkKey($0)]) } ?? noise)
             let depth = linkDepth(chainA, chainB)
             guard depth >= minLinkDepth else { continue }
-            // تاريخ الشجرة الوهمي (2026) مجهول لا «بعيد» — كان يؤخّر السجل الصحيح عن ابن عمه
-            let treeBirth = JoinCompare.clean(m.birthDate).hasPrefix(JoinCompare.placeholderBirthYear) ? nil : m.birthDate
+            // تاريخ الشجرة الوهمي (2026) مجهول لا «بعيد» — كان يؤخّر السجل الصحيح
+            let treeBirth = (m.birthDate ?? "").hasPrefix("2026") ? nil : m.birthDate
             let gap: Int? = birthA.flatMap { a in
                 linkBirth(treeBirth).map { Int(abs(a.timeIntervalSince($0)) / 86_400) }
             }
