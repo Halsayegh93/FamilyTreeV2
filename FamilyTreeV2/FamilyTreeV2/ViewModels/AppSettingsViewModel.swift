@@ -10,6 +10,8 @@ struct AppSettings: Codable {
     var newsRequiresApproval: Bool
     var allowNewRegistrations: Bool
     var maintenanceMode: Bool
+    /// يوقف إشعارات الجوال عن التطبيق كله (السيرفر يمنع الإرسال) — الإشعار يبقى داخل التطبيق
+    var notificationsPaused: Bool? = nil
     var maxDevicesPerUser: Int
     var pollsEnabled: Bool?
     var diwaniyasEnabled: Bool?
@@ -57,6 +59,7 @@ struct AppSettings: Codable {
         case newsRequiresApproval = "news_requires_approval"
         case allowNewRegistrations = "allow_new_registrations"
         case maintenanceMode = "maintenance_mode"
+        case notificationsPaused = "notifications_paused"
         case maxDevicesPerUser = "max_devices_per_user"
         case pollsEnabled = "polls_enabled"
         case diwaniyasEnabled = "diwaniyas_enabled"
@@ -341,6 +344,7 @@ class AppSettingsViewModel: ObservableObject {
                 "news_requires_approval": AnyEncodable(true),
                 "allow_new_registrations": AnyEncodable(true),
                 "maintenance_mode": AnyEncodable(false),
+                "notifications_paused": AnyEncodable(false),
                 "max_devices_per_user": AnyEncodable(3),
                 "polls_enabled": AnyEncodable(true),
                 "diwaniyas_enabled": AnyEncodable(true),

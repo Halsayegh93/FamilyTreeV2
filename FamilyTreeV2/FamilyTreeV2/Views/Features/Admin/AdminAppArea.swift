@@ -239,6 +239,11 @@ private struct AdminAppSettingsGroups: View {
                    title: L10n.t("وضع الصيانة", "Maintenance mode"),
                    subtitle: L10n.t("يوقف التطبيق مؤقتاً للأعضاء — الإدارة تدخل", "Pauses the app for members — admins still get in"),
                    isOn: s.maintenanceMode)
+            toggle("notifications_paused", icon: "bell.slash.fill", tint: DS.Color.warning,
+                   title: L10n.t("إيقاف الإشعارات", "Pause notifications"),
+                   subtitle: L10n.t("يوقف إشعارات الجوال للكل — تبقى داخل التطبيق، ورسائل الدخول ما تتأثر",
+                                    "Stops phone notifications for everyone. They stay inside the app; login messages aren't affected."),
+                   isOn: s.notificationsPaused == true)
             AdminTapRow(icon: "arrow.down.app.fill", tint: DS.Color.primary,
                         title: L10n.t("فرض التحديث", "Force update"),
                         subtitle: forceUpdateLine(s),
