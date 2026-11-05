@@ -109,8 +109,8 @@ struct LinkToExistingMemberSheet: View {
         } message: {
             if let target = selectedMember {
                 Text(L10n.t(
-                    "سيُربط حساب \(pendingMember.firstName) بسجل \(target.fullName) الموجود بالشجرة.\nسيحتفظ بموقعه وأبنائه وبياناته.",
-                    "Account \(pendingMember.firstName) will be linked to \(target.fullName)'s existing tree record. Position, children and data will be preserved."
+                    "سيُربط حساب \(pendingMember.displayFullName) بسجل \(target.fullName) الموجود بالشجرة.\nسيحتفظ بموقعه وأبنائه وبياناته.",
+                    "Account \(pendingMember.displayFullName) will be linked to \(target.fullName)'s existing tree record. Position, children and data will be preserved."
                 ))
             }
         }
@@ -650,8 +650,8 @@ struct LinkWomanAccountSheet: View {
 
     private var confirmText: String {
         if let w = selectedWoman {
-            return L10n.t("سيُربط حساب \(pendingMember.firstName) بـ «\(w.fullName)» في شجرة النساء ويُفعَّل.",
-                          "\(pendingMember.firstName)'s account will be linked to «\(w.fullName)» in the women's tree and activated.")
+            return L10n.t("سيُربط حساب \(pendingMember.displayFullName) بـ «\(w.fullName)» في شجرة النساء ويُفعَّل.",
+                          "\(pendingMember.displayFullName)'s account will be linked to «\(w.fullName)» in the women's tree and activated.")
         }
         return L10n.t("ستُضاف «\(trimmedNewName)» بنتاً تحت \(fatherDisplayName) في شجرة النساء ويُربط بها الحساب ويُفعَّل.",
                       "«\(trimmedNewName)» will be added as a daughter of \(fatherDisplayName) in the women's tree, linked and activated.")

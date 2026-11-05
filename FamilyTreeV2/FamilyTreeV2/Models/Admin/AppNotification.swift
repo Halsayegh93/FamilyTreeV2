@@ -52,7 +52,7 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         id            = try c.decode(UUID.self, forKey: .id)
         title         = try c.decode(String.self, forKey: .title)
         body          = try c.decode(String.self, forKey: .body)
-        kind          = try c.decode(String.self, forKey: .kind)
+        let rawKind   = try c.decode(String.self, forKey: .kind)
         createdAt     = try c.decode(String.self, forKey: .createdAt)
         targetMemberId = try? c.decodeIfPresent(UUID.self, forKey: .targetMemberId)
         createdBy     = try? c.decodeIfPresent(UUID.self, forKey: .createdBy)
@@ -60,6 +60,8 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         requestId     = try? c.decodeIfPresent(UUID.self, forKey: .requestId)
         requestType   = try? c.decodeIfPresent(String.self, forKey: .requestType)
         details       = try? c.decodeIfPresent(NotificationDetails.self, forKey: .details)
+        // السيرفر يكتب «تغييرات الأعضاء» باسم admin_edit لأن نسخة 49 لا تعرف member_change (20261105100000)
+        kind          = (rawKind == "admin_edit" && details?.v == 2) ? "member_change" : rawKind
         subjectMemberId = try? c.decodeIfPresent(UUID.self, forKey: .subjectMemberId)
     }
 

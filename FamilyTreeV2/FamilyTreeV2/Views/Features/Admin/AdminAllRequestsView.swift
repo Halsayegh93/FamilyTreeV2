@@ -2498,7 +2498,8 @@ struct AdminAllRequestsView: View {
                 Text(match.member.displayFullName)
                     .dsFieldFont(.rowTitleCompact)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .dsNameLines()
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: DS.Spacing.xs) {
                     // السبب: «الاسم الأول + الأب + الجد»

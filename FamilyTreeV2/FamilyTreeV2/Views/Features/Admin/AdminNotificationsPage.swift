@@ -98,7 +98,8 @@ enum AdminNotices {
     static let smsKinds: Set<String> = [smsBalanceLow, smsSuspicious]
 
     /// تنبيهات النظام (رصيد رسائل رمز الدخول)
-    static let systemKinds: Set<String> = [smsBalanceLow]
+    static let systemKinds: Set<String> = [smsBalanceLow, "review_account_activity"]
+    private static let decidedPrefixes = ["تم قبول", "تم رفض"]
     /// تنبيهات أمنية تحتاج مراجعة («يحتاج إجراء» بزرّ «راجع»)
     static let securityKinds: Set<String> = [smsSuspicious]
 
@@ -116,6 +117,8 @@ enum AdminNotices {
         if n.kind == memberChangeKind { return .changes }
         // ما يخصّني أنا (تعديل على بياناتي، طلب عنّي) يبقى في «الإشعارات» — كما كان
         if let me, n.subjectMemberId == me, n.createdBy != me { return nil }
+        // نتيجة طلب انتهى («تم قبول…») بنوع الطلب نفسه: سجلّ لا مهمّة — كانت تطلع «يحتاج إجراء» بزرّ «مراجعة»
+        if requestKinds.contains(n.kind), decidedPrefixes.contains(where: { n.title.hasPrefix($0) }) { return .team }
         if requestKinds.contains(n.kind) { return .action }
         if teamKinds.contains(n.kind) { return .team }
         if n.kind == NotificationKind.admin.rawValue, n.details?.type == "approval_workflow",
@@ -428,7 +431,7 @@ struct AdminNotificationsPage: View {
                     ? .messages : .inbox(rid.flatMap { open.contains($0) ? $0 : nil })
             }
         case .system:
-            if canTopUp {
+            if canTopUp, n.kind == AdminNotices.smsBalanceLow {
                 item.button = L10n.t("شحن الرصيد", "Top up")
                 item.target = .sms
             }

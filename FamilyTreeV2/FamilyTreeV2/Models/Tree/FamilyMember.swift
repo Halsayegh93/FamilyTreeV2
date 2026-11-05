@@ -242,7 +242,10 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
 
     /// وحدات الاسم من سلسلة الشجرة (القاعدة ٢ في PersonName): «زين العابدين» و«محمد باقر» وحدة واحدة
     var nameUnits: [String] {
-        PersonName.chainUnits(fullName: fullName, firstName: firstName, fatherId: fatherId)
+        // طالب الانضمام: `first_name` فيه كل ما كتبه («حسن محمد عبدالرزاق») وبلا أب، فلو عُدّ وحدة واحدة
+        // لا يطابق أحداً في الشجرة وتفرغ اقتراحات الربط
+        if role == .pending, fatherId == nil { return PersonName.units(fullName) }
+        return PersonName.chainUnits(fullName: fullName, firstName: firstName, fatherId: fatherId)
     }
 
     /// وحدات الاسم مع العائلة المختارة آخر وحدة — للعرض والاختصار (ثلاثي/رباعي/خماسي)
