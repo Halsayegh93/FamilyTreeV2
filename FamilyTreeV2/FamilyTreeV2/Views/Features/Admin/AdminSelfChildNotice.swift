@@ -237,7 +237,7 @@ struct AdminChildAlertBox: View {
     @State private var failed = false
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var noticeTitle: String { L10n.stored("تنبيه من الإدارة", "Notice from the administration") }
+    private var noticeTitle: String { AdminAlertProfileCard.title }
 
     var body: some View {
         DSComposer(
@@ -302,5 +302,47 @@ struct AdminChildAlertBox: View {
             isSending = false
             if ok { onSent() } else { failed = true }
         }
+    }
+}
+
+// MARK: - التنبيه عند العضو في «حسابي» (طلب المالك ٢٠٢٦-١١-٠٥ «بمركز الإشعارات والملف الشخصي وبشكل بسيط»)
+
+/// آخر تنبيه من الإدارة لم يُقرأ — يختفي بـ«تم» أو حين يقرؤه من مركز الإشعارات
+struct AdminAlertProfileCard: View {
+    static let title = L10n.stored("تنبيه من الإدارة", "Notice from the administration")
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+
+    var body: some View {
+        if let alert = notificationVM.notifications.first(where: { $0.title == Self.title && !$0.read }) {
+            AdminAlertCardBody(text: alert.body) {
+                Task { await notificationVM.markNotificationAsRead(id: alert.id) }
+            }
+        }
+    }
+}
+
+struct AdminAlertCardBody: View {
+    let text: String
+    let onDone: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            Image(systemName: "exclamationmark.bubble.fill")
+                .dsGlyph(DS.Glyph.lg)
+                .foregroundColor(DS.Color.warning)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(verbatim: AdminAlertProfileCard.title)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                Text(verbatim: text)
+                    .dsFont(.callout)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            DSChipButton(L10n.t("تم", "Done"), size: .small, action: onDone)
+        }
+        .dsCard()
     }
 }

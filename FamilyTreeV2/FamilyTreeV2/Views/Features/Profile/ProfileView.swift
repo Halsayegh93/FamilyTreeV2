@@ -104,6 +104,7 @@ struct ProfileView: View {
                                     HStack(alignment: .top, spacing: DS.Spacing.md) {
                                         VStack(spacing: DS.Spacing.md) {
                                             // موافقة ولي الأمر — أعلى «حسابي» حين يوجد طلب
+                                            AnyView(AdminAlertProfileCard())
                                             if let card = reviewCard.card {
                                                 ReviewAccountPassCard(info: card, phone: currentUser.phoneNumber)
                                                     .dsCardCascade(0, appeared: appeared)
@@ -141,6 +142,7 @@ struct ProfileView: View {
                                 } else {
                                     VStack(spacing: DS.Spacing.md) {
                                         // موافقة ولي الأمر — أعلى «حسابي» حين يوجد طلب، ثم الملف
+                                        AnyView(AdminAlertProfileCard())
                                         if let card = reviewCard.card {
                                             ReviewAccountPassCard(info: card, phone: currentUser.phoneNumber)
                                                 .dsCardCascade(0, appeared: appeared)

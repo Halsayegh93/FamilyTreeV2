@@ -2787,28 +2787,22 @@ struct AdminAllRequestsView: View {
     // MARK: - Child Row
 
     private func childRow(for request: AdminRequest) -> some View {
+        // مختصر (طلب المالك ٢٠٢٦-١١-٠٥): مَن أضاف مَن فقط — التفاصيل في مربّع الطلب
         let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
+        let father = request.member?.shortFullName ?? L10n.t("عضو", "Member")
+        let child = request.newValue.flatMap(UUID.init(uuidString:)).flatMap { memberVM.member(byId: $0)?.firstName }
         return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
             requestRowHeader(icon: "person.badge.plus",
                              tint: DS.Color.info,
                              title: L10n.t("إضافة ابن", "Child Add"),
-                             subtitle: L10n.t("الأب: \(request.member?.displayFullName ?? "عضو")",
-                                              "Father: \(request.member?.displayFullName ?? "Member")")) {
+                             subtitle: child.map { L10n.t("\(father) أضاف ابنه \($0)", "\(father) added his son \($0)") }
+                                ?? L10n.t("الأب: \(father)", "Father: \(father)")) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
-            rowExtras {
-                // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
-                if let requester, requester.id != request.memberId {
-                    requesterLine(requester)
-                }
-                if let details = request.details, !details.isEmpty {
-                    contentBlock(details)
-                }
-                // التاريخ تحت
-                if let createdAt = request.createdAt {
-                    metaItem("clock", formatRegistrationDate(String(createdAt)))
-                }
+            // مقدّم الطلب غير الأب فقط
+            if let requester, requester.id != request.memberId {
+                rowExtras { requesterLine(requester) }
             }
         }
     }

@@ -1114,8 +1114,8 @@ class MemberViewModel: ObservableObject {
                     await notificationVM?.notifyAdminsWithPush(
                         title: L10n.stored("طلب إضافة ابن", "Child Add Request"),
                         body: L10n.stored(
-                            "\(firstNameOnly) لـ: \(father.fullName)",
-                            "\(firstNameOnly) to: \(father.fullName)"
+                            "\(father.shortFullName) أضاف ابنه \(firstNameOnly)",
+                            "\(father.shortFullName) added his son \(firstNameOnly)"
                         ),
                         kind: RequestType.childAdd.rawValue,
                         requestId: childRequestId,
