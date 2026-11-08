@@ -21,6 +21,7 @@ nonisolated enum AdminReportPart: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .names:
             switch grouping {
+            case .plain: return "الأسماء"
             case .father: return "الأسماء بالبيوت"
             case .branch: return "الأسماء بالفروع"
             case .birthDecade: return "الأسماء بعقد الميلاد"
@@ -88,7 +89,8 @@ nonisolated enum AdminReportExtra: String, CaseIterable, Identifiable, Sendable 
 /// أعمدة «الأسماء» في العمودين — ما يتّسع لنصف الصفحة (الهاتف في «الهواتف» وحده)
 nonisolated enum AdminReportNameColumns {
     static let allowed: [AdminReportField] = [.birth, .age, .registration, .death]
-    static let defaults: [AdminReportField] = [.birth, .age, .registration]
+    /// الافتراضي: الاسم وحده (المالك ٢٠٢٦-١١-٠٨ «لا تعبّيهم بيانات وايد») — والباقي من «تعديل»
+    static let defaults: [AdminReportField] = []
 }
 
 /// ما يُطلب بناؤه من صفحة الأسئلة الثلاث
@@ -173,7 +175,7 @@ nonisolated struct AdminReportPreset: Identifiable, Sendable {
     let parts: [AdminReportPart]
     var life: AdminReportFilter.Life = .all
     var registration: AdminReportFilter.Registration = .all
-    var grouping: AdminReportGrouping = .father
+    var grouping: AdminReportGrouping = .plain
     var periodOn = false
     var missingOn = false
 
@@ -279,7 +281,9 @@ nonisolated enum AdminReportComposer {
                 let houses = sections.count
                 let noun = r.plan.grouping == .father ? "\(AdminReportText.num(houses)) \(houses >= 3 && houses <= 10 ? "بيوت" : "بيتاً")"
                     : "\(AdminReportText.num(houses)) \(houses >= 3 && houses <= 10 ? "مجموعات" : "مجموعة")"
-                blocks.append(.section(partTitle, subtitle: "\(AdminReportText.people(pool.count)) في \(noun) · \(r.plan.grouping.pdfLabel)"))
+                let line = r.plan.grouping == .plain ? AdminReportText.people(pool.count)
+                    : "\(AdminReportText.people(pool.count)) في \(noun) · \(r.plan.grouping.pdfLabel)"
+                blocks.append(.section(partTitle, subtitle: line))
                 if pool.isEmpty {
                     blocks.append(.note("لا يوجد أفراد يطابقون هذا النطاق.", tone: .muted))
                 } else {

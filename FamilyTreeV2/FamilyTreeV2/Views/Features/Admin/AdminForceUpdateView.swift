@@ -375,8 +375,8 @@ private struct AdminUpdatePlatformCard: View {
                                                                   label: L10n.t("أقل نسخة — \(title)", "Minimum — \(title)"))))
                 AdminControlRow(icon: "tag.fill", tint: AppSection.admin.ink,
                                 title: L10n.t("اسم النسخة", "Version name"),
-                                subtitle: L10n.t("يطلع في المربّع — مثل 1.0.1", "Shown in the box — e.g. 1.0.1"),
-                                control: AnyView(AdminShortField(text: $draft.latestVersion, placeholder: "1.0.1",
+                                subtitle: L10n.t("يطلع في المربّع — مثل 1.1.0", "Shown in the box — e.g. 1.1.0"),
+                                control: AnyView(AdminShortField(text: $draft.latestVersion, placeholder: "1.1.0",
                                                                  label: L10n.t("اسم النسخة — \(title)", "Version name — \(title)"))))
             }
 

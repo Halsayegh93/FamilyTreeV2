@@ -20,7 +20,7 @@ struct AdminReportBuilderPage: View {
 
     @State private var parts: Set<AdminReportPart>
     @State private var filter: AdminReportFilter
-    @State private var grouping: AdminReportGrouping = .father
+    @State private var grouping: AdminReportGrouping = .plain
     @State private var periodOn = false
     @State private var missingOn = false
     @State private var preset: AdminReportKind?
@@ -37,15 +37,13 @@ struct AdminReportBuilderPage: View {
     @State private var planCache: (key: String, plan: AdminReportGroupPlan)?
     @AppStorage(AdminReportFieldsStore.key) private var fieldsRaw = ""
     @AppStorage(AdminReportRecentStore.key) private var recentRaw = ""
-    /// الإضافات المختارة (فوق الأجزاء) — محفوظة على الجهاز؛ فاضي = بلا مقدمة
-    @AppStorage("admin_report_extras_v1") private var extrasRaw = ""
 
     init(scope: AdminReportScope? = nil) {
         var f = AdminReportFilter()
         if let scope { f.scope = .init(ids: scope.ids, title: scope.title) }
-        f.grouping = .father
+        f.grouping = .plain
         _filter = State(initialValue: f)
-        _parts = State(initialValue: scope == nil ? [.numbers, .names] : [.names])
+        _parts = State(initialValue: [.names])  // الأسماء وحدها — أقل صفحات (المالك ٢٠٢٦-١١-٠٨)
     }
 
     // MARK: - Body
@@ -111,7 +109,8 @@ struct AdminReportBuilderPage: View {
 
     private var treeKey: String { "\(memberVM.membersVersion)-\(memberVM.allMembers.count)" }
     private var userKey: String { authVM.currentUser?.id.uuidString.lowercased() ?? "-" }
-    private var columnsKey: String { "\(userKey)|builder" }
+    /// v2: الافتراضي صار الاسم وحده — اختيارات الأعمدة القديمة لا تُحمل
+    private var columnsKey: String { "\(userKey)|builder2" }
 
     /// أعمدة الأسماء المحفوظة لهذا المستخدم (بترتيبها) — وإلا الافتراضية
     private var columns: [AdminReportField] {
@@ -128,7 +127,6 @@ struct AdminReportBuilderPage: View {
         let periodOn: Bool
         let missingOn: Bool
         let preset: AdminReportKind?
-        let extras: Set<AdminReportExtra>
         let members: Int
         let version: Int
         let accounts: Int
@@ -140,7 +138,7 @@ struct AdminReportBuilderPage: View {
 
     private var genKey: GenKey {
         GenKey(parts: parts, filter: filter, grouping: grouping, columns: columns, periodOn: periodOn, missingOn: missingOn,
-               preset: preset, extras: extras, members: memberVM.allMembers.count, version: memberVM.membersVersion,
+               preset: preset, members: memberVM.allMembers.count, version: memberVM.membersVersion,
                accounts: accounts.accounts.count, accountsLoaded: accounts.loaded, women: women?.count,
                names: appSettingsVM.settings.branchNames, allowed: authVM.isAdmin)
     }
@@ -177,8 +175,7 @@ struct AdminReportBuilderPage: View {
         f.grouping = grouping
         let request = AdminReportComposeRequest(parts: Array(parts), filter: f, columns: columns, plan: groupPlan(),
                                                 periodOn: periodOn, missingOn: missingOn,
-                                                presetTitle: preset.map { AdminReportKindUI.title($0) },
-                                                extras: extras)
+                                                presetTitle: preset.map { AdminReportKindUI.title($0) })
         let flag = AdminReportCancelFlag()
         let job = Task.detached(priority: .userInitiated) { () -> AdminReportResult? in
             let doc = AdminReportComposer.build(request, input: input)
@@ -244,8 +241,8 @@ struct AdminReportBuilderPage: View {
                     }
                 }
                 AdminReportHint(icon: "doc.on.doc",
-                                text: L10n.t("اختر شيئين ← ملف واحد بفهرس، وكل جزء يبدأ صفحة",
-                                             "Pick two → one file with an index, each part starts a page"))
+                                text: L10n.t("اختر شيئين ← ملف واحد، وكل جزء يبدأ صفحة",
+                                             "Pick two → one file, each part starts a page"))
             })
         }
     }
@@ -418,10 +415,11 @@ struct AdminReportBuilderPage: View {
 
     // MARK: - ٣ «كيف ترتّبه؟»
 
-    static let groupings: [AdminReportGrouping] = [.father, .branch, .birthDecade, .alphabet, .country]
+    static let groupings: [AdminReportGrouping] = [.plain, .father, .branch, .birthDecade, .alphabet, .country]
 
     static func groupingTitle(_ g: AdminReportGrouping) -> String {
         switch g {
+        case .plain: return L10n.t("عادي", "Plain")
         case .father: return L10n.t("بالبيوت", "By house")
         case .branch: return L10n.t("بالفرع", "By branch")
         case .birthDecade: return L10n.t("بالعمر", "By age")
@@ -449,7 +447,6 @@ struct AdminReportBuilderPage: View {
                     .padding(.vertical, (DS.Icon.tapTarget - DSBox.chipHeight) / 2)
                     .padding(.horizontal, DS.Border.width)
                 }
-                extrasRow
                 if parts.contains(.names) {
                     HStack(spacing: DS.Spacing.sm) {
                         AdminReportHint(icon: "list.bullet",
@@ -468,39 +465,6 @@ struct AdminReportBuilderPage: View {
                 }
             })
         }
-    }
-
-    // MARK: - الإضافات: الملف بلا مقدمة إلا ما تختاره
-
-    private var extras: Set<AdminReportExtra> {
-        Set(extrasRaw.split(separator: ",").compactMap { AdminReportExtra(rawValue: String($0)) })
-    }
-
-    private var extrasRow: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminReportHint(icon: "plus.square.on.square",
-                            text: L10n.t("أضف للملف (اختياري) — بدونها يبدأ الملف بالأسماء مباشرة",
-                                         "Add to the file (optional) — without these it starts straight with the content"))
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: DS.Spacing.sm)], alignment: .leading,
-                      spacing: DS.Spacing.sm) {
-                ForEach(AdminReportExtra.allCases) { e in
-                    let on = extras.contains(e)
-                    Button { setExtra(e, on: !on) } label: {
-                        AdminChoiceChip(title: e.title, icon: on ? "checkmark" : "plus", isSelected: on)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                }
-            }
-        }
-    }
-
-    private func setExtra(_ e: AdminReportExtra, on: Bool) {
-        UISelectionFeedbackGenerator().selectionChanged()
-        var s = extras
-        if on { s.insert(e) } else { s.remove(e) }
-        extrasRaw = AdminReportExtra.allCases.filter { s.contains($0) }.map(\.rawValue).joined(separator: ",")
     }
 
     static func columnTitle(_ f: AdminReportField) -> String {

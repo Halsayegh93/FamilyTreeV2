@@ -1628,16 +1628,23 @@ nonisolated extension AdminReportPDF {
         }
         startColumn()
         for (hi, house) in h.houses.enumerated() {
-            let need = houseHeadH + houseRowH * CGFloat(min(2, max(1, house.rows.count)))
+            // «عادي»: مجموعة بلا عنوان — بلا شريط رأس، الصفوف متتالية
+            let headed = !house.title.isEmpty
+            let headH = headed ? houseHeadH : 0
+            let need = headH + houseRowH * CGFloat(min(2, max(1, house.rows.count)))
             if cy + need > contentBottom { nextColumn() }
-            pages[pages.count - 1].append(.houseHead(house, x: colX(), y: cy, continued: false))
-            toc.append((house.title, pages.count - 1))
-            cy += houseHeadH
+            if headed {
+                pages[pages.count - 1].append(.houseHead(house, x: colX(), y: cy, continued: false))
+                toc.append((house.title, pages.count - 1))
+            }
+            cy += headH
             for r in house.rows.indices {
                 if cy + houseRowH > contentBottom {
                     nextColumn()
-                    pages[pages.count - 1].append(.houseHead(house, x: colX(), y: cy, continued: true))
-                    cy += houseHeadH
+                    if headed {
+                        pages[pages.count - 1].append(.houseHead(house, x: colX(), y: cy, continued: true))
+                    }
+                    cy += headH
                 }
                 pages[pages.count - 1].append(.houseRow(h, house: hi, row: r, x: colX(), y: cy))
                 cy += houseRowH

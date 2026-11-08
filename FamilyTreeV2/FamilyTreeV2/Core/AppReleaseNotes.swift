@@ -5,6 +5,24 @@ import Foundation
 /// المفتاح = رقم البناء (CFBundleVersion). أضف مدخلاً جديداً مع كل إصدار.
 enum AppReleaseNotes {
     static let byBuild: [String: (ar: String, en: String)] = [
+        "50": (
+            ar: """
+            • إضافة الأبناء أسهل، وتذكير لطيف بإضافة صورتك.
+            • ربط حسابك بالشجرة أوضح، مع إصلاح ظهور الاقتراحات.
+            • رمز الدخول: تركيز تلقائي ورسائل أوضح عند ضعف الاتصال.
+            • «ذكرى الراحلين» ومجلدات في مكتبة العائلة.
+            • تصميم إعلانات المناسبات أسهل، بنماذج تتحدّث من السيرفر.
+            • تحسينات وإصلاحات في الإشعارات والشاشات.
+            """,
+            en: """
+            • Adding children is easier, with a gentle reminder to add your photo.
+            • Linking your account to the tree is clearer, and suggestions show again.
+            • Login code: automatic focus and clearer messages on weak connections.
+            • «In memory» and folders in the Family Library.
+            • Designing occasion announcements is easier, with templates updated from the server.
+            • Improvements and fixes in notifications and screens.
+            """
+        ),
         "43": (
             ar: """
             • هوية ألوان جديدة رسمية (كحلي وذهبي) وأزرار بتصميم iOS 27.

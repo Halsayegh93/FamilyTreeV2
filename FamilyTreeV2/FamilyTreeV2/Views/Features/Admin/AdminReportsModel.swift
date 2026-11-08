@@ -169,6 +169,8 @@ nonisolated enum AdminReportField: String, CaseIterable, Identifiable, Sendable 
 
 /// التجميع (نفس خيارات صفحة الأعضاء — `AdminMemberGrouping`)
 nonisolated enum AdminReportGrouping: String, CaseIterable, Identifiable, Sendable {
+    /// «عادي»: قائمة واحدة أبجدية بلا بيوت ولا عناوين مجموعات (الافتراضي — المالك ٢٠٢٦-١١-٠٨)
+    case plain
     case branch, father, birthDecade, alphabet, country
 
     var id: String { rawValue }
@@ -176,6 +178,7 @@ nonisolated enum AdminReportGrouping: String, CaseIterable, Identifiable, Sendab
     /// اسمه على الغلاف (عربي دائماً)
     var pdfLabel: String {
         switch self {
+        case .plain: return "عادي"
         case .branch: return "حسب الفرع"
         case .father: return "حسب الأب"
         case .birthDecade: return "حسب عقد الميلاد"

@@ -19,6 +19,9 @@ extension AdminReportGroupPlan {
         let rows = members.filter { $0.role != .pending && $0.hasName }
         var sections: [Section] = []
         switch grouping {
+        case .plain:
+            // قسم واحد بلا عنوان — يُرتّب أبجدياً عند البناء
+            sections = [Section(title: "", path: nil, depth: 0, ids: rows.map(\.id))]
         case .branch:
             let groups = AdminGrouping.nested(rows, member: { $0 }, tree: tree, root: root, names: names)
             func walk(_ g: AdminBranchGroup<FamilyMember>, path: [String], depth: Int) {
