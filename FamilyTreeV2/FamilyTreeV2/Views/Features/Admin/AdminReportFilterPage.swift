@@ -389,7 +389,7 @@ struct AdminReportFilterPage: View {
     private var groupingCard: some View {
         AdminSectionCard(title: L10n.t("التجميع", "Group by")) {
             AdminChoiceRow {
-                ForEach(AdminReportGrouping.allCases) { g in
+                ForEach(AdminReportGrouping.allCases.filter { $0 != .plain }) { g in
                     Button {
                         guard g != filter.grouping else { return }
                         UISelectionFeedbackGenerator().selectionChanged()
