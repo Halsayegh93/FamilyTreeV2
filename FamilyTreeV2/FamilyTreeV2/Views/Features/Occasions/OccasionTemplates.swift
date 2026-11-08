@@ -34,6 +34,9 @@ enum OccasionSize: String, CaseIterable, Identifiable {
         }
     }
 
+    /// «منشور ٤:٥» — النسبة معزولة باتجاه LTR حتى ما تنقلب داخل السطر العربي
+    var label: String { "\(title) \u{2066}\(ratio)\u{2069}" }
+
     var ratio: String {
         switch self {
         case .post: return "4:5"
@@ -51,16 +54,17 @@ struct OccasionPlacement: Identifiable, Hashable {
     /// مكان النشر → المقاس. الستوري بهوامش أمان ٢٥٠ بكسل فوق وتحت (انستقرام، واتساب، سناب، تيك توك).
     static var all: [OccasionPlacement] {
         [
-            OccasionPlacement(id: "ig_post", title: L10n.t("انستقرام — منشور", "Instagram post"), size: .post),
-            OccasionPlacement(id: "ig_story", title: L10n.t("انستقرام — ستوري", "Instagram story"), size: .story),
-            OccasionPlacement(id: "wa_status", title: L10n.t("واتساب — حالة", "WhatsApp status"), size: .story),
-            OccasionPlacement(id: "wa_chat", title: L10n.t("واتساب — محادثة", "WhatsApp chat"), size: .post),
+            // أسماء واضحة بلا شرطات (المالك ٢٠٢٦-١١-٠٨ «عدل المسميات في مكان النشر»)
+            OccasionPlacement(id: "ig_post", title: L10n.t("منشور انستقرام", "Instagram post"), size: .post),
+            OccasionPlacement(id: "ig_story", title: L10n.t("ستوري انستقرام", "Instagram story"), size: .story),
+            OccasionPlacement(id: "wa_status", title: L10n.t("حالة واتساب", "WhatsApp status"), size: .story),
+            OccasionPlacement(id: "wa_chat", title: L10n.t("محادثة واتساب", "WhatsApp chat"), size: .post),
             OccasionPlacement(id: "snap", title: L10n.t("سناب شات", "Snapchat"), size: .story),
             OccasionPlacement(id: "tiktok", title: L10n.t("تيك توك", "TikTok"), size: .story),
-            OccasionPlacement(id: "x", title: "X", size: .post),
-            OccasionPlacement(id: "fb_post", title: L10n.t("فيسبوك — منشور", "Facebook post"), size: .post),
-            OccasionPlacement(id: "fb_story", title: L10n.t("فيسبوك — ستوري", "Facebook story"), size: .story),
-            OccasionPlacement(id: "square", title: L10n.t("مربع — لكل المنصات", "Square — any platform"), size: .square),
+            OccasionPlacement(id: "x", title: L10n.t("إكس (تويتر)", "X (Twitter)"), size: .post),
+            OccasionPlacement(id: "fb_post", title: L10n.t("منشور فيسبوك", "Facebook post"), size: .post),
+            OccasionPlacement(id: "fb_story", title: L10n.t("ستوري فيسبوك", "Facebook story"), size: .story),
+            OccasionPlacement(id: "square", title: L10n.t("مربع لكل المنصات", "Square — any platform"), size: .square),
         ]
     }
 }
@@ -70,7 +74,8 @@ struct OccasionPlacement: Identifiable, Hashable {
 /// نموذج ١ (صورة دائرية فوق، اسم كبير، كبسولة متدرجة)، نموذج ٢ (صورة جانبية داخل إطار سداسي)،
 /// أو نموذج ٣ (المعتمد منذ 17/10/2026: صورة بقوس فوق بطاقة رملية)
 enum OccasionModel: String, CaseIterable, Identifiable {
-    case m1, m2, m3
+    /// m4: تصميمه من السيرفر (OccasionModel4View.swift) — ما يطلع إلا لو رُفع
+    case m1, m2, m3, m4
 
     var id: String { rawValue }
 
@@ -78,19 +83,23 @@ enum OccasionModel: String, CaseIterable, Identifiable {
     static let standard: OccasionModel = .m3
 
     var title: String {
+        if let t = OccasionDesignerConfig.title(model: rawValue) { return t }
         switch self {
         case .m1: return L10n.t("نموذج ١", "Design 1")
         case .m2: return L10n.t("نموذج ٢", "Design 2")
         case .m3: return L10n.t("نموذج ٣", "Design 3")
+        case .m4: return OccasionDesignerConfig.model4?.title ?? L10n.t("نموذج ٤", "Design 4")
         }
     }
 
     /// شكل الصورة في النموذج
     var subtitle: String {
+        if let t = OccasionDesignerConfig.subtitle(model: rawValue) { return t }
         switch self {
         case .m1: return L10n.t("صورة دائرية فوق", "Round photo on top")
         case .m2: return L10n.t("صورة سداسية جانبية", "Hexagon photo at the side")
         case .m3: return L10n.t("صورة بقوس فوق بطاقة", "Arched photo over a card")
+        case .m4: return OccasionDesignerConfig.model4?.subtitle ?? L10n.t("تصميم جديد", "New design")
         }
     }
 
@@ -100,6 +109,7 @@ enum OccasionModel: String, CaseIterable, Identifiable {
         case .m1: return "circle.circle"
         case .m2: return "hexagon"
         case .m3: return "rectangle.roundedtop"
+        case .m4: return "sparkles.rectangle.stack"
         }
     }
 }
@@ -321,7 +331,8 @@ enum OccasionGender: String, CaseIterable, Identifiable {
 
 struct OccasionTemplate: Identifiable {
     let id: String
-    let title: String
+    /// الاسم — يتغيّر من السيرفر (`available`)
+    var title: String
     /// SF Symbol
     let icon: String
     let kind: OccasionKind
@@ -343,12 +354,35 @@ struct OccasionTemplate: Identifiable {
 
     /// النموذج اللي ينرسم فعلاً (نموذج ٣ لكل القوالب؛ القالب اللي ما له نموذج ١ يرجع لنموذج ٢)
     func effectiveModel(_ model: OccasionModel) -> OccasionModel {
+        // النموذج المختار مخفي من السيرفر (أو نموذج ٤ بلا تصميم لهذا الإعلان) ← أول نموذج متاح
+        let available = models
+        let model = available.contains(model) ? model : (available.first ?? .m3)
+        if model == .m4 { return .m4 }
         if model == .m3 { return .m3 }
         return model == .m1 && hasModel1 ? .m1 : .m2
     }
 
-    /// النماذج المتاحة لهذا القالب (لاختيار النموذج في الشاشة)
-    var models: [OccasionModel] { OccasionModel.allCases.filter { $0 != .m1 || hasModel1 } }
+    /// تصميم نموذج ٤ لهذا الإعلان بالمقاس (من السيرفر)
+    func model4Layout(_ size: OccasionSize) -> OccasionModel4Spec.Layout? {
+        OccasionDesignerConfig.model4?.layout(for: self, size: size)
+    }
+
+    /// النماذج المتاحة لهذا القالب (لاختيار النموذج في الشاشة) — بعد إعداد السيرفر: النموذج المخفي ما يطلع،
+    /// والإعلان اللي له قائمة نماذج يطلع فيه اللي فيها بس، ونموذج ٤ لو له تصميم. ولو انخفت كلها يبقى نموذج ٣
+    var models: [OccasionModel] {
+        let allowed = OccasionDesignerConfig.allowedModels(template: id)
+        let list = OccasionModel.allCases.filter { m in
+            switch m {
+            case .m1: guard hasModel1 else { return false }
+            case .m4: guard OccasionDesignerConfig.model4?.supports(self) == true else { return false }
+            default: break
+            }
+            if OccasionDesignerConfig.isHidden(model: m.rawValue) { return false }
+            if let allowed, !allowed.contains(m.rawValue) { return false }
+            return true
+        }
+        return list.isEmpty ? [.m3] : list
+    }
 
     /// المستخدم يختار «مع صورة / بدون صورة»؟ التهاني و«إعلان عزاء» (كان قالبين «إعلان وفاة — مع صورة / بدون صورة»
     /// ودُمجا بطلب المالك ٢٠٢٦-١٠-١٧)؛ مشاركة العزاء بدون صورة
@@ -373,6 +407,7 @@ struct OccasionTemplate: Identifiable {
     func optionalAssetPaths(for size: OccasionSize = .post, model: OccasionModel = .m2, withPhoto: Bool = true,
                             palette: OccasionPalette = .standard) -> [String] {
         guard palette == .silver, hasPalette else { return [] }
+        if effectiveModel(model) == .m4 { return [] }
         let S = OccasionSilver.self
         switch (effectiveModel(model), kind) {
         case (.m3, .death), (.m3, .deathText):
@@ -401,6 +436,10 @@ struct OccasionTemplate: Identifiable {
     func assetPaths(for size: OccasionSize, model: OccasionModel = .m2, withPhoto: Bool = true) -> [String] {
         let photo = showsPhoto(withPhoto)
         var paths: [String] = []
+        if effectiveModel(model) == .m4 {
+            // نموذج ٤: صور تخطيطه من السيرفر (مسار في occasion-kit أو رابط كامل)
+            return model4Layout(size)?.imagePaths ?? []
+        }
         if effectiveModel(model) == .m3 {
             // نموذج ٣: المخطوطات (PNG — نسخة من SVG الموقع)، الختم النافر، والشعار الكريمي
             switch kind {
@@ -458,6 +497,15 @@ struct OccasionTemplate: Identifiable {
 
 /// النصوص نفسها تطلع من الاختيارات (OccasionChoices / OccasionCompose) — هنا شكل القالب فقط
 extension OccasionTemplate {
+    /// الإعلانات الظاهرة في التطبيق بعد إعداد السيرفر (`occasion_designer`): المخفي ما يطلع، والترتيب والاسم من السيرفر
+    static var available: [OccasionTemplate] {
+        OccasionDesignerConfig.ordered(all).map { t in
+            var t = t
+            if let name = OccasionDesignerConfig.title(template: t.id) { t.title = name }
+            return t
+        }
+    }
+
     static var all: [OccasionTemplate] {
         [
             OccasionTemplate(id: "wedding", title: L10n.t("عقد قران", "Wedding"), icon: "heart.circle.fill", kind: .happy,

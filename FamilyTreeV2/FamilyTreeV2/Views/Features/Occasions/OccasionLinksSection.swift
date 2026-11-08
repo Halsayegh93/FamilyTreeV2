@@ -111,13 +111,25 @@ struct OccasionLinksSection: View {
     @State private var copiedId: UUID?
     @State private var linkToDelete: OccasionLink?
     @State private var expanded = false
+    /// داخل مربّع «رابط الموقع» (زرّ في «تصميم إعلان»): بلا رأس ولا بطاقة، مفتوح دائماً
+    var embedded = false
 
     private let tint = DS.Color.accent
 
     var body: some View {
+        if embedded {
+            content
+        } else {
+            content
+                .padding(DS.Spacing.md)
+                .dsCard(padding: 0)
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            header
-            if expanded {
+            if !embedded { header }
+            if expanded || embedded {
                 createRow
                 list
                 if let error = model.errorText {
@@ -128,8 +140,6 @@ struct OccasionLinksSection: View {
                 }
             }
         }
-        .padding(DS.Spacing.md)
-        .dsCard(padding: 0)
         .animation(DS.Anim.snappy, value: expanded)
         .task { await model.load() }
         .dsAlert(L10n.t("حذف الرابط؟", "Delete link?"),

@@ -754,6 +754,8 @@ struct DSComposerSection<Content: View>: View {
     var index: Int = 0
     /// قسم قابل للطي: الضغط على العنوان يفتح المحتوى ويخفيه (مثل «العائلة»)
     var isOpen: Binding<Bool>? = nil
+    /// زرّ صغير بطرف سطر العنوان (مثل «رابط الموقع» في «تصميم إعلان») — nil = بلا
+    var accessory: AnyView? = nil
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsStaggerBase) private var staggerBase
@@ -765,7 +767,15 @@ struct DSComposerSection<Content: View>: View {
     var body: some View {
         if flat && isOpen == nil {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
+                if let accessory {
+                    HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                        NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
+                        Spacer(minLength: 0)
+                        accessory
+                    }
+                } else {
+                    NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
+                }
                 content()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -836,6 +846,7 @@ struct DSComposerSection<Content: View>: View {
                     .foregroundColor(DS.Color.textTertiary)
                     .lineLimit(1)
             }
+            if let accessory { accessory }
             if let chevronUp {
                 Image(systemName: "chevron.down")
                     .dsGlyph(DS.Glyph.smCompact)

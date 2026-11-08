@@ -574,6 +574,8 @@ nonisolated struct AdminReportDoc: Sendable {
     var customTitle: String? = nil
     /// الورقة الجديدة: الصفحة الأولى ملخّص برأسه (`.masthead`) والفهرس فيها — بلا غلاف ولا صفحات فهرس
     var summaryFirst: Bool = false
+    /// false = بلا صفحات فهرس (التقارير المبسّطة — الفهرس اختياري داخل الصفحة الأولى)
+    var tocPages: Bool = true
 
     var title: String { customTitle ?? kind.pdfTitle }
 

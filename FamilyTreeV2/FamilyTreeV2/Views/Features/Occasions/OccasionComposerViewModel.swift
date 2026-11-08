@@ -41,15 +41,20 @@ final class OccasionComposerViewModel: ObservableObject {
     private var avatarTask: Task<Void, Never>?
 
     let kit = OccasionKit.shared
-    let templates = OccasionTemplate.all
+    /// الإعلانات الظاهرة (إعداد السيرفر `occasion_designer`)
+    var templates: [OccasionTemplate] { OccasionTemplate.available }
     let placements = OccasionPlacement.all
 
     /// سطور القرابة اللي تتعبّى من الشجرة (الزوج/الزوجة كتابة)
     static let relationKeys = ["relation", "rel2", "rel3"]
 
-    init() {
-        template = OccasionTemplate.all[0]
+    /// `startTemplateId`: الإعلان المختار في «تصميم إعلان» — المصمّم يبدأ عليه
+    init(startTemplateId: String? = nil) {
+        template = startTemplateId.flatMap { id in
+            OccasionTemplate.available.first(where: { $0.id == id }) ?? OccasionTemplate.all.first(where: { $0.id == id })
+        } ?? OccasionTemplate.available.first ?? OccasionTemplate.all[0]
         placement = OccasionPlacement.all[0]
+        if template.kind == .death { photo.gray = true }
     }
 
     var size: OccasionSize { placement.size }

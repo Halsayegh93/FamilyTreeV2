@@ -63,6 +63,28 @@ nonisolated enum AdminReportPart: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// إضافات اختيارية فوق الأجزاء (طلب المالك ٢٠٢٦-١١-٠٨ «بسّطها، ما أبي مقدمة، وأشيل شغلات وقت الإنشاء»):
+/// الافتراضي **بلا شيء** — الملف يبدأ مباشرة بالأجزاء. كل واحدة تُشغَّل من «كيف ترتّبه؟» وتنحفظ للمستخدم.
+nonisolated enum AdminReportExtra: String, CaseIterable, Identifiable, Sendable {
+    case masthead, numbers, branch, distribution, index, notes, legend
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .masthead: return "رأس العائلة والتصفية"
+        case .numbers: return "الأرقام الأربعة"
+        case .branch: return "الفرع مختصراً"
+        case .distribution: return "التوزيع"
+        case .index: return "فهرس الملف"
+        case .notes: return "ملاحظات الملف"
+        case .legend: return "مفتاح الرموز"
+        }
+    }
+
+    static let defaults: Set<AdminReportExtra> = []
+}
+
 /// أعمدة «الأسماء» في العمودين — ما يتّسع لنصف الصفحة (الهاتف في «الهواتف» وحده)
 nonisolated enum AdminReportNameColumns {
     static let allowed: [AdminReportField] = [.birth, .age, .registration, .death]
@@ -82,6 +104,8 @@ nonisolated struct AdminReportComposeRequest: Sendable {
     var missingOn: Bool = false
     /// «جاهزة بضغطة» المختارة — عنوان الملف إن وُجد
     var presetTitle: String? = nil
+    /// ما يُضاف فوق الأجزاء — فاضي = بلا مقدمة
+    var extras: Set<AdminReportExtra> = AdminReportExtra.defaults
 }
 
 // MARK: - كتل الورقة الجديدة
@@ -157,12 +181,13 @@ nonisolated struct AdminReportPreset: Identifiable, Sendable {
 
     static let all: [AdminReportPreset] = [
         AdminReportPreset(kind: .phones, parts: [.phones], life: .living),
+        // المسجّلون في التطبيق فقط: الأحياء أصحاب الحسابات — بلا «بدون حساب» ولا «موقوف»
+        AdminReportPreset(kind: .registered, parts: [.names], life: .living, registration: .registered),
         AdminReportPreset(kind: .memorial, parts: [.memorial]),
         AdminReportPreset(kind: .book, parts: [.tree, .names, .memorial, .attendance]),
         AdminReportPreset(kind: .register, parts: [.names]),
         AdminReportPreset(kind: .tree, parts: [.tree]),
         AdminReportPreset(kind: .branchReport, parts: [.numbers, .tree, .names, .memorial]),
-        AdminReportPreset(kind: .registered, parts: [.names], life: .living, registration: .registered),
         AdminReportPreset(kind: .calendar, parts: [.calendar]),
         AdminReportPreset(kind: .stats, parts: [.numbers]),
         AdminReportPreset(kind: .newThisMonth, parts: [.names], periodOn: true),
@@ -226,16 +251,25 @@ nonisolated enum AdminReportComposer {
             return "بيت " + s.title.dropFirst("أبناء ".count)
         }
 
+        // المقدمة اختيارية بالكامل (`r.extras`) — بلا شيء = الملف يبدأ بالأجزاء مباشرة
+        let x = r.extras
         var blocks: [AdminReportBlock] = []
-        blocks.append(.masthead(masthead(title: title, subtitle: subtitle, r: r, scopePath: scopePath, input: input)))
+        if x.contains(.masthead) {
+            blocks.append(.masthead(masthead(title: title, subtitle: subtitle, r: r, scopePath: scopePath, input: input)))
+        }
         blocks += summary(pool: pool, whole: wholeScope, sections: sections, tree: tree, input: input, r: r, ages: ages)
-        let namesTitle = ordered.contains(.names) ? AdminReportPart.names.pdfTitle(r.plan.grouping) : nil
-        let listedHouses = namesTitle != nil && sections.count <= indexHousesMax ? sections.count : 0
-        blocks.append(.heading("في هذا الملف", subtitle: nil, panel: true))
-        blocks.append(.fileIndex(AdminReportFileIndex(parts: ["الملخّص"] + partTitles, housesUnder: namesTitle,
-                                                      houses: listedHouses)))
-        blocks.append(.heading("عن هذا الملف", subtitle: nil, panel: true))
-        blocks.append(.note(aboutText(r, ordered), tone: .muted))
+        if x.contains(.index) && ordered.count > 1 {
+            let namesTitle = ordered.contains(.names) ? AdminReportPart.names.pdfTitle(r.plan.grouping) : nil
+            let listedHouses = namesTitle != nil && sections.count <= indexHousesMax ? sections.count : 0
+            let lead = blocks.isEmpty ? [] : ["الملخّص"]
+            blocks.append(.heading("في هذا الملف", subtitle: nil, panel: true))
+            blocks.append(.fileIndex(AdminReportFileIndex(parts: lead + partTitles, housesUnder: namesTitle,
+                                                          houses: listedHouses)))
+        }
+        if x.contains(.notes) {
+            blocks.append(.heading("عن هذا الملف", subtitle: nil, panel: true))
+            blocks.append(.note(aboutText(r, ordered), tone: .muted))
+        }
 
         // الأجزاء — كل جزء يبدأ صفحة بعنوانه (`.section` يدخل الفهرس)، وما في داخله لا يدخل الفهرس
         for part in ordered {
@@ -249,7 +283,9 @@ nonisolated enum AdminReportComposer {
                 if pool.isEmpty {
                     blocks.append(.note("لا يوجد أفراد يطابقون هذا النطاق.", tone: .muted))
                 } else {
-                    blocks.append(.caption("● عضو مسجّل في التطبيق   ○ بدون حساب   ● حساب موقوف — الاسم الثلاثي والعائلة في رأس كل بيت"))
+                    if x.contains(.legend) {
+                        blocks.append(.caption("● عضو مسجّل في التطبيق   ○ بدون حساب   ● حساب موقوف — الاسم الثلاثي والعائلة في رأس كل بيت"))
+                    }
                     blocks.append(.houses(houseBlock(sections, title: houseTitle, r: r, tree: tree, input: input, ages: ages)))
                 }
             default:
@@ -277,7 +313,9 @@ nonisolated enum AdminReportComposer {
                                  blocks: blocks, generatedBy: input.generatedBy, date: input.date)
         doc.grouping = r.plan.grouping.pdfLabel
         doc.cover = false
-        doc.summaryFirst = true
+        // رأس الصفحة الأولى الكبير فقط إن اختير؛ وإلا رأس عادي بالعنوان في كل صفحة — وبلا صفحات فهرس أبداً
+        doc.summaryFirst = x.contains(.masthead)
+        doc.tocPages = false
         doc.customTitle = title
         return doc
     }
@@ -356,17 +394,20 @@ nonisolated enum AdminReportComposer {
         let known = pool.compactMap { ages[$0.id] }
         let avg = known.isEmpty ? nil : Int((Double(known.reduce(0, +)) / Double(known.count)).rounded())
         let houses = Set(pool.compactMap(\.fatherId)).count
-        var blocks: [AdminReportBlock] = [
+        let x = r.extras
+        var blocks: [AdminReportBlock] = []
+        if x.contains(.numbers) {
+            blocks.append(
             .tiles([AdminReportTile(value: AdminReportText.num(pool.count), label: "فرداً في هذا التقرير"),
                     AdminReportTile(value: AdminReportText.num(houses), label: houses >= 3 && houses <= 10 ? "بيوت" : "بيتاً"),
                     AdminReportTile(value: registered.map(AdminReportText.num) ?? "—", label: "مسجّلاً في التطبيق"),
-                    AdminReportTile(value: avg.map { "\($0) سنة" } ?? "—", label: "متوسط العمر")])
-        ]
-        if whole.count != pool.count {
+                    AdminReportTile(value: avg.map { "\($0) سنة" } ?? "—", label: "متوسط العمر")]))
+        }
+        if x.contains(.numbers) && whole.count != pool.count {
             let out = whole.count - pool.count
             blocks.append(.caption("النطاق كاملاً \(AdminReportText.people(whole.count)): \(AdminReportText.people(out)) خارج هذا التقرير بسبب التصفية."))
         }
-        if let mini = branchTree(pool: pool, tree: tree, input: input, branch: r.filter.branch) {
+        if x.contains(.branch), let mini = branchTree(pool: pool, tree: tree, input: input, branch: r.filter.branch) {
             blocks.append(.heading("الفرع مختصراً", subtitle: "أبناء رأس الفرع وعدد الأفراد في بيت كلٍّ منهم", panel: true))
             blocks.append(.miniTree(mini))
         }
@@ -383,7 +424,7 @@ nonisolated enum AdminReportComposer {
         let ageSegs = (AdminReportFilter.Age.bands + [.unknown]).map {
             AdminReportDistribution.Segment(label: $0.label, count: bands[$0] ?? 0, tone: $0 == .unknown ? .muted : .men)
         }
-        if !pool.isEmpty {
+        if x.contains(.distribution) && !pool.isEmpty {
             blocks.append(.heading("التوزيع", subtitle: nil, panel: true))
             blocks.append(.distribution(AdminReportDistribution(registration: regSegs, ages: ageSegs)))
         }
@@ -443,7 +484,9 @@ nonisolated enum AdminReportComposer {
     private static func houseBlock(_ sections: [AdminReportTree.Section], title: (AdminReportTree.Section) -> String,
                                    r: AdminReportComposeRequest, tree: AdminReportTree, input: AdminReportInput,
                                    ages: [UUID: Int]) -> AdminReportHouses {
-        let cols = r.columns.filter { AdminReportNameColumns.allowed.contains($0) }
+        // «المسجّلون فقط»: عمود التسجيل كله «مسجّل» — ما له داعي
+        let cols = r.columns.filter { AdminReportNameColumns.allowed.contains($0)
+            && !($0 == .registration && r.filter.registration == .registered) }
         let reg = input.registered
         let houses = sections.map { s -> AdminReportHouses.House in
             let rows = s.members.map { p -> AdminReportHouses.Row in

@@ -11,9 +11,15 @@ import PhotosUI
 struct OccasionComposerView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @StateObject private var vm = OccasionComposerViewModel()
-    /// القالب المختار في «تصميم بطاقة» (نافذة «إنشاء») — nil = الافتراضي
-    var startTemplateId: String? = nil
+    @StateObject private var vm: OccasionComposerViewModel
+    /// المصمّم على الإعلان المختار وحده: بلا قائمة الإعلانات، والعنوان اسمه (المالك ٢٠٢٦-١١-٠٨)
+    var lockedTemplate = false
+
+    /// `startTemplateId`: الإعلان المختار في «تصميم إعلان» (نافذة «إنشاء») — nil = الأول
+    init(startTemplateId: String? = nil, lockedTemplate: Bool = false) {
+        _vm = StateObject(wrappedValue: OccasionComposerViewModel(startTemplateId: startTemplateId))
+        self.lockedTemplate = lockedTemplate && startTemplateId != nil
+    }
     @StateObject private var diwaniyasVM = DiwaniyasViewModel()
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @ObservedObject private var kit = OccasionKit.shared
@@ -66,14 +72,12 @@ struct OccasionComposerView: View {
             }
         }
         // الرأس الموحّد: العنوان، وفي الطرف حفظ الصورة (الأساسي) والمشاركة
-        .dsSubPageHeader(L10n.t("بطاقات التهنئة والتعزية", "Greeting & condolence cards"), icon: "") {
+        .dsSubPageHeader(lockedTemplate ? vm.template.title : L10n.t("بطاقات التهنئة والتعزية", "Greeting & condolence cards"),
+                         icon: "") {
             if authVM.canModerate { headerActions }
         }
         .task(id: vm.assetKey) { await vm.prepareAssets() }
         .task { await loadData() }
-        .onAppear {
-            if let id = startTemplateId, let t = OccasionTemplate.all.first(where: { $0.id == id }) { vm.select(t) }
-        }
         .onChange(of: memberVM.membersVersion) { _ in
             vm.updateFamily(memberVM.allMembers)
         }
@@ -98,6 +102,8 @@ struct OccasionComposerView: View {
 
     /// أعضاء الشجرة + الديوانيات + أسماء العوائل (للاختيارات)
     private func loadData() async {
+        // الإعلانات والنماذج والنصوص من السيرفر (`occasion_designer`)
+        await AppConfigValues.shared.refresh()
         vm.updateFamily(memberVM.allMembers)
         if memberVM.allMembers.isEmpty {
             await memberVM.fetchAllMembers()
@@ -133,10 +139,8 @@ struct OccasionComposerView: View {
                         }
                     // «رابط الموقع» — روابط عامة لمولّد المنشورات على الموقع (المالك والمدير، نفس صلاحية
                     // جدول occasion_links). من النسخة المحلية (٢٠٢٦-١٠-١٢)؛ main ما فيه مقابل في التطبيق.
-                    if authVM.isAdmin {
-                        OccasionLinksSection()
-                    }
-                    templateSection
+                    // «رابط الموقع» انتقل لمربّع «تصميم إعلان» في «المناسبات والإعلانات» (المالك ٢٠٢٦-١١-٠٨)
+                    if !lockedTemplate { templateSection }
                     if vm.template.models.count > 1 { modelSection }
                     placementSection
                     detailsSection
@@ -396,26 +400,43 @@ struct OccasionComposerView: View {
     private var placementSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSSectionHeader(title: L10n.t("مكان النشر", "Where to post"), icon: "paperplane.fill")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
+            // قائمة منسدلة (المالك ٢٠٢٦-١١-٠٨) بدل مربعات الأماكن العشرة: الاسم والمقاس، والمختار عليه علامة
+            Menu {
                 ForEach(vm.placements) { p in
-                    let on = p.id == vm.placement.id
                     Button {
                         withAnimation(DS.Anim.quick) { vm.placement = p }
                     } label: {
-                        // نفس عائلة مربعات القالب والنموذج: حدّ شعري، والمختار ذهبي
+                        // الاسم وتحته المقاس (سطر ثانٍ في القائمة)، والمختار عليه علامة
                         Text(p.title)
-                            .dsFont(.chip)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .occasionTile(isOn: on)
+                        Text(p.size.label)
+                        if p.id == vm.placement.id { Image(systemName: "checkmark") }
                     }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "paperplane.fill")
+                        .dsGlyph(DS.Glyph.sm)
+                        .foregroundColor(DS.Color.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(vm.placement.title)
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                        Text(vm.size.label)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer(minLength: DS.Spacing.sm)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .dsGlyph(DS.Glyph.xs)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .occasionTile(isOn: false)
+                .contentShape(Rectangle())
             }
+            .accessibilityLabel(L10n.t("مكان النشر: \(vm.placement.title)", "Where to post: \(vm.placement.title)"))
             if vm.size == .story {
                 Text(L10n.t("الستوري فيه هوامش أمان فوق وتحت حتى ما تغطيها أزرار التطبيقات.",
                             "Stories keep safe margins at the top and bottom so app buttons don't cover the content."))

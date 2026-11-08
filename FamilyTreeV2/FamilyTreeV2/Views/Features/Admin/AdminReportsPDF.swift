@@ -169,7 +169,7 @@ nonisolated enum AdminReportPDF {
     static func render(_ doc: AdminReportDoc, isCancelled: () -> Bool = { false }) throws -> Output {
         let laid = try layout(doc.blocks, isCancelled: isCancelled)
         // الفهرس: على الغلاف إن قصر، وإلا صفحاته بعد الغلاف (مدخل واحد بلا فهرس)؛ الورقة الجديدة: في الصفحة الأولى
-        let entries = laid.toc.count > 1 && !doc.summaryFirst ? laid.toc : []
+        let entries = laid.toc.count > 1 && !doc.summaryFirst && doc.tocPages ? laid.toc : []
         let tocOnCover = doc.cover && entries.count <= coverTocMax
         let tocPages = entries.isEmpty || tocOnCover ? 0 : Int(ceil(Double(entries.count) / Double(tocPerPage)))
         let firstContent = (doc.cover ? 1 : 0) + tocPages + 1

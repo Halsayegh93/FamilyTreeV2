@@ -148,7 +148,9 @@ struct AdminOccasionsHeaderButtons: View {
 
     private func button(_ kind: AdminCreateKind) -> some View {
         Button {
-            AdminCreateWindow.open(kind, authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+            // كل زر يفتح نوعه وحده — «إرسال إشعار» بلا «تصميم إعلان» والعكس (المالك ٢٠٢٦-١١-٠٨)
+            AdminCreateWindow.open(kind, chooser: false,
+                                   authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
         } label: {
             AdminPillLabel(title: kind.title, icon: kind == .announcement ? "speaker.wave.2" : "photo",
                            style: .gold, height: DS.Hub.pillHeightCard, fullWidth: true)
@@ -266,9 +268,9 @@ struct AdminOccasionsJoysCard: View {
                             title: firstLine.trimmingCharacters(in: .whitespaces),
                             subtitle: "\(post.type) · \(AdminOccasionsText.shortDate(post.timestamp))",
                             showsChevron: false) {
-            AdminPillButton(title: L10n.t("بطاقة", "Card"), icon: "photo", style: .soft) { card(post) }
+            AdminPillButton(title: L10n.t("إعلان", "Design"), icon: "photo", style: .soft) { card(post) }
         }
-        .accessibilityAction(named: L10n.t("تصميم بطاقة", "Design a card")) { card(post) }
+        .accessibilityAction(named: L10n.t("تصميم إعلان", "Design an announcement")) { card(post) }
     }
 
     private func card(_ post: NewsPost) {
@@ -277,7 +279,8 @@ struct AdminOccasionsJoysCard: View {
         case "مولود": "newborn"
         default: nil
         }
-        AdminCreateWindow.open(.card, cardTemplate: template,
+        // فرح بإعلان معروف (زواج ← عقد قران، مولود ← قدوم مولود) يفتح المصمّم عليه مباشرة؛ غيره يختار الإعلان أولاً
+        AdminCreateWindow.open(.card, cardTemplate: template, chooser: false,
                                authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
     }
 }

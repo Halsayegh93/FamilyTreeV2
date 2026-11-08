@@ -24,7 +24,7 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
         switch self {
         case .announcement: return L10n.t("إرسال إشعار", "Send a push")
         case .death:        return L10n.t("إعلان وفاة", "Obituary")
-        case .card:         return L10n.t("تصميم بطاقة", "Design a card")
+        case .card:         return L10n.t("تصميم إعلان", "Design an announcement")
         case .appUpdate:    return L10n.t("إعلان تحديث التطبيق", "App update notice")
         }
     }
@@ -69,6 +69,11 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
     }
 }
 
+/// الإعلان اللي يفتح عليه المصمّم
+struct AdminCreateDesignTarget: Identifiable {
+    let id: String
+}
+
 // MARK: - النافذة المستقلّة
 
 /// يعرض «ماذا تنشئ؟» في نافذة فوق كل شيء (مثل `DeathAnnouncementPresenter`) — لا مُعدِّل عرض على «اليوم» ولا على صفحة القسم
@@ -79,8 +84,10 @@ enum AdminCreateWindow {
 
     /// `start` النوع المفتوح أولاً (إن كان متاحاً للدور)، و`death` متوفى جاهز لـ«إعلان وفاة» (من «القادم»)،
     /// و`announce` مسودّة «إعلان» (تعديل إشعار مجدول من «القادم» — المربّع وحده بلا «ماذا تنشئ؟»)
+    /// `chooser: false` = المربّع وحده بلا «ماذا تنشئ؟» (أزرار قسم «المناسبات والإعلانات» — كل زر يفتح نوعه بس،
+    /// المالك ٢٠٢٦-١١-٠٨)؛ و«تصميم إعلان» بإعلان جاهز (`cardTemplate`) بلا اختيار يفتح المصمّم مباشرة على إعلانه
     static func open(_ start: AdminCreateKind = .announcement, death: DeathAnnouncementTarget? = nil,
-                     announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil,
+                     announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil, chooser: Bool = true,
                      authVM: AuthViewModel, newsVM: NewsViewModel, notificationVM: NotificationViewModel,
                      memberVM: MemberViewModel) {
         let allowed = AdminCreateKind.allowed(for: authVM)
@@ -90,8 +97,10 @@ enum AdminCreateWindow {
             ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first
         else { return }
         previousKey = scene.windows.first(where: \.isKeyWindow)
-        let root = AdminCreateRoot(allowed: allowed, start: allowed.contains(start) ? start : allowed[0],
-                                   death: death, announce: announce, cardTemplate: cardTemplate, onClose: { close() })
+        let first = allowed.contains(start) ? start : allowed[0]
+        let root = AdminCreateRoot(allowed: chooser ? allowed : [first], start: first,
+                                   death: death, announce: announce, cardTemplate: cardTemplate,
+                                   directCard: !chooser && cardTemplate != nil, onClose: { close() })
             .environmentObject(authVM)
             .environmentObject(newsVM)
             .environmentObject(notificationVM)
@@ -122,26 +131,31 @@ enum AdminCreateWindow {
     }
 }
 
-/// جذر النافذة: المربّع بنوعه المختار، ومصمّم البطاقات فوقه بملء الشاشة. من لا يملك إلا البطاقة (المراقب والمشرف)
-/// يفتح المصمّم مباشرة بلا مربّع اختيار
+/// جذر النافذة: المربّع بنوعه المختار، ومصمّم الإعلانات فوقه بملء الشاشة. نوع واحد (المشرف، أو زرّ في «المناسبات
+/// والإعلانات») = المربّع بلا «ماذا تنشئ؟». المصمّم يفتح على الإعلان المختار وحده (المالك ٢٠٢٦-١١-٠٨)
 struct AdminCreateRoot: View {
     let allowed: [AdminCreateKind]
     let death: DeathAnnouncementTarget?
     /// مسودّة «إعلان» (تعديل إشعار مجدول) — nil = جديد
     let announce: AdminAnnounceDraft?
+    /// يفتح المصمّم مباشرة على الإعلان الجاهز («بطاقة» على فرح في «المناسبات»)
+    let directCard: Bool
     let onClose: () -> Void
 
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
     @State private var kind: AdminCreateKind
-    @State private var cardOpen = false
-    /// نوع البطاقة المختار في «تصميم بطاقة» — يفتح المصمّم عليه
-    @State private var cardTemplate: String? = OccasionTemplate.all.first?.id
+    /// الإعلان المفتوح في المصمّم — `item` (لا Bool) حتى يوصل المصمّم الاختيار الحالي لا قيمة قديمة
+    @State private var designing: AdminCreateDesignTarget?
+    /// الإعلان المختار في «تصميم إعلان» — يفتح المصمّم عليه وحده (بلا اختيار مسبق: المستخدم يختار)
+    @State private var cardTemplate: String? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?,
-         announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil, onClose: @escaping () -> Void) {
+         announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil, directCard: Bool = false,
+         onClose: @escaping () -> Void) {
         self.allowed = allowed
+        self.directCard = directCard
         // «بطاقة» على فرح في «المناسبات» — المصمّم على قالبه (زواج ← عقد قران، مولود ← قدوم مولود)
         if let cardTemplate { _cardTemplate = State(initialValue: cardTemplate) }
         self.death = death
@@ -150,11 +164,9 @@ struct AdminCreateRoot: View {
         _kind = State(initialValue: start)
     }
 
-    private var cardOnly: Bool { allowed == [.card] }
-
     var body: some View {
         Group {
-            if cardOnly {
+            if directCard {
                 Color.clear
             } else {
                 // التبديل بين الأنواع بحركة: المربّع الجديد ينزلق ويظهر، والقديم يتلاشى (المالك ٢٠٢٦-١٠-٢٣ «نبي انميشن و حركات»)
@@ -168,30 +180,34 @@ struct AdminCreateRoot: View {
                 .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82), value: kind)
             }
         }
-        .fullScreenCover(isPresented: $cardOpen, onDismiss: { if cardOnly { onClose() } }) {
-            NavigationStack { OccasionComposerView(startTemplateId: cardTemplate) }
+        .fullScreenCover(item: $designing, onDismiss: { if directCard { onClose() } }) { target in
+            NavigationStack { OccasionComposerView(startTemplateId: target.id, lockedTemplate: true) }
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
                 .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         }
-        .onAppear { if cardOnly { cardOpen = true } }
+        .onAppear { if directCard, let cardTemplate { designing = AdminCreateDesignTarget(id: cardTemplate) } }
+        // الإعلانات والنماذج والنصوص من السيرفر (`occasion_designer`)
+        .task { await AppConfigValues.shared.refresh() }
     }
 
     /// كل نوع منشئه الموجود خلف `AnyView` (نوع صغير لكل فرع)
     private var box: AnyView {
-        let chooser = AnyView(AdminCreateTypePicker(kinds: allowed, selection: $kind))
+        // نوع واحد = بلا «ماذا تنشئ؟»
+        let chooser = allowed.count > 1 ? AnyView(AdminCreateTypePicker(kinds: allowed, selection: $kind)) : AnyView(EmptyView())
         switch kind {
         case .announcement:
             // تعديل إشعار مجدول: المربّع وحده (لا تبديل نوع أثناء التعديل)
             if let announce, announce.editingId != nil {
                 return AnyView(AdminAnnounceComposer(draft: announce, onClose: onClose))
             }
-            return AnyView(AdminAnnounceComposer(chooser: chooser, draft: announce ?? AdminAnnounceDraft(), onClose: onClose))
+            return AnyView(AdminAnnounceComposer(chooser: allowed.count > 1 ? chooser : nil,
+                                                 draft: announce ?? AdminAnnounceDraft(), onClose: onClose))
         case .death:
             return AnyView(AdminCreateDeathForm(chooser: chooser, preset: death, onClose: onClose))
         case .card:
-            return AnyView(AdminCreateCardForm(chooser: chooser, selection: $cardTemplate,
-                                        onOpen: { cardOpen = true }, onClose: onClose))
+            return AnyView(AdminCreateCardForm(chooser: chooser, single: allowed.count == 1, selection: $cardTemplate,
+                                        onOpen: { if let id = cardTemplate { designing = AdminCreateDesignTarget(id: id) } }, onClose: onClose))
         case .appUpdate:
             return AnyView(AdminAppUpdateComposer(chooser: chooser, onClose: onClose))
         }
@@ -381,25 +397,58 @@ struct AdminCreateDeathForm: View {
 
 // MARK: - بطاقة تهنئة أو تعزية
 
-/// يشرح البطاقة ثم «فتح مصمّم البطاقة» — المصمّم نفسه (`OccasionComposerView`) بملء الشاشة فوق المربّع
+/// اختيار الإعلان (عقد قران، قدوم مولود، …) ثم «صمّم الإعلان» — المصمّم (`OccasionComposerView`) بملء الشاشة فوق
+/// المربّع على الإعلان المختار وحده
 struct AdminCreateCardForm: View {
     let chooser: AnyView
+    /// بلا «ماذا تنشئ؟» (زرّ «تصميم إعلان» في «المناسبات والإعلانات») — العنوان اسم النوع
+    var single = false
     /// القالب المختار (المالك ٢٠٢٦-١٠-٢٣ «في تصميم اعلان خل اختيار نوع البطاقات»)
     @Binding var selection: String?
     let onOpen: () -> Void
     let onClose: () -> Void
 
+    @EnvironmentObject private var authVM: AuthViewModel
     @Environment(\.dynamicTypeSize) private var typeSize
     private var tint: Color { DS.Color.actionNavy }
-    private var templates: [OccasionTemplate] { OccasionTemplate.all }
+    /// الإعلانات الظاهرة (إعداد السيرفر)
+    private var templates: [OccasionTemplate] { OccasionTemplate.available }
+
+    /// مربّع «رابط الموقع» مفتوح بدل اختيار الإعلان
+    @State private var linksOpen = false
 
     var body: some View {
+        Group {
+            if linksOpen {
+                AdminSiteLinksBox(onBack: { linksOpen = false }, onClose: onClose)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                form
+                    .transition(.opacity)
+            }
+        }
+        .animation(DS.Anim.smooth, value: linksOpen)
+    }
+
+    /// زرّ «رابط الموقع» — أيقونة صغيرة تفتح مربّعه
+    private var siteLinksButton: some View {
+        DSIconButton(icon: "link", size: 28, iconSize: 13, iconColor: DS.Color.accent,
+                     fillColor: DS.Color.accent.opacity(DS.Opacity.tintFillSoft),
+                     borderColor: DS.Color.accent.opacity(DS.Opacity.border), borderWidth: DS.Border.width) {
+            UISelectionFeedbackGenerator().selectionChanged()
+            linksOpen = true
+        }
+        .accessibilityLabel(L10n.t("رابط الموقع", "Website link"))
+        .accessibilityHint(L10n.t("المولّد على الموقع لمن عنده الرابط", "The website generator, for whoever has the link"))
+    }
+
+    private var form: some View {
         DSComposer(
-            title: L10n.t("ماذا تنشئ؟", "What to create?"),
-            subtitle: AdminCreateKind.card.title,
+            title: single ? AdminCreateKind.card.title : L10n.t("ماذا تنشئ؟", "What to create?"),
+            subtitle: single ? L10n.t("اختر الإعلان ثم صمّمه", "Pick one, then design it") : AdminCreateKind.card.title,
             icon: AdminCreateKind.card.icon,
             tint: tint,
-            actionTitle: L10n.t("صمّم البطاقة", "Design the card"),
+            actionTitle: L10n.t("صمّم الإعلان", "Design it"),
             actionIcon: "paintbrush.pointed.fill",
             canSubmit: selection != nil,
             note: L10n.t("صورة تُحفظ في الصور أو تُشارك — لا تُرسل للأعضاء من هنا",
@@ -408,7 +457,10 @@ struct AdminCreateCardForm: View {
             onCancel: onClose
         ) {
             chooser
-            DSComposerSection(title: L10n.t("نوع البطاقة", "Card type"), icon: "photo.on.rectangle.angled", tint: tint, index: 1) {
+            // «رابط الموقع» — زرّ أيقونة في سطر عنوان القسم يفتح مربّعه: في «تصميم إعلان» من «المناسبات والإعلانات» فقط،
+            // للمالك والمدير (صلاحية جدول occasion_links) — كان داخل المصمّم (المالك ٢٠٢٦-١١-٠٨)
+            DSComposerSection(title: L10n.t("اختر الإعلان", "Pick the announcement"), icon: "photo.on.rectangle.angled", tint: tint, index: 1,
+                              accessory: single && authVM.isAdmin ? AnyView(siteLinksButton) : nil) {
                 let cols = typeSize >= .accessibility1 ? 1 : 2
                 VStack(spacing: DS.Spacing.sm) {
                     ForEach(Array(stride(from: 0, to: templates.count, by: cols)), id: \.self) { start in
@@ -458,6 +510,33 @@ struct AdminCreateCardForm: View {
         .buttonStyle(DSPressStyle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// MARK: - رابط الموقع
+
+/// مربّع «رابط الموقع» (زرّ في «تصميم إعلان» من «المناسبات والإعلانات»): إنشاء رابط لمولّد الإعلانات على الموقع
+/// ونسخه وإيقافه — نفس `OccasionLinksSection` بلا رأس. «رجوع» يرجع لاختيار الإعلان
+struct AdminSiteLinksBox: View {
+    let onBack: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        DSComposer(
+            title: L10n.t("رابط الموقع", "Website link"),
+            subtitle: L10n.t("نفس المولّد على الموقع بدون تسجيل دخول — لمن عنده الرابط بس",
+                             "The same generator on the website without signing in — only for whoever has the link"),
+            icon: "link",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("رجوع", "Back"),
+            actionIcon: "chevron.backward",
+            canSubmit: true,
+            note: nil,
+            onSubmit: onBack,
+            onCancel: onClose
+        ) {
+            OccasionLinksSection(embedded: true)
+        }
     }
 }
 
