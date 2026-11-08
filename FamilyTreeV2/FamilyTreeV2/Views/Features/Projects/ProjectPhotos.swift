@@ -228,22 +228,35 @@ struct ProjectPhotoIndex: Identifiable { let id: Int }
 struct ZoomHintBadge: View {
     /// فُتح العارض من هذا المربّع — لا حاجة للتلميح بعدها
     var dismissed: Bool = false
+    /// ثابت على ركن الصورة لا يختفي (المكتبة — طلب المالك ٢٠٢٦-١١-٠٦)
+    var fixed: Bool = false
     @State private var expired = false
 
     var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(width: 36, height: 36)
-            .background(Circle().fill(Color.black.opacity(0.4)))
-            .opacity(dismissed || expired ? 0 : 1)
-            .animation(.easeOut(duration: 0.4), value: dismissed || expired)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .task {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                expired = true
-            }
+        if fixed {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                .foregroundColor(.white)
+                .frame(width: DS.Folder.zoomButton, height: DS.Folder.zoomButton)
+                .background(Circle().fill(Color.black.opacity(0.45)))
+                .padding(DS.Folder.zoomButtonInset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(Color.black.opacity(0.4)))
+                .opacity(dismissed || expired ? 0 : 1)
+                .animation(.easeOut(duration: 0.4), value: dismissed || expired)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .task {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    expired = true
+                }
+        }
     }
 }
 

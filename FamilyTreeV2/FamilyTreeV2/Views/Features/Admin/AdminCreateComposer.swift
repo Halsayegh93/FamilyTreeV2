@@ -11,7 +11,7 @@ import SwiftUI
 //   • إعلان تحديث التطبيق — ما الجديد في الإصدار (`sendNotification(kind: app_update)` كما كانت صفحته).
 // البيت الوحيد: زرّ «إنشاء» في رأس «المناسبات والإعلانات»؛ ومكبّر الصوت في رأس «اليوم» (طلب المالك) يفتح المربّع نفسه
 // على «إعلان». يُعرض في نافذة مستقلّة (حارس المكدس — «اليوم» على سقف مكدس الجوال، كما كان `AdminAnnounceWindow`).
-// الصلاحيات كما كانت: الإعلان والتحديث `canSendNotifications`، إعلان الوفاة `isAdmin`، البطاقة `canModerate`.
+// الصلاحيات كما كانت: الإعلان والتحديث `canSendNotifications`، إعلان الوفاة `isAdmin`، البطاقة `canModerate` + خانة `occasions.cards` في الجدول.
 // لا منطق إرسال جديد — كل نوع يستدعي مساره الموجود، وحارس السيرفر يبقى الحَكَم.
 
 /// نوع ما يُنشأ
@@ -63,7 +63,8 @@ enum AdminCreateKind: String, CaseIterable, Identifiable {
         // و«تحديث التطبيق» أُزيل من الشريط
         var list: [AdminCreateKind] = []
         if authVM.canSendNotifications { list.append(.announcement) }
-        if authVM.canModerate { list.append(.card) }
+        // البطاقة: المالك والمدير والمشرف (محتوى — جدول «مين يشوف وش» من السيرفر؛ المراقب لا، ٢٠٢٦-١١-٠٧)
+        if authVM.canModerate && authVM.adminAccess(.occasionsCards).canEdit { list.append(.card) }
         return list
     }
 }
@@ -79,7 +80,7 @@ enum AdminCreateWindow {
     /// `start` النوع المفتوح أولاً (إن كان متاحاً للدور)، و`death` متوفى جاهز لـ«إعلان وفاة» (من «القادم»)،
     /// و`announce` مسودّة «إعلان» (تعديل إشعار مجدول من «القادم» — المربّع وحده بلا «ماذا تنشئ؟»)
     static func open(_ start: AdminCreateKind = .announcement, death: DeathAnnouncementTarget? = nil,
-                     announce: AdminAnnounceDraft? = nil,
+                     announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil,
                      authVM: AuthViewModel, newsVM: NewsViewModel, notificationVM: NotificationViewModel,
                      memberVM: MemberViewModel) {
         let allowed = AdminCreateKind.allowed(for: authVM)
@@ -90,7 +91,7 @@ enum AdminCreateWindow {
         else { return }
         previousKey = scene.windows.first(where: \.isKeyWindow)
         let root = AdminCreateRoot(allowed: allowed, start: allowed.contains(start) ? start : allowed[0],
-                                   death: death, announce: announce, onClose: { close() })
+                                   death: death, announce: announce, cardTemplate: cardTemplate, onClose: { close() })
             .environmentObject(authVM)
             .environmentObject(newsVM)
             .environmentObject(notificationVM)
@@ -139,8 +140,10 @@ struct AdminCreateRoot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(allowed: [AdminCreateKind], start: AdminCreateKind, death: DeathAnnouncementTarget?,
-         announce: AdminAnnounceDraft? = nil, onClose: @escaping () -> Void) {
+         announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil, onClose: @escaping () -> Void) {
         self.allowed = allowed
+        // «بطاقة» على فرح في «المناسبات» — المصمّم على قالبه (زواج ← عقد قران، مولود ← قدوم مولود)
+        if let cardTemplate { _cardTemplate = State(initialValue: cardTemplate) }
         self.death = death
         self.announce = announce
         self.onClose = onClose

@@ -679,6 +679,26 @@ class MemberViewModel: ObservableObject {
 
     /// اختيار أمّ موجودة من زوجات الأب (RPC set_self_mother؛ nil لإزالة الاختيار).
     @discardableResult
+    /// أم ابني/ابنتي (أو أختي) من زوجات أبيه — `set_self_relative_mother` (nil = بلا أم محدّدة)
+    func setChildMother(childId: UUID, motherId: UUID?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        do {
+            _ = try await supabase.rpc("set_self_relative_mother",
+                                       params: ["p_child_id": AnyEncodable(childId.uuidString),
+                                                "p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
+            await fetchWomenFamily(for: uid)
+            await fetchChildren(for: uid)
+            return true
+        } catch {
+            let hint = (error as? PostgrestError)?.hint
+            self.errorMessage = hint == "has_account"
+                ? L10n.t("له حساب دخول — تحدّد أمه الإدارة.", "Has a login account — an admin sets the mother.")
+                : L10n.t("تعذّر تحديد الأم.", "Couldn't set the mother.")
+            Log.error("[Women] setChildMother: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func setSelfMother(motherId: UUID?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         do {

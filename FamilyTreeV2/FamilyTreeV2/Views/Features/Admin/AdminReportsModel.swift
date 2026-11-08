@@ -5,7 +5,7 @@ import Foundation
 // «مكتبة التقارير» (طلب المالك ٢٠٢٦-١١-٠٢ — الاتجاه «أ» مع «كتاب الفرع» من «ج»): رفّ تقارير بأقسام
 // العائلة · التواصل · الذكرى · البيانات، وكل تقرير يفتح صفحة تصفيته (`AdminReportFilterPage`)، و«كتاب الفرع» بثلاث
 // خطوات (`AdminReportBookWizard`). الأربعة القديمة كما هي بخصوصيتها: «سجل العائلة» · «دليل الهواتف» · «سجل الراحلين» ·
-// «الملخّص»، والجديدة: «شجرة فرع مطبوعة» · «تقرير فرع شامل» · «المسجّلون في التطبيق» · «المقيّدون هذا الشهر» ·
+// «الملخّص»، والجديدة: «شجرة فرع مطبوعة» · «تقرير فرع شامل» · «المسجّلون في التطبيق» · «المضافون هذا الشهر» ·
 // «تقويم الذكرى» · «الناقصة بياناتهم».
 // الصفحة تأخذ لقطة من الأعضاء على الخيط الرئيسي (`AdminReportInput.make` — أسماء العرض، تنسيق الهاتف، أسماء الفروع،
 // والتجميع من أدوات صفحة الأعضاء `AdminGrouping` ← `AdminReportGroupPlan`)، ثم يُبنى التقرير (`AdminReportBuilder`)
@@ -16,7 +16,7 @@ import Foundation
 // الخصوصية: الهاتف كما وصل من `members_masked`، ومن أخفى رقمه يظهر «مخفي» دائماً — حتى للإدارة (الملف يُشارك خارج
 // التطبيق)، ولا تُستنتج دولته منه. الهواتف في «دليل الهواتف» وحده — «كتاب الفرع» وقائمة الحضور بلا هواتف. تاريخ
 // الميلاد المخفي يظهر «مخفي» كذلك، ويدخل الإحصاءات المجمّعة فقط. تاريخ وفاة غير مكتمل = «لا يوجد تاريخ كامل للوفاة».
-// نصوص الملف عربية دائماً بالمسميات الرسمية (عضو مسجّل، مقيّد في الشجرة، حساب موقوف، بلا رقم هاتف).
+// نصوص الملف عربية دائماً بالمسميات الرسمية (عضو مسجّل، بدون حساب، حساب موقوف، بلا رقم هاتف).
 // TODO(تقارير مجدولة): تقرير شهري يُرسل تلقائياً يحتاج دالة سيرفر وجدولة وموافقة المالك — غير مبني هنا.
 
 // MARK: - نوع التقرير ورفّه
@@ -64,7 +64,7 @@ nonisolated enum AdminReportKind: String, CaseIterable, Identifiable, Sendable {
         case .memorial: return "سجل الراحلين"
         case .calendar: return "تقويم الذكرى"
         case .stats: return "الملخّص الإحصائي"
-        case .newThisMonth: return "المقيّدون في الشجرة"
+        case .newThisMonth: return "المضافون"
         case .incomplete: return "الناقصة بياناتهم"
         case .book: return "كتاب الفرع"
         }
@@ -81,7 +81,7 @@ nonisolated enum AdminReportKind: String, CaseIterable, Identifiable, Sendable {
         case .memorial: return "سجل-الراحلين"
         case .calendar: return "تقويم-الذكرى"
         case .stats: return "الملخص"
-        case .newThisMonth: return "المقيدون"
+        case .newThisMonth: return "المضافون"
         case .incomplete: return "الناقصة-بياناتهم"
         case .book: return "كتاب-الفرع"
         }
@@ -217,7 +217,7 @@ nonisolated enum AdminReportBookSection: String, CaseIterable, Identifiable, Sen
 
 nonisolated struct AdminReportFilter: Equatable, Sendable {
     enum Life: String, CaseIterable, Sendable { case all, living, deceased }
-    /// التسجيل في التطبيق (الأحياء): مسجّل · مقيّد · موقوف
+    /// التسجيل في التطبيق (الأحياء): مسجّل · بدون حساب · موقوف
     enum Registration: String, CaseIterable, Sendable { case all, registered, treeOnly, frozen }
     enum Phones: String, CaseIterable, Sendable { case all, registered, noPhone }
     enum Memorial: String, CaseIterable, Sendable { case all, incomplete }
@@ -545,6 +545,14 @@ nonisolated enum AdminReportBlock: Sendable {
     case signatures([String])
     /// سطر صغير رمادي
     case caption(String)
+    /// رأس الصفحة الأولى في الورقة الجديدة (`AdminReportComposer`)
+    case masthead(AdminReportMasthead)
+    /// التسجيل في التطبيق والأعمار جنباً إلى جنب
+    case distribution(AdminReportDistribution)
+    /// «في هذا الملف» بأرقام الصفحات
+    case fileIndex(AdminReportFileIndex)
+    /// الأسماء في عمودين بالبيوت
+    case houses(AdminReportHouses)
 }
 
 nonisolated struct AdminReportDoc: Sendable {
@@ -564,6 +572,8 @@ nonisolated struct AdminReportDoc: Sendable {
     var cover: Bool = true
     /// عنوان الملف — nil = عنوان النوع
     var customTitle: String? = nil
+    /// الورقة الجديدة: الصفحة الأولى ملخّص برأسه (`.masthead`) والفهرس فيها — بلا غلاف ولا صفحات فهرس
+    var summaryFirst: Bool = false
 
     var title: String { customTitle ?? kind.pdfTitle }
 
@@ -735,7 +745,7 @@ nonisolated enum AdminReportText {
     static let familyName = "عائلة المحمدعلي"
     static let confidential = "سرّي — لعائلة المحمدعلي فقط"
     static let registered = "عضو مسجّل"
-    static let treeOnly = "مقيّد في الشجرة"
+    static let treeOnly = "بدون حساب"
     static let frozen = "حساب موقوف"
     static let hidden = "مخفي"
     static let noPhone = "بلا رقم هاتف"
@@ -952,7 +962,7 @@ nonisolated enum AdminReportBuilder {
         p.phoneHidden ? AdminReportText.hidden : (p.phone ?? "—")
     }
 
-    /// حالة التسجيل في التطبيق: حساب موقوف · عضو مسجّل · مقيّد في الشجرة («—» إن لم تصل القوائم)
+    /// حالة التسجيل في التطبيق: حساب موقوف · عضو مسجّل · بدون حساب («—» إن لم تصل القوائم)
     static func registrationText(_ p: AdminReportPerson, _ reg: Set<UUID>?) -> String {
         if p.frozen { return AdminReportText.frozen }
         guard let reg else { return "—" }
@@ -1036,7 +1046,7 @@ nonisolated enum AdminReportBuilder {
         case .phone: return .init(title: "رقم الهاتف", ltr: true)
         case .registration: return .init(title: "التسجيل", wraps: true)
         case .country: return .init(title: "الدولة")
-        case .created: return .init(title: "قُيّد في")
+        case .created: return .init(title: "انضاف في")
         case .missing: return .init(title: "الناقص", wraps: true)
         case .anniversary: return .init(title: "الذكرى القادمة")
         case .ageAtDeath: return .init(title: "العمر عند الوفاة", centered: true)
@@ -1131,7 +1141,7 @@ nonisolated enum AdminReportBuilder {
         guard reg != nil else { return s }
         var c: [AdminReportFilter.Registration: Int] = [:]
         for p in living { if let r = registration(p, reg) { c[r, default: 0] += 1 } }
-        s += " — مسجّلون \(AdminReportText.num(c[.registered] ?? 0)) · مقيّدون \(AdminReportText.num(c[.treeOnly] ?? 0))"
+        s += " — مسجّلون \(AdminReportText.num(c[.registered] ?? 0)) · بدون حساب \(AdminReportText.num(c[.treeOnly] ?? 0))"
         if let f = c[.frozen], f > 0 { s += " · موقوف \(AdminReportText.num(f))" }
         return s
     }
@@ -1163,7 +1173,7 @@ nonisolated enum AdminReportBuilder {
         let label: String
         switch filter.registration {
         case .registered: label = "مسجّلون"
-        case .treeOnly: label = "مقيّدون في الشجرة"
+        case .treeOnly: label = "بدون حساب"
         case .frozen: label = "حسابات موقوفة"
         case .all: label = ""
         }
@@ -1313,7 +1323,7 @@ nonisolated enum AdminReportBuilder {
         }
 
         if fields.contains(.registered) {
-            contents.append("نسبة الأعضاء المسجّلين في التطبيق إلى المقيّدين في الشجرة")
+            contents.append("نسبة الأعضاء المسجّلين في التطبيق إلى من ليس لهم حساب")
             blocks.append(.heading("التسجيل في التطبيق", subtitle: "الأحياء من رجال الشجرة: من له حساب دخول ومن اسمه في الشجرة فقط",
                                    panel: true))
             if let registeredLiving {

@@ -1277,7 +1277,8 @@ nonisolated enum FT5SGlyph {
     }
 
     /// زرّ مجسّم صقيل بلون القسم/النوع ورمز أبيض (أيقونات الحالة ولوحة الإدارة): سُمك + وجه + لمعة حادّة — ٧ عمليات
-    static func button(_ ctx: inout GraphicsContext, symbol: String, tint: Color, size: CGSize, squircle: Bool, dark: Bool) {
+    static func button(_ ctx: inout GraphicsContext, symbol: String, tint: Color, size: CGSize, squircle: Bool, dark: Bool,
+                       glyph glyphColor: Color = .white) {
         let s = min(size.width, size.height)
         guard s > 4 else { return }
         let bw = s * 0.84
@@ -1299,7 +1300,7 @@ nonisolated enum FT5SGlyph {
                with: .linearGradient(Gradient(colors: [.white.opacity(0.28), .white.opacity(0.05)]),
                                      startPoint: CGPoint(x: body.minX, y: body.minY), endPoint: CGPoint(x: body.midX, y: body.midY)))
         let glyph = ctx.resolve(Text(Image(dsSymbol: symbol)).font(.system(size: s * 0.38, weight: .bold)))
-        put(&ctx, glyph, CGPoint(x: body.midX, y: body.midY), .white)
+        put(&ctx, glyph, CGPoint(x: body.midX, y: body.midY), glyphColor)
     }
 }
 
@@ -1536,7 +1537,10 @@ struct FT5SButton: View {
     var body: some View {
         let dark = scheme == .dark
         let icon = self.icon, tint = self.tint, sq = squircle
-        Canvas { ctx, sz in FT5SGlyph.button(&ctx, symbol: icon, tint: tint, size: sz, squircle: sq, dark: dark) }
+        // الرمز أبيض فوق الألوان الغامقة، وحبر داكن فوق الألوان التي تفتح في الداكن (فحص التوحيد ١١-٠٦ A1)
+        let traits = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
+        let glyph = Color(uiColor: UIColor(DS.Color.readableText(on: tint)).resolvedColor(with: traits))
+        Canvas { ctx, sz in FT5SGlyph.button(&ctx, symbol: icon, tint: tint, size: sz, squircle: sq, dark: dark, glyph: glyph) }
             .frame(width: size, height: size)
             .allowsHitTesting(false)
             .accessibilityHidden(true)

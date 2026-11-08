@@ -74,7 +74,7 @@ struct DSMemberPickerBox: View {
         let query = settledSearch.trimmingCharacters(in: .whitespaces)
         let queryWords = query.split(whereSeparator: \.isWhitespace).count
         let queryIsSpecific = queryWords >= Self.specificWords || query.count >= Self.specificLength
-        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
+        // البحث الدقيق الواحد (`NameSearch.filter`): سلسلة الاسم متتالية (تضيق مع كل كلمة)، والسلسلة التامة أولاً
         let matched: [FamilyMember] = {
             if requiresSpecificQuery {
                 return queryIsSpecific ? NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName } : []
@@ -82,8 +82,9 @@ struct DSMemberPickerBox: View {
             guard !query.isEmpty else { return listsAllWhenEmpty ? candidates : [] }
             return NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
         }()
-        // بعد الكتابة: أول ٥٠ فقط وسطر «اكتب أكثر» — القائمة الكاملة بلا بحث (المنتقيات التي تعرض الكل) كما هي
-        let capped = !query.isEmpty && matched.count > Self.maxShown
+        // أول ٥٠ فقط وسطر «اكتب أكثر» — بعد الكتابة، وقبلها أيضاً (طلب المالك ٢٠٢٦-١١-٠٧ «قائمة الزوج بطيئة»: ٢٥٠٠ ذكر
+        // كانت تُرسم كلها عند الفتح لأن المربّع يقيس ارتفاع محتواه). الاختيار المتعدّد (مستلمو الإعلان) يبقى كاملاً
+        let capped = matched.count > Self.maxShown && (!query.isEmpty || selectedIds == nil)
         let list = capped ? Array(matched.prefix(Self.maxShown)) : matched
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
@@ -140,8 +141,11 @@ struct DSMemberPickerBox: View {
                     }
                 }
                 if capped {
-                    Text(L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب أكثر لتضييق النتائج",
-                                "Showing the first \(Self.maxShown) of \(matched.count) — type more to narrow"))
+                    Text(query.isEmpty
+                         ? L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب الاسم للبحث",
+                                  "Showing the first \(Self.maxShown) of \(matched.count) — type a name to search")
+                         : L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب أكثر لتضييق النتائج",
+                                  "Showing the first \(Self.maxShown) of \(matched.count) — type more to narrow"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .frame(maxWidth: .infinity)

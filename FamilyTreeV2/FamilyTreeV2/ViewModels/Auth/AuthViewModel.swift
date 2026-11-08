@@ -156,18 +156,10 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - صلاحيات الأدوار
 
-    /// المالك — يُقرأ من Info.plist (`OWNER_UUID`) مع fallback للقيمة الافتراضية.
-    /// لنقله إلى build config: أضف `INFOPLIST_KEY_OWNER_UUID = <uuid>` في pbxproj أو xcconfig.
-    static let ownerUUID: UUID? = {
-        if let raw = Bundle.main.object(forInfoDictionaryKey: "OWNER_UUID") as? String,
-           let uuid = UUID(uuidString: raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return uuid
-        }
-        // Default fallback (dev/legacy)
-        return UUID(uuidString: "9849ab4f-fc16-495e-b82d-33811d4b8d3c")
-    }()
+    // المالك بالدور لا بمعرّف ثابت — المالكان اثنان (٢٠٢٦-١١-٠٧)، ونُقل حساب المالك لمعرّف جديد ٢٠٢٦-٠٩-٢٤؛ حُذف
+    // `ownerUUID` الاحتياطي القديم (9849ab4f، لم يعد يُستخدم)
 
-    /// هل المستخدم الحالي مالك التطبيق
+    /// هل المستخدم الحالي أحد مالكي التطبيق
     var isOwner: Bool {
         currentUser?.role == .owner
     }
@@ -213,11 +205,12 @@ class AuthViewModel: ObservableObject {
     /// إعدادات التطبيق — المالك فقط
     var canManageSettings: Bool { isOwner }
 
-    /// قسما «التطبيق» و«الفريق والأمان» وكل مداخلهما (الإعدادات، رسائل الدخول ومحاولاته، الأجهزة، فريق الإدارة
-    /// والأدوار، التسجيل والمنع) — المالك فقط (طلب المالك ٢٠٢٦-١٠-٢٤؛ كان المدير يتصفّحها للقراءة)
+    /// ما يحرسه السيرفر للمالك وحده: إعدادات «التطبيق»، رسائل الدخول ومحاولاته، الأجهزة، التسجيل والمنع، حالة النظام.
+    /// ظهور الأقسام والبطاقات نفسه من جدول السيرفر (`AdminRoleMatrix` / `adminAccess(_:)`، ٢٠٢٦-١١-٠٧) — المدير يطّلع
+    /// على «الفريق والأمان» (الفريق والاستخدام) بلا هذه
     var canViewSystemSettings: Bool { isOwner }
 
-    /// «المؤشرات» (الأعداد، الاستخدام، تقرير الموافقات) — المالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
+    /// تقرير الموافقات والاستخدام (دوال السيرفر للمالك والمدير). ظهور «المؤشرات» نفسه من الجدول — «العائلة» فيها للمراقب أيضاً
     var canViewInsights: Bool { isAdmin }
 
     /// أرقام محظورة — المالك فقط

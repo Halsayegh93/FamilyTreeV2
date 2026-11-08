@@ -37,8 +37,11 @@ enum DSNoticeMetrics {
 
 extension DS.TextRole {
     /// عنوان صفّ الإشعار: غير المقروء عريض، والمقروء أخفّ — Subheadline (١٥)
-    static let noticeTitle = DS.TextRole(.subheadline, weight: .semibold)
-    static let noticeTitleRead = DS.TextRole(.subheadline, weight: .medium)
+    static let noticeTitle = DS.TextRole(.footnote, weight: .semibold)
+    static let noticeTitleRead = DS.TextRole(.footnote, weight: .medium)
+    /// قوائم الإدارة بسلّم واحد (طلب المالك ٢٠٢٦-١١-٠٥): عنوان الصف، وسطره الثاني
+    static let adminRowTitle = DS.TextRole(.footnote, weight: .semibold)
+    static let adminRowSubtitle = DS.TextRole(.caption)
 }
 
 // MARK: الأيام
@@ -267,7 +270,7 @@ struct DSNoticeText: View {
     let text: String
     let unread: Bool
     var lines: Int = 1
-    var role: DS.TextRole = .footnote
+    var role: DS.TextRole = .adminRowSubtitle
 
     var body: some View {
         Text(verbatim: text)

@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - التقارير الجديدة و«كتاب الفرع» (طلب المالك ٢٠٢٦-١١-٠٢ — مزيج الاتجاهين «أ» و«ج»)
 //
-// • «المسجّلون في التطبيق»: الأحياء — مسجّل · مقيّد · موقوف، بنسبة لكل فرع، ثم القائمة بالتجميع المختار.
-// • «المقيّدون في الشجرة» (هذا الشهر / الشهر الماضي / ٩٠ يوماً) من `created_at` بتوقيت الكويت.
+// • «المسجّلون في التطبيق»: الأحياء — مسجّل · بدون حساب · موقوف، بنسبة لكل فرع، ثم القائمة بالتجميع المختار.
+// • «المضافون» (هذا الشهر / الشهر الماضي / ٩٠ يوماً) من `created_at` بتوقيت الكويت.
 // • «الناقصة بياناتهم»: ما ينقص كل فرد (الميلاد · تاريخ وفاة كامل · الصورة · الأب في الشجرة).
 // • «تقويم الذكرى»: صفحة لكل شهر بمن تحلّ ذكراهم (تاريخ الوفاة الكامل فقط — الباقي «لا يوجد تاريخ كامل للوفاة» في ملاحظة).
 // • «شجرة فرع مطبوعة»: الفرع مرسوماً بخطوط ذهبية — يتّسع على A4، وما لا يتّسع يُختصر وينزل لصفحة فرعه، أو يُصغَّر،
@@ -74,7 +74,7 @@ nonisolated extension AdminReportBuilder {
         var blocks: [AdminReportBlock] = [
             .tiles([AdminReportTile(value: AdminReportText.num(all.count), label: "الأحياء"),
                     AdminReportTile(value: reg == nil ? "—" : AdminReportText.num(counts[.registered] ?? 0), label: "مسجّلون"),
-                    AdminReportTile(value: reg == nil ? "—" : AdminReportText.num(counts[.treeOnly] ?? 0), label: "مقيّدون"),
+                    AdminReportTile(value: reg == nil ? "—" : AdminReportText.num(counts[.treeOnly] ?? 0), label: "بدون حساب"),
                     AdminReportTile(value: AdminReportText.num(counts[.frozen] ?? 0), label: "موقوف")])
         ]
         if reg == nil {
@@ -87,7 +87,7 @@ nonisolated extension AdminReportBuilder {
                 .init(title: "الفرع", weight: 0.34, wraps: true),
                 .init(title: "الأحياء", weight: 0.13, centered: true),
                 .init(title: "مسجّلون", weight: 0.13, centered: true),
-                .init(title: "مقيّدون", weight: 0.13, centered: true),
+                .init(title: "بدون حساب", weight: 0.13, centered: true),
                 .init(title: "موقوف", weight: 0.12, centered: true),
                 .init(title: "النسبة", weight: 0.15, centered: true)
             ], rows: [])
@@ -111,7 +111,7 @@ nonisolated extension AdminReportBuilder {
             let ctx = CellContext(tree: tree, input: input, ages: ages, fields: r.fields)
             blocks += memberSections(pool, ctx: ctx, plan: r.plan) { registrationSummary($0, reg) }
         }
-        let intro = "الأحياء من أفراد الشجرة وحالة كل منهم في التطبيق: عضو مسجّل (له حساب دخول)، أو مقيّد في الشجرة فقط،"
+        let intro = "الأحياء من أفراد الشجرة وحالة كل منهم في التطبيق: عضو مسجّل (له حساب دخول)، أو بدون حساب فقط،"
             + " أو حساب موقوف — بنسبة لكل فرع ثم القائمة."
         var doc = AdminReportDoc(kind: .registered, scope: parts.joined(separator: " · "), count: pool.count, intro: intro,
                                  blocks: blocks, generatedBy: input.generatedBy, date: input.date)
@@ -119,7 +119,7 @@ nonisolated extension AdminReportBuilder {
         return doc
     }
 
-    // MARK: المقيّدون في الشجرة (الفترة)
+    // MARK: المضافون (الفترة)
 
     /// بداية الفترة ونهايتها بتوقيت الكويت، واسمها
     static func period(_ p: AdminReportFilter.Period, today: Date) -> (from: Date, to: Date, label: String) {
@@ -149,7 +149,7 @@ nonisolated extension AdminReportBuilder {
         let living = pool.filter { !$0.deceased }.count
         let branchCount = Set(pool.compactMap { tree.branchOf[$0.id] }).count
         var blocks: [AdminReportBlock] = [
-            .tiles([AdminReportTile(value: AdminReportText.num(pool.count), label: "قُيّدوا"),
+            .tiles([AdminReportTile(value: AdminReportText.num(pool.count), label: "انضافوا"),
                     AdminReportTile(value: AdminReportText.num(living), label: "أحياء"),
                     AdminReportTile(value: AdminReportText.num(pool.count - living), label: "متوفون"),
                     AdminReportTile(value: AdminReportText.num(branchCount), label: "الفروع")])
@@ -537,7 +537,7 @@ nonisolated extension AdminReportBuilder {
             table.rows.append(row.row)
         }
         blocks.append(.table(table))
-        blocks.append(.heading("أبناء غير مقيّدين في الشجرة؟", subtitle: nil, panel: true))
+        blocks.append(.heading("أبناء غير موجودين في الشجرة؟", subtitle: nil, panel: true))
         var extra = AdminReportTable(columns: [
             .init(title: "الاسم الثلاثي", fill: true),
             .init(title: "ابن من؟", minWidth: 110),

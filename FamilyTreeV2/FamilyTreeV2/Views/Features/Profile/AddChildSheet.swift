@@ -19,6 +19,36 @@ enum AddChildChecks {
         return String(String(kept).map { folded[$0] ?? $0 })
     }
 
+    /// أكثر عدد وحدات مقبول في خانة الاسم الأول — من السيرفر متى أُضيف مفتاحه
+    static let firstNameMaxUnitsKey = "child_first_name_max_units"
+    static var firstNameMaxUnits: Int { AppConfigValues.shared.int(firstNameMaxUnitsKey, default: 2) }
+
+    /// وحدات الاسم المكتوب: «زين العابدين» و«عبد الله» وحدة واحدة.
+    /// `PersonName.units` لا يدمج الكلمة الأخيرة (يعتبرها العائلة)، فتُضاف كلمة وهمية ثم تُطرح.
+    static func firstNameUnits(_ name: String) -> Int {
+        let cleaned = PersonName.clean(name)
+        guard !cleaned.isEmpty else { return 0 }
+        return max(PersonName.units(cleaned + " ـ").count - 1, 1)
+    }
+
+    /// مكتوب فيه أكثر من اسم أول (الاسم الكامل مثلاً) — يُرفض
+    static func isMoreThanFirstName(_ name: String) -> Bool {
+        firstNameUnits(name) > firstNameMaxUnits
+    }
+
+    static var firstNameOnlyMessage: String {
+        L10n.t("اكتب الاسم الأول فقط، وباقي الاسم ينضاف تلقائياً من اسم الأب.",
+               "Enter the first name only. The rest is added from the father's name.")
+    }
+
+    /// كلمتان: قد يكون اسماً مركّباً مثل «محمد رضا» — تنبيه يقدر يتجاوزه
+    static func compoundNameWarning(_ name: String) -> String? {
+        guard firstNameUnits(name) >= 2 else { return nil }
+        let cleaned = PersonName.clean(name)
+        return L10n.t("«\(cleaned)» أكثر من كلمة. إذا هو اسم مركّب اضغط متابعة، وإذا فيه اسم الأب عدّله واكتب الاسم الأول فقط.",
+                      "«\(cleaned)» has more than one word. If it is a compound name, continue. Otherwise enter the first name only.")
+    }
+
     /// ابن مسجّل اسمه قريب من المكتوب (لا مطابق تماماً) — الأول فقط
     static func nearSon(name: String, among sons: [FamilyMember]) -> FamilyMember? {
         let typed = NameMatcher.tokens(name).joined(separator: " ")
@@ -161,7 +191,7 @@ struct AddChildSheet: View {
         DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
                           icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
             DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
-                            placeholder: L10n.t("اسم الابن", "Child's name"),
+                            placeholder: L10n.t("الاسم الأول فقط", "First name only"),
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
             // اختيار الجنس — أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
@@ -236,6 +266,7 @@ struct AddChildSheet: View {
     private var currentWarnings: [String] {
         var list: [String] = []
         let name = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let compound = AddChildChecks.compoundNameWarning(name) { list.append(compound) }
         if selectedGender != "female" {
             let sons = memberVM.allMembers.filter { $0.fatherId == member.id && !$0.isFemale }
             if let son = AddChildChecks.nearSon(name: name, among: sons) {
@@ -251,6 +282,11 @@ struct AddChildSheet: View {
 
     private func saveChild() {
         guard !isSubmitting else { return }
+        guard !AddChildChecks.isMoreThanFirstName(firstName) else {
+            errorMessage = AddChildChecks.firstNameOnlyMessage
+            showErrorAlert = true
+            return
+        }
         let warnings = currentWarnings
         if warnings.isEmpty {
             performSave()

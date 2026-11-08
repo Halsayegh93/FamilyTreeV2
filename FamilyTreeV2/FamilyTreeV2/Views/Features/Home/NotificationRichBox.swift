@@ -108,7 +108,8 @@ struct NotificationRichBox: View {
                     .readHeight($contentH)
             }
         }
-        .background(DS.Color.surface)
+        // الداكن: أسود صافٍ بلا رمادي (طلب المالك ٢٠٢٦-١١-٠٧) — الفاتح أبيض كما كان
+        .background(DS.Color.background)
         .preference(key: SheetContentHeightKey.self, value: headerH > 0 ? headerH + contentH : 0)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -208,13 +209,15 @@ struct NotifQuoteCard: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, DS.Spacing.md + DS.Spacing.xxs)
             .padding(.vertical, DS.Spacing.md)
-            .background(DS.Color.cardBackgroundSoft)
+            .background(DS.Color.background)
             .overlay(alignment: .leading) {
                 Rectangle()
                     .fill(DS.Color.accentLight)
                     .frame(width: DS.Border.widthBold * 2)
             }
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(DS.Color.cardBorder, lineWidth: DS.Border.width))
     }
 }
 
@@ -332,7 +335,9 @@ struct NotifInfoGrid: View {
                 .padding(.vertical, DS.Spacing.sm)
                 .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + DS.Spacing.xxs, style: .continuous)
-                    .fill(cell.highlighted ? DS.Color.success.opacity(DS.Opacity.tintFill) : DS.Color.cardBackgroundSoft))
+                    .fill(cell.highlighted ? DS.Color.success.opacity(DS.Opacity.tintFill) : DS.Color.background))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm + DS.Spacing.xxs, style: .continuous)
+                    .strokeBorder(cell.highlighted ? Color.clear : DS.Color.cardBorder, lineWidth: DS.Border.width))
                 .accessibilityElement(children: .combine)
             }
         }
@@ -356,7 +361,7 @@ struct NotifContextLine: View {
         }
         .padding(.horizontal, DS.Spacing.md)
         .padding(.vertical, DS.Spacing.sm + DS.Spacing.xxs)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.cardBackgroundSoft))
+        .dsWhiteTile(radius: DS.Radius.md)
     }
 }
 
@@ -405,7 +410,7 @@ struct NotifBoxButtonStyle: ButtonStyle {
             switch kind {
             case .primary:   return DS.Color.primaryFill
             case .approve:   return DS.Color.successFill
-            case .reject, .secondary: return DS.Color.surface
+            case .reject, .secondary: return DS.Color.background
             }
         }()
         let ink: Color = {
@@ -614,5 +619,15 @@ extension String {
         guard contains(".fill") else { return self }
         let outline = replacingOccurrences(of: ".fill", with: "")
         return UIImage(systemName: outline) != nil ? outline : self
+    }
+}
+
+
+extension View {
+    /// خانة بيضاء بإطار رفيع بدل التعبئة الرملية/الرمادية (طلب المالك ٢٠٢٦-١١-٠٧ «بدون رمادي» في تفاصيل الإشعار)
+    func dsWhiteTile(radius: CGFloat) -> some View {
+        background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(DS.Color.background))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .strokeBorder(DS.Color.cardBorder, lineWidth: DS.Border.width))
     }
 }

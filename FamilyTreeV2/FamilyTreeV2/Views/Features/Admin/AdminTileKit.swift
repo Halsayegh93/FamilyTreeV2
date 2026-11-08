@@ -324,3 +324,113 @@ struct AdminToolTile: View {
                      index: index, hint: tool.subtitle)
     }
 }
+
+// MARK: - مربّع أفقي («اليوم ← الأقسام»، اختيار المالك ٢٠٢٦-١١-٠٦ — العيّنة ٤ «ب»)
+//
+// الأيقونة ثم الاسم ثم العدد في الطرف — كل الأرقام على خطّ واحد (طرف المربّعات). الأيقونة خطّية بلون القسم على تعبئته
+// الخفيفة بحجم واحد، والعدد شارة حمراء في الطرف، وبلا عدد سهم خفيف. عمودان (ثلاثة أفقياً)، وعمود واحد من أحجام إمكانية
+// الوصول. الضغط والقفزة كالمربّع بالمنتصف.
+
+extension AdminTileMetrics {
+    /// مربّع الأيقونة الخفيف ورمزه الخطّي في المربّع الأفقي
+    static let rowIcon: CGFloat = DS.Icon.row
+    static let rowIconRadius: CGFloat = DS.Radius.sm + DS.Spacing.xxs
+    static let rowGlyph: CGFloat = DS.Glyph.lg
+    /// حشوة المربّع الأفقي — طوله الأدنى بطول سطرين من الاسم
+    static let rowTilePaddingH: CGFloat = DS.Spacing.md
+    static let rowTilePaddingV: CGFloat = DS.Spacing.md
+    static let rowTileMinHeight: CGFloat = DS.Icon.tapTarget + DS.Spacing.md
+    static let rowColumns = 2
+    static let rowColumnsLandscape = 3
+}
+
+extension AdminArea {
+    /// حبر القسم (نصّ/رمز على السطح — يتكيّف مع الداكن) — قرين `fill`
+    var ink: Color {
+        switch self {
+        case .inbox:     return DS.Color.primary
+        case .family:    return DS.Color.palm
+        case .occasions: return DS.Color.sadu
+        case .metrics:   return DS.Color.accent
+        case .team:      return DS.Color.primary
+        case .app:       return DS.Color.slate
+        }
+    }
+}
+
+/// شبكة المربّعات الأفقية: عمودان (ثلاثة أفقياً)، وعمود واحد من أحجام إمكانية الوصول
+struct AdminRowTileGrid<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dsLandscape) private var landscape
+
+    var body: some View {
+        let n = typeSize.isAccessibilitySize ? 1
+            : (landscape ? AdminTileMetrics.rowColumnsLandscape : AdminTileMetrics.rowColumns)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AdminGrid.spacing, alignment: .top), count: n),
+                  alignment: .center, spacing: AdminGrid.spacing) {
+            content()
+        }
+    }
+}
+
+/// المربّع الأفقي: [أيقونة] الاسم ……… [العدد أو ›] — يوضع داخل `NavigationLink`/زرّ بـ`AdminTilePressStyle`
+struct AdminRowTile: View {
+    let icon: String
+    let ink: Color
+    let title: String
+    /// سطر صغير تحت الاسم («للاطلاع»، «مجدول اليوم 2») — nil = الاسم وحده
+    var caption: String? = nil
+    var badge: AdminTileBadge.Kind? = nil
+    var badgeSpoken: String? = nil
+    var index: Int = 0
+    var hint: String? = nil
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.adminTilePressed) private var pressed
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(dsSymbol: icon.dsLightSymbol)
+                .dsGlyph(AdminTileMetrics.rowGlyph, weight: .regular)
+                .foregroundColor(ink)
+                .frame(width: AdminTileMetrics.rowIcon, height: AdminTileMetrics.rowIcon)
+                .background(RoundedRectangle(cornerRadius: AdminTileMetrics.rowIconRadius, style: .continuous)
+                    .fill(ink.opacity(DS.Opacity.tintFill)))
+                .scaleEffect(pressed ? AdminTileMetrics.pressIconScale : 1)
+                .animation(DSMotion.press, value: pressed)
+                .modifier(DSIconPop(delay: DSMotion.staggerDelay(index, base: DSMotion.iconDelay)))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .dsFont(.hubRow)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : AdminTileMetrics.titleLines)
+                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
+                if let caption {
+                    Text(caption)
+                        .dsFont(.micro)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                        .minimumScaleFactor(0.85)
+                }
+            }
+            Spacer(minLength: DS.Spacing.xs)
+            if let badge {
+                AdminTileBadge(kind: badge)
+            } else {
+                DSChevron()
+            }
+        }
+        .padding(.horizontal, AdminTileMetrics.rowTilePaddingH)
+        .padding(.vertical, AdminTileMetrics.rowTilePaddingV)
+        .frame(maxWidth: .infinity, minHeight: AdminTileMetrics.rowTileMinHeight, alignment: .leading)
+        .dsCard(padding: nil, radius: AdminTileMetrics.radius)
+        .contentShape(RoundedRectangle(cornerRadius: AdminTileMetrics.radius, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel([title, caption, badge.map { badgeSpoken ?? AdminTileBadge.spoken($0) }]
+            .compactMap { $0 }.joined(separator: L10n.t("، ", ", ")))
+        .accessibilityHint(hint ?? "")
+    }
+}

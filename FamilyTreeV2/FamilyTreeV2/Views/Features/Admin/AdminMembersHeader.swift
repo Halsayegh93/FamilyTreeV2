@@ -14,12 +14,25 @@ import SwiftUI
 /// إناث شجرة النساء
 struct AdminFamilyCensus: Equatable {
     var counts = AdminMemberCounts()
+    /// «خارج العائلة» (طلب المالك ٢٠٢٦-١١-٠٨): ذكور = أبناء البنات (`DaughterSonsIndex`) + أزواج البنات من خارج العائلة؛
+    /// إناث = نساء شجرة النساء المعلَّمات `is_outside_family` — لا يدخلون الإجمالي ولا الرجال ولا النساء
+    var outsideMale: Int?
+    var outsideFemale: Int?
+    var outsideTotal: Int? { outsideMale.flatMap { m in outsideFemale.map { m + $0 } } }
 
     @MainActor
     static func make(members: [FamilyMember], women: [FamilyMember]) -> AdminFamilyCensus {
         var c = AdminFamilyCensus()
+        let outside = WomenStore.outsideFamilyIds
         c.counts.setMen(from: members)
-        c.counts.setWomen(women)
+        c.counts.setWomen(women, excluding: outside)
+        let sons = DaughterSonsIndex.shared.ids
+        let sonCount = members.filter { sons.contains($0.id) && $0.hasName }.count
+        if !women.isEmpty {
+            let outsideRows = women.filter { outside.contains($0.id) && $0.hasName }
+            c.outsideMale = sonCount + outsideRows.filter { !$0.isFemale }.count
+            c.outsideFemale = outsideRows.filter(\.isFemale).count
+        }
         return c
     }
 }
@@ -29,12 +42,14 @@ struct AdminFamilyCensusBand: View {
     let census: AdminFamilyCensus
     /// «الرجال» ← شريحة «الكل» في صفحة الأعضاء نفسها
     let openMen: () -> Void
+    /// «خارج العائلة» ← «شجرة النساء ← فرع خارج العائلة» في الصفحة نفسها
+    var openOutside: (() -> Void)? = nil
     @EnvironmentObject private var authVM: AuthViewModel
     @ObservedObject private var verified = AdminLivingVerifiedStore.shared
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dsLandscape) private var landscape
 
-    private enum Target { case overview, men, women }
+    private enum Target { case overview, men, women, outside }
 
     private struct Gauge: Identifiable {
         let id: String
@@ -46,6 +61,8 @@ struct AdminFamilyCensusBand: View {
         let target: Target
         /// الأحياء تقديريون («تحقق من الأحياء» فيها من لم يُراجَع — الرجال والإجمالي)
         var estimated = false
+        /// «خارج العائلة»: سطرا «N ذكور · M إناث» بدل الأحياء والمتوفين
+        var lines: (String, String)? = nil
     }
 
     private var estimated: Bool {
@@ -60,13 +77,18 @@ struct AdminFamilyCensusBand: View {
             Gauge(id: "men", title: L10n.t("الرجال", "Men"), tint: DS.Hub.censusMale,
                   total: c.men, alive: c.menAlive, deceased: c.menDeceased, target: .men, estimated: estimated),
             Gauge(id: "women", title: L10n.t("النساء", "Women"), tint: DS.Hub.censusFemale,
-                  total: c.women, alive: c.womenAlive, deceased: c.womenDeceased, target: .women)
+                  total: c.women, alive: c.womenAlive, deceased: c.womenDeceased, target: .women),
+            Gauge(id: "outside", title: L10n.t("خارج العائلة", "Outside"), tint: DS.Hub.censusOutside,
+                  total: census.outsideTotal, alive: census.outsideMale, deceased: nil, target: .outside,
+                  lines: (census.outsideMale.map { L10n.t("\($0) ذكور", "\($0) male") } ?? L10n.t("— ذكور", "— male"),
+                          census.outsideFemale.map { L10n.t("\($0) إناث", "\($0) female") } ?? L10n.t("— إناث", "— female")))
         ]
     }
 
     /// كتل عمودية من أحجام إمكانية الوصول (كـ«إحصاء الأفراد»)
     private var stacked: Bool { typeSize.isAccessibilitySize }
-    private var ringSize: DS.Ring.Size { typeSize >= .xxxLarge ? DS.Ring.censusCompact : DS.Ring.census }
+    /// أربع حلقات في صفّ (الدفعة ٢٠٢٦-١١-٠٨ «نضبط التصميم شوي»): المتوسطة لتتّسع الأربع في عرض ٣٩٣
+    private var ringSize: DS.Ring.Size { DS.Ring.medium }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -76,7 +98,7 @@ struct AdminFamilyCensusBand: View {
                 })
             } else {
                 // صفّ واحد — في الوضع الأفقي بعرض عمود القراءة في الوسط
-                AnyView(HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                AnyView(HStack(alignment: .top, spacing: DS.Spacing.md) {
                     ForEach(gauges) { column($0) }
                 }
                 .frame(maxWidth: landscape ? DS.Landscape.maxContentWidth : .infinity)
@@ -98,12 +120,18 @@ struct AdminFamilyCensusBand: View {
     /// عمود: الحلقة، ثم الاسم بلونها، ثم «2351 حياً · 368 متوفى» (سطران إن ضاق) — رابط واحد
     private func column(_ g: Gauge) -> some View {
         let face = VStack(spacing: DS.Spacing.xs) {
-            ring(g, size: ringSize)
+            // الاسم أصغر وفوق الحلقة (طلب المالك ٢٠٢٦-١١-٠٨ «نصغرهم» + «خل عنوان الحلقة فوق الحلقة»)
             Text(g.title)
-                .dsFont(.hubRow)
+                .dsFont(.hubLabel)
                 .foregroundColor(g.tint)
                 .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                // مسافة بين العنوان والحلقة (طلب المالك ٢٠٢٦-١١-٠٨)
+                .padding(.bottom, DS.Spacing.xsm)
+            ring(g, size: ringSize)
+                // مسافة تحت الحلقة أيضاً (طلب المالك ٢٠٢٦-١١-٠٨)
+                .padding(.bottom, DS.Spacing.xsm)
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: DS.Spacing.xs) { aliveText(g); dot; deceasedText(g) }
                 VStack(spacing: 0) { aliveText(g); deceasedText(g) }
@@ -139,16 +167,16 @@ struct AdminFamilyCensusBand: View {
     }
 
     private func aliveText(_ g: Gauge) -> some View {
-        Text(verbatim: AdminFamilyStatsPage.aliveText(g.alive, estimated: g.estimated))
-            .dsFont(.hubLabel)
+        Text(verbatim: g.lines?.0 ?? AdminFamilyStatsPage.aliveText(g.alive, estimated: g.estimated))
+            .dsFont(.caption)
             .monospacedDigit()
             .foregroundColor(g.tint)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private func deceasedText(_ g: Gauge) -> some View {
-        Text(verbatim: AdminFamilyStatsPage.deceasedText(g.deceased))
-            .dsFont(.hubLabel)
+        Text(verbatim: g.lines?.1 ?? AdminFamilyStatsPage.deceasedText(g.deceased))
+            .dsFont(.caption)
             .monospacedDigit()
             .foregroundColor(DS.Hub.onBandMuted)
             .fixedSize(horizontal: false, vertical: true)
@@ -156,7 +184,7 @@ struct AdminFamilyCensusBand: View {
 
     private var dot: some View {
         Text(verbatim: "·")
-            .dsFont(.hubLabel)
+            .dsFont(.caption)
             .foregroundColor(DS.Hub.onBandMuted)
     }
 
@@ -191,6 +219,14 @@ struct AdminFamilyCensusBand: View {
             } label: { face }
             .buttonStyle(DSPressStyle())
             .accessibilityHint(L10n.t("يفتح شجرة النساء", "Opens the women's tree"))
+        case .outside:
+            if let openOutside {
+                Button(action: openOutside) { face }
+                    .buttonStyle(DSPressStyle())
+                    .accessibilityHint(L10n.t("يعرض فرع خارج العائلة", "Shows the outside branch"))
+            } else {
+                face
+            }
         }
     }
 
@@ -200,7 +236,11 @@ struct AdminFamilyCensusBand: View {
 
     /// «الإجمالي 2719، 2351 حياً، 368 متوفى»
     private func spoken(_ g: Gauge) -> String {
-        "\(g.title) \(Self.number(g.total))" + L10n.t("، ", ", ")
+        if let lines = g.lines {
+            return "\(g.title) \(Self.number(g.total))" + L10n.t("، ", ", ") + lines.0 + L10n.t("، ", ", ") + lines.1
+                + L10n.t("، لا يدخلون الإجمالي", ", not in the total")
+        }
+        return "\(g.title) \(Self.number(g.total))" + L10n.t("، ", ", ")
             + AdminFamilyStatsPage.aliveText(g.alive, estimated: false)
             + (g.estimated ? L10n.t(" (تقديري)", " (estimate)") : "")
             + L10n.t("، ", ", ") + AdminFamilyStatsPage.deceasedText(g.deceased)

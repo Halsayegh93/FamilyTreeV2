@@ -180,7 +180,7 @@ struct AdminAnalyticsView: View {
         }
     }
 
-    // MARK: - المسجّلون في التطبيق من الأحياء (الحالات الرسمية — «عضو مسجّل» · «مقيّد في الشجرة»)
+    // MARK: - المسجّلون في التطبيق من الأحياء (الحالات الرسمية — «عضو مسجّل» · «بدون حساب»)
 
     /// كل رقم يفتح شريحته في «العائلة» (بيت القائمة)
     private var registeredSection: some View {
@@ -192,7 +192,7 @@ struct AdminAnalyticsView: View {
         let line = L10n.t("\(registered ?? 0) من \(living) من الأحياء", "\(registered ?? 0) of \(living) living members")
         return AdminSectionCard(title: L10n.t("المسجّلون في التطبيق من الأحياء", "Registered among the living"),
                                 spacing: DS.Spacing.sm) {
-            // الحلقة الموحّدة (الدفعة ١٠): المسجّلون أخضر فوق رمادي «مقيّدون في الشجرة»
+            // الحلقة الموحّدة (الدفعة ١٠): المسجّلون أخضر فوق رمادي «بدون حساب»
             DSGaugeRow(gauge: DSRingGauge(progress: u == nil || living == 0 ? nil : Double(registered ?? 0) / Double(living),
                                           tint: DS.Color.success, size: DS.Ring.medium, track: DS.Ring.restTrack,
                                           center: .percent(u == nil || living == 0 ? nil : pct),
@@ -207,7 +207,7 @@ struct AdminAnalyticsView: View {
                             value: registered.map { "\($0)" } ?? "—",
                             tap: .page { AnyView(AdminMembersPage(chip: .registered).adminArea(.family)) })
                 AdminTapRow(icon: "person.fill", tint: DS.Color.slate,
-                            title: L10n.t("مقيّدون في الشجرة", "In the tree only"),
+                            title: L10n.t("بدون حساب", "In the tree only"),
                             subtitle: L10n.t("أسماء في الشجرة بلا حساب", "Names in the tree without an account"),
                             value: treeOnly.map { "\($0)" } ?? "—",
                             tap: .page { AnyView(AdminMembersPage(chip: .treeOnly).adminArea(.family)) })

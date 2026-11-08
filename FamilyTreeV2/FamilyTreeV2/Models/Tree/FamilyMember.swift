@@ -312,6 +312,13 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         return PersonName.shorten(parts, to: 3).joined(separator: " ")
     }
 
+    /// ثلاثة أسماء متتالية من السلسلة: الأول + الأب + الجد (بلا العائلة) — أسماء «إشعارات الإدارة»
+    /// مثال: "علي محمدحسين عبدالله موسى … الصايغ" → "علي محمدحسين عبدالله"
+    var chainThreeName: String {
+        let parts = nameUnits
+        return parts.isEmpty ? fullName : PersonName.firstThree(parts).joined(separator: " ")
+    }
+
     /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)
     /// مثال: "حسن صلاح عبدالحميد حسن موسى محمدعلي الصايغ" → "حسن صلاح الصايغ"
     var shortFullName: String {

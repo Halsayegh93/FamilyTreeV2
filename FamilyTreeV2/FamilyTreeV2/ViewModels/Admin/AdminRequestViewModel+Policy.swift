@@ -90,17 +90,20 @@ extension AdminRequestViewModel {
     var canHandleRelativeAdd: Bool { canHandlePrivacyRequests }
 
     /// عدد طلبات السياسة الظاهرة في «الوارد»
-    var policyRequestsCount: Int { accountDeleteRequests.count + privacyRequests.count + relativeAddRequests.count }
+    var policyRequestsCount: Int {
+        accountDeleteRequests.count + privacyRequests.count + relativeAddRequests.count + lineageRequests.count
+    }
 
     func fetchPolicyRequests() async {
         var types: [String] = []
         if canHandleAccountDeletion { types.append(RequestType.accountDelete.rawValue) }
         if canHandlePrivacyRequests { types.append(RequestType.privacyRequest.rawValue) }
-        if canHandleRelativeAdd { types.append(RequestType.relativeAdd.rawValue) }
+        if canHandleRelativeAdd { types.append(RequestType.relativeAdd.rawValue); types.append(DaughterSons.requestType) }
         guard !types.isEmpty else {
             accountDeleteRequests = []
             privacyRequests = []
             relativeAddRequests = []
+            lineageRequests = []
             return
         }
         do {
@@ -116,6 +119,7 @@ extension AdminRequestViewModel {
             accountDeleteRequests = all.filter { $0.requestType == RequestType.accountDelete.rawValue }
             privacyRequests = all.filter { $0.requestType == RequestType.privacyRequest.rawValue }
             relativeAddRequests = all.filter { $0.requestType == RequestType.relativeAdd.rawValue }
+            lineageRequests = all.filter { $0.requestType == DaughterSons.requestType }
         } catch {
             Log.fetchError("فشل جلب طلبات الحذف والخصوصية", error)
         }

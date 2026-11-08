@@ -28,6 +28,9 @@ struct EditChildSheet: View {
     @State private var errorMessage = ""
     /// حذف الابن من «عائلتي» — لكل عضو يعدّل ابنه هو (طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»)
     @State private var showDeleteConfirm = false
+    /// أم الابن من زوجاتي (طلب المالك ٢٠٢٦-١١-٠٥) — nil = غير محدّدة
+    @State private var selectedMotherId: UUID? = nil
+    @State private var originalMotherId: UUID? = nil
     @State private var isDeleting = false
 
     var body: some View {
@@ -45,12 +48,14 @@ struct EditChildSheet: View {
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
             extraActions: deleteActions,
+            extraInline: true,
             onSubmit: saveChanges,
             onCancel: { dismiss() }
         ) {
             // الصورة للذكر فقط — الأنثى بلا خيار صورة
             if selectedGender != "female" { photoSection }
             basicInfoSection
+            if isOwnSon && !wives.isEmpty { motherSection }
         }
         .onAppear(perform: setupData)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -80,6 +85,19 @@ struct EditChildSheet: View {
 
     /// ابنه هو (أبوه = المستخدم) — يحذفه أي عضو مفعّل عبر remove_self_child (أبناؤه فقط، بلا حساب دخول،
     /// والمتوفى للمالك والمدير — السيرفر يرفض غير ذلك برسالة عربية)
+    /// زوجاتي — خيارات «الأم»
+    private var wives: [WomenFamilyEntry] {
+        memberVM.currentMemberWomenFamily.filter { $0.role == .wife }
+    }
+
+    /// «الأم» من زوجاتي — قائمة قصيرة، والحفظ مع بقية التعديلات
+    private var motherSection: some View {
+        DSComposerSection(title: L10n.t("الأم", "Mother"), icon: "person.fill",
+                          tint: DS.Color.female, index: 2) {
+            ChildMotherPicker(wives: wives, selection: $selectedMotherId)
+        }
+    }
+
     private var isOwnSon: Bool {
         guard let me = authVM.currentUser?.id else { return false }
         return member.fatherId == me
@@ -88,8 +106,8 @@ struct EditChildSheet: View {
     /// زرّ الحذف بأسفل المربّع — لكل من يعدّل ابنه هو، وللمالك والمدير كما كان
     private var deleteActions: [DSComposerAction] {
         guard isOwnSon || authVM.canDeleteMembers else { return [] }
-        return [DSComposerAction(id: "delete-child", title: L10n.t("حذف الابن", "Delete son"), icon: "trash",
-                                 role: .destructive, isEnabled: !isDeleting && !isSaving, fullRow: true) {
+        return [DSComposerAction(id: "delete-child", title: L10n.t("حذف", "Delete"), icon: "trash",
+                                 role: .destructive, isEnabled: !isDeleting && !isSaving) {
             showDeleteConfirm = true
         }]
     }
@@ -165,7 +183,7 @@ struct EditChildSheet: View {
     /// صورة جديدة أو أي حقل يختلف عمّا فُتح عليه — «إلغاء» يسأل قبل التجاهل
     private var hasUnsavedChanges: Bool {
         guard let startDraft else { return false }
-        return selectedUIImage != nil || currentDraft != startDraft
+        return selectedUIImage != nil || currentDraft != startDraft || selectedMotherId != originalMotherId
     }
 
     /// الصورة — قسم مثل أقسام مربّعات الإضافة (للذكر فقط)
@@ -283,6 +301,10 @@ struct EditChildSheet: View {
     private func setupData() {
         firstName = member.firstName
         selectedGender = originalGender
+        // أم الابن: من نسخته في شجرة النساء (تحفظ الأم من خارج الملفات)، وإلا من ملفه
+        let mother = memberVM.currentMemberWomenFamily.first { $0.member.id == member.id }?.member.motherId ?? member.motherId
+        selectedMotherId = mother
+        originalMotherId = mother
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
         phoneNumber = detectedPhone.localDigits
@@ -414,6 +436,18 @@ struct EditChildSheet: View {
                 await memberVM.uploadAvatar(image: image, for: targetId)
             }
 
+            // الأم من زوجاتي — بعد حفظ بقية الحقول
+            if success, isOwnSon, selectedMotherId != originalMotherId {
+                if await memberVM.setChildMother(childId: targetId, motherId: selectedMotherId) {
+                    originalMotherId = selectedMotherId
+                } else {
+                    isSaving = false
+                    errorMessage = memberVM.errorMessage ?? L10n.t("تعذّر تحديد الأم.", "Couldn't set the mother.")
+                    showErrorAlert = true
+                    return
+                }
+            }
+
             isSaving = false
             if success, requestFailed {
                 errorMessage = L10n.t("حُفظت التعديلات، لكن تعذّر إرسال طلب الوفاة للإدارة. حاول مرة ثانية.",
@@ -435,5 +469,44 @@ struct EditChildSheet: View {
                 showErrorAlert = true
             }
         }
+    }
+}
+
+/// «الأم» من زوجات الأب — صفّ يفتح قائمة قصيرة (طلب المالك ٢٠٢٦-١١-٠٥ «اختار اسم الام للابناء»)
+struct ChildMotherPicker: View {
+    let wives: [WomenFamilyEntry]
+    @Binding var selection: UUID?
+
+    private var current: String {
+        guard let selection, let wife = wives.first(where: { $0.member.id == selection }) else {
+            return L10n.t("غير محدّدة", "Not set")
+        }
+        return wife.member.firstName
+    }
+
+    var body: some View {
+        Menu {
+            Button(L10n.t("غير محدّدة", "Not set")) { selection = nil }
+            ForEach(wives) { wife in
+                Button {
+                    selection = wife.member.id
+                } label: {
+                    if selection == wife.member.id {
+                        Label(wife.member.firstName, systemImage: "checkmark")
+                    } else {
+                        Text(wife.member.firstName)
+                    }
+                }
+            }
+        } label: {
+            // اسم الزوجة وحده (طلب المالك ٢٠٢٦-١١-٠٦ «شيل ام الابن… خل اسم الزوجة»)
+            DSRow(icon: "person.fill", tint: DS.Color.female, title: current) {
+                Image(systemName: "chevron.up.chevron.down")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(L10n.t("الأم: \(current)", "Mother: \(current)"))
     }
 }

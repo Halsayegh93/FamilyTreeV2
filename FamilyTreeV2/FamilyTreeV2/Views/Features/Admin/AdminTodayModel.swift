@@ -228,7 +228,9 @@ struct AdminMemberCounts: Equatable {
         var total = 0, alive = 0
         // سجلّ بلا اسم (رقم دخول بلا اسم) ليس فرداً في العائلة — `FamilyMember.hasName`؛
         // وحساب المرأة (`isWomanAccount`) ليس رجلاً — تُعدّ مرة واحدة بعقدتها في شجرة النساء (`setWomen`)
-        for m in all where m.role != .pending && m.hasName && !m.isWomanAccount {
+        // وابن البنت (`DaughterSonsIndex`) ليس من شجرة الرجال — بيته شجرة النساء
+        let sons = DaughterSonsIndex.shared.ids
+        for m in all where m.role != .pending && m.hasName && !m.isWomanAccount && !sons.contains(m.id) {
             total += 1
             if m.isDeceased != true { alive += 1 }
         }
@@ -239,9 +241,10 @@ struct AdminMemberCounts: Equatable {
         oldLiving = Set(AdminLivingCheck.candidates(all, hasLogin: accounts.loaded ? { accounts.info($0) != nil } : nil).keys)
     }
 
-    mutating func setWomen(_ rows: [FamilyMember]) {
+    /// `excluding`: نساء «خارج العائلة» (`is_outside_family`) — يُعددن في حلقة «خارج العائلة» لا هنا
+    mutating func setWomen(_ rows: [FamilyMember], excluding: Set<UUID> = []) {
         guard !rows.isEmpty else { return }
-        let females = rows.filter { $0.isFemale && $0.hasName }
+        let females = rows.filter { $0.isFemale && $0.hasName && !excluding.contains($0.id) }
         women = females.count
         womenAlive = females.filter { $0.isDeceased != true }.count
     }
@@ -335,9 +338,11 @@ enum AdminTodayFeed {
     }
 
     private static func scope(_ authVM: AuthViewModel, workflowOn: Bool) -> Scope {
-        if authVM.isAdmin { return Scope(tree: true, content: true, photos: true) }
-        if authVM.currentUser?.role == .supervisor { return Scope(tree: false, content: true, photos: true) }
-        return Scope(tree: true, content: false, photos: workflowOn)
+        // «صور مقترحة» من جدول السيرفر (`inbox.photos`): المالك والمدير والمراقب دائماً، والمشرف لا (البند ٥)
+        let photos = AdminAllRequestsView.reviewIncludesPhotos(for: authVM)
+        if authVM.isAdmin { return Scope(tree: true, content: true, photos: photos) }
+        if authVM.currentUser?.role == .supervisor { return Scope(tree: false, content: true, photos: photos) }
+        return Scope(tree: true, content: false, photos: photos)
     }
 
     /// لقطات المسار في مجال الدور (المشرف: البلاغات، المراقب: الباقي)
@@ -437,8 +442,10 @@ enum AdminTodayFeed {
     static func counts(authVM: AuthViewModel, adminRequestVM: AdminRequestViewModel,
                        items: [AdminDecisionItem], inboxTotal: Int) -> AdminTodayCounts {
         var c = AdminTodayCounts()
-        c.unreadMessages = adminRequestVM.unreadContactMessagesCount
-        c.pendingMessages = adminRequestVM.pendingContactMessagesCount
+        // «الرسائل» لمن يراها في جدول السيرفر فقط (`inbox.messages`)
+        let seesMessages = authVM.adminSees(.inboxMessages)
+        c.unreadMessages = seesMessages ? adminRequestVM.unreadContactMessagesCount : 0
+        c.pendingMessages = seesMessages ? adminRequestVM.pendingContactMessagesCount : 0
         c.inboxTotal = inboxTotal
         if adminRequestVM.approvalsWorkflowOn {
             let flows = scopedSnapshots(authVM: authVM, adminRequestVM: adminRequestVM)
@@ -505,7 +512,7 @@ enum AdminTodayFeed {
         }
 
         // رسائل لم يُتعامل معها
-        let pending = adminRequestVM.contactMessages
+        let pending = (authVM.adminSees(.inboxMessages) ? adminRequestVM.contactMessages : [])
             .filter { $0.status == ApprovalStatus.pending.rawValue }
             .sorted { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
         for msg in pending {

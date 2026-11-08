@@ -389,6 +389,10 @@ struct AdminPolicyRequestsSection: View {
             ForEach(adminRequestVM.relativeAddRequests) { request in
                 card(request, isDeletion: false)
             }
+            // «طلب النسب» — صفّا الأم والأب وموافقة/رفض (أبناء البنات من خارج العائلة)
+            ForEach(adminRequestVM.lineageRequests) { request in
+                AdminLineageRequestCard(request: request, adminRequestVM: adminRequestVM)
+            }
         }
         .dsAlert(L10n.t("حذف نهائي للحساب؟", "Delete the account permanently?"),
                  isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {

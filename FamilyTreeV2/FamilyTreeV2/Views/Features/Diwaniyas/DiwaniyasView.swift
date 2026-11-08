@@ -17,6 +17,8 @@ struct DiwaniyasView: View {
     /// الظاهرة للمستخدم (المعتمدة + طلباته/المعلّقة للإدارة) — كلها في قائمة واحدة: شريط «الديوانيات/الحسينيات»
     /// شيل (طلب المالك ٢٠٢٦-١٠-٢٤)، والنوع علامة على البطاقة
     @State private var cachedVisibleDiwaniyas: [Diwaniya] = []
+    /// الحساب المقيّد («أكمل حسابك») — القسم مقفول تحت رأسه
+    @ObservedObject private var lineage = LineageGateStore.shared
 
     var body: some View {
         NavigationStack {
@@ -35,7 +37,10 @@ struct DiwaniyasView: View {
                         section: .diwaniyas
                     )
 
-                    if viewModel.isLoading && filteredDiwaniyas.isEmpty {
+                    if lineage.isLocked(.diwaniyas) {
+                        LineageLockedView(section: .diwaniyas)
+                            .frame(maxHeight: .infinity)
+                    } else if viewModel.isLoading && filteredDiwaniyas.isEmpty {
                         // التحميل الموحّد: مجسّم «المجلس» يتنفّس (بدل الدوّارة)
                         DSPageLoader(section: .diwaniyas)
                     } else if filteredDiwaniyas.isEmpty {
@@ -64,7 +69,8 @@ struct DiwaniyasView: View {
                     }
                 }
 
-                // زر الإضافة السفلي (FAB) — مثل بقية الصفحات
+                // زر الإضافة السفلي (FAB) — مثل بقية الصفحات (لا يظهر والقسم مقفول)
+                if !lineage.isLocked(.diwaniyas) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {
@@ -75,6 +81,7 @@ struct DiwaniyasView: View {
                     .padding(.bottom, DS.Spacing.lg)
                 }
                 .frame(maxHeight: .infinity, alignment: .bottom)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)

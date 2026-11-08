@@ -187,44 +187,55 @@ struct AdminChildAlertBox: View {
             general ? [.wrongName, .wrongBirth, .badPhoto, .wrongData] : [.duplicateName, .wrongName, .wrongBirth, .notYourSon]
         }
 
-        var title: String {
+        /// نصوص رسمية (طلب المالك ٢٠٢٦-١١-٠٧ «نخليها رسمية»)، ويقدر السيرفر يبدّلها بلا بناء:
+        /// `app_config.child_alert_texts` = {"<السبب>": {"title": "…", "body": "… {name} …"}, "<السبب>_general": {…}}
+        @MainActor private func serverText(_ field: String, general: Bool) -> String? {
+            guard let all = AppConfigValues.shared.values["child_alert_texts"] as? [String: Any] else { return nil }
+            let entry = (general ? all["\(rawValue)_general"] as? [String: Any] : nil) ?? all[rawValue] as? [String: Any]
+            guard let t = (entry?[field] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+            return t
+        }
+
+        @MainActor var title: String {
+            if let t = serverText("title", general: false) { return t }
             switch self {
-            case .duplicateName: return L10n.t("الاسم مكرر", "Duplicate name")
-            case .wrongName:     return L10n.t("الاسم غلط", "Wrong name")
-            case .wrongBirth:    return L10n.t("الميلاد غلط", "Wrong birth date")
-            case .notYourSon:    return L10n.t("مو ابنك", "Not your son")
+            case .duplicateName: return L10n.t("الاسم مكرّر", "Duplicate name")
+            case .wrongName:     return L10n.t("خطأ في الاسم", "Incorrect name")
+            case .wrongBirth:    return L10n.t("خطأ في تاريخ الميلاد", "Incorrect birth date")
+            case .notYourSon:    return L10n.t("ليس من الأبناء", "Not your son")
             case .badPhoto:      return L10n.t("الصورة غير مناسبة", "Unsuitable photo")
-            case .wrongData:     return L10n.t("البيانات غلط", "Wrong details")
+            case .wrongData:     return L10n.t("خطأ في البيانات", "Incorrect details")
             }
         }
 
         /// نصّ يُحفظ في الإشعار ويقرؤه الأب
-        func body(child: String, general: Bool = false) -> String {
+        @MainActor func body(child: String, general: Bool = false) -> String {
+            if let t = serverText("body", general: general) { return t.replacingOccurrences(of: "{name}", with: child) }
             switch self {
             case .wrongName where general:
-                return L10n.stored("الاسم «\(child)» يمكن فيه خطأ. راجعه وعدّله.",
-                                   "The name «\(child)» may be misspelled. Please check and correct it.")
+                return L10n.stored("نأمل مراجعة الاسم «\(child)» وتصحيحه، إذ يُرجَّح وجود خطأ فيه.",
+                                   "Please review and correct the name «\(child)», as it may contain an error.")
             case .wrongBirth where general:
-                return L10n.stored("تاريخ ميلاد «\(child)» يمكن غلط. راجعه وعدّله.",
-                                   "The birth date of «\(child)» may be wrong. Please check and correct it.")
+                return L10n.stored("نأمل مراجعة تاريخ ميلاد «\(child)» وتصحيحه، إذ يُرجَّح وجود خطأ فيه.",
+                                   "Please review and correct the birth date of «\(child)», as it may contain an error.")
             case .badPhoto:
-                return L10n.stored("صورة «\(child)» غير مناسبة. غيّرها لو سمحت.",
-                                   "The photo of «\(child)» isn't suitable. Please change it.")
+                return L10n.stored("نأمل استبدال صورة «\(child)»، إذ إنها غير مناسبة.",
+                                   "Please replace the photo of «\(child)», as it is not suitable.")
             case .wrongData:
-                return L10n.stored("بيانات «\(child)» اللي عدّلتها يمكن فيها خطأ. راجعها وعدّلها.",
-                                   "The details you changed for «\(child)» may be wrong. Please check and correct them.")
+                return L10n.stored("نأمل مراجعة بيانات «\(child)» التي جرى تعديلها، إذ يُرجَّح وجود خطأ فيها.",
+                                   "Please review the edited details of «\(child)», as they may contain an error.")
             case .duplicateName:
-                return L10n.stored("الاسم «\(child)» يمكن مكرر في الشجرة. تأكد منه، وإذا كان خطأ احذفه من «عائلتي».",
-                                   "The name «\(child)» may be a duplicate in the tree. Please check it, and delete it from «My Family» if it's wrong.")
+                return L10n.stored("يُرجَّح أن الاسم «\(child)» مكرّر في الشجرة. نأمل التحقق منه، وحذفه من «عائلتي» إن ثبت تكراره.",
+                                   "The name «\(child)» may be a duplicate in the tree. Please verify it and delete it from «My Family» if so.")
             case .wrongName:
-                return L10n.stored("الاسم «\(child)» يمكن فيه خطأ. تأكد منه وعدّله من «عائلتي».",
-                                   "The name «\(child)» may be misspelled. Please check it and correct it from «My Family».")
+                return L10n.stored("نأمل مراجعة الاسم «\(child)» وتصحيحه من «عائلتي»، إذ يُرجَّح وجود خطأ فيه.",
+                                   "Please review and correct the name «\(child)» from «My Family», as it may contain an error.")
             case .wrongBirth:
-                return L10n.stored("تاريخ ميلاد «\(child)» يمكن غلط. تأكد منه وعدّله من «عائلتي».",
-                                   "The birth date of «\(child)» may be wrong. Please check it and correct it from «My Family».")
+                return L10n.stored("نأمل مراجعة تاريخ ميلاد «\(child)» وتصحيحه من «عائلتي»، إذ يُرجَّح وجود خطأ فيه.",
+                                   "Please review and correct the birth date of «\(child)» from «My Family», as it may contain an error.")
             case .notYourSon:
-                return L10n.stored("«\(child)» مسجّل تحتك كابن. إذا مو ابنك احذفه من «عائلتي».",
-                                   "«\(child)» is registered as your son. If he isn't, delete him from «My Family».")
+                return L10n.stored("«\(child)» مسجّل ضمن أبنائك. إن لم يكن من أبنائك، نأمل حذفه من «عائلتي».",
+                                   "«\(child)» is registered as your son. If he is not, please delete him from «My Family».")
             }
         }
     }
@@ -274,10 +285,10 @@ struct AdminChildAlertBox: View {
                                   icon: "bell.fill", tint: DS.Color.primary, index: 2) {
                     VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(verbatim: noticeTitle)
-                            .dsFont(.rowTitle)
+                            .dsFont(.adminRowTitle)
                             .foregroundColor(DS.Color.textPrimary)
                         Text(verbatim: trimmed)
-                            .dsFont(.callout)
+                            .dsFont(.adminRowSubtitle)
                             .foregroundColor(DS.Color.textSecondary)
                             .lineLimit(2)
                     }
@@ -333,10 +344,10 @@ struct AdminAlertCardBody: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(verbatim: AdminAlertProfileCard.title)
-                    .dsFont(.rowTitle)
+                    .dsFont(.adminRowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                 Text(verbatim: text)
-                    .dsFont(.callout)
+                    .dsFont(.adminRowSubtitle)
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

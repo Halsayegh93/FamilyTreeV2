@@ -17,20 +17,43 @@ enum ArchivePDFLoader {
         return folder.appendingPathComponent(key.hasSuffix(".pdf") ? key : key + ".pdf")
     }
 
-    static func document(for url: URL) async -> PDFDocument? {
+    /// تنزيل جارٍ لكل ملف: الغلاف والقارئ لا ينزّلان نفس المجلة مرتين
+    private static var inFlight: [URL: Task<URL?, Never>] = [:]
+
+    /// الملف على الجهاز (يُنزَّل أول مرة فقط): يبقى بعد إغلاق التطبيق، والغلاف والقارئ يقرآن النسخة نفسها
+    static func localFile(for url: URL) async -> URL? {
         let file = cacheFile(for: url)
-        if FileManager.default.fileExists(atPath: file.path), let doc = PDFDocument(url: file) { return doc }
-        do {
-            let fetchURL = await StorageURLResolver.shared.displayURL(for: url)
-            let (temp, _) = try await URLSession.shared.download(from: fetchURL)
-            try? FileManager.default.removeItem(at: file)
-            try FileManager.default.moveItem(at: temp, to: file)
-            return PDFDocument(url: file)
-        } catch {
-            if ErrorHelper.isCancellation(error) { return nil }
-            Log.warning("[ARCHIVE] تعذّر تحميل الملف: \(error.localizedDescription)")
-            return nil
+        if FileManager.default.fileExists(atPath: file.path) { return file }
+        if let running = inFlight[file] { return await running.value }
+        let task = Task<URL?, Never> {
+            do {
+                let fetchURL = await StorageURLResolver.shared.displayURL(for: url)
+                let (temp, response) = try await URLSession.shared.download(from: fetchURL)
+                // رد الخطأ من التخزين لا يُحفظ كأنه الملف
+                if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) { return nil }
+                try? FileManager.default.removeItem(at: file)
+                try FileManager.default.moveItem(at: temp, to: file)
+                return file
+            } catch {
+                if !ErrorHelper.isCancellation(error) {
+                    Log.warning("[ARCHIVE] تعذّر تحميل الملف: \(error.localizedDescription)")
+                }
+                return nil
+            }
         }
+        inFlight[file] = task
+        let result = await task.value
+        inFlight[file] = nil
+        return result
+    }
+
+    static func document(for url: URL) async -> PDFDocument? {
+        guard let file = await localFile(for: url) else { return nil }
+        if let doc = PDFDocument(url: file) { return doc }
+        // ملف تالف من نسخة سابقة: يُحذف ويُنزَّل مرة واحدة
+        try? FileManager.default.removeItem(at: file)
+        guard let again = await localFile(for: url) else { return nil }
+        return PDFDocument(url: again)
     }
 }
 

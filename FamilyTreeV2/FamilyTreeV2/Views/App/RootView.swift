@@ -5,6 +5,8 @@ struct RootView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @ObservedObject private var network = NetworkMonitor.shared
+    /// حالة التحديث من السيرفر («فرض التحديث»)
+    @ObservedObject private var updateStore = AppUpdateStore.shared
     /// شاشة «جاري التحقق» تبقى ١٫٢ ث على الأقل عند الفتح (طلب المالك ٢٠٢٦-١٠-٢٥ «وين راحت؟») — نسخة الإصدار
     /// تتحقق من الجلسة في لحظة فكانت الشاشة تومض وتختفي
     @State private var splashMinDone = false
@@ -47,16 +49,16 @@ struct RootView: View {
                     .environmentObject(appSettingsVM))
 
             case .fullyAuthenticated:
-                // التحديث الإجباري — النسخة أقل من الحد الأدنى. المالك مستثنى حتى
-                // لا يقفل نفسه خارج التطبيق لو رفع الحد قبل ما يحدّث جهازه.
-                if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0)
-                    && authVM.currentUser?.role != .owner {
+                // التحديث الإجباري — السيرفر يقرّر (`app_update_policy`: بعد الموعد، «إجباري الحين»، تحت الحد)،
+                // وقبل الترحيل الحد الأدنى من app_settings كما كان. المالك مستثنى حتى لا يقفل نفسه خارج التطبيق.
+                if updateStore.isForced(minBuildSetting: appSettingsVM.settings.iosMinBuild ?? 0,
+                                        isOwner: authVM.currentUser?.role == .owner) {
                     AnyView(ForceUpdateView())
                 } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
                     AnyView(MaintenanceModeView())
                 } else {
                     // قبول «الخصوصية والاستخدام» مرة لكل إصدار (app_config.terms_version)
-                    AnyView(MainTabView().termsAcceptanceGate())
+                    AnyView(MainTabView().termsAcceptanceGate().lineageGate().appUpdateGate())
                 }
             }
             }

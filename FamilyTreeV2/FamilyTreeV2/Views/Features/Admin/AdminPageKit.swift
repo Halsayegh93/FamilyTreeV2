@@ -241,7 +241,7 @@ struct AdminPageBand: View {
                                 symbol: header.glyph ?? area?.icon ?? AppSection.admin.symbol,
                                 subtitle: header.subtitle) {
             Text(header.title)
-                .dsFont(.tabTitle)
+                .dsFont(.pageTitle)
                 .foregroundColor(DS.Color.headerTitle)
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)

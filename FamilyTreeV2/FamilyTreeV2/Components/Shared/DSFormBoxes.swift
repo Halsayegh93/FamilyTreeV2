@@ -85,6 +85,9 @@ enum DSFieldMetrics {
     static let dateRowHeight: CGFloat = 58
     static let toggleRowHeight: CGFloat = 52
     static let optionRowHeight: CGFloat = 50
+    /// اختيار الجنس: زرّان أنيقان بارتفاع أزرار المربّعات (طلب المالك ٢٠٢٦-١١-٠٦)
+    static let genderHeight: CGFloat = 44
+    static let genderHeightInBox: CGFloat = 40
 }
 
 private struct DSFieldFontModifier: ViewModifier {
@@ -406,40 +409,37 @@ struct DSGenderPicker: View {
                 }
             }
             HStack(spacing: DS.Spacing.sm) {
-                option("male", title: L10n.t("ذكر", "Male"),
-                       icon: "figure.stand", tint: DS.Color.male)
-                option("female", title: L10n.t("أنثى", "Female"),
-                       icon: "figure.stand.dress", tint: DS.Color.likeAction)
+                option("male", title: L10n.t("ذكر", "Male"), icon: "figure.stand",
+                       fill: DS.Color.maleFill, ink: DS.Color.male)
+                option("female", title: L10n.t("أنثى", "Female"), icon: "figure.stand.dress",
+                       fill: DS.Color.femaleFill, ink: DS.Color.female)
             }
         }
     }
 
-    private func option(_ value: String, title: String, icon: String, tint: Color) -> some View {
+    /// زرّ اختيار أنيق: المختار ممتلئ بلون معناه ونصّ أبيض، والآخر أبيض بإطار رفيع وأيقونة بلونه
+    private func option(_ value: String, title: String, icon: String, fill: Color, ink: Color) -> some View {
         let selected = selection == value
         return Button {
             withAnimation(DS.Anim.snappy) { selection = value }
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.xsm) {
                 Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.lg)
+                    .dsGlyph(DS.Glyph.md, weight: .medium)
+                    .foregroundColor(selected ? DS.Color.textOnPrimary : ink)
                 Text(title)
-                    .dsFieldFont(.headlineCompact)
-                Spacer(minLength: 0)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .dsGlyph(DS.Glyph.lgCompact, weight: .semibold)
+                    .dsFieldFont(.rowTitle)
+                    .foregroundColor(selected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
             }
-            .foregroundColor(selected ? tint : DS.Color.textSecondary)
-            .padding(.horizontal, DS.Spacing.md)
-            // حدّ أدنى يطول مع «حجم النص» في الجهاز (كان ارتفاعاً ثابتاً يضيق على «ذكر/أنثى» بالخط الكبير)
-            .frame(minHeight: inBox ? DSFieldMetrics.optionRowHeight - DSFieldMetrics.boxHeightReduction
-                                    : DSFieldMetrics.optionRowHeight)
-            .background(selected ? tint.opacity(DS.Opacity.tintFill) : DS.Color.background,
-                        in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: inBox ? DSFieldMetrics.genderHeightInBox : DSFieldMetrics.genderHeight)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(selected ? fill : DS.Color.cardBackground)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(selected ? tint.opacity(DS.Opacity.selectedStroke)
-                                     : DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong),
-                            lineWidth: selected ? DS.Border.widthBold : DS.Border.width)
+                    .strokeBorder(selected ? Color.clear : DS.Color.cardBorder, lineWidth: DS.Border.width)
             )
             .contentShape(Rectangle())
         }

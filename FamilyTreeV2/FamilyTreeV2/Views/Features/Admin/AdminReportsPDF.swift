@@ -168,13 +168,16 @@ nonisolated enum AdminReportPDF {
 
     static func render(_ doc: AdminReportDoc, isCancelled: () -> Bool = { false }) throws -> Output {
         let laid = try layout(doc.blocks, isCancelled: isCancelled)
-        // الفهرس: على الغلاف إن قصر، وإلا صفحاته بعد الغلاف (مدخل واحد بلا فهرس)
-        let entries = laid.toc.count > 1 ? laid.toc : []
+        // الفهرس: على الغلاف إن قصر، وإلا صفحاته بعد الغلاف (مدخل واحد بلا فهرس)؛ الورقة الجديدة: في الصفحة الأولى
+        let entries = laid.toc.count > 1 && !doc.summaryFirst ? laid.toc : []
         let tocOnCover = doc.cover && entries.count <= coverTocMax
         let tocPages = entries.isEmpty || tocOnCover ? 0 : Int(ceil(Double(entries.count) / Double(tocPerPage)))
         let firstContent = (doc.cover ? 1 : 0) + tocPages + 1
         let total = firstContent - 1 + laid.pages.count
         let toc = entries.map { (title: $0.title, page: firstContent + $0.page) }
+        let index = IndexInfo(parts: laid.toc.map { (title: $0.title, page: firstContent + $0.page) },
+                              houses: laid.houseToc.map { (title: $0.title, page: firstContent + $0.page) },
+                              total: total)
 
         let vector = familyLogo()
         let logo = vector.flatMap { raster($0, height: coverLogoWidth * $0.size.height / max($0.size.width, 1), background: cream) }
@@ -188,7 +191,9 @@ nonisolated enum AdminReportPDF {
         ]
         let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: pageSize), format: format)
         var cancelled = false
-        let stamp = "\(AdminReportText.confidential) · \(AdminReportText.date(doc.date, calendar: AdminReportText.kuwait))"
+        let stamp = doc.summaryFirst
+            ? "خاص بعائلة المحمدعلي — لا يُنشر خارجها · أعدّه \(doc.generatedBy) · \(AdminReportText.date(doc.date, calendar: AdminReportText.kuwait))"
+            : "\(AdminReportText.confidential) · \(AdminReportText.date(doc.date, calendar: AdminReportText.kuwait))"
         let data = renderer.pdfData { ctx in
             var page = 0
             if doc.cover {
@@ -209,8 +214,13 @@ nonisolated enum AdminReportPDF {
                 if isCancelled() { cancelled = true; return }
                 ctx.beginPage()
                 page += 1
-                drawHeader(doc.title, scope: doc.scope, logo: smallLogo)
-                for item in items { drawItem(item) }
+                if doc.summaryFirst {
+                    // الصفحة الأولى رأسها `.masthead`؛ وما بعدها «المحمدعلي | النطاق»
+                    if page > 1 { drawHeader("المحمدعلي", scope: doc.title, logo: nil) }
+                } else {
+                    drawHeader(doc.title, scope: doc.scope, logo: smallLogo)
+                }
+                for item in items { drawItem(item, index: index) }
                 drawFooter(page: page, total: total, stamp: stamp)
             }
         }
@@ -386,12 +396,25 @@ nonisolated enum AdminReportPDF {
         case row(TableLayout, Int, y: CGFloat)
         case footer(TableLayout, y: CGFloat)
         case summary(TableLayout, y: CGFloat)
+        /// الأسماء في عمودين: عناوين الأعمدة أعلى كل عمود، رأس بيت، وصفّ
+        case houseColumns(AdminReportHouses, x: CGFloat, y: CGFloat)
+        case houseHead(AdminReportHouses.House, x: CGFloat, y: CGFloat, continued: Bool)
+        case houseRow(AdminReportHouses, house: Int, row: Int, x: CGFloat, y: CGFloat)
+    }
+
+    /// أرقام الصفحات النهائية لـ«في هذا الملف»
+    struct IndexInfo {
+        let parts: [(title: String, page: Int)]
+        let houses: [(title: String, page: Int)]
+        let total: Int
     }
 
     private struct Laid {
         let pages: [[Item]]
         /// مداخل الفهرس: العنوان ورقم صفحة المحتوى (من ٠)
         let toc: [(title: String, page: Int)]
+        /// البيوت (الأسماء في عمودين) وصفحة كلٍّ منها
+        var houseToc: [(title: String, page: Int)] = []
     }
 
     private static let blockGap: CGFloat = 12
@@ -416,6 +439,7 @@ nonisolated enum AdminReportPDF {
             if isCancelled() { throw Cancelled() }
         }
 
+        var houseToc: [(title: String, page: Int)] = []
         var tables: [Int: TableLayout] = [:]
         for (i, b) in blocks.enumerated() {
             guard case let .table(t) = b else { continue }
@@ -451,6 +475,10 @@ nonisolated enum AdminReportPDF {
                     y += l.summaryH
                 }
                 y += blockGap
+                continue
+            }
+            if case let .houses(h) = b {
+                layoutHouses(h, pages: &pages, y: &y, toc: &houseToc)
                 continue
             }
             switch b {
@@ -493,7 +521,7 @@ nonisolated enum AdminReportPDF {
             }
         }
         if pages.last?.isEmpty == true && pages.count > 1 { pages.removeLast() }
-        return Laid(pages: pages, toc: toc)
+        return Laid(pages: pages, toc: toc, houseToc: houseToc)
     }
 
     // MARK: مقاسات الكتل
@@ -533,14 +561,22 @@ nonisolated enum AdminReportPDF {
         case .cardRow: return cardHeight
         case .signatures: return signaturesHeight
         case let .caption(text): return textHeight(text, width: contentWidth, font: fFooter) + 2
+        case let .masthead(m): return mastheadHeight(m) - (contentTop - headerTop)
+        case let .distribution(d): return distributionHeight(d)
+        case let .fileIndex(i): return fileIndexHeight(i)
+        case .houses: return 0
         }
     }
 
     // MARK: رسم عنصر
 
-    private static func drawItem(_ item: Item) {
+    private static func drawItem(_ item: Item, index: IndexInfo) {
         switch item {
+        case let .block(.fileIndex(i), y, _): drawFileIndex(i, info: index, y: y)
         case let .block(b, y, h): drawBlock(b, y: y, h: h)
+        case let .houseColumns(h, x, y): drawHouseColumns(h, x: x, y: y)
+        case let .houseHead(house, x, y, continued): drawHouseHead(house, x: x, y: y, continued: continued)
+        case let .houseRow(h, house, row, x, y): drawHouseRow(h, house: house, row: row, x: x, y: y)
         case let .header(l, y): drawTableHeader(l, y: y)
         case let .row(l, r, y): drawRow(l, l.table.rows[r], index: r, y: y, h: l.rowH[r], font: l.style.body)
         case let .footer(l, y):
@@ -572,7 +608,9 @@ nonisolated enum AdminReportPDF {
         case let .signatures(labels): drawSignatures(labels, y: y)
         case let .caption(text):
             draw(text, in: CGRect(x: margin, y: y, width: contentWidth, height: h), font: fFooter, color: faint, wrap: true)
-        case .table, .pageBreak: break
+        case let .masthead(m): drawMasthead(m, y: y - (contentTop - headerTop))
+        case let .distribution(d): drawDistribution(d, y: y)
+        case .table, .pageBreak, .fileIndex, .houses: break
         }
     }
 
@@ -1324,6 +1362,359 @@ nonisolated enum AdminReportPDF {
         sp.stroke()
         draw(AdminReportText.confidential, in: CGRect(x: stampRect.minX, y: stampRect.minY + 5, width: stampRect.width, height: lh),
              font: fSecret, color: secret, align: .center)
+    }
+}
+
+// MARK: - الورقة الجديدة (اختيار المالك ٢٠٢٦-١١-٠٦ «أ»): الصفحة الأولى = الملخّص، والأسماء في عمودين بالبيوت
+//
+// بلا غلاف مزخرف: رأس الصفحة الأولى «المحمدعلي» كبيراً والتاريخ، ثم عنوان التقرير وتصفيته شرائح، والأرقام، والفرع
+// مختصراً، والتوزيع، و«في هذا الملف» بصفحاته. الأسماء: كل بيت مربّع مستقل (رأس كريمي بالاسم والعدد ثم الصفوف)،
+// عمودان من اليمين، والبيت الطويل يكمل في العمود التالي بـ«(تابع)». حبر خفيف — لا صفوف كحلية ممتلئة، خطوط ذهبية رفيعة.
+
+nonisolated extension AdminReportPDF {
+
+    private static let fMastFamily = plex("Bold", 26)
+    private static let fMastTitle = plex("Bold", 19)
+    private static let fPill = plex("Regular", 7.5)
+    private static let fPillBold = plex("SemiBold", 7.5)
+    private static let fHouseTitle = plex("SemiBold", 8.5)
+    private static let fHouseRow = plex("Regular", 8)
+    private static let fHouseSmall = plex("Regular", 7)
+
+    private static let mastNameBlock: CGFloat = 50
+    private static let pillH: CGFloat = 15
+    private static let pillGap: CGFloat = 5
+    private static let houseColGap: CGFloat = 16
+    private static let houseColHeader: CGFloat = 14
+    private static let houseHeadH: CGFloat = 20
+    private static let houseRowH: CGFloat = 14.5
+    private static let houseGap: CGFloat = 8
+    private static let houseSeqW: CGFloat = 12
+    private static var houseColW: CGFloat { (contentWidth - houseColGap) / 2 }
+
+    private static func houseColumnWidth(_ f: AdminReportField) -> CGFloat {
+        switch f {
+        case .birth: return 30
+        case .age: return 22
+        case .registration: return 44
+        case .death: return 58
+        default: return 30
+        }
+    }
+
+    // MARK: رأس الصفحة الأولى
+
+    private static func pillWidth(_ p: AdminReportMasthead.Pill) -> CGFloat {
+        textWidth("\(p.label): ", fPill) + textWidth(p.value, fPillBold) + 14
+    }
+
+    /// الشرائح صفوفاً من اليمين بعرض الصفحة
+    private static func pillRows(_ pills: [AdminReportMasthead.Pill]) -> [[AdminReportMasthead.Pill]] {
+        var rows: [[AdminReportMasthead.Pill]] = [[]]
+        var used: CGFloat = 0
+        for p in pills {
+            let w = min(pillWidth(p), contentWidth)
+            if used + w > contentWidth, !(rows.last?.isEmpty ?? true) {
+                rows.append([])
+                used = 0
+            }
+            rows[rows.count - 1].append(p)
+            used += w + pillGap
+        }
+        return rows.filter { !$0.isEmpty }
+    }
+
+    static func mastheadHeight(_ m: AdminReportMasthead) -> CGFloat {
+        let titleH = textHeight(m.title, width: contentWidth, font: fMastTitle)
+        let subH = textHeight(m.subtitle, width: contentWidth, font: fBody)
+        let pills = CGFloat(pillRows(m.pills).count) * (pillH + pillGap)
+        return mastNameBlock + 12 + lineH(fSmall) + 2 + titleH + 2 + subH + 8 + pills + 4
+    }
+
+    static func drawMasthead(_ m: AdminReportMasthead, y top: CGFloat) {
+        // «المحمدعلي» يميناً وتحته «سجل العائلة · خاص»، والتاريخ يساراً
+        let fh = lineH(fMastFamily)
+        draw("المحمدعلي", in: CGRect(x: margin, y: top, width: contentWidth, height: fh), font: fMastFamily, color: navy)
+        draw("سجل العائلة · خاص", in: CGRect(x: margin, y: top + fh - 2, width: contentWidth, height: lineH(fSmall)),
+             font: fSmall, color: goldText)
+        draw(m.dateLine, in: CGRect(x: margin, y: top + 8, width: contentWidth / 2, height: lineH(fFooter)),
+             font: fFooter, color: muted, align: .left)
+        draw(m.timeLine, in: CGRect(x: margin, y: top + 8 + lineH(fFooter), width: contentWidth / 2, height: lineH(fFooter)),
+             font: fFooter, color: muted, align: .left)
+        let ruleY = top + mastNameBlock
+        gold.setFill()
+        UIRectFill(CGRect(x: margin, y: ruleY, width: contentWidth, height: 0.6))
+        navy.setFill()
+        UIRectFill(CGRect(x: right - 64, y: ruleY - 1, width: 64, height: 2))
+
+        var y = ruleY + 12
+        draw("تقرير من تطبيق العائلة", in: CGRect(x: margin, y: y, width: contentWidth, height: lineH(fSmall)),
+             font: fSmall, color: goldText)
+        y += lineH(fSmall) + 2
+        let th = textHeight(m.title, width: contentWidth, font: fMastTitle)
+        draw(m.title, in: CGRect(x: margin, y: y, width: contentWidth, height: th + 1), font: fMastTitle, color: navy, wrap: true)
+        y += th + 2
+        let sh = textHeight(m.subtitle, width: contentWidth, font: fBody)
+        draw(m.subtitle, in: CGRect(x: margin, y: y, width: contentWidth, height: sh + 1), font: fBody, color: muted, wrap: true)
+        y += sh + 8
+        for row in pillRows(m.pills) {
+            var x = right
+            for p in row {
+                let w = min(pillWidth(p), contentWidth)
+                let rect = CGRect(x: x - w, y: y, width: w, height: pillH)
+                let path = UIBezierPath(roundedRect: rect, cornerRadius: pillH / 2)
+                zebra.setFill()
+                path.fill()
+                line.setStroke()
+                path.lineWidth = 0.5
+                path.stroke()
+                let label = "\(p.label): "
+                let lw = textWidth(label, fPill)
+                let ty = y + (pillH - lineH(fPill)) / 2
+                draw(label, in: CGRect(x: rect.maxX - 7 - lw, y: ty, width: lw, height: lineH(fPill)), font: fPill, color: muted)
+                draw(p.value, in: CGRect(x: rect.minX + 7, y: ty, width: max(0, w - 14 - lw), height: lineH(fPillBold)),
+                     font: fPillBold, color: ink)
+                x -= w + pillGap
+            }
+            y += pillH + pillGap
+        }
+    }
+
+    // MARK: التوزيع
+
+    static func distributionHeight(_ d: AdminReportDistribution) -> CGFloat {
+        let reg = d.registration.isEmpty ? 0 : 16 + 10 + CGFloat(d.registration.count) * 13
+        let ages = 16 + CGFloat(d.ages.count) * 13
+        return max(reg, ages) + 4
+    }
+
+    private static func toneColor(_ t: AdminReportTone) -> UIColor {
+        switch t {
+        case .registered: return success
+        case .treeOnly: return deceased
+        case .warning: return secret
+        case .muted: return deceased
+        default: return navy
+        }
+    }
+
+    static func drawDistribution(_ d: AdminReportDistribution, y: CGFloat) {
+        let half = (contentWidth - 24) / 2
+        // يميناً: التسجيل في التطبيق — شريط واحد مكدّس ومفتاحه بالنسبة والعدد
+        if !d.registration.isEmpty {
+            let x0 = right - half
+            draw("التسجيل في التطبيق", in: CGRect(x: x0, y: y, width: half, height: lineH(fSmallBold)), font: fSmallBold, color: ink)
+            let total = max(1, d.registration.reduce(0) { $0 + $1.count })
+            let barY = y + 16
+            track.setFill()
+            UIBezierPath(roundedRect: CGRect(x: x0, y: barY, width: half, height: 6), cornerRadius: 3).fill()
+            var x = right
+            for s in d.registration where s.count > 0 {
+                let w = half * CGFloat(s.count) / CGFloat(total)
+                toneColor(s.tone).setFill()
+                UIRectFill(CGRect(x: x - w, y: barY, width: w, height: 6))
+                x -= w
+            }
+            var ly = barY + 12
+            for s in d.registration {
+                toneColor(s.tone).setFill()
+                UIBezierPath(ovalIn: CGRect(x: right - 6, y: ly + 3, width: 5, height: 5)).fill()
+                draw(s.label, in: CGRect(x: x0, y: ly, width: half - 10, height: lineH(fFooter)), font: fFooter, color: muted)
+                draw("\(AdminReportText.percent(s.count, of: total)) · \(AdminReportText.num(s.count))",
+                     in: CGRect(x: x0, y: ly, width: half / 2, height: lineH(fFooter)), font: fFooterBold, color: ink,
+                     align: .left, ltr: true)
+                ly += 13
+            }
+        }
+        // يساراً: الأعمار — أشرطة بطول العدد
+        let ax = margin
+        draw("الأعمار", in: CGRect(x: ax, y: y, width: half, height: lineH(fSmallBold)), font: fSmallBold, color: ink)
+        let maxCount = max(1, d.ages.map(\.count).max() ?? 1)
+        let labelW: CGFloat = 52, numW: CGFloat = 26
+        var ry = y + 16
+        for s in d.ages {
+            draw(s.label, in: CGRect(x: ax + half - labelW, y: ry, width: labelW, height: lineH(fFooter)), font: fFooter, color: muted)
+            draw(AdminReportText.num(s.count), in: CGRect(x: ax, y: ry, width: numW, height: lineH(fFooter)),
+                 font: fFooterBold, color: ink, align: .left, ltr: true)
+            let trackX = ax + numW + 4, trackW = half - labelW - numW - 10
+            track.setFill()
+            UIBezierPath(roundedRect: CGRect(x: trackX, y: ry + 4, width: trackW, height: 4), cornerRadius: 2).fill()
+            if s.count > 0 {
+                let w = max(2, trackW * CGFloat(s.count) / CGFloat(maxCount))
+                toneColor(s.tone).setFill()
+                UIBezierPath(roundedRect: CGRect(x: trackX + trackW - w, y: ry + 4, width: w, height: 4), cornerRadius: 2).fill()
+            }
+            ry += 13
+        }
+    }
+
+    // MARK: «في هذا الملف»
+
+    static func fileIndexHeight(_ i: AdminReportFileIndex) -> CGFloat {
+        let row = lineH(fToc) + 6
+        let houseRows = CGFloat((i.houses + 1) / 2)
+        return CGFloat(i.parts.count) * row + houseRows * (lineH(fFooter) + 4) + 4
+    }
+
+    static func drawFileIndex(_ i: AdminReportFileIndex, info: IndexInfo, y: CGFloat) {
+        // صفحة كل جزء من التوزيع؛ «الملخّص» = ١، والمدى حتى بداية الجزء التالي
+        var starts: [String: Int] = ["الملخّص": 1]
+        for e in info.parts where starts[e.title] == nil { starts[e.title] = e.page }
+        let ordered = i.parts.compactMap { t in starts[t].map { (title: t, page: $0) } }
+        var ry = y
+        let rowH = lineH(fToc) + 6
+        for (n, e) in ordered.enumerated() {
+            let end = n + 1 < ordered.count ? ordered[n + 1].page - 1 : info.total
+            let range = end > e.page ? "\(e.page)–\(end)" : "\(e.page)"
+            // رقم الجزء في دائرة كحلية، والعنوان، ونقاط، والصفحات يساراً
+            navy.setFill()
+            UIBezierPath(ovalIn: CGRect(x: right - 12, y: ry + 1, width: 12, height: 12)).fill()
+            draw("\(n + 1)", in: CGRect(x: right - 12, y: ry + 1, width: 12, height: 12), font: fNodeSmall,
+                 color: paper, align: .center)
+            let tw = min(textWidth(e.title, fBodyBold), contentWidth * 0.6)
+            draw(e.title, in: CGRect(x: right - 18 - tw, y: ry, width: tw, height: lineH(fBodyBold)), font: fBodyBold, color: ink)
+            let nw = textWidth(range, fToc) + 2
+            draw(range, in: CGRect(x: margin, y: ry, width: nw, height: lineH(fToc)), font: fToc, color: goldText,
+                 align: .left, ltr: true)
+            dotted(from: margin + nw + 4, to: right - 22 - tw, y: ry + lineH(fToc) - 3, color: line)
+            ry += rowH
+            if e.title == i.housesUnder, i.houses > 0 {
+                let houses = Array(info.houses.prefix(i.houses))
+                let colW = (contentWidth - 30) / 2
+                for (k, h) in houses.enumerated() {
+                    let col = k % 2
+                    let x = col == 0 ? right - 18 - colW : margin
+                    let hy = ry + CGFloat(k / 2) * (lineH(fFooter) + 4)
+                    let num = "\(h.page)"
+                    let nw = textWidth(num, fFooter) + 2
+                    let tw = min(textWidth(h.title, fFooter), colW - nw - 20)
+                    draw(h.title, in: CGRect(x: x + colW - tw, y: hy, width: tw, height: lineH(fFooter)), font: fFooter, color: muted)
+                    draw(num, in: CGRect(x: x, y: hy, width: nw, height: lineH(fFooter)), font: fFooterBold, color: goldText,
+                         align: .left, ltr: true)
+                    dotted(from: x + nw + 3, to: x + colW - tw - 3, y: hy + lineH(fFooter) - 3, color: rowLine)
+                }
+                ry += CGFloat((houses.count + 1) / 2) * (lineH(fFooter) + 4)
+            }
+        }
+    }
+
+    // MARK: الأسماء في عمودين
+
+    /// يوزّع البيوت على عمودين من اليمين ثم صفحة جديدة؛ البيت لا يبدأ إلا ومعه صفّان، والطويل يكمل بـ«(تابع)»
+    private static func layoutHouses(_ h: AdminReportHouses, pages: inout [[Item]], y: inout CGFloat,
+                                         toc: inout [(title: String, page: Int)]) {
+        var col = 0
+        var top = y
+        var cy = top
+        var firstColEnd = top
+        func colX() -> CGFloat { col == 0 ? right - houseColW : margin }
+        func startColumn() {
+            pages[pages.count - 1].append(.houseColumns(h, x: colX(), y: cy))
+            cy += houseColHeader
+        }
+        func nextColumn() {
+            if col == 0 {
+                firstColEnd = cy
+                col = 1
+                cy = top
+            } else {
+                pages.append([])
+                col = 0
+                top = contentTop
+                cy = top
+                firstColEnd = top
+            }
+            startColumn()
+        }
+        startColumn()
+        for (hi, house) in h.houses.enumerated() {
+            let need = houseHeadH + houseRowH * CGFloat(min(2, max(1, house.rows.count)))
+            if cy + need > contentBottom { nextColumn() }
+            pages[pages.count - 1].append(.houseHead(house, x: colX(), y: cy, continued: false))
+            toc.append((house.title, pages.count - 1))
+            cy += houseHeadH
+            for r in house.rows.indices {
+                if cy + houseRowH > contentBottom {
+                    nextColumn()
+                    pages[pages.count - 1].append(.houseHead(house, x: colX(), y: cy, continued: true))
+                    cy += houseHeadH
+                }
+                pages[pages.count - 1].append(.houseRow(h, house: hi, row: r, x: colX(), y: cy))
+                cy += houseRowH
+            }
+            cy += houseGap
+        }
+        y = max(cy, col == 1 ? firstColEnd : cy) + blockGap
+    }
+
+    /// عناوين الأعمدة أعلى العمود: الاسم يميناً، والأعمدة المختارة يساراً
+    private static func drawHouseColumns(_ h: AdminReportHouses, x: CGFloat, y: CGFloat) {
+        let w = houseColW
+        draw("الاسم", in: CGRect(x: x + w - houseSeqW - 120, y: y, width: 120, height: lineH(fHouseSmall)),
+             font: fHouseSmall, color: faint)
+        var cx = x
+        for f in h.columns.reversed() {
+            let cw = houseColumnWidth(f)
+            draw(AdminReportComposer.columnTitle(f), in: CGRect(x: cx, y: y, width: cw, height: lineH(fHouseSmall)),
+                 font: fHouseSmall, color: faint, align: .center)
+            cx += cw + 4
+        }
+    }
+
+    private static func drawHouseHead(_ house: AdminReportHouses.House, x: CGFloat, y: CGFloat, continued: Bool) {
+        let w = houseColW
+        let rect = CGRect(x: x, y: y + 1, width: w, height: houseHeadH - 3)
+        cream.setFill()
+        UIBezierPath(roundedRect: rect, cornerRadius: 3).fill()
+        let title = continued ? "\(house.title) (تابع)" : house.title
+        let th = lineH(fHouseTitle)
+        let capW = house.caption.map { min(textWidth($0, fHouseSmall), w * 0.4) } ?? 0
+        draw(title, in: CGRect(x: x + capW + 10, y: rect.midY - th / 2, width: w - capW - 16, height: th),
+             font: fHouseTitle, color: navy)
+        if let c = house.caption {
+            draw(c, in: CGRect(x: x + 5, y: rect.midY - lineH(fHouseSmall) / 2, width: capW, height: lineH(fHouseSmall)),
+                 font: fHouseSmall, color: goldText, align: .left)
+        }
+    }
+
+    private static func drawHouseRow(_ h: AdminReportHouses, house: Int, row: Int, x: CGFloat, y: CGFloat) {
+        let r = h.houses[house].rows[row]
+        let w = houseColW
+        let ty = y + (houseRowH - lineH(fHouseRow)) / 2
+        draw("\(row + 1)", in: CGRect(x: x + w - houseSeqW, y: ty, width: houseSeqW - 2, height: lineH(fHouseSmall)),
+             font: fHouseSmall, color: faint, align: .right, ltr: true)
+        var cx = x
+        var used: CGFloat = 0
+        for (i, f) in h.columns.enumerated().reversed() {
+            let cw = houseColumnWidth(f)
+            let text = i < r.cells.count ? r.cells[i] : ""
+            let tone = r.tones[i]
+            if f == .registration, let tone, tone == .registered || tone == .treeOnly || tone == .warning {
+                // نقطة الحالة قبل الكلمة: ممتلئة للمسجّل والموقوف، ودائرة فارغة للمقيّد
+                let dot = CGRect(x: cx + cw - 6, y: y + houseRowH / 2 - 2.5, width: 5, height: 5)
+                let color = toneColor(tone)
+                if tone == .treeOnly {
+                    color.setStroke()
+                    let p = UIBezierPath(ovalIn: dot.insetBy(dx: 0.4, dy: 0.4))
+                    p.lineWidth = 0.7
+                    p.stroke()
+                } else {
+                    color.setFill()
+                    UIBezierPath(ovalIn: dot).fill()
+                }
+                draw(text, in: CGRect(x: cx, y: ty, width: cw - 9, height: lineH(fHouseRow)), font: fHouseRow,
+                     color: tone == .treeOnly ? muted : color)
+            } else {
+                draw(text, in: CGRect(x: cx, y: ty, width: cw, height: lineH(fHouseRow)), font: fHouseRow,
+                     color: tone.map { $0 == .muted ? faint : AdminReportPDF.color($0) } ?? muted, align: .center, ltr: true)
+            }
+            cx += cw + 4
+            used += cw + 4
+        }
+        draw(r.name, in: CGRect(x: x + used + 2, y: ty, width: w - used - houseSeqW - 4, height: lineH(fHouseRow)),
+             font: fHouseRow, color: r.deceased ? faint : ink)
+        rowLine.setFill()
+        UIRectFill(CGRect(x: x, y: y + houseRowH - 0.4, width: w, height: 0.4))
     }
 }
 

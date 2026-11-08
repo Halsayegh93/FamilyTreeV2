@@ -489,15 +489,15 @@ struct ProfileView: View {
         let infoItems = buildInfoItems(user: user)
         let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
-        // «معلوماتي» — بطاقة القسم الواحدة، وزرّا الرمز (للقرابة) شريحتان بطرف العنوان (طلب المالك ٢٠٢٦-١٠-٠٢)
+        // «معلوماتي» — بطاقة القسم الواحدة، وزرّا الرمز (للقرابة) شريحتان بمقاس «ترتيب» نفسه (طلب المالك ٢٠٢٦-١١-٠٦) بطرف العنوان (طلب المالك ٢٠٢٦-١٠-٠٢)
         return DSFormCard(L10n.t("معلوماتي", "My info"), icon: "person.text.rectangle.fill",
                           color: DS.Color.primary) {
             HStack(spacing: DS.Spacing.sm) {
                 DSChipButton(L10n.t("مسح رمز", "Scan"), icon: "camera.viewfinder",
-                             tint: DS.Color.accent, size: .mini) { showQRScanner = true }
+                             tint: DS.Color.accent, size: .small) { showQRScanner = true }
                     .accessibilityLabel(L10n.t("مسح رمز QR", "Scan QR Code"))
                 DSChipButton(L10n.t("رمزي", "My code"), icon: "qrcode",
-                             tint: DS.Color.secondary, size: .mini) { showQRCode = true }
+                             tint: DS.Color.secondary, size: .small) { showQRCode = true }
                     .accessibilityLabel(L10n.t("عرض رمز QR", "Show QR Code"))
             }
         } content: {
@@ -566,7 +566,7 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(title)
                     .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
+                    .foregroundColor(DS.Color.textSecondary)
                     .lineLimit(1)
 
                 Text(value)
@@ -1072,7 +1072,7 @@ struct ProfileView: View {
                 }
                 // إضافة ابن — نفس خانة الإضافة (لمن له أسرة)
                 if hasOwnFamily {
-                    addFamilyActionCell(title: L10n.t("إضافة ابن", "Add Child"), icon: "plus",
+                    addFamilyActionCell(title: L10n.t("إضافة الأبناء", "Add children"), icon: "plus",
                                         color: AppSection.profile.ink) { showAddChild = true }
                 }
             }
@@ -1140,7 +1140,7 @@ struct ProfileView: View {
             }
             .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
             .clipShape(Circle())
-            .overlay(Circle().strokeBorder(AppSection.profile.ink.opacity(DS.Opacity.tintFill), lineWidth: DS.Border.width))
+            .overlay(Circle().strokeBorder(AppSection.profile.ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 // الاسم وحده هو المستور — الصورة والدور يبقيان ظاهرين
@@ -1256,7 +1256,7 @@ struct ProfileView: View {
     private func reorderIndexBadge(_ number: Int, color: Color) -> some View {
         Text("\(number)")
             .dsFont(.chip)
-            .foregroundColor(DS.Color.textOnPrimary)
+            .foregroundColor(DS.Color.readableText(on: color))
             .frame(width: DS.Icon.orderBadge, height: DS.Icon.orderBadge)
             .background(color)
             .clipShape(Circle())
@@ -1274,7 +1274,7 @@ struct ProfileView: View {
         }
         .frame(width: DS.Icon.avatar, height: DS.Icon.avatar)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(AppSection.profile.ink.opacity(DS.Opacity.tintFill), lineWidth: DS.Border.width))
+        .overlay(Circle().strokeBorder(AppSection.profile.ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
     }
 
     /// أسهم أعلى/أسفل موحّدة (≥44pt) مع تسميات وصول — تُستخدم للأبناء والبنات.
@@ -1363,6 +1363,11 @@ private extension View {
         frame(maxWidth: .infinity, alignment: .leading)
             .dsRowBox()
             .overlay {
+                // إطار رفيع يفصل الخانة عن البطاقة في الوضعين (فحص التوحيد ١١-٠٦ A5)
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .strokeBorder(tint == nil ? DS.Color.cardBorder : .clear, lineWidth: DS.Border.width)
+            }
+            .overlay {
                 if let tint {
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                         .strokeBorder(tint.opacity(DSAddChipLabel.strokeOpacity), style: DSAddChipLabel.dash)
@@ -1395,6 +1400,8 @@ struct WomanMemberEditSheet: View {
     @State private var errorBanner: String? = nil
     /// نُقل بين الشجرتين بتغيير الجنس — رسالة «تم الحفظ» ثم إغلاق (مثل أندرويد)
     @State private var showMovedAlert = false
+    /// أم الابنة من زوجاتي (طلب المالك ٢٠٢٦-١١-٠٥) — nil = غير محدّدة
+    @State private var selectedMotherId: UUID?
 
     /// تاريخا الميلاد والوفاة كما فُتح المربّع («yyyy-MM-dd» أو nil) — لمقارنة التغييرات
     private let startBirthKey: String?
@@ -1408,6 +1415,7 @@ struct WomanMemberEditSheet: View {
         _isDeceased = State(initialValue: entry.member.isDeceased)
         _isHidden = State(initialValue: entry.member.isHiddenFromTree)
         _selectedGender = State(initialValue: entry.member.gender)
+        _selectedMotherId = State(initialValue: entry.member.motherId)
         // DateHelper: ميلادي بأرقام لاتينية — formatter الجهاز يقرأ التاريخ خطأ بالتقويم الهجري
         if let d = DateHelper.parse(entry.member.birthDate) {
             _hasBirthDate = State(initialValue: true)
@@ -1434,7 +1442,7 @@ struct WomanMemberEditSheet: View {
     /// أي حقل يختلف عمّا فُتح عليه المربّع (أو صورة جديدة) — «إلغاء» يسأل قبل التجاهل
     private var hasUnsavedChanges: Bool {
         let m = entry.member
-        if selectedUIImage != nil { return true }
+        if selectedUIImage != nil || selectedMotherId != m.motherId { return true }
         if name != m.firstName || isDeceased != m.isDeceased
             || isHidden != m.isHiddenFromTree || selectedGender != m.gender { return true }
         let birthKey = hasBirthDate ? Self.dayKey(birthDate) : nil
@@ -1464,6 +1472,12 @@ struct WomanMemberEditSheet: View {
             canSubmit: canSave,
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
+            // حفظ · إلغاء · حذف في صفّ واحد (طلب المالك ٢٠٢٦-١١-٠٥)
+            extraActions: [DSComposerAction(id: "remove-family-member", title: L10n.t("حذف", "Delete"),
+                                            icon: "trash", role: .destructive, isEnabled: !isSaving) {
+                showDeleteConfirm = true
+            }],
+            extraInline: true,
             onSubmit: { save() },
             onCancel: { dismiss() }
         ) {
@@ -1486,13 +1500,17 @@ struct WomanMemberEditSheet: View {
 
             personalInfoSection
             datesSection
+            // أم الابنة من زوجاتي
+            if entry.role == .child && !wives.isEmpty {
+                DSComposerSection(title: L10n.t("الأم", "Mother"), icon: "person.fill",
+                                  tint: DS.Color.female, index: 3) {
+                    ChildMotherPicker(wives: wives, selection: $selectedMotherId)
+                }
+            }
 
             if let errorBanner {
                 DSNoteCard(errorBanner, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
-
-            deleteButton
-                .dsStaggerIn(3)
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .dsAlert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
@@ -1583,11 +1601,9 @@ struct WomanMemberEditSheet: View {
         }
     }
 
-    /// «حذف من العائلة» — الزرّ الواحد بدور الحذف (أحمر)
-    private var deleteButton: some View {
-        DSButton(L10n.t("حذف من العائلة", "Remove from family"), icon: "trash", role: .destructive) {
-            showDeleteConfirm = true
-        }
+    /// زوجاتي — خيارات «الأم» للابنة
+    private var wives: [WomenFamilyEntry] {
+        memberVM.currentMemberWomenFamily.filter { $0.role == .wife }
     }
 
     private func save() {
@@ -1625,6 +1641,13 @@ struct WomanMemberEditSheet: View {
             }
             if ok, let img = selectedUIImage {
                 await memberVM.updateWomanAvatar(id: entry.member.id, image: img)
+            }
+            // أم الابنة من زوجاتي — بعد حفظ بقية الحقول
+            if ok, entry.role == .child, selectedMotherId != entry.member.motherId,
+               !(await memberVM.setChildMother(childId: entry.member.id, motherId: selectedMotherId)) {
+                isSaving = false
+                errorBanner = memberVM.errorMessage
+                return
             }
             // الإخفاء يمرّ بـRPC ذاتي منفصل (updateWomanMember لا يملك صلاحيته للعضو).
             if ok, entry.role == .wife, isHidden != entry.member.isHiddenFromTree {

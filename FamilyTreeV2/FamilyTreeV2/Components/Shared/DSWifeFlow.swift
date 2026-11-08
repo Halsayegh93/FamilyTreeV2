@@ -277,6 +277,10 @@ struct DSWifeFlowBox: View {
     @State private var selectedId: UUID? = nil
     @State private var addingNew = false
     @State private var newName = ""
+    /// «متوفّاة» للبنت الجديدة تحت أبيها — يظهر فقط حين يمرّر المضيف `addsDeceased` (الإدارة)
+    @State private var newDeceased = false
+    /// إضافة البنت الجديدة متوفّاةً (طلب المالك ٢٠٢٦-١١-٠٧) — nil = بلا خيار «متوفّاة» كما كان
+    private var onAddDeceasedUnderFather: ((_ name: String, _ father: FamilyMember) -> Void)? = nil
     /// القوائم تُعاد حين تصل أرقام السيرفر
     @ObservedObject private var config = AppConfigValues.shared
 
@@ -341,8 +345,15 @@ struct DSWifeFlowBox: View {
     }
     private var trimmedName: String { newName.trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// يُظهر «متوفّاة» في «أضفها تحت أبيها»، والإضافة بها تمرّ من هنا بدل `onAddUnderFather`
+    func addsDeceased(_ handler: @escaping (_ name: String, _ father: FamilyMember) -> Void) -> Self {
+        var copy = self
+        copy.onAddDeceasedUnderFather = handler
+        return copy
+    }
+
     private func go(_ next: Step) {
-        selectedId = nil; addingNew = false; newName = ""; search = ""
+        selectedId = nil; addingNew = false; newName = ""; newDeceased = false; search = ""
         step = next
     }
 
@@ -514,19 +525,20 @@ struct DSWifeFlowBox: View {
         DSComposerSection(title: L10n.t("بناته", "His daughters"), icon: "figure.stand.dress", tint: DS.Color.female,
                           trailing: list.eligible.isEmpty ? nil : "\(list.eligible.count)", index: 1) {
             VStack(spacing: DS.Spacing.sm) {
-                if list.eligible.isEmpty {
+                // «لا بنات متاحات» تختفي حين يختار «إضافة بنت غير موجودة» (طلب المالك ٢٠٢٦-١١-٠٨)
+                if list.eligible.isEmpty && !addingNew {
                     DSEmptyView(L10n.t("لا بنات متاحات له في الشجرة", "No available daughters in the tree"),
                                 icon: "person.fill.questionmark", style: .inline)
                 }
                 ForEach(Array(list.eligible.enumerated()), id: \.element.id) { i, d in
                     WifeDaughterRow(name: firstName(d), age: WifeCandidateRules.age(d),
                                     isSelected: selectedId == d.id && !addingNew) {
-                        withAnimation(DS.Anim.snappy) { selectedId = d.id; addingNew = false; newName = "" }
+                        withAnimation(DS.Anim.snappy) { selectedId = d.id; addingNew = false; newName = ""; newDeceased = false }
                     }
                     .dsEntrance(delay: DSMotion.staggerDelay(i + 2, base: DSMotion.sectionsAfterHeader),
                                 y: DSMotion.rise, scale: DSMotion.riseScale)
                 }
-                if list.hidden > 0 {
+                if list.hidden > 0 && !addingNew {
                     // لماذا لا تظهر بعضهنّ — بلا أسماء
                     HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
                         Image(systemName: "eye.slash")
@@ -541,9 +553,11 @@ struct DSWifeFlowBox: View {
                     .foregroundColor(DS.Color.textTertiary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                WifeFlowOption(title: L10n.t("أضفها تحت أبيها", "Add her under her father"),
-                               hint: L10n.t("إن لم تكن في القائمة — بنتاً جديدة له", "If she isn't listed — a new daughter of his"),
-                               icon: "plus", tint: DSMemberKit.addTint, isSelected: addingNew) {
+                // زرّ إضافة واضح (طلب المالك ٢٠٢٦-١١-٠٨ «شكل واضح ان زر اضافة بنت غير موجودة تحت الاب»)
+                WifeFlowOption(title: L10n.t("إضافة بنت غير موجودة", "Add a daughter who isn't listed"),
+                               hint: father.map { L10n.t("بنت جديدة تحت أبيها \(firstName($0))", "A new daughter under \(firstName($0))") }
+                                   ?? L10n.t("بنت جديدة تحت أبيها", "A new daughter under her father"),
+                               icon: "plus", tint: DSMemberKit.addTint, isSelected: addingNew, dashed: !addingNew) {
                     withAnimation(DS.Anim.snappy) { addingNew = true; selectedId = nil }
                 }
             }
@@ -565,9 +579,23 @@ struct DSWifeFlowBox: View {
         DSComposerSection(title: L10n.t("اسمها", "Her name"), icon: "person.fill", tint: DS.Color.female, index: 2) {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 DSComposerField(icon: "person.fill",
-                                label: L10n.t("الاسم الأول", "First name"),
-                                placeholder: L10n.t("اسمها الأول", "Her first name"),
+                                label: L10n.t("اسم البنت الأول", "Daughter's first name"),
+                                placeholder: L10n.t("اكتب اسمها الأول فقط — يُكمَل باسم أبيها", "Her first name only — her father's name is added"),
                                 text: $newName)
+                if onAddDeceasedUnderFather != nil {
+                    // «متوفّاة» بلون المتوفى بوضوح حين تُختار، وسطر يؤكّدها
+                    DSEntryOptionCard(title: newDeceased ? L10n.t("متوفّاة ✓", "Deceased ✓") : L10n.t("متوفّاة", "Deceased"),
+                                      icon: newDeceased ? "checkmark.circle.fill" : "heart.slash",
+                                      tint: DS.Color.deceasedStrip, isOn: newDeceased) {
+                        withAnimation(DS.Anim.snappy) { newDeceased.toggle() }
+                    }
+                    if newDeceased {
+                        Text(L10n.t("تُضاف متوفّاة — تظهر تحت صورتها «متوفية» في الشجرة", "Added as deceased — marked in the tree"))
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.deceasedStrip.dsReadableGlyph)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 if let father {
                     Text(mode == .request
                          ? L10n.t("تضيفها الإدارة بنتاً لـ\(firstName(father)) ثم تربطها ", "The admins add her as \(firstName(father))'s daughter, then link her ") + asWord
@@ -585,7 +613,11 @@ struct DSWifeFlowBox: View {
         guard let father, !isBusy else { return }
         if addingNew {
             guard !trimmedName.isEmpty else { return }
-            onAddUnderFather(trimmedName, father)
+            if newDeceased, let addDeceased = onAddDeceasedUnderFather {
+                addDeceased(trimmedName, father)
+            } else {
+                onAddUnderFather(trimmedName, father)
+            }
         } else if let d = eligible.first(where: { $0.id == selectedId }) {
             onLink(d, father)
         }
@@ -601,6 +633,8 @@ private struct WifeFlowOption: View {
     let icon: String
     let tint: Color
     var isSelected: Bool = false
+    /// إطار متقطّع — زرّ «إضافة» واضح قبل اختياره
+    var dashed: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -642,7 +676,8 @@ private struct WifeFlowOption: View {
                                                            tint.opacity(DS.Opacity.tintFillSoft)],
                                                   startPoint: .leading, endPoint: .trailing)))
             .overlay(shape.strokeBorder(tint.opacity(isSelected ? DS.Opacity.selectedStroke : DS.Opacity.tintStroke),
-                                        lineWidth: isSelected ? DS.Border.widthBold : DS.Border.width))
+                                        style: StrokeStyle(lineWidth: isSelected || dashed ? DS.Border.widthBold : DS.Border.width,
+                                                           dash: dashed ? [DS.Spacing.xsm, DS.Spacing.xs] : [])))
             .contentShape(shape)
         }
         .buttonStyle(DSPressStyle())

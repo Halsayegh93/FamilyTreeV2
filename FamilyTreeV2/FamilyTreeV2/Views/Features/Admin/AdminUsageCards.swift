@@ -9,6 +9,8 @@ import SwiftUI
 
 /// البطاقات كلها — المبدّل الواحد يغيّر فترة الاتجاه والجلسات معاً
 struct AdminUsageInsights: View {
+    /// «المزيد عن الاستخدام» يخفيها — النشطون هناك في السلّم
+    var showsActiveRings = true
     @ObservedObject private var store = AdminUsageStore.shared
 
     var body: some View {
@@ -17,7 +19,7 @@ struct AdminUsageInsights: View {
                 DSNoteCard(L10n.t("أرقام الاستخدام للمالك والمدير فقط.", "Usage numbers are for the owner and admins only."),
                            icon: "lock.fill", tint: DS.Color.warning)
             } else {
-                AnyView(AdminUsageRingsCard(store: store))
+                if showsActiveRings { AnyView(AdminUsageRingsCard(store: store)) }
                 AnyView(AdminUsageTrendCard(store: store))
                 AnyView(AdminUsageSessionsCard(store: store))
                 if let engagement = store.engagement, engagement.hasData {

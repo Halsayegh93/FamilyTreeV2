@@ -49,7 +49,7 @@ struct MemberDetailsView: View {
     /// حظر العضو / إلغاء حظره (Guideline 1.2) — بجانب «إبلاغ»
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
-    /// شريط العائلة (الأب والأبناء) مخفي بالبداية (طلب المالك)
+    /// قسم «العائلة» تحت المعلومات مطويّ ومغلق بالبداية (طلب المالك ٢٠٢٦-١١-٠٦)
     @State private var familyOpen = false
     /// حجم الشيت: متوسط = صورة+اسم+قرابة+عمر فقط، كبير = كل المعلومات.
     @State private var detent: PresentationDetent = .fraction(0.46)
@@ -115,9 +115,37 @@ struct MemberDetailsView: View {
         !centered || (panelFooterH > 0 && (!Self.showsHeaderBand || panelHeaderH > 0))
     }
 
+    /// الحساب المقيّد («أكمل حسابك»، طلب المالك ٢٠٢٦-١١-٠٧): تفاصيل غيره مقفولة — القائمة من السيرفر
+    @ObservedObject private var lineage = LineageGateStore.shared
+    private var lineageLocked: Bool { !isViewingSelf && lineage.isLocked(.memberDetails) }
+
     var body: some View {
-        // جلسات الاستخدام: «صفحة العضو» ما دامت ظاهرة
-        panel.appUsageScreen(.memberDetails)
+        if lineageLocked {
+            lineageLockedPanel
+        } else {
+            // جلسات الاستخدام: «صفحة العضو» ما دامت ظاهرة
+            panel.appUsageScreen(.memberDetails)
+        }
+    }
+
+    /// المربّع نفسه بحالة القفل الهادئة — «أكمل حسابك» يُغلقه ثم يفتح الصفحة (لا تُعرض نافذتان معاً)
+    @ViewBuilder
+    private var lineageLockedPanel: some View {
+        let box = LineageLockedView(section: section, style: .card, onOpen: {
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { LineageGateStore.shared.openPage() }
+        })
+        .padding(DS.Spacing.lg)
+        .background(GeometryReader { geo in
+            Color.clear
+                .preference(key: SheetContentHeightKey.self, value: geo.size.height)
+                .preference(key: DSPanelCollapsedHeightKey.self, value: geo.size.height)
+        })
+        if centered {
+            DSExpandableCenterPanel(isExpanded: .constant(false), onClose: { dismiss() }) { box }
+        } else {
+            box
+        }
     }
 
     @ViewBuilder
@@ -510,6 +538,7 @@ struct MemberDetailsView: View {
         // الأقسام تدخل تباعاً عند «عرض التفاصيل» (نفس حركة مربّعات الإضافة)
         let open = detent == .large
         return VStack(spacing: DS.Spacing.md) {
+            // المعلومات أولاً، وتحتها العائلة مطويّة ومغلقة (طلب المالك ٢٠٢٦-١١-٠٦)
             infoGrid
                 .dsStaggerWhen(0, active: open)
 
@@ -532,76 +561,42 @@ struct MemberDetailsView: View {
         .padding(.horizontal, DS.Spacing.lg)
     }
 
-    // MARK: شريط العائلة — الأب والأبناء بشكل جديد (طلب المالك)
+    // MARK: العائلة — تحت المعلومات، مطويّة ومغلقة بالبداية (طلب المالك ٢٠٢٦-١١-٠٦): الأب بطاقة بصورته واسمه
+    // وعمره، والأبناء مرقّمون من الأكبر بشبكة ثابتة — شجرة الرجال بلا أم ولا زوجات («ما تنضاف الام و النساء نهائيا»)
 
-    /// عدد الأبناء في السطر الواحد تحت الأب
-    private static let childrenPerRow = 3
-
-    /// الأب بصورته وحلقة ذهبية، ثم فاصل، ثم الأبناء بصور صغيرة تتمرّر أفقياً.
-    /// الضغط على أي صورة يفتح صاحبها.
+    /// الضغط على الأب أو الابن يفتح صاحبه والشجرة تتبعه
     @ViewBuilder
     private var familyStrip: some View {
         let father = cachedFather
         let children = cachedChildren
         if father != nil || !children.isEmpty {
-            // نفس أقسام المربّعات — العنوان يفتح/يخفي الأب والأبناء (مخفيّون بالبداية)
-            DSComposerSection(
-                title: L10n.t("العائلة", "Family"),
-                icon: "person.2.fill",
-                tint: DS.Color.palm,   // الهوية: العائلة أخضر العائلة (لا لون حالة)
-                trailing: familySummary(hasFather: father != nil, children: children.count),
+            // إطار «ب» (اختيار المالك ٢٠٢٦-١١-٠٧): حدّ أخضر + الملخّص تحت العنوان + صور الأقارب مطويّاً
+            DSFamilyBox(
+                summary: familySummary(hasFather: father != nil, children: children.count),
+                people: (father.map { [$0] } ?? []) + children,
                 isOpen: $familyOpen
             ) {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    // الأب بالمنتصف بخلفية خفيفة بعرض القسم (طلب المالك)
                     if let father {
-                        Button { openMemberInTree(father.id) } label: {
-                            familyBubble(father, size: 50, caption: L10n.t("الأب", "Father"))
-                                .padding(.vertical, DS.Spacing.sm)
-                                .frame(maxWidth: .infinity)
-                                .dsRowBox()
-                                .contentShape(Rectangle())
+                        DSFamilyPersonRow(role: L10n.t("الأب", "Father"), tint: chromeInk,
+                                          name: father.displayFullName,
+                                          detail: DSMemberAge.detail(father),
+                                          onTap: { openMemberInTree(father.id) }) {
+                            familyAvatar(father, size: DSMemberKit.parentAvatar)
                         }
-                        .buttonStyle(DSScaleButtonStyle())
-                        // القارئ الصوتي: «الأب، الاسم» بلا حرف الصورة البديلة
-                        .accessibilityLabel(L10n.t("الأب، \(father.firstName)", "Father, \(father.firstName)"))
                     }
-
-                    // الأبناء: كل ٣ أبناء في سطر تحت الأب، كل سطر متمركز — ٧ أبناء = ٣ أسطر (٣+٣+١)
-                    // (طلب المالك ٢٠٢٦-١٠-٠٧؛ كانت صفوفاً من أربعة)
                     if !children.isEmpty {
-                        VStack(spacing: DS.Spacing.sm) {
-                            Text(L10n.t("الأبناء", "Children") + " · \(children.count)")
-                                .dsFont(.familyLabel)   // ١١ ثقيل كما كان
-                                .foregroundColor(DS.Color.fieldLabel)
-                                .frame(maxWidth: .infinity)
-                            VStack(spacing: DS.Spacing.xs) {
-                                ForEach(Array(stride(from: 0, to: children.count, by: Self.childrenPerRow)), id: \.self) { start in
-                                    HStack(alignment: .top, spacing: DS.Spacing.md) {
-                                        ForEach(children[start..<min(start + Self.childrenPerRow, children.count)]) { child in
-                                            Button { openMemberInTree(child.id) } label: {
-                                                familyBubble(child, size: 42, caption: nil)
-                                            }
-                                            .buttonStyle(DSScaleButtonStyle())
-                                            // القارئ الصوتي: الاسم (+ «متوفّى») بلا حرف الصورة البديلة
-                                            .accessibilityLabel(child.firstName
-                                                                + (child.isDeceased == true ? L10n.t("، متوفّى", ", deceased") : ""))
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                            }
-                        }
-                        .padding(.vertical, DS.Spacing.sm)
-                        .frame(maxWidth: .infinity)
-                        .dsRowBox()
+                        DSFamilyChildrenBlock(
+                            groups: [.init(id: "children", title: nil, tint: chromeInk, members: children)],
+                            avatar: { familyAvatar($0, size: DSMemberKit.childAvatar) },
+                            onTap: { openMemberInTree($0.id) })
                     }
                 }
             }
         }
     }
 
-    /// «الأب · ٣ أبناء» — ملخّص تحت العنوان والشريط مقفول
+    /// «الأب · ٣ أبناء» — بجانب العنوان (ملخّص والقسم مغلق)
     private func familySummary(hasFather: Bool, children: Int) -> String {
         var parts: [String] = []
         if hasFather { parts.append(L10n.t("الأب", "Father")) }
@@ -609,45 +604,28 @@ struct MemberDetailsView: View {
         return parts.joined(separator: " · ")
     }
 
-    /// صورة دائرية بحلقة + الاسم الأول تحتها (+ وصف فوق الاسم للأب) — بلون القسم
-    private func familyBubble(_ m: FamilyMember, size: CGFloat, caption: String?) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            ZStack {
-                if let url = m.avatarUrl, let imgUrl = URL(string: url) {
-                    CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
-                    placeholder: { Circle().fill(chromeInk.opacity(DS.Opacity.tintFill)) }
+    /// صورة دائرية بلون القسم (الحرف الأول بلا صورة)، والمتوفّى بالأبيض والأسود
+    private func familyAvatar(_ m: FamilyMember, size: CGFloat) -> some View {
+        ZStack {
+            if let url = m.avatarUrl, let imgUrl = URL(string: url) {
+                CachedAsyncImage(url: imgUrl) { img in img.resizable().scaledToFill() }
+                placeholder: { Circle().fill(chromeInk.opacity(DS.Opacity.tintFill)) }
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(chromeInk.opacity(DS.Opacity.tintFill))
                     .frame(width: size, height: size)
-                    .clipShape(Circle())
-                } else {
-                    Circle()
-                        .fill(chromeInk.opacity(DS.Opacity.tintFill))
-                        .frame(width: size, height: size)
-                        .overlay(
-                            Text(String(m.firstName.prefix(1)))
-                                .font(DS.Font.plex(size * 0.36, weight: .bold))
-                                .foregroundColor(chromeInk)
-                        )
-                }
+                    .overlay(
+                        Text(String(m.firstName.prefix(1)))
+                            .font(DS.Font.plex(size * 0.36, weight: .bold))
+                            .foregroundColor(chromeInk)
+                    )
             }
-            // حلقة «مجسّمات» — «الحالي» الحلقة القديمة بلون القسم
-            .modifier(MemberTrialRing(side: size, inset: -DS.Spacing.xxs))
-            // المتوفّى بالأبيض والأسود (طلب المالك)
-            .grayscale(m.isDeceased == true ? 1 : 0)
-
-            // خط العائلة كما كان قبل التوحيد (طلب المالك ٢٠٢٦-١٠-٠٧ «الخط صغير أبيه نفس السابق»):
-            // «الأب» ١٠٫٥ عريض، والاسم ١١٫٥ عريض
-            if let caption {
-                Text(caption)
-                    .dsFont(.badgeCompact)
-                    .foregroundColor(chromeInk)
-            }
-            Text(m.firstName)
-                .dsFont(.chipCompact)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: size + 18)
         }
+        .modifier(MemberTrialRing(side: size, inset: -DS.Spacing.xxs))
+        .grayscale(m.isDeceased == true ? 1 : 0)
+        .accessibilityHidden(true)
     }
 
     // MARK: شبكة المعلومات الأيقونية (طلب المالك)
@@ -1250,18 +1228,23 @@ struct MemberDetailsView: View {
 
     /// رأس ملوّن مثل مربّعات الإضافة (فوق الصورة، بلا تداخل) — يظهر فقط مع showsHeaderBand
     private var memberHeaderBand: some View {
-        DSComposerHeader(
-            title: L10n.t("تفاصيل العضو", "Member Details"),
-            subtitle: L10n.t("من شجرة العائلة", "From the family tree"),
-            icon: "person.text.rectangle.fill",
-            tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy
-        )
+        // زرّ × في طرف الرأس يغلق المربّع (طلب المالك ٢٠٢٦-١١-٠٧) — مثل بقية المربّعات، و«إغلاق» السفلي باقٍ
+        DSPanelCloseReader { close in
+            DSComposerHeader(
+                title: L10n.t("تفاصيل العضو", "Member Details"),
+                subtitle: L10n.t("من شجرة العائلة", "From the family tree"),
+                icon: "person.text.rectangle.fill",
+                tint: member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
+                onClose: close
+            )
+        }
         // علم دولة الرقم (غير الكويت) في زاوية الرأس — طلب المالك ٢٠٢٦-١٠-٢٤ «علم السعودية للرقم السعودي»؛
-        // بقاعدة صفّ «الهاتف» نفسها: لا علم إن لم يحقّ للمشاهد رؤية الرقم
+        // بقاعدة صفّ «الهاتف» نفسها: لا علم إن لم يحقّ للمشاهد رؤية الرقم. قبل زرّ × لا تحته
         .overlay(alignment: .trailing) {
             DSPhoneCountryBadge(phone: member.dsVisiblePhone(viewerId: authVM.currentUser?.id,
                                                              viewerCanModerate: authVM.canModerate))
-                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.leading, DS.Spacing.lg)
+                .padding(.trailing, DS.Theme.isCalm ? DS.Spacing.lg : DSFamilyKit.badgeInsetWithClose)
         }
     }
 

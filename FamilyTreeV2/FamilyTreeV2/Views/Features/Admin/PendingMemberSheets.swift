@@ -33,6 +33,12 @@ struct LinkToExistingMemberSheet: View {
     @State private var selectedMember: FamilyMember? = nil
     @State private var showConfirm = false
     @State private var displayLimit = linkCandidatesPageSize
+    /// «ابن بنت من خارج العائلة» (٢٠٢٦-١١-٠٧): الخيار يظهر فقط والسيرفر جاهز والمفتاح مفعّل
+    @State private var daughterSonsReady = false
+    @State private var asDaughterSon = false
+    @State private var showDaughterSonConfirm = false
+    @State private var daughterSonBusy = false
+    @State private var daughterSonError: String?
 
     private var candidates: [FamilyMember] {
         let all = memberVM.allMembers.filter {
@@ -72,20 +78,41 @@ struct LinkToExistingMemberSheet: View {
             subtitle: pendingMember.displayFullName,
             icon: "link.badge.plus",
             tint: DS.Color.actionNavy,
-            actionTitle: L10n.t("ربط", "Link"),
+            actionTitle: asDaughterSon ? L10n.t("موافقة", "Approve") : L10n.t("ربط", "Link"),
             actionIcon: "link",
-            canSubmit: selectedMember != nil,
-            isBusy: adminRequestVM.isLoading,
+            canSubmit: asDaughterSon || selectedMember != nil,
+            isBusy: adminRequestVM.isLoading || daughterSonBusy,
             // عضو مختار ولم يُربط بعد → «إلغاء» يسأل قبل التجاهل (توصية أبل)
             hasUnsavedChanges: selectedMember != nil,
-            onSubmit: { showConfirm = true },
+            onSubmit: { if asDaughterSon { showDaughterSonConfirm = true } else { showConfirm = true } },
             onCancel: { dismiss() }
         ) {
-            linkPreview
-            if searchText.isEmpty && !visibleSuggestions.isEmpty {
-                suggestionsSection
+            if daughterSonsReady {
+                JoinKindPicker(asDaughterSon: $asDaughterSon)
             }
-            candidatesSection
+            if asDaughterSon {
+                DSNoteCard(L10n.t("يُقبل حسابه الآن، وأول ما يفتح التطبيق يختار أمّه من بنات العائلة واسم أبوه — وتؤكّده الإدارة من «الوارد».",
+                                  "His account is approved now; on first open he picks his mother and his father's name — admins confirm it in the inbox."),
+                           icon: "arrow.triangle.branch", tint: DS.Color.female)
+                if let daughterSonError {
+                    DSNoteCard(daughterSonError, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                }
+            } else {
+                linkPreview
+                if searchText.isEmpty && !visibleSuggestions.isEmpty {
+                    suggestionsSection
+                }
+                candidatesSection
+            }
+        }
+        .task { daughterSonsReady = await DaughterSons.isAvailable() }
+        .dsAlert(DaughterSons.text("option_title", "ابن بنت من خارج العائلة", "A daughter's son from outside the family"),
+                 isPresented: $showDaughterSonConfirm) {
+            Button(L10n.t("موافقة", "Approve")) { approveAsDaughterSon() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("يُقبل حساب \(pendingMember.displayFullName) ويكمل نسبه من التطبيق.",
+                        "\(pendingMember.displayFullName)'s account is approved; he completes his lineage in the app."))
         }
         .animation(DS.Anim.snappy, value: selectedMember?.id)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -112,6 +139,25 @@ struct LinkToExistingMemberSheet: View {
                     "سيُربط حساب \(pendingMember.displayFullName) بسجل \(target.fullName) الموجود بالشجرة.\nسيحتفظ بموقعه وأبنائه وبياناته.",
                     "Account \(pendingMember.displayFullName) will be linked to \(target.fullName)'s existing tree record. Position, children and data will be preserved."
                 ))
+            }
+        }
+    }
+
+    private func approveAsDaughterSon() {
+        guard !daughterSonBusy else { return }
+        daughterSonBusy = true
+        daughterSonError = nil
+        Task {
+            do {
+                try await DaughterSons.approveJoin(memberId: pendingMember.id)
+                await DaughterSonsIndex.shared.refresh(force: true)
+                await memberVM.fetchAllMembers(force: true)
+                daughterSonBusy = false
+                DSMomentToast.show(L10n.t("تمت الموافقة", "Approved"))
+                dismiss()
+            } catch {
+                daughterSonError = DaughterSons.message(error)
+                daughterSonBusy = false
             }
         }
     }

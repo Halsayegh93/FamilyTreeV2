@@ -31,6 +31,7 @@ struct AddSonByAdminSheet: View {
     @State private var showOfflineAlert = false
     @State private var showSaveError = false
     @State private var saveErrorText = ""
+    @State private var showCompoundNameCheck = false
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
 
@@ -133,7 +134,7 @@ struct AddSonByAdminSheet: View {
             canSubmit: !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
-            onSubmit: saveAction,
+            onSubmit: submitAction,
             onCancel: { dismiss() }
         ) {
             contextSection.dsStaggerIn(0)
@@ -156,6 +157,12 @@ struct AddSonByAdminSheet: View {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
             Text(saveErrorText)
+        }
+        .dsAlert(L10n.t("تأكد قبل الحفظ", "Check before saving"), isPresented: $showCompoundNameCheck, icon: "exclamationmark.triangle.fill") {
+            Button(L10n.t("متابعة", "Continue")) { saveAction() }
+            Button(L10n.t("تعديل", "Edit"), role: .cancel) {}
+        } message: {
+            Text(AddChildChecks.compoundNameWarning(firstName) ?? "")
         }
         .onAppear {
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
@@ -194,7 +201,7 @@ struct AddSonByAdminSheet: View {
         DSFormCard(L10n.t("البيانات الأساسية", "Basic Info"),
                    icon: "person.text.rectangle.fill", color: chromeInk) {
             DSFieldBox(L10n.t("الاسم الأول", "First Name")) {
-                TextField(L10n.t("اسم الابن الأول", "Child's first name"), text: $firstName)
+                TextField(L10n.t("الاسم الأول فقط", "First name only"), text: $firstName)
                     .onChange(of: firstName) { _ in
                         if firstName.count > 50 { firstName = String(firstName.prefix(50)) }
                     }
@@ -230,6 +237,19 @@ struct AddSonByAdminSheet: View {
 
 
     // MARK: - Save Action
+    /// الإضافة: الاسم الأول فقط، والكلمتان بتأكيد. التعديل لا يُفحص (أسماء قائمة)
+    private func submitAction() {
+        guard !isEditMode else { return saveAction() }
+        if AddChildChecks.isMoreThanFirstName(firstName) {
+            saveErrorText = AddChildChecks.firstNameOnlyMessage
+            showSaveError = true
+        } else if AddChildChecks.compoundNameWarning(firstName) != nil {
+            showCompoundNameCheck = true
+        } else {
+            saveAction()
+        }
+    }
+
     /// الحفظ ينتظر النتيجة: المربّع يُغلق وإشعار الإدارة يخرج بعد النجاح فقط، والفشل يُعرض.
     /// الأنثى لا تُكتب في `profiles` أبداً: الإضافة عبر `addFamilyChild` (شجرة النساء) وتغيير الجنس
     /// عبر `moveChildGender` — نفس مسار «حسابي» (AddChildSheet / EditChildSheet)

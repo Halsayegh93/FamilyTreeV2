@@ -23,7 +23,11 @@ struct TreeTabContainer: View {
     private var womenTreeEnabled: Bool { appSettingsVM.settings.womenTreeEnabled ?? true }
 
     /// حساب امرأة: موقعها في شجرة النساء لا شجرة الرجال
-    private var isWomanAccount: Bool { authVM.currentUser?.isWomanAccount ?? false }
+    /// وابن البنت المكتمل: موقعه عقدته في شجرة النساء (طلب المالك ٢٠٢٦-١١-٠٨ «ظهور ابناء البنات فقط في شجرة النساء»)
+    private var isWomanAccount: Bool {
+        (authVM.currentUser?.isWomanAccount ?? false) || lineage.status?.flagged == true
+    }
+    @ObservedObject private var lineage = LineageGateStore.shared
 
     var body: some View {
         Group {

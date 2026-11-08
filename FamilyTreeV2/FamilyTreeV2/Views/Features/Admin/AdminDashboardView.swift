@@ -46,10 +46,18 @@ struct AdminDashboardView: View {
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @StateObject private var taskStore = AdminTodayTaskStore()
     @ObservedObject private var sms = SmsBalanceStore.shared
+    /// جدول «مين يشوف وش» يصل من السيرفر (`app_config.admin_role_matrix`) — تتحدّث «اليوم» حين يصل
+    @ObservedObject private var config = AppConfigValues.shared
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
     /// عدّاد انتقالات شريط الأقسام (قيمة جديدة في المسار كل مرة)
     @State private var areaHops = 0
+    /// جذر المكدس («اليوم») ظاهر الآن
+    @State private var rootVisible = false
+    /// هوية المكدس — تتجدّد عند العودة لـ«اليوم» بعد مغادرة التبويب
+    @State private var stackID = UUID()
+    /// غادر المستخدم تبويب «الإدارة» منذ آخر ظهور لـ«اليوم»
+    @State private var leftTab = false
 
     // أرقام محسوبة من البيانات المحمّلة
     @State private var isInitialLoading = true
@@ -93,9 +101,39 @@ struct AdminDashboardView: View {
             .navigationDestination(for: AdminReviewDestination.self) { destination in
                 AdminLazyPage { Self.page(for: destination) }
             }
+            // «اليوم» ظاهر = المكدس عند جذره: مسار باقٍ هنا معناه أنه انفصل عن الشاشة بعد الرجوع، فكانت المربّعات لا تفتح
+            // حتى يُغلق التطبيق (بلاغ المالك ٢٠٢٦-١١-٠٨ «روح اي قسم و رد على لوحة الادارة») — يُصفَّر
+            // بعد لحظة وما زال الجذر ظاهراً (لا صفحة دُفعت من إشعار أو رابط في الأثناء)
+            .onAppear {
+                rootVisible = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    if rootVisible && !navigationPath.isEmpty { navigationPath = NavigationPath() }
+                }
+            }
+            .onDisappear { rootVisible = false }
             .toolbar(.hidden, for: .navigationBar)
         }
+        // بعد مغادرة تبويب «الإدارة» يفقد المكدس وجهاته (مثلث أصفر بدل الصفحة — بلاغ المالك ٢٠٢٦-١١-٠٨، مثبت بسجلّ الجهاز:
+        // الضغط يصل والمسار يتغيّر ولا تُبنى الصفحة) — يُعاد بناء المكدس عند العودة لـ«اليوم» (`stackID`)
+        .id(stackID)
+        // يُعاد بناؤه لحظة العودة للتبويب (مع تبديل التبويب، لا وسط حركة الرجوع) والصفحة المفتوحة تبقى كما هي — المسار خارج المكدس
+        .onChange(of: selectedTab) { tab in
+            if tab != 4 {
+                leftTab = true
+            } else if leftTab {
+                leftTab = false
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { stackID = UUID() }
+            }
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        // الضغط على تبويب «الإدارة» وهو مختار يرجع لـ«اليوم» — نصفّر المسار بأنفسنا (رجوع النظام كان يترك المسار فتتجاهل
+        // المربّعات الضغط حتى يُغلق التطبيق — بلاغ المالك ٢٠٢٦-١١-٠٨)
+        .onReceive(NotificationCenter.default.publisher(for: .didReselectTab)) { note in
+            guard (note.userInfo?["tab"] as? Int) == 4, !navigationPath.isEmpty else { return }
+            navigationPath = NavigationPath()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openAdminReviewForKind)) { note in
             guard let kind = note.userInfo?["kind"] as? String else { return }
             // صفحات رسائل الدخول للمالك فقط (٢٠٢٦-١٠-٢٤) — إشعارها عند غيره يبقيه على «اليوم»
@@ -148,6 +186,14 @@ struct AdminDashboardView: View {
         }
     }
 
+    /// مربّع قسم في «اليوم»: مسار جديد بصفحة القسم وحدها (قيمة فريدة كل مرة — يفتح ولو بقي في المسار شيء قديم)
+    private func openAreaFromToday(_ area: AdminArea) {
+        areaHops += 1
+        var path = NavigationPath()
+        path.append(AdminReviewDestination.area(area, areaHops))
+        navigationPath = path
+    }
+
     /// شريط الأقسام: المسار كله يصير صفحة القسم المطلوب (لا تكدّس صفحات فوق بعض)
     private func openArea(_ area: AdminArea) {
         areaHops += 1
@@ -180,14 +226,18 @@ struct AdminDashboardView: View {
 
     /// كل بيانات «اليوم» بالتوازي — في `.task` وفي السحب للتحديث
     private func loadAllAdminData(force: Bool = false) async {
+        // جدول الأقسام والبطاقات لكل دور من السيرفر — قبل الباقي (غيابه = الافتراضي المكتوب في `AdminRoleMatrix`)
+        await AppConfigValues.shared.refresh(force: force)
         diwaniyaVM.canModerate = authVM.canModerate
         diwaniyaVM.authVM = authVM
+        // أبناء البنات قبل الأعضاء — لا يُعدّون في «الرجال» (بيتهم شجرة النساء)
+        if authVM.canModerateTree { await DaughterSonsIndex.shared.refresh(force: force) }
         await memberVM.fetchAllMembers(force: force)
         await adminRequestVM.refreshApprovalsFlag()
 
         let isAdmin = authVM.isAdmin
         let isSystem = authVM.canViewSystemSettings
-        let seesStats = authVM.canViewInsights
+        let seesStats = authVM.adminSees(.todayCensus)
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in await adminRequestVM.fetchDeceasedRequests() }
             group.addTask { @MainActor in await newsVM.fetchPendingNewsRequests() }
@@ -198,7 +248,10 @@ struct AdminDashboardView: View {
             group.addTask { @MainActor in await diwaniyaVM.fetchPendingDiwaniyas() }
             group.addTask { @MainActor in await adminRequestVM.fetchTreeEditRequests() }
             group.addTask { @MainActor in await adminRequestVM.fetchNameChangeRequests() }
-            group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
+            // «الرسائل» رسائل خاصة — لمن يراها في جدول السيرفر (`inbox.messages`)، وغيره لا يجلبها أصلاً
+            if authVM.adminSees(.inboxMessages) {
+                group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
+            }
             group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
             group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
@@ -249,15 +302,20 @@ struct AdminDashboardView: View {
         let tree = AdminMemberFacts.TreeContext(all)
         for m in all {
             if m.role == .pending { continue }
+            // ابن البنت: بيته شجرة النساء — ليس «يتيماً/مخفياً» في شجرة الرجال
+            if DaughterSonsIndex.shared.contains(m.id) { continue }
+            // حساب المرأة بيته «شجرة النساء» — لا «مشكلات الشجرة» (نفس صفحة «العائلة»)
+            if m.isWomanAccount { continue }
             if moderatorRoles.contains(m.role) && m.isDeceased != true && m.status != .frozen { moderator += 1 }
             if !AdminMemberFacts.problems(m, in: tree).isEmpty { treeIssues += 1 }
         }
-        let stats = authVM.canViewInsights ? AdminFamilyStats.make(members: all) : AdminFamilyStats()
+        let stats = authVM.adminSees(.todayCensus) ? AdminFamilyStats.make(members: all) : AdminFamilyStats()
         let total = AdminAllRequestsView.reviewRequestsTotal(
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
             pendingArchiveCount: pendingArchiveCount,
-            scope: AdminAllRequestsView.reviewScope(for: authVM))
+            scope: AdminAllRequestsView.reviewScope(for: authVM),
+            includePhotos: AdminAllRequestsView.reviewIncludesPhotos(for: authVM))
         let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }
             .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
         withAnimation(DS.Anim.smooth) {
@@ -331,7 +389,7 @@ struct AdminDashboardView: View {
     private var todayHeaderContent: some View {
         // «إشعارات الإدارة» (صفحة واحدة: الطلبات ونشاط الفريق والنظام) — العدد = غير المقروء + ما يحتاج إجراء الآن
         let bell = notificationVM.unreadAdminNoticesCount + derivedNotices.count
-        let canAnnounce = authVM.canSendNotifications
+        let canAnnounce = authVM.canSendNotifications && authVM.adminAccess(.todayMegaphone).canEdit
         return MainHeaderView(selectedTab: $selectedTab, showingNotifications: .constant(false),
                               title: L10n.t("الإدارة", "Admin"), subtitle: helloLine,
                               icon: AppSection.admin.symbol, section: .admin, hideNotificationBell: true) {
@@ -415,12 +473,17 @@ struct AdminDashboardView: View {
     /// والمشرف: الصفحة الأولى وحدها بلا نقاط ولا سحب
     private var attentionCard: some View {
         let pills = statusPills
-        let attention = AnyView(AdminAttentionPanel(counts: counts(decisionItems), loading: isInitialLoading,
+        let attention = AnyView(AdminAttentionPanel(counts: counts(decisionItems),
+                                                    fourth: AdminRoleMatrix.attentionFourth(for: authVM.currentUser?.role),
+                                                    treeIssues: treeIssuesCount,
+                                                    reports: adminRequestVM.newsReportRequests.count,
+                                                    loading: isInitialLoading,
                                                     status: pills.isEmpty ? nil : AdminSystemStatus(pills: pills),
                                                     open: openStatusHome))
         var pages = [attention]
         var titles = [L10n.t("يحتاج انتباهك", "Needs your attention")]
-        if authVM.canViewInsights {
+        // «إحصاء الأفراد» — المالك والمدير والمراقب (أرقام الشجرة من مجاله؛ الجدول من السيرفر)
+        if authVM.adminSees(.todayCensus) {
             pages.append(AnyView(AdminFamilyStatsPage(stats: familyStats)))
             titles.append(L10n.t("إحصائيات العائلة", "Family statistics"))
         }
@@ -432,7 +495,8 @@ struct AdminDashboardView: View {
     /// الصيانة · الرصيد · المجدول · بلا إشعارات — للمالك والمدير (نفس ظهور التنبيهات السابقة؛ المراقب والمشرف لا يرونها،
     /// والصيانة والرصيد لمن يرى إعدادات النظام). نفس المخازن بلا جلب جديد
     private var statusPills: [AdminStatusPill] {
-        guard authVM.isAdmin else { return [] }
+        // للمالك وحده منذ ٢٠٢٦-١١-٠٧ (الجدول من السيرفر) — «المجدول» للمدير صار سطراً تحت مربّع «المناسبات»
+        guard authVM.adminSees(.todaySystemStatus) else { return [] }
         let notLoaded = L10n.t("لم يُحمَّل بعد", "not loaded yet")
         let notLoadedLine = L10n.t("لم يُحمَّل بعد", "Not loaded yet")
         var list: [AdminStatusPill] = []
@@ -530,16 +594,36 @@ struct AdminDashboardView: View {
         let areas = visibleAreas
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminSectionLabel(title: L10n.t("الأقسام", "Sections"))
-            AdminTileGrid(count: areas.count) {
+            // مربّع أفقي (اختيار المالك ٢٠٢٦-١١-٠٦ «ب»): الأيقونة ثم الاسم ثم العدد في الطرف — الأرقام على خطّ واحد
+            AdminRowTileGrid {
                 ForEach(Array(areas.enumerated()), id: \.element) { index, area in
-                    NavigationLink(value: AdminReviewDestination.area(area, 0)) {
-                        AdminHubTile(icon: area.icon, fill: area.fill, title: area.title,
+                    // زرّ يضع مساراً جديداً بقيمة فريدة (لا رابط بقيمة ثابتة — كان يُتجاهل إن بقيت القيمة نفسها في المسار)
+                    Button { openAreaFromToday(area) } label: {
+                        AdminRowTile(icon: area.icon, ink: area.ink, title: area.title,
+                                     caption: areaCaption(area),
                                      badge: areaBadge(area), badgeSpoken: areaBadgeSpoken(area),
                                      index: index, hint: area.subtitle)
                     }
                     .buttonStyle(AdminTilePressStyle())
                 }
             }
+        }
+    }
+
+    /// سطر صغير تحت اسم القسم: «للاطلاع» لقسم يشوفه دورك بس، «العائلة فقط» لـ«المؤشرات» بلا الموافقات، و«مجدول اليوم N»
+    /// تحت «المناسبات» لمن يعلن ولا يرى «حالة النظام» (المدير — كان سطراً فيها)
+    private func areaCaption(_ area: AdminArea) -> String? {
+        switch area {
+        case .metrics:
+            guard authVM.adminSees(.metricsFamily), !authVM.adminSees(.metricsApprovals) else { return nil }
+            return L10n.t("العائلة فقط · للاطلاع", "Family only · view only")
+        case .occasions where !area.isReadOnly(for: authVM):
+            guard !authVM.adminSees(.todaySystemStatus), authVM.adminSees(.occasionsPublished) else { return nil }
+            let today = notificationVM.scheduledNotifications.compactMap(\.scheduledDate)
+                .filter { Calendar.current.isDateInToday($0) }.count
+            return today > 0 ? L10n.t("مجدول اليوم \(today)", "\(today) scheduled today") : nil
+        default:
+            return area.isReadOnly(for: authVM) ? L10n.t("للاطلاع", "View only") : nil
         }
     }
 
@@ -559,7 +643,7 @@ struct AdminDashboardView: View {
     /// «المؤشرات» للقراءة فقط — بلا شارة
     private func areaCount(_ area: AdminArea) -> Int {
         switch area {
-        case .inbox:     return inboxTotal + adminRequestVM.unreadContactMessagesCount
+        case .inbox:     return inboxTotal + (authVM.adminSees(.inboxMessages) ? adminRequestVM.unreadContactMessagesCount : 0)
         case .occasions: return unannounced.count
         case .family:    return treeIssuesCount
         case .team:      return securityAlerts
@@ -647,6 +731,13 @@ struct AdminTodayDoneRow: View {
 /// القارئ الصوتي: حاوية «يحتاج انتباهك» فيها كل رقم زرّاً ثم سطر الحالة
 struct AdminAttentionPanel: View {
     let counts: AdminTodayCounts
+    /// الرقم الرابع من مجال الدور (جدول «مين يشوف وش» من السيرفر، ٢٠٢٦-١١-٠٧): رسائل (المالك والمدير) · مشكلات الشجرة
+    /// (المراقب) · بلاغات (المشرف)
+    var fourth: AdminAttentionFourth = .messages
+    /// عدد مشكلات الشجرة (لـ`.treeIssues`)
+    var treeIssues: Int = 0
+    /// عدد البلاغات المعلّقة (لـ`.reports`)
+    var reports: Int = 0
     let loading: Bool
     /// nil = بلا سطر حالة (المراقب والمشرف)
     let status: AdminSystemStatus?
@@ -659,8 +750,22 @@ struct AdminAttentionPanel: View {
         let label: String
         let icon: String
         let tint: Color
-        /// فلتر «الوارد» — nil = رسائل الأعضاء
+        /// فلتر «الوارد» — nil = بيت الرقم الرابع (الرسائل، أو مشكلات الشجرة، أو البلاغات)
         let filter: ApprovalListFilter?
+    }
+
+    private var fourthItem: Item {
+        switch fourth {
+        case .messages:
+            return Item(id: "messages", value: counts.unreadMessages, label: L10n.t("رسائل", "Messages"), icon: "bubble.left",
+                        tint: DS.Color.textPrimary, filter: nil)
+        case .treeIssues:
+            return Item(id: "treeIssues", value: treeIssues, label: L10n.t("مشكلات الشجرة", "Tree problems"),
+                        icon: "exclamationmark.triangle", tint: DS.Color.palm, filter: nil)
+        case .reports:
+            return Item(id: "reports", value: reports, label: L10n.t("بلاغات", "Reports"), icon: "flag",
+                        tint: DS.Color.error.dsReadableGlyph, filter: nil)
+        }
     }
 
     private var items: [Item] {
@@ -671,8 +776,7 @@ struct AdminAttentionPanel: View {
                  tint: DS.Color.error.dsReadableGlyph, filter: .urgent),
             Item(id: "late", value: counts.late, label: L10n.t("متأخر", "Late"), icon: "clock",
                  tint: DS.Color.warning.dsReadableGlyph, filter: .late),
-            Item(id: "messages", value: counts.unreadMessages, label: L10n.t("رسائل", "Messages"), icon: "bubble.left",
-                 tint: DS.Color.textPrimary, filter: nil)
+            fourthItem
         ]
     }
 
@@ -714,8 +818,7 @@ struct AdminAttentionPanel: View {
         let filter = item.filter
         return NavigationLink {
             AdminLazyPage {
-                filter.map { AnyView(AdminAllRequestsView(initialFilter: $0).adminArea(.inbox)) }
-                    ?? AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
+                filter.map { AnyView(AdminAllRequestsView(initialFilter: $0).adminArea(.inbox)) } ?? fourthPage
             }
         } label: {
             AdminAttentionNumber(value: loading ? nil : item.value, label: item.label, icon: item.icon, tint: item.tint)
@@ -725,6 +828,16 @@ struct AdminAttentionPanel: View {
             if divided {
                 hairline(horizontal: false).padding(.vertical, DS.Spacing.sm)
             }
+        }
+    }
+
+    /// بيت الرقم الرابع: الرسائل في «الوارد»، أو «العائلة» على شريحة «مشكلات الشجرة»، أو «الوارد» (مجال المشرف = المحتوى
+    /// والبلاغات)
+    private var fourthPage: AnyView {
+        switch fourth {
+        case .messages:   return AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
+        case .treeIssues: return AnyView(AdminMembersPage(chip: .problems).adminArea(.family))
+        case .reports:    return AnyView(AdminAllRequestsView().adminArea(.inbox))
         }
     }
 

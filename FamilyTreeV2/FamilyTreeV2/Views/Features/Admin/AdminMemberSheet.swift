@@ -82,7 +82,7 @@ struct AdminMemberSheet: View {
         }
         let facts = AdminMemberSheetFacts(member: m, all: memberVM.allMembers, byId: memberVM.member(byId:), tree: tree,
                                           account: accounts.info(m.id), accountsReady: accounts.loaded,
-                                          liveStatus: liveStatus)
+                                          liveStatus: liveStatus, daughterSon: DaughterSonsIndex.shared.contains(m.id))
         return AnyView(DSComposer(
             title: m.shortFullName.isEmpty ? L10n.t("بلا اسم", "No name") : m.shortFullName,
             subtitle: facts.status?.title ?? L10n.t("بيانات العضو", "Member details"),
@@ -301,7 +301,7 @@ struct AdminMemberSheet: View {
                 }
                 AdminSheetRow(icon: "clock.fill", tint: DS.Color.slate, title: L10n.t("آخر دخول", "Last sign-in"),
                               value: facts.lastSeenText)
-                // الأجهزة لمن له حساب دخول (المقيّد في الشجرة لا جهاز له)
+                // الأجهزة لمن له حساب دخول (من بلا حساب لا جهاز له)
                 if authVM.canViewSystemSettings && facts.status != .treeOnly {
                     devicesRows(m)
                 }
@@ -420,13 +420,14 @@ struct AdminMemberSheetFacts {
     let branchHead: FamilyMember?
 
     init(member m: FamilyMember, all: [FamilyMember], byId: (UUID) -> FamilyMember?, tree: AdminMemberFacts.TreeContext?,
-         account: AdminAccountInfo?, accountsReady: Bool, liveStatus: FamilyMember.MemberStatus?) {
+         account: AdminAccountInfo?, accountsReady: Bool, liveStatus: FamilyMember.MemberStatus?, daughterSon: Bool = false) {
         var shown = m
         if let liveStatus { shown.status = liveStatus }
         status = AdminMemberFacts.status(shown, hasLogin: accountsReady ? account != nil : nil)
         self.account = account
         gaps = AdminMemberFacts.gaps(m, registered: account != nil)
-        problems = tree.map { AdminMemberFacts.problems(m, in: $0) } ?? []
+        // ابن البنت بلا أب ومخفي من شجرة الرجال عمداً — ليست مشكلة (بيته شجرة النساء)
+        problems = daughterSon ? [] : (tree.map { AdminMemberFacts.problems(m, in: $0) } ?? [])
         children = all.filter { $0.fatherId == m.id }.sorted { $0.sortOrder < $1.sortOrder }
         isFamilyRoot = m.fatherId == nil && !children.isEmpty
         father = m.fatherId.flatMap(byId)
@@ -657,7 +658,13 @@ struct AdminMemberLineageSection: View {
                 AdminSheetRow(icon: "figure.2", tint: DS.Color.female, title: L10n.t("الأم والزوجة", "Mother and wife"),
                               value: L10n.t("تُدار من شجرة النساء", "Managed in the women's tree"),
                               action: (L10n.t("فتح", "Open"), openWomen))
-                if canEdit {
+                if DaughterSonsIndex.shared.contains(member.id) {
+                    // ابن بنت: بيته شجرة النساء وحدها — لا «إظهار» في شجرة الرجال (السيرفر يرفضه أيضاً)
+                    AdminSheetRow(icon: "figure.2.and.child.holdinghands", tint: DS.Color.female,
+                                  title: L10n.t("الظهور في الشجرة", "Shown in the tree"),
+                                  value: L10n.t("فرع خارج العائلة — في شجرة النساء فقط", "Outside branch — women's tree only"),
+                                  action: nil)
+                } else if canEdit {
                     AdminSheetRow(icon: member.isHiddenFromTree ? "eye.slash" : "eye", tint: DS.Color.slate,
                                   title: L10n.t("الظهور في الشجرة", "Shown in the tree"),
                                   value: member.isHiddenFromTree ? AdminMemberProblem.hidden.title : L10n.t("ظاهر", "Shown"),

@@ -47,6 +47,14 @@ enum AdminOccasionsText {
         return f.string(from: date)
     }
 
+    /// «اليوم» · «أمس» · «2 نوفمبر»
+    static func relativeDay(_ date: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(date) { return L10n.t("اليوم", "today") }
+        if cal.isDateInYesterday(date) { return L10n.t("أمس", "yesterday") }
+        return shortDate(date)
+    }
+
     static func shortDate(_ date: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: L10n.isArabic ? "ar_KW@numbers=latn" : "en_US")
@@ -55,12 +63,17 @@ enum AdminOccasionsText {
     }
 }
 
+/// الصفحة باتجاه «أ — فرح وعزاء» (اختيار المالك ٢٠٢٦-١١-٠٦، samples/occasions-and-matching): المحتوى بالمعنى —
+/// «أفراح العائلة · من الأخبار» (زواج · مولود · تهنئة خلال ٣٠ يوماً، و«بطاقة» على كل فرح) ← «عزاء وذكرى» (وفاة لم يُعلن عنها
+/// «إعلان»، ذكرى الراحلين خلال ٣٠ يوماً، و«N متوفى بلا تاريخ كامل» «أكمل») ← «الإعلانات» (المالك والمدير: وصول الإشعارات في
+/// عنوانها، المجدول «تعديل/إلغاء»، و«المنشور» سطر بعدده يفتح القائمة كاملة). زرّان مباشران في الرأس بدل «إنشاء»:
+/// «إرسال إشعار» (`canSendNotifications`) و«تصميم بطاقة» (`canModerate`) — نفس المنشئ الواحد (`AdminCreateWindow`).
+/// القسم الفاضي سطر واحد هادئ. لا قراءة جديدة على السيرفر.
 struct AdminOccasionsPage: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
-    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// المعلن عنهم — nil قبل الجلب أو إن تعذّر (فلا تظهر «وفاة لم يُعلن عنها» خطأً)
     @State private var announced: Set<UUID>? = nil
@@ -69,18 +82,23 @@ struct AdminOccasionsPage: View {
         let feed = AdminUpcomingFeed(members: memberVM.allMembers,
                                      scheduled: authVM.isAdmin ? notificationVM.scheduledNotifications : [],
                                      announced: authVM.isAdmin ? announced : nil)
+        let loading = memberVM.allMembers.isEmpty
         AdminHubPage {
-            AdminBandHeader(title: AdminArea.occasions.title, isAreaRoot: true) {
+            AdminBandHeader(title: AdminArea.occasions.title, subtitle: AdminOccasionsText.dayTitle(Date()),
+                            isAreaRoot: true) {
                 EmptyView()
             } accessory: {
-                AnyView(headerAccessory(feed))
+                AnyView(AdminOccasionsHeaderButtons())
             }
         } content: {
-            AnyView(AdminOccasionsUpcomingCard(feed: feed, loading: memberVM.allMembers.isEmpty))
-            if authVM.isAdmin {
-                AnyView(AdminOccasionsPublishedCard())
+            // «أفراح العائلة» بيت «بطاقة» — لمن يصمّم البطاقات (المراقب يشوف «عزاء وذكرى» بس — الجدول من السيرفر)
+            if AdminCreateKind.allowed(for: authVM).contains(.card) {
+                AnyView(AdminOccasionsJoysCard())
             }
-            AnyView(AdminOccasionsNumbersCard())
+            AnyView(AdminOccasionsGriefCard(feed: feed, loading: loading))
+            if authVM.isAdmin && authVM.adminSees(.occasionsPublished) {
+                AnyView(AdminOccasionsAnnouncementsCard(feed: feed, loading: loading))
+            }
         }
         .task { await load() }
         .refreshable { await load(force: true) }
@@ -91,11 +109,12 @@ struct AdminOccasionsPage: View {
 
     private func load(force: Bool = false) async {
         if memberVM.allMembers.isEmpty || force { await memberVM.fetchAllMembers(force: force) }
+        // «أفراح العائلة» من الأخبار المحمّلة نفسها (لكل الأدوار)
+        if newsVM.allNews.isEmpty || force { await newsVM.fetchNews(force: force) }
         guard authVM.isAdmin else { return }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in await notificationVM.fetchScheduledNotifications() }
             group.addTask { @MainActor in if let ids = await AdminTodayFetch.announcedDeathIds() { announced = ids } }
-            group.addTask { @MainActor in if newsVM.allNews.isEmpty || force { await newsVM.fetchNews(force: force) } }
             group.addTask { @MainActor in await notificationVM.fetchNotifications(force: force) }
             // نفس مخزن «الأجهزة ووصول الإشعارات» (الفريق والأمان — للمالك فقط) — رقم واحد بتعريف واحد في المكانين
             if authVM.canViewSystemSettings {
@@ -103,31 +122,427 @@ struct AdminOccasionsPage: View {
             }
         }
     }
+}
 
-    // MARK: الرأس
+// MARK: - الرأس: زرّان مباشران
 
-    /// ذكرى الأسبوع (المالك والمدير) ثم «＋ إنشاء» — بيت كل ما يُرسل أو يُنشر. «وفاة لم يُعلن» و«المجدول» في قسم «القادم»
-    private func headerAccessory(_ feed: AdminUpcomingFeed) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            if authVM.isAdmin {
-                HStack(spacing: DS.Spacing.sm) {
-                    AdminKPITile(value: "\(feed.memorialWeek)", label: L10n.t("ذكرى هذا الأسبوع", "Memorials this week"),
-                                 icon: "moon.stars", tint: DS.Hub.kpiMine)
-                }
-            }
-            Button {
-                AdminCreateWindow.open(authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
-            } label: {
-                AdminPillLabel(title: L10n.t("إنشاء", "Create"), icon: "plus", style: .gold,
-                               height: DS.Hub.pillHeightCard, fullWidth: true)
-            }
-            .buttonStyle(DSPressStyle())
-            .accessibilityHint(authVM.canSendNotifications
-                ? L10n.t("إعلان، إعلان وفاة، بطاقة تهنئة أو تعزية، إعلان تحديث التطبيق",
-                         "Announcement, obituary, greeting or condolence card, app update notice")
-                : L10n.t("بطاقة تهنئة أو تعزية", "Greeting or condolence card"))
+/// «إرسال إشعار» و«تصميم بطاقة» جنباً إلى جنب (فوق بعض من أحجام إمكانية الوصول) — كلٌّ بصلاحيته
+struct AdminOccasionsHeaderButtons: View {
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var newsVM: NewsViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: DS.Spacing.sm))
+            : AnyLayout(HStackLayout(spacing: DS.Spacing.sm))
+        let allowed = AdminCreateKind.allowed(for: authVM)
+        layout {
+            if allowed.contains(.announcement) && authVM.adminAccess(.occasionsAnnounce).canEdit { button(.announcement) }
+            if allowed.contains(.card) { button(.card) }
         }
         .padding(.top, DS.Spacing.md)
+    }
+
+    private func button(_ kind: AdminCreateKind) -> some View {
+        Button {
+            AdminCreateWindow.open(kind, authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+        } label: {
+            AdminPillLabel(title: kind.title, icon: kind == .announcement ? "speaker.wave.2" : "photo",
+                           style: .gold, height: DS.Hub.pillHeightCard, fullWidth: true)
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityHint(kind.note)
+    }
+}
+
+// MARK: - قطع مشتركة
+
+/// عنوان قسم صغير بطرف اختياري قابل للضغط («عرض الكل (4)»)
+struct AdminOccasionsSectionTitle: View {
+    let title: String
+    var actionTitle: String? = nil
+    var onAction: () -> Void = {}
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: DS.Spacing.sm)
+            if let actionTitle {
+                Button(action: onAction) {
+                    Text(actionTitle)
+                        .dsFont(.chip)
+                        .foregroundColor(DS.Color.primary)
+                        .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                }
+                .buttonStyle(DSPressStyle())
+            }
+        }
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.top, DS.Spacing.xs)
+    }
+}
+
+/// سطر هادئ واحد لقسم فارغ (بدل بطاقة فارغة)
+struct AdminOccasionsQuietLine: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            Image(systemName: icon)
+                .dsGlyph(DS.Glyph.sm)
+                .accessibilityHidden(true)
+            Text(text)
+                .dsFont(.footnote)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundColor(DS.Color.textTertiary)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard(padding: nil)
+    }
+}
+
+// MARK: - «أفراح العائلة · من الأخبار»
+
+/// أخبار الزواج والمواليد والتهاني المنشورة خلال ٣٠ يوماً — الأحدث أولاً، اثنان ثم «عرض الكل (N)»؛ «بطاقة» تفتح المصمّم
+/// على قالبها (زواج ← عقد قران، مولود ← قدوم مولود)
+struct AdminOccasionsJoysCard: View {
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var newsVM: NewsViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+    @State private var showsAll = false
+
+    static let joyTypes: [String] = ["زواج", "مولود", "تهنئة"]
+    private static let windowDays = 30
+    private static let collapsed = 2
+
+    private var joys: [NewsPost] {
+        let since = Date().addingTimeInterval(-Double(Self.windowDays) * 86_400)
+        return newsVM.allNews
+            .filter { Self.joyTypes.contains($0.type) && $0.timestamp >= since
+                && ($0.approval_status == nil || $0.approval_status == "approved") }
+            .sorted { $0.timestamp > $1.timestamp }
+    }
+
+    var body: some View {
+        let all = joys
+        let visible = showsAll ? all : Array(all.prefix(Self.collapsed))
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminOccasionsSectionTitle(
+                title: L10n.t("أفراح العائلة · من الأخبار", "Family joys · from News"),
+                actionTitle: all.count > Self.collapsed
+                    ? (showsAll ? L10n.t("أقل", "Less") : L10n.t("عرض الكل (\(all.count))", "Show all (\(all.count))"))
+                    : nil,
+                onAction: { withAnimation(DS.Anim.snappy) { showsAll.toggle() } })
+            if all.isEmpty {
+                AdminOccasionsQuietLine(icon: "heart",
+                                        text: L10n.t("لا أفراح في الأخبار خلال ٣٠ يوماً", "No joyful news in the last 30 days"))
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, post in
+                        if index > 0 { AdminRowDivider() }
+                        row(post)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adminCard()
+            }
+        }
+    }
+
+    private func row(_ post: NewsPost) -> some View {
+        let firstLine = post.content.split(separator: "\n").first.map(String.init) ?? post.content
+        return AdminListRow(icon: NewsTypeHelper.icon(for: post.type), tint: NewsTypeHelper.color(for: post.type),
+                            title: firstLine.trimmingCharacters(in: .whitespaces),
+                            subtitle: "\(post.type) · \(AdminOccasionsText.shortDate(post.timestamp))",
+                            showsChevron: false) {
+            AdminPillButton(title: L10n.t("بطاقة", "Card"), icon: "photo", style: .soft) { card(post) }
+        }
+        .accessibilityAction(named: L10n.t("تصميم بطاقة", "Design a card")) { card(post) }
+    }
+
+    private func card(_ post: NewsPost) {
+        let template: String? = switch post.type {
+        case "زواج": "wedding"
+        case "مولود": "newborn"
+        default: nil
+        }
+        AdminCreateWindow.open(.card, cardTemplate: template,
+                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+    }
+}
+
+// MARK: - «عزاء وذكرى»
+
+/// وفيات لم يُعلن عنها («إعلان» — المالك والمدير)، ثم ذكرى الراحلين خلال ٣٠ يوماً (ثلاث ثم «عرض الكل»)، ثم
+/// «N متوفى بلا تاريخ كامل» «أكمل» ← «إدارة تواريخ الوفاة» (`canEditMembers`)
+struct AdminOccasionsGriefCard: View {
+    let feed: AdminUpcomingFeed
+    let loading: Bool
+
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var newsVM: NewsViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+    @State private var showsAll = false
+
+    private static let collapsed = 3
+
+    var body: some View {
+        let memorials = DeceasedMemorialBoard(memberVM.allMembers).upcoming
+        let visible = showsAll ? memorials : Array(memorials.prefix(Self.collapsed))
+        let incomplete = authVM.canEditMembers ? DeathDatesCampaign.stats(memberVM.allMembers).incomplete : 0
+        let isEmpty = feed.deaths.isEmpty && memorials.isEmpty && incomplete == 0
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            AdminOccasionsSectionTitle(
+                title: L10n.t("عزاء وذكرى", "Condolences & memorials"),
+                actionTitle: memorials.count > Self.collapsed
+                    ? (showsAll ? L10n.t("أقل", "Less") : L10n.t("عرض الكل (\(memorials.count))", "Show all (\(memorials.count))"))
+                    : nil,
+                onAction: { withAnimation(DS.Anim.snappy) { showsAll.toggle() } })
+            if loading {
+                AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
+            } else if isEmpty {
+                AdminOccasionsQuietLine(icon: "moon.stars",
+                                        text: L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days"))
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(feed.deaths.enumerated()), id: \.element.id) { index, m in
+                        if index > 0 { AdminRowDivider() }
+                        deathRow(m)
+                    }
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, u in
+                        if index > 0 || !feed.deaths.isEmpty { AdminRowDivider() }
+                        memorialRow(u)
+                    }
+                    if incomplete > 0 {
+                        if !feed.deaths.isEmpty || !visible.isEmpty { AdminRowDivider() }
+                        datesRow(incomplete)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adminCard()
+            }
+        }
+    }
+
+    private func deathRow(_ m: FamilyMember) -> some View {
+        AdminListRow(icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.error,
+                     title: L10n.t("وفاة لم يُعلن عنها", "Death not announced"),
+                     subtitle: "\(AdminOccasionsText.late(m)) \(m.shortFullName) · \(AdminOccasionsText.deathLine(m))",
+                     showsChevron: false) {
+            AdminPillButton(title: L10n.t("إعلان", "Announce"), style: .navy) { announce(m) }
+        }
+        .accessibilityAction(named: L10n.t("إعلان", "Announce")) { announce(m) }
+    }
+
+    private func memorialRow(_ u: DeceasedMemorialBoard.Upcoming) -> some View {
+        AdminListRow(icon: "moon.stars.fill", tint: DS.Color.sadu,
+                     title: L10n.t("ذكرى \(AdminOccasionsText.late(u.member)) \(u.member.fullName)",
+                                   "\(u.member.fullName)'s anniversary"),
+                     subtitle: DeceasedMemorial.anniversaryLine(u.anniversary, arabic: L10n.isArabic),
+                     showsChevron: false) {
+            AdminValueChip(text: DeceasedMemorial.whenLabel(u.anniversary.daysUntil, arabic: L10n.isArabic),
+                           tint: u.anniversary.daysUntil <= 1 ? DS.Color.accent : DS.Color.primary)
+        }
+    }
+
+    /// «128 متوفى بلا تاريخ كامل» — بيت الاستكمال «إدارة تواريخ الوفاة»
+    private func datesRow(_ incomplete: Int) -> some View {
+        NavigationLink {
+            AdminLazyPage {
+                AnyView(DeathDatesCampaignPage().adminBackTitle(AdminArea.occasions.title).adminArea(.family))
+            }
+        } label: {
+            AdminListRow(icon: "calendar.badge.exclamationmark", tint: DS.Color.warning,
+                         title: L10n.t("\(incomplete) متوفى بلا تاريخ كامل", "\(incomplete) deceased without a full date"),
+                         subtitle: L10n.t("لا تظهر ذكراهم حتى يكتمل التاريخ", "Their memorial shows once the date is complete"),
+                         showsChevron: false) {
+                AdminPillLabel(title: L10n.t("أكمل", "Complete"), style: .soft)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// المنشئ الواحد على «إعلان وفاة» والمتوفى جاهز
+    private func announce(_ m: FamilyMember) {
+        AdminCreateWindow.open(.death, death: DeathAnnouncementTarget(id: m.id, name: m.fullName, isFemale: m.isFemale,
+                                                                      deathDate: m.deathDate),
+                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+    }
+}
+
+// MARK: - «الإعلانات» (المالك والمدير)
+
+/// العنوان ووصول الإشعارات في طرفه (للمالك ← «الأجهزة ووصول الإشعارات») ← بطاقة: «مجدول N» وصفوفه («تعديل» · «إلغاء»)
+/// أو سطر هادئ، ثم «المنشور» سطر واحد بعدده يفتح القائمة كاملة
+struct AdminOccasionsAnnouncementsCard: View {
+    let feed: AdminUpcomingFeed
+    let loading: Bool
+
+    @ObservedObject private var devices = AdminDeviceReachStore.shared
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var newsVM: NewsViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+    @State private var cancelTarget: NotificationViewModel.ScheduledNotification? = nil
+    @State private var cancellingId: UUID? = nil
+    @State private var cancelFailed = false
+
+    var body: some View {
+        let published = AdminOccasionsPublishedCard.items(news: newsVM.allNews, notifications: notificationVM.notifications)
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            title
+            VStack(alignment: .leading, spacing: 0) {
+                if !loading {
+                    scheduledBlock
+                    AdminRowDivider()
+                }
+                publishedRow(published)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
+        }
+        .dsAlert(L10n.t("إلغاء الإشعار المجدول؟", "Cancel the scheduled push?"), isPresented: Binding(
+            get: { cancelTarget != nil },
+            set: { if !$0 { cancelTarget = nil } }
+        ), icon: "clock.badge.xmark") {
+            Button(L10n.t("إلغاء الإشعار", "Cancel push"), role: .destructive) {
+                guard let n = cancelTarget else { return }
+                cancelTarget = nil
+                Task {
+                    cancellingId = n.id
+                    let ok = await notificationVM.cancelScheduledNotification(n.id)
+                    cancellingId = nil
+                    if !ok { cancelFailed = true }
+                }
+            }
+            Button(L10n.t("تراجع", "Keep it"), role: .cancel) { cancelTarget = nil }
+        } message: {
+            Text(L10n.t("«\(cancelTarget.map(Self.previewText) ?? "")» ما راح يوصل.", "“\(cancelTarget.map(Self.previewText) ?? "")” won't be sent."))
+        }
+        .dsAlert(L10n.t("تعذّر الإلغاء", "Couldn't cancel"), isPresented: $cancelFailed) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("حاول مرة أخرى.", "Try again."))
+        }
+    }
+
+    /// أول النص (للتأكيد)
+    nonisolated static func previewText(_ n: NotificationViewModel.ScheduledNotification) -> String {
+        let text = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let line = text.isEmpty ? n.title : text
+        return line.count > 40 ? String(line.prefix(40)) + "…" : line
+    }
+
+    /// «الإعلانات» ووصول الإشعارات في الطرف (للمالك — بيته «الفريق والأمان»)
+    private var title: some View {
+        let reach = devices.stats.flatMap { $0.total > 0 ? $0 : nil }
+        return HStack {
+            Text(L10n.t("الإعلانات", "Announcements"))
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textTertiary)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: DS.Spacing.sm)
+            if authVM.canViewSystemSettings, let reach {
+                NavigationLink {
+                    AdminLazyPage { AnyView(AdminPushHealthView().adminBackTitle(AdminArea.occasions.title).adminArea(.team)) }
+                } label: {
+                    HStack(spacing: DS.Spacing.xsm) {
+                        DSRingGauge(progress: reach.reachShare,
+                                    tint: reach.reachPercent >= 90 ? DS.Color.success
+                                        : (reach.reachPercent >= 70 ? DS.Color.warning : DS.Color.error),
+                                    size: DS.Ring.mini)
+                        Text(verbatim: L10n.t("تصل \(reach.reach) جهازاً · \(reach.reachPercent)٪",
+                                              "Reaches \(reach.reach) devices · \(reach.reachPercent)%"))
+                            .dsFont(.chip)
+                            .monospacedDigit()
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityHint(L10n.t("الأجهزة ووصول الإشعارات", "Devices & notification reach"))
+            }
+        }
+        .padding(.horizontal, DS.Spacing.xs)
+        .padding(.top, DS.Spacing.xs)
+    }
+
+    /// «مجدول N» ثم الصفوف — أو سطر هادئ
+    @ViewBuilder
+    private var scheduledBlock: some View {
+        if feed.scheduled.isEmpty {
+            AdminListRow(icon: "bell.slash", tint: DS.Color.textTertiary,
+                         title: L10n.t("ما في إشعارات مجدولة", "No scheduled pushes"),
+                         subtitle: L10n.t("«إرسال إشعار» ← متى؟ ← اختر وقت", "Send a push → When? → Pick a time"),
+                         showsChevron: false)
+        } else {
+            HStack {
+                Text(L10n.t("مجدول", "Scheduled"))
+                    .dsFont(.label)
+                    .foregroundColor(DS.Color.textSecondary)
+                Spacer(minLength: 0)
+                Text(verbatim: "\(feed.scheduled.count)")
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(.top, DS.Spacing.xs)
+            .accessibilityElement(children: .combine)
+            ForEach(Array(feed.scheduled.enumerated()), id: \.element.id) { index, s in
+                if index > 0 { AdminRowDivider() }
+                AdminScheduledPushRow(item: s.item, date: s.date, showsDay: true,
+                                      audience: AdminAnnounceKit.audienceLabel(ids: s.item.targetMemberIds,
+                                                                               members: memberVM.allMembers),
+                                      isBusy: cancellingId == s.item.id,
+                                      onEdit: { edit(s.item) }, onCancel: { cancelTarget = s.item })
+            }
+        }
+    }
+
+    /// «المنشور · 14 هذا الشهر · آخره أمس» ← القائمة كاملة
+    private func publishedRow(_ items: [AdminOccasionsPublishedCard.Item]) -> some View {
+        let cal = Calendar.current
+        let thisMonth = items.filter { cal.isDate($0.date, equalTo: Date(), toGranularity: .month) }.count
+        let subtitle: String = {
+            guard let last = items.first else { return L10n.t("لم يُنشر شيء بعد", "Nothing published yet") }
+            return L10n.t("\(thisMonth) هذا الشهر · آخره \(AdminOccasionsText.relativeDay(last.date))",
+                          "\(thisMonth) this month · last \(AdminOccasionsText.relativeDay(last.date))")
+        }()
+        return NavigationLink {
+            AdminLazyPage { AnyView(AdminOccasionsPublishedPage().adminBackTitle(AdminArea.occasions.title).adminArea(.occasions)) }
+        } label: {
+            AdminListRow(icon: "bell.fill", tint: DS.Color.info,
+                         title: L10n.t("المنشور", "Published"), subtitle: subtitle)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// «تعديل» = المنشئ نفسه بمسودّة الإشعار المجدول (النص، المستلمون، الموعد) — الحفظ يعدّل الصف نفسه
+    private func edit(_ n: NotificationViewModel.ScheduledNotification) {
+        AdminCreateWindow.open(.announcement, announce: AdminAnnounceDraft(editing: n, members: memberVM.allMembers),
+                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+    }
+}
+
+/// «المنشور» كاملاً (من سطر «الإعلانات»)
+struct AdminOccasionsPublishedPage: View {
+    var body: some View {
+        AdminPage(header: AdminPageHeader(title: L10n.t("المنشور", "Published"),
+                                          subtitle: L10n.t("الإعلانات وإعلانات الوفاة والتحديث والإشعارات المرسلة",
+                                                           "Announcements, obituaries, updates and pushes sent"),
+                                          glyph: "bell.fill"),
+                  content: AnyView(AdminOccasionsPublishedCard(showsTitle: false)))
     }
 }
 
@@ -222,152 +637,6 @@ struct AdminUpcomingFeed {
     }
 
     var isEmpty: Bool { groups.isEmpty }
-}
-
-/// «القادم»: عنوان صغير ثم بطاقة لكل يوم/فترة — الصفوف بأزرارها في مكانها
-struct AdminOccasionsUpcomingCard: View {
-    let feed: AdminUpcomingFeed
-    let loading: Bool
-
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var memberVM: MemberViewModel
-    @EnvironmentObject private var newsVM: NewsViewModel
-    @EnvironmentObject private var notificationVM: NotificationViewModel
-    @State private var cancelTarget: NotificationViewModel.ScheduledNotification? = nil
-    @State private var cancellingId: UUID? = nil
-    @State private var cancelFailed = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            if authVM.isAdmin && !loading {
-                AnyView(scheduledSection)
-            }
-            AdminSectionLabel(title: L10n.t("القادم", "Upcoming"),
-                              trailing: authVM.isAdmin ? nil : L10n.t("ذكرى الراحلين", "Memorials"))
-            if loading {
-                AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
-            } else if feed.isEmpty {
-                AdminPageStateCard(.empty(L10n.t("لا شيء قادم", "Nothing upcoming"),
-                                          message: L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days")))
-            } else {
-                ForEach(feed.groups) { group in
-                    AnyView(groupCard(group.bucket, group.items))
-                }
-            }
-        }
-        .dsAlert(L10n.t("إلغاء الإشعار المجدول؟", "Cancel the scheduled push?"), isPresented: Binding(
-            get: { cancelTarget != nil },
-            set: { if !$0 { cancelTarget = nil } }
-        ), icon: "clock.badge.xmark") {
-            Button(L10n.t("إلغاء الإشعار", "Cancel push"), role: .destructive) {
-                guard let n = cancelTarget else { return }
-                cancelTarget = nil
-                Task {
-                    cancellingId = n.id
-                    let ok = await notificationVM.cancelScheduledNotification(n.id)
-                    cancellingId = nil
-                    if !ok { cancelFailed = true }
-                }
-            }
-            Button(L10n.t("تراجع", "Keep it"), role: .cancel) { cancelTarget = nil }
-        } message: {
-            Text(L10n.t("«\(cancelTarget.map(Self.previewText) ?? "")» ما راح يوصل.", "“\(cancelTarget.map(Self.previewText) ?? "")” won't be sent."))
-        }
-        .dsAlert(L10n.t("تعذّر الإلغاء", "Couldn't cancel"), isPresented: $cancelFailed) {
-            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("حاول مرة أخرى.", "Try again."))
-        }
-    }
-
-    /// أول النص (للتأكيد)
-    nonisolated static func previewText(_ n: NotificationViewModel.ScheduledNotification) -> String {
-        let text = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        let line = text.isEmpty ? n.title : text
-        return line.count > 40 ? String(line.prefix(40)) + "…" : line
-    }
-
-    /// «الإشعارات المجدولة»: قائمة مسطّحة بالموعد (الوقت · النص · لمن) — أو سطر هادئ واحد بلا مجدول
-    private var scheduledSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminSectionLabel(title: L10n.t("الإشعارات المجدولة", "Scheduled pushes"),
-                              trailing: feed.scheduled.isEmpty ? nil : "\(feed.scheduled.count)")
-            Group {
-                if feed.scheduled.isEmpty {
-                    AdminListRow(icon: "bell.slash", tint: DS.Color.textTertiary,
-                                 title: L10n.t("ما في إشعارات مجدولة", "No scheduled pushes"),
-                                 subtitle: L10n.t("«إنشاء» ← إعلان ← جدولة", "Create → Announcement → Schedule"),
-                                 showsChevron: false)
-                } else {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(feed.scheduled.enumerated()), id: \.element.id) { index, s in
-                            if index > 0 { AdminRowDivider() }
-                            AdminScheduledPushRow(item: s.item, date: s.date, showsDay: true,
-                                                  audience: AdminAnnounceKit.audienceLabel(ids: s.item.targetMemberIds,
-                                                                                           members: memberVM.allMembers),
-                                                  isBusy: cancellingId == s.item.id,
-                                                  onEdit: { edit(s.item) }, onCancel: { cancelTarget = s.item })
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adminCard()
-        }
-        .padding(.bottom, DS.Spacing.sm)
-    }
-
-    private func groupCard(_ bucket: AdminUpcomingFeed.Bucket, _ items: [AdminUpcomingFeed.Item]) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(bucket.title)
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-                .padding(.bottom, DS.Spacing.xxs)
-                .accessibilityAddTraits(.isHeader)
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                if index > 0 { AdminRowDivider() }
-                AnyView(row(item))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
-    }
-
-    @ViewBuilder
-    private func row(_ item: AdminUpcomingFeed.Item) -> some View {
-        switch item {
-        case .death(let m):
-            AdminListRow(icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.error,
-                         title: L10n.t("وفاة لم يُعلن عنها", "Death not announced"),
-                         subtitle: "\(AdminOccasionsText.late(m)) \(m.shortFullName) · \(AdminOccasionsText.deathLine(m))",
-                         showsChevron: false) {
-                AdminPillButton(title: L10n.t("إعلان", "Announce"), style: .navy) { announce(m) }
-            }
-            .accessibilityAction(named: L10n.t("إعلان", "Announce")) { announce(m) }
-        case .memorial(let u):
-            AdminListRow(icon: "moon.stars.fill", tint: DS.Color.sadu,
-                         title: L10n.t("ذكرى \(AdminOccasionsText.late(u.member)) \(u.member.fullName)",
-                                       "\(u.member.fullName)'s anniversary"),
-                         subtitle: DeceasedMemorial.anniversaryLine(u.anniversary, arabic: L10n.isArabic),
-                         showsChevron: false) {
-                AdminValueChip(text: DeceasedMemorial.whenLabel(u.anniversary.daysUntil, arabic: L10n.isArabic),
-                               tint: u.anniversary.daysUntil <= 1 ? DS.Color.accent : DS.Color.primary)
-            }
-        }
-    }
-
-    /// المنشئ الواحد على «إعلان وفاة» والمتوفى جاهز
-    private func announce(_ m: FamilyMember) {
-        AdminCreateWindow.open(.death, death: DeathAnnouncementTarget(id: m.id, name: m.fullName, isFemale: m.isFemale,
-                                                                      deathDate: m.deathDate),
-                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
-    }
-
-    /// «تعديل» = المنشئ نفسه بمسودّة الإشعار المجدول (النص، المستلمون، الموعد) — الحفظ يعدّل الصف نفسه
-    private func edit(_ n: NotificationViewModel.ScheduledNotification) {
-        AdminCreateWindow.open(.announcement, announce: AdminAnnounceDraft(editing: n, members: memberVM.allMembers),
-                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
-    }
 }
 
 /// إشعار مجدول في «الإشعارات المجدولة»: الوقت كبيراً في الطرف واليوم فوقه («اليوم» · «بكرة» · «الخميس»)، النص سطرين،
@@ -506,9 +775,11 @@ struct AdminScheduledPushRow: View {
 struct AdminOccasionsPublishedCard: View {
     @EnvironmentObject private var newsVM: NewsViewModel
     @EnvironmentObject private var notificationVM: NotificationViewModel
+    /// false = داخل صفحة «المنشور» (العنوان في رأسها)
+    var showsTitle: Bool = true
     @State private var limit = Self.pageSize
 
-    private static let pageSize = 6
+    private static let pageSize = 20
 
     struct Item: Identifiable {
         let id: String
@@ -520,9 +791,10 @@ struct AdminOccasionsPublishedCard: View {
         let date: Date
     }
 
-    private var items: [Item] {
+    /// كل المنشور — الأحدث أولاً (يقرؤه سطر «المنشور» في «الإعلانات» أيضاً)
+    static func items(news: [NewsPost], notifications: [AppNotification]) -> [Item] {
         var list: [Item] = []
-        for post in newsVM.allNews where post.type == "إعلان" || post.type == "وفاة" {
+        for post in news where post.type == "إعلان" || post.type == "وفاة" {
             let death = post.type == "وفاة"
             let firstLine = post.content.split(separator: "\n").first.map(String.init) ?? post.content
             list.append(Item(id: "news-\(post.id)", kind: death ? .death : .announcement,
@@ -530,7 +802,7 @@ struct AdminOccasionsPublishedCard: View {
                              icon: death ? AdminCreateKind.death.icon : AdminCreateKind.announcement.icon,
                              tint: death ? DS.Color.slate : DS.Color.sea, title: firstLine, date: post.timestamp))
         }
-        for n in notificationVM.notifications where n.kind == "app_update" || n.kind == "admin_broadcast" {
+        for n in notifications where n.kind == "app_update" || n.kind == "admin_broadcast" {
             let update = n.kind == "app_update"
             list.append(Item(id: "notif-\(n.id)", kind: update ? .appUpdate : .announcement,
                              kindTitle: update ? L10n.t("إعلان تحديث التطبيق", "App update notice") : L10n.t("إشعار للأعضاء", "Push to members"),
@@ -541,9 +813,11 @@ struct AdminOccasionsPublishedCard: View {
     }
 
     var body: some View {
-        let all = items
+        let all = Self.items(news: newsVM.allNews, notifications: notificationVM.notifications)
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminSectionLabel(title: L10n.t("المنشور", "Published"), trailing: all.isEmpty ? nil : "\(all.count)")
+            if showsTitle {
+                AdminSectionLabel(title: L10n.t("المنشور", "Published"), trailing: all.isEmpty ? nil : "\(all.count)")
+            }
             if all.isEmpty {
                 AdminPageStateCard(.empty(L10n.t("لم يُنشر شيء بعد", "Nothing published yet"),
                                           message: L10n.t("يظهر هنا ما يُنشر من «إنشاء»", "What you publish from Create appears here")))
@@ -567,68 +841,6 @@ struct AdminOccasionsPublishedCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .adminCard()
             }
-        }
-    }
-}
-
-// MARK: - أرقام فقط تفتح بيوتها
-
-/// «تصل الإشعارات إلى N جهازاً · P٪» ← الفريق والأمان ← «الأجهزة ووصول الإشعارات» (للمالك)، و«N متوفى: لا يوجد تاريخ كامل
-/// للوفاة» ← «إدارة تواريخ الوفاة». لا أوامر هنا — البيت هناك
-struct AdminOccasionsNumbersCard: View {
-    /// «تصلها الإشعارات» = تسجيل صالح (الفاشل وحده لا تصله — الدفعة ١٤) — نفس رقم «الأجهزة ووصول الإشعارات» ورأس «الفريق والأمان»
-    @ObservedObject private var devices = AdminDeviceReachStore.shared
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var memberVM: MemberViewModel
-
-    /// نفس عدّ «إدارة تواريخ الوفاة» (نطاق «ذكرى الراحلين»)
-    private var incomplete: Int { DeathDatesCampaign.stats(memberVM.allMembers).incomplete }
-
-    var body: some View {
-        // وصول الإشعارات بيته «الفريق والأمان» — للمالك فقط (٢٠٢٦-١٠-٢٤)
-        let showsReach = authVM.canViewSystemSettings
-        let reach = devices.stats.flatMap { $0.total > 0 ? $0 : nil }
-        let showsDates = authVM.canEditMembers && incomplete > 0
-        if showsReach || showsDates {
-            VStack(alignment: .leading, spacing: 0) {
-                if showsReach {
-                    NavigationLink {
-                        AdminLazyPage { AnyView(AdminPushHealthView().adminBackTitle(AdminArea.occasions.title).adminArea(.team)) }
-                    } label: {
-                        AdminListRow(icon: "bell.and.waves.left.and.right.fill", tint: DS.Color.info,
-                                     title: reach.map { L10n.t("تصل الإشعارات إلى \($0.reach) جهازاً", "Notifications reach \($0.reach) devices") }
-                                        ?? L10n.t("وصول الإشعارات", "Notification reach"),
-                                     subtitle: AdminArea.team.title) {
-                            if let reach {
-                                // الحلقة المصغّرة الموحّدة (الدفعة ١٠) بلون الحال كما كان
-                                DSRingValue(progress: reach.reachShare,
-                                            tint: reach.reachPercent >= 90 ? DS.Color.success
-                                                : (reach.reachPercent >= 70 ? DS.Color.warning : DS.Color.error),
-                                            text: DSGaugeText.percent(reach.reachPercent))
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-                if showsReach && showsDates { AdminRowDivider() }
-                if showsDates {
-                    // بيت الاستكمال «إدارة تواريخ الوفاة» (٢٠٢٦-١٠-٢٤)
-                    NavigationLink {
-                        AdminLazyPage {
-                            AnyView(DeathDatesCampaignPage().adminBackTitle(AdminArea.occasions.title).adminArea(.family))
-                        }
-                    } label: {
-                        AdminListRow(icon: "calendar.badge.exclamationmark", tint: DS.Color.warning,
-                                     title: L10n.t("\(incomplete) متوفى: \(DeathDatesCampaign.noFullDate)",
-                                                   "\(incomplete) deceased: \(DeathDatesCampaign.noFullDate)"),
-                                     subtitle: L10n.t("لا تظهر ذكراهم — أكملها من «إدارة تواريخ الوفاة»",
-                                                      "No memorial shows — complete them in Death dates"))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .adminCard()
         }
     }
 }

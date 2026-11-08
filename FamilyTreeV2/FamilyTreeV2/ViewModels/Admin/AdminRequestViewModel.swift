@@ -28,6 +28,8 @@ class AdminRequestViewModel: ObservableObject {
     @Published var privacyRequests: [AdminRequest] = []
     /// «إضافة قريبة» المعلّقة (`relative_add`) — المالك/المدير/المراقب
     @Published var relativeAddRequests: [AdminRequest] = []
+    /// «طلب النسب» المعلّق (`lineage_request`، أبناء البنات من خارج العائلة) — المالك/المدير/المراقب
+    @Published var lineageRequests: [AdminRequest] = []
     /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
     @Published var myPendingRequests: [AdminRequest] = []
     /// «مسار الموافقات»: صفوف طلبات الانضمام/الربط المعلّقة (مرحلتها) — تُجلب والمفتاح شغّال فقط
@@ -1919,6 +1921,27 @@ class AdminRequestViewModel: ObservableObject {
         default:
             return L10n.t("تعذّر الربط. حاول مرة أخرى.", "Couldn't link. Try again.")
         }
+    }
+
+    /// «حوّل للمدير» (مقترح «أدوار الإدارة» البند ١١): المراقب يقبل طلب الانضمام ولا يرفضه (الرفض = حذف الملف،
+    /// `canDeleteMembers`) — فيحوّله للمالك/المدير بإشعار الإدارة الموجود (داخلي + push) بملاحظته.
+    /// `request_id` = معرّف العضو المعلّق (كما يعرّف «الوارد» طلب الانضمام) فيبقى الإشعار «يحتاج إجراء» حتى يُبتّ فيه.
+    func forwardJoinToManager(member: FamilyMember, note: String) async -> Bool {
+        guard canModerate, member.role == .pending else { return false }
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let who = currentUser?.shortFullName ?? L10n.stored("المراقب", "The monitor")
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        var body = L10n.stored("\(who) حوّل لك طلب انضمام \(member.fullName) للقرار",
+                               "\(who) forwarded \(member.fullName)'s join request to you for a decision")
+        if !trimmed.isEmpty { body += "\n" + L10n.stored("ملاحظته: \(trimmed)", "Note: \(trimmed)") }
+        await notificationVM?.notifyAdminsWithPush(
+            title: L10n.stored("طلب انضمام محوَّل للمدير", "Join request forwarded to the manager"),
+            body: body,
+            kind: NotificationKind.adminRequest.rawValue,
+            requestId: member.id,
+            requestType: RequestType.joinRequest.rawValue)
+        Log.info("[Join] حُوّل طلب الانضمام \(member.id) للمدير")
+        return true
     }
 
     private func notifyJoinApproval(memberId: UUID, fatherName: String?) async {

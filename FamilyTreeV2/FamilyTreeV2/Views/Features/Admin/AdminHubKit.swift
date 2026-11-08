@@ -62,18 +62,19 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// يظهر هذا القسم لدور المشاهد — القسم الفارغ لدورك لا يُرسم (المبدأ ٥ في IA.md).
-    /// المناسبات (`canModerate`) ∪ الإعلانات (`canSendNotifications` ⊂ الإدارة). «الفريق والأمان» و«التطبيق» للمالك
-    /// فقط، و«المؤشرات» للمالك والمدير (طلب المالك ٢٠٢٦-١٠-٢٤) — كل مدخل لصفحاتهما يمرّ بهذا الشرط (`AdminAreaGate`)
+    /// يظهر هذا القسم لدور المشاهد — القسم الفارغ لدورك لا يُرسم (المبدأ ٥ في IA.md). المصدر جدول «مين يشوف وش» من
+    /// السيرفر (`AdminRoleMatrix` ← `app_config.admin_role_matrix`، مقترح «أدوار الإدارة» ٢٠٢٦-١١-٠٧): المالكان كل شي،
+    /// المدير كل شي عدا «التطبيق» و«الفريق والأمان» للاطلاع، المراقب الوارد والعائلة والمناسبات والمؤشرات للاطلاع،
+    /// المشرف الوارد والمناسبات. كل مدخل لصفحات القسم يمرّ بهذا الشرط (`AdminAreaGate`)
     @MainActor
     func isVisible(for authVM: AuthViewModel) -> Bool {
-        switch self {
-        case .inbox:     return authVM.canModerate
-        case .family:    return authVM.canEditMembers
-        case .occasions: return authVM.canModerate || authVM.canSendNotifications
-        case .metrics:   return authVM.canViewInsights
-        case .team, .app: return authVM.canViewSystemSettings
-        }
+        authVM.adminAccess(self).canSee
+    }
+
+    /// القسم للاطلاع فقط لهذا الدور («يشوف بس» في الجدول) — المربّع يحمل «للاطلاع» وأزرار التعديل تختفي
+    @MainActor
+    func isReadOnly(for authVM: AuthViewModel) -> Bool {
+        authVM.adminAccess(self) == .read
     }
 
     /// الأقسام الظاهرة لهذا الدور بترتيبها
@@ -155,7 +156,7 @@ struct AdminAreaTitleMenu: View {
     private func label(chevron: Bool) -> some View {
         HStack(alignment: .center, spacing: DS.Spacing.xsm) {
             Text(title)
-                .dsFont(compact ? .pageTitle : .tabTitle)
+                .dsFont(.pageTitle)
                 .foregroundColor(DS.Color.headerTitle)
                 .lineLimit(compact ? 1 : 2)
                 .minimumScaleFactor(0.8)
@@ -382,7 +383,7 @@ struct AdminBandHeader<Buttons: View, Accessory: View>: View {
                     AnyView(AdminAreaTitleMenu(title: title))
                 } else {
                     Text(title)
-                        .dsFont(.tabTitle)
+                        .dsFont(.pageTitle)
                         .foregroundColor(DS.Color.headerTitle)
                         .lineLimit(2)
                         .minimumScaleFactor(0.7)

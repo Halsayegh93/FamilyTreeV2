@@ -139,7 +139,7 @@ enum DS {
         static let sectionFill      = SwiftUI.Color.gray.opacity(0.08)
         /// حقل الإدخال داخل المربّعات — صندوق رمادي بلا إطار يتميّز عن أرضية المربّع في الفاتح والداكن،
         /// والإطار بلون القسم عند الكتابة فقط (طلب المالك ٢٠٢٦-١١-٠٢ «صندوق رمادي بدون إطار»)
-        static let fieldFill        = SwiftUI.Color.adaptive(light: "#F0F0F2", dark: "#1F2228")
+        static let fieldFill        = SwiftUI.Color.adaptive(light: "#F0F0F2", dark: "#282B31")
         static let actionRowFill    = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25")
         static let actionRowOverlay = SwiftUI.Color.adaptive(light: "#F2EBDD", dark: "#23272E")
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
@@ -243,6 +243,8 @@ enum DS {
         static let likeAction       = newsWedding // وردي
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
         static let female           = SwiftUI.Color.adaptive(light: "#92526F", dark: "#F4B1CB") // وردي
+        /// تعبئة ثابتة تحت نص أبيض في الوضعين (اختيار «أنثى»)
+        static let femaleFill       = SwiftUI.Color(hex: "#92526F")
         /// الأنثى المتوفّاة — بنفسجي خوخي مطفأ: لون مختلف عن وردي الحيّة لكنه من عائلته (طلب المالك)
         static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#7A5578", dark: "#9D7A9B")
         /// حافة الأنثى المتوفّاة — بنفسجي داكن متناسق (وفي الداكن فاتح ليظهر)
@@ -583,6 +585,24 @@ enum DS {
         static let xxl:  CGFloat = 24
         static let xxxl: CGFloat = 28
         static let full: CGFloat = 999
+    }
+
+    // MARK: Library folder
+    /// مجلد المكتبة: لسان يلتصق بجسم المجلد، وفوقها غلاف أحدث عنصر (طلب المالك ٢٠٢٦-١١-٠٥، بين «أ» و«ج»)
+    enum Folder {
+        static let tabWidth: CGFloat = 58
+        static let tabHeight: CGFloat = 20
+        static let tabOverlap: CGFloat = 8
+        static let minHeight: CGFloat = 72
+        static let coverWidth: CGFloat = 78
+        static let coverHeight: CGFloat = 102
+        /// أطول ما تأخذه الصفحة في مربّع العنصر من طول الشاشة
+        static let itemPageScreenShare: CGFloat = 0.36
+        /// عرض الصفحة من عرض المربّع الداخلي — أصغر شوي من الحافة (طلب المالك ٢٠٢٦-١١-٠٦)
+        static let itemPageWidthShare: CGFloat = 0.86
+        /// زرّ التكبير الثابت على ركن الصفحة
+        static let zoomButton: CGFloat = 30
+        static let zoomButtonInset: CGFloat = 8
     }
 
     // MARK: Icon
@@ -1512,8 +1532,8 @@ enum DSBox {
     // أزرار الرجوع/الإغلاق/الإجراء (`DSNavButtons`): فوق الرأس الملوّن ٤٤ (المضغوط ٣٦)، وفوق السطح ٣٨
     static let navButtonOnColor: CGFloat = 44
     /// أيقونة القسم في دائرة رأس التبويب («الإدارة» في «اليوم») ورؤوس صفحات الإدارة — `MainHeaderView.leadingIcon`
-    static let headerSymbol: CGFloat = 52
-    static let headerSymbolGlyph: CGFloat = 20
+    static let headerSymbol: CGFloat = 38
+    static let headerSymbolGlyph: CGFloat = 17
     static let navButtonCompact: CGFloat = 36
     static let navButtonSurface: CGFloat = 38
     static var navGlyph: CGFloat { DS.Glyph.xl }
@@ -1941,7 +1961,7 @@ extension DS.Opacity {
 // MARK: - لون «رفض» (طلب المالك ٢٠٢٦-١٠-٠٧ «غيّر بين لون الرفض والحذف النهائي»)
 extension DS.Color {
     /// الرفض برتقالي محروق — يتميّز عن «حذف نهائي» الأحمر؛ النص الأبيض فوقه ≥ ٤٫٥:١ في الوضعين
-    static let reject = SwiftUI.Color.adaptive(light: "#B94E0C", dark: "#C8621E")
+    static let reject = SwiftUI.Color.adaptive(light: "#B94E0C", dark: "#B85A1A") // الداكن ٤٫٦٥:١ مع الأبيض (حكم التصميم ١١-٠٦)
 }
 
 // MARK: - دفعة 3-B «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شارة العدد ونقطة الفئة في صفحات الإدارة
@@ -1971,6 +1991,8 @@ extension DS.Icon {
     static let appLogo: CGFloat = 100
     /// ارتفاع شعار العائلة المسطّح في شاشة البداية والدخول (طلب المالك ٢٠٢٦-١٠-٢٩ «الشعار مو واضح» — كان ١٠٠)
     static let familyLogo: CGFloat = 150
+    /// شعار شاشة البداية (طلب المالك ٢٠٢٦-١١-٠٥ «شوي نصغر الشعار») — أصغر من شعار الدخول
+    static let splashLogo: CGFloat = 120
     /// الشعار في صفحة الانتظار ووضع العرض
     static let familyLogoCompact: CGFloat = 120
     /// قرص الحالة الكبير في شاشات ملء الشاشة (الحساب مجمّد، حد الأجهزة، التحديث الإجباري)
@@ -2379,6 +2401,10 @@ extension DS {
         /// أزرق الرجال وورديّ النساء الفاتحان (درجتا `male`/`female` الداكنتان) ليظهرا على الكحلي
         static let censusMale = SwiftUI.Color(hex: "#9DC2E7")
         static let censusFemale = SwiftUI.Color(hex: "#F4B1CB")
+        /// «خارج العائلة» في رأس «العائلة» — رمادي فاتح محايد فوق الكحلي (لا يُعدّ في الإجمالي)
+        static let censusOutside = SwiftUI.Color(hex: "#B4BCC5")
+        /// أقل ارتفاع لقائمة تحت شرائح فلتر — تبديل الشريحة لا يقصّر الصفحة فجأة
+        static let filterListMinHeight: CGFloat = 560
         /// قسم «الدخول والأمان» (صدئي من عائلة الكحلي والذهبي)
         static let securityFill = SwiftUI.Color(hex: "#9A3B2E")
 
@@ -2413,7 +2439,9 @@ extension DS {
         /// عرض اللوحة من أحجام إمكانية الوصول (الإجراء تحت النص)
         static let statusPanelWidthLarge: CGFloat = 360
         /// مربّع الأيقونة الملوّن في صفوف البطاقات، ومربّع الأقسام، ومربّع نوع الطلب
-        static let iconSquare: CGFloat = 36
+        static let iconSquare: CGFloat = 30
+        /// أيقونة صف الطلب في «الوارد» (طلب المالك ٢٠٢٦-١١-٠٥: أصغر)
+        static let rowIcon: CGFloat = 26
         static let iconSquareRadius: CGFloat = 11
         static let tileIcon: CGFloat = 34
         static let tileIconRadius: CGFloat = 10
@@ -2467,7 +2495,7 @@ extension DS.TextRole {
     /// Footnote (١٣) شبه عريض
     static let hubLabel = DS.TextRole(.footnote, weight: .medium)
     /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
-    static let hubRow = DS.TextRole(.subheadline, weight: .medium)
+    static let hubRow = DS.TextRole(.footnote, weight: .medium)
     /// نص زرّ الكبسولة في الصفوف — Footnote (١٣) عريض
     static let hubButton = DS.TextRole(.footnote, weight: .medium)
 }

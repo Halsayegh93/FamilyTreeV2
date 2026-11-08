@@ -48,13 +48,17 @@ enum AdminToolCatalog {
                            icon: "tray.full.fill", tint: DS.Color.primary,
                            keywords: ["طلبات", "مراجعة", "انضمام", "موافقة", "بانتظار قرارك", "عاجل", "متأخر", "يحتاج انتباهك"],
                            kind: page { AdminAllRequestsView() }))
-        t.append(AdminTool(id: "inbox.messages", area: .inbox, group: L10n.t("الوارد", "Inbox"),
-                           title: L10n.t("الرسائل", "Messages"),
-                           subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة»", "Members' “Contact admin” messages"),
-                           icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.sea,
-                           keywords: ["رسائل", "تواصل", "رسائل الأعضاء"],
-                           kind: page { AdminAllRequestsView(startsWithMessages: true) }))
-        if authVM.canViewSystemSettings {
+        // «الرسائل» رسائل خاصة — للمالك والمدير (جدول «مين يشوف وش» من السيرفر)
+        if authVM.adminSees(.inboxMessages) {
+            t.append(AdminTool(id: "inbox.messages", area: .inbox, group: L10n.t("الوارد", "Inbox"),
+                               title: L10n.t("الرسائل", "Messages"),
+                               subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة»", "Members' “Contact admin” messages"),
+                               icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.sea,
+                               keywords: ["رسائل", "تواصل", "رسائل الأعضاء"],
+                               kind: page { AdminAllRequestsView(startsWithMessages: true) }))
+        }
+        // المالك يعدّل والمدير يقرأ (الصفحة نفسها تقفل مفاتيحها لغير المالك — `canManageSettings`)
+        if authVM.adminSees(.inboxApprovalSettings) {
             t.append(AdminTool(id: "inbox.settings", area: .inbox, group: L10n.t("الوارد", "Inbox"),
                                title: L10n.t("إعدادات مسار الموافقات", "Approval path settings"),
                                subtitle: L10n.t("مسار الموافقات، المهلة، الاعتماد المباشر، نماذج الردود",
@@ -119,8 +123,8 @@ enum AdminToolCatalog {
         // ٤ المؤشرات — ثلاثة مداخل للقراءة: العائلة · الاستخدام · الموافقات («سجل التعديلات» صار «نشاط الفريق» في
         // «إشعارات الإدارة» — الدفعة ٥). كل رقم في بيته هنا، و«اليوم» يعرض أرقاماً تفتحه فقط
         let insights = L10n.t("أرقام وسجل", "Numbers & history")
-        // «المؤشرات» للمالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
-        if authVM.canViewInsights {
+        // «المؤشرات ← العائلة» للمالك والمدير والمراقب (أرقام الشجرة من مجاله — الجدول من السيرفر)
+        if authVM.adminSees(.metricsFamily) {
             t.append(AdminTool(id: "metrics.family", area: .metrics, group: insights,
                                title: L10n.t("العائلة", "The family"),
                                subtitle: L10n.t("الأفراد والأحياء، المسجّلون، النمو والأعمار والأدوار",
@@ -130,17 +134,8 @@ enum AdminToolCatalog {
                                           "رجال", "نساء", "أحياء", "متوفون"],
                                kind: page { AdminAnalyticsView() }))
         }
-        if isAdmin {
-            t.append(AdminTool(id: "metrics.usage", area: .metrics, group: insights,
-                               title: L10n.t("الاستخدام", "Usage"),
-                               subtitle: L10n.t("المستخدمون الآن، النشطون واتجاههم، الجلسات وأكثر الشاشات — التطبيق والموقع",
-                                                "Using now, active members and trend, sessions and top screens — app and web"),
-                               icon: "bolt.fill", tint: DS.Color.sea,
-                               keywords: ["نشاط", "نشط", "الآن", "مستخدمون", "جلسات", "شاشات", "اتجاه", "دقائق"],
-                               kind: page { AdminActiveMembersView() }))
-        }
         // تقرير الموافقات — بيته الواحد هنا (كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع»)
-        if adminRequestVM.approvalsWorkflowOn && authVM.canViewInsights {
+        if adminRequestVM.approvalsWorkflowOn && authVM.adminSees(.metricsApprovals) {
             t.append(AdminTool(id: "metrics.approvals", area: .metrics, group: insights,
                                title: L10n.t("الموافقات", "Approvals"),
                                subtitle: L10n.t("المنجز، وقت كل مرحلة، حسب النوع، أداء الإدارة", "Done, time per stage, by type, team"),
@@ -162,9 +157,10 @@ enum AdminToolCatalog {
                                place: L10n.t("اليوم ← الجرس", "Today ← bell")))
         }
 
-        // ٥ الفريق والأمان — أربعة مداخل: فريق الإدارة · رسائل رمز الدخول · التسجيل والمنع · الأجهزة ووصول الإشعارات
-        // (صفحة القسم `AdminTeamAreaView` في `AdminTeamArea.swift`؛ «صلاحيات الأدوار» داخل فريق الإدارة) — للمالك فقط
-        if authVM.canViewSystemSettings {
+        // ٥ الفريق والأمان — أربعة مداخل: فريق الإدارة · رسائل رمز الدخول · التسجيل والمنع · الاستخدام والأجهزة
+        // (صفحة القسم `AdminTeamAreaView` في `AdminTeamArea.swift`؛ «صلاحيات الأدوار» داخل فريق الإدارة). المالكان كل
+        // شي؛ المدير للاطلاع: فريق الإدارة و«الاستخدام» بلا الأجهزة (الجدول من السيرفر — رسائل الدخول والتسجيل والأجهزة للمالك)
+        if authVM.adminSees(.teamMembers) {
             t.append(AdminTool(id: "team.members", area: .team, group: L10n.t("الفريق", "Team"),
                                title: L10n.t("فريق الإدارة", "Admin team"),
                                subtitle: authVM.canManageRoles ? L10n.t("الأعضاء حسب الدور، وصلاحيات الأدوار — إضافة وتغيير",
@@ -174,8 +170,8 @@ enum AdminToolCatalog {
                                keywords: ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "صلاحياتي"],
                                kind: page { AdminModeratorsView() }))
         }
-        if authVM.canViewSystemSettings {
-            let access = L10n.t("الدخول والأمان", "Sign-in and security")
+        let access = L10n.t("الدخول والأمان", "Sign-in and security")
+        if authVM.adminSees(.teamSms) {
             t.append(AdminTool(id: "access.sms", area: .team, group: access,
                                title: L10n.t("رسائل رمز الدخول (KWT SMS)", "Sign-in code messages (KWT SMS)"),
                                subtitle: L10n.t("الرصيد، طلبات رمز الدخول، إعدادات الإرسال",
@@ -183,6 +179,8 @@ enum AdminToolCatalog {
                                icon: "ellipsis.message.fill", tint: DS.Hub.securityFill,
                                keywords: ["رسائل", "sms", "رصيد", "kwt", "محاولات", "مرسل"],
                                kind: page { AdminSmsView() }))
+        }
+        if authVM.adminSees(.teamRegistration) {
             t.append(AdminTool(id: "access.registration", area: .team, group: access,
                                title: L10n.t("التسجيل والمنع", "Sign-up and blocking"),
                                subtitle: L10n.t("السماح بالتسجيل · الأرقام الممنوعة من التسجيل",
@@ -190,18 +188,35 @@ enum AdminToolCatalog {
                                icon: "person.crop.circle.badge.checkmark", tint: DS.Color.palm,
                                keywords: ["تسجيل", "شروط", "حظر", "محظور", "منع", "ممنوع"],
                                kind: page { AdminRegistrationBansView() }))
-            t.append(AdminTool(id: "access.devices", area: .team, group: access,
-                               title: L10n.t("الأجهزة ووصول الإشعارات", "Devices and notification reach"),
-                               subtitle: L10n.t("الأجهزة المرتبطة، وصول الإشعارات، عدد الأجهزة لكل عضو",
-                                                "Linked devices, notification reach, devices per member"),
-                               icon: "iphone.gen3", tint: DS.Color.primary,
-                               keywords: ["أجهزة", "إشعارات", "رموز", "وصول", "فصل", "تجربة", "تسجيل الأجهزة", "إشعار تجريبي"],
+        }
+        if authVM.adminSees(.teamDevices) {
+            // دمجت «الأجهزة ووصول الإشعارات» و«الاستخدام» (من «المؤشرات») — الكلمات القديمة للاثنين تجد بيتها هنا
+            t.append(AdminTool(id: "access.usage", area: .team, group: access,
+                               title: L10n.t("الاستخدام والأجهزة", "Usage and devices"),
+                               subtitle: L10n.t("منو يستخدم التطبيق الحين، الأجهزة ووصول الإشعارات، عدد الأجهزة لكل عضو",
+                                                "Who is using the app now, devices and notification reach, devices per member"),
+                               icon: "waveform.path.ecg", tint: DS.Color.palm,
+                               keywords: ["الاستخدام", "استخدام", "نشاط", "نشط", "نشطون", "الآن", "الحين", "مستخدمون", "جلسات",
+                                          "شاشات", "اتجاه", "دقائق", "آخر 24 ساعة",
+                                          "الأجهزة ووصول الإشعارات", "أجهزة", "الأجهزة", "إشعارات", "رموز", "وصول",
+                                          "وصول الإشعارات", "فصل", "تجربة", "تسجيل الأجهزة", "إشعار تجريبي",
+                                          "تسجيل فاشل", "بدون جهاز", "ما دخلوا"],
                                kind: page { AdminPushHealthView() }))
+        } else if authVM.adminSees(.teamUsage) {
+            // بلا الأجهزة (المدير): «الاستخدام» وحده — نفس صفحته التي كانت في «المؤشرات»
+            t.append(AdminTool(id: "access.usage", area: .team, group: access,
+                               title: L10n.t("الاستخدام", "Usage"),
+                               subtitle: L10n.t("المستخدمون الآن، النشطون واتجاههم، الجلسات وأكثر الشاشات — التطبيق والموقع",
+                                                "Using now, active members and trend, sessions and top screens — app and web"),
+                               icon: "waveform.path.ecg", tint: DS.Color.palm,
+                               keywords: ["الاستخدام", "استخدام", "نشاط", "نشط", "نشطون", "الآن", "الحين", "مستخدمون", "جلسات",
+                                          "شاشات", "اتجاه", "دقائق", "آخر 24 ساعة"],
+                               kind: page { AdminActiveMembersView() }))
         }
 
         // ٦ التطبيق — صفحة القسم هي الإعدادات نفسها (`AdminAppAreaPage`، المفاتيح في مكانها)؛ هذه الصفوف للبحث الشامل
-        // (تفتح الصفحة أو قائمتها). «كل الإعدادات في صفحة واحدة» حُذفت — الصفحة نفسها صارت كل الإعدادات
-        if authVM.canViewSystemSettings {
+        // (تفتح الصفحة أو قائمتها). «كل الإعدادات في صفحة واحدة» حُذفت — الصفحة نفسها صارت كل الإعدادات. للمالك وحده
+        if authVM.adminSees(.appSettings) {
             let settings = L10n.t("التطبيق", "App")
             // صفحة واحدة لكل إعدادات التطبيق (الأقسام الظاهرة، الصيانة، حدّ التعديلات، النظام) — المفاتيح في مكانها
             t.append(AdminTool(id: "app.sections", area: .app, group: settings,
@@ -233,7 +248,8 @@ enum AdminToolCatalog {
                                keywords: ["تحديث", "إجباري", "إصدار"],
                                kind: page { AdminForceUpdateView() }))
         }
-        return t
+        // قسم لا يظهر لدورك (جدول «مين يشوف وش» من السيرفر) لا تظهر أدواته في البحث أيضاً
+        return t.filter { $0.area.isVisible(for: authVM) }
     }
 }
 

@@ -844,7 +844,7 @@ struct AdminMemberDetailSheet: View {
         (accountStatus == nil || accountStatus == .pending) && !savedPhone.isEmpty && member.role != .pending
     }
 
-    /// شارة الحالة الرسمية في رأس البطاقة: حساب موقوف · عضو مسجّل (له حساب دخول) · مقيّد في الشجرة
+    /// شارة الحالة الرسمية في رأس البطاقة: حساب موقوف · عضو مسجّل (له حساب دخول) · بدون حساب
     /// («مفعّل / بانتظار التفعيل» تقسيم تاريخي لا يُعرض)
     private var accountChip: (text: String, tint: Color)? {
         if isFrozen { return (AdminMemberStatus.frozen.title, AdminMemberStatus.frozen.tint) }

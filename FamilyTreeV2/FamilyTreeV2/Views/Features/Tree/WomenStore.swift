@@ -21,6 +21,11 @@ private struct WomenRow: Decodable {
     let isMarried: Bool?
     /// وقت إضافة السجل — «المضافة حديثاً» تُستبعد من مرشّحات الزوجة (`WifeCandidateRules`)
     let createdAt: String?
+    /// ترتيب الزوجة بين زوجات زوجها (`wife_order`) — مستقلّ عن `sort_order` (ترتيبها بين أبناء أبيها).
+    /// اختياري: قبل ترحيل السيرفر لا يوجد العمود فيُقرأ nil بلا خطأ (`select()` = كل الأعمدة)
+    let wifeOrder: Int?
+    /// «زوج من خارج العائلة» (`is_outside_family`، ٢٠٢٦-١١-٠٧) — اختياري: قبل ترحيل السيرفر لا يوجد فيُقرأ nil
+    let isOutsideFamily: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -40,6 +45,8 @@ private struct WomenRow: Decodable {
         case linkedUserId = "linked_user_id"
         case isMarried = "is_married"
         case createdAt = "created_at"
+        case wifeOrder = "wife_order"
+        case isOutsideFamily = "is_outside_family"
     }
 }
 
@@ -55,6 +62,19 @@ enum WomenStore {
     /// ربط حساب التطبيق ↔ اسم في شجرة النساء (مرجع إداري + زر موقعي).
     static var womanByLinkedUser: [UUID: UUID] = [:]   // userId → womanId
     static var linkedUserByWoman: [UUID: UUID] = [:]   // womanId → userId
+    /// ترتيب الزوجات (`wife_order`) من آخر جلب — womanId → ترتيبها بين زوجات زوجها
+    static var wifeOrderByWoman: [UUID: Int] = [:]
+    /// «أبناء البنات من خارج العائلة»: أزواج البنات من خارج العائلة (`is_outside_family`) — يُرسمون تحت زوجاتهم
+    static var outsideFamilyIds: Set<UUID> = []
+    /// العمود موجود على السيرفر (الترحيل طُبّق) — قبله تختفي «زوج من خارج العائلة»
+    static var outsideFamilySupported = false
+
+    /// ترتيب زوجات الرجل الواحد: `wife_order` أولاً (ما رتّبته الإدارة)، ثم `sort_order` كما كان
+    /// (القاموس يُمرَّر — المستدعون يقرؤون `wifeOrderByWoman` مرة ثم يرتّبون في سياق غير معزول)
+    nonisolated static func wifeOrdered(_ a: FamilyMember, _ b: FamilyMember, orders: [UUID: Int]) -> Bool {
+        let oa = orders[a.id] ?? Int.max, ob = orders[b.id] ?? Int.max
+        return oa != ob ? oa < ob : a.sortOrder < b.sortOrder
+    }
 
     /// عقدة حساب المرأة في شجرة النساء (`linked_user_id` = معرّف حسابها) — من آخر جلب؛ nil = غير مربوطة بعد
     static func node(forAccount userId: UUID) -> FamilyMember? {
@@ -80,6 +100,11 @@ enum WomenStore {
         }
         womanByLinkedUser = byUser
         linkedUserByWoman = byWoman
+        var wifeOrders: [UUID: Int] = [:]
+        for r in rows { if let o = r.wifeOrder { wifeOrders[r.id] = o } }
+        wifeOrderByWoman = wifeOrders
+        outsideFamilyIds = Set(rows.lazy.filter { $0.isOutsideFamily == true }.map(\.id))
+        outsideFamilySupported = rows.contains { $0.isOutsideFamily != nil }
         let mapped = rows.map { r in
             FamilyMember(
                 id: r.id,
@@ -388,6 +413,22 @@ enum WomenStore {
             }
             try await group.waitForAll()
         }
+    }
+
+    /// ترتيب زوجات رجل (إدارة فقط) — يكتب `wife_order` حسب الترتيب الجديد، معاً لا بالتسلسل.
+    /// يحتاج العمود من ترحيل `20261107000000_women_wife_order.sql`
+    static func reorderWives(orderedIds: [UUID]) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (i, id) in orderedIds.enumerated() {
+                group.addTask {
+                    try await SupabaseConfig.client.from("women_members")
+                        .update(["wife_order": AnyEncodable(i)])
+                        .eq("id", value: id.uuidString).execute()
+                }
+            }
+            try await group.waitForAll()
+        }
+        for (i, id) in orderedIds.enumerated() { wifeOrderByWoman[id] = i }
     }
 
     /// ربط/فكّ ربط اسم في شجرة النساء بحساب مستخدم (للإدارة فقط عبر RLS).

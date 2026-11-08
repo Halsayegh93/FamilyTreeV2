@@ -58,6 +58,8 @@ struct HomeNewsView: View {
 
     /// الصفحة الفرعية المفتوحة — تُدفع كوجهة تنقّل حقيقية لتأخذ حركة iOS الأصلية
     @State private var activeSubPage: HomeSubPage? = nil
+    /// مجلد المكتبة المفتوح — الرأس يعرض اسمه ورجوعه يرجع للمجلدات
+    @State private var archiveFolder: String? = nil
 
     /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
     private var layout: DS.Layout.Metrics {
@@ -147,6 +149,7 @@ struct HomeNewsView: View {
                 Task { await newsVM.setNewsFilter(search: debouncedNewsSearch, type: value) }
             }
             .onChange(of: activeSubPage) { value in
+                if value != .archive { archiveFolder = nil }
                 if value != .news {
                     newsSearchText = ""
                     selectedNewsTypeFilter = nil
@@ -225,8 +228,9 @@ struct HomeNewsView: View {
         VStack(spacing: 0) {
             subPageHeader(for: page)
             switch page {
-            case .archive: FamilyArchiveView()
-            case .projects: FamilyProjectsView()
+            // الحساب المقيّد («أكمل حسابك»): القسم مقفول تحت رأسه
+            case .archive: FamilyArchiveView(openFolder: $archiveFolder).lineageLocked(.library, appSection: .library)
+            case .projects: FamilyProjectsView().lineageLocked(.projects, appSection: .projects)
             case .contact: MemberContactFormView()
             case .news: newsFullPage.dsSectionPage(.news)   // بلون قسم الأخبار مثل إضافة/تعديل الخبر والتعليقات
             }
@@ -364,7 +368,7 @@ struct HomeNewsView: View {
     private func subPageHeader(for page: HomeSubPage) -> some View {
         let title: String = {
             switch page {
-            case .archive: return L10n.t("مكتبة العائلة", "Family Library")
+            case .archive: return archiveFolder.map(ArchiveItem.categoryName) ?? L10n.t("مكتبة العائلة", "Family Library")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
             case .news: return L10n.t("الأخبار والمناسبات", "News & Events")
@@ -374,7 +378,8 @@ struct HomeNewsView: View {
         // سطر توضيحي تحت اسم القسم
         let subtitle: String? = {
             switch page {
-            case .archive:  return L10n.t("أرشيف ووثائق العائلة", "Family archive & documents")
+            case .archive:  return archiveFolder != nil ? L10n.t("مكتبة العائلة", "Family Library")
+                                                        : L10n.t("أرشيف ووثائق العائلة", "Family archive & documents")
             case .projects: return L10n.t("مبادرات ومشاريع الأعضاء", "Member initiatives & projects")
             case .contact:  return L10n.t("اكتب رسالتك ويصلك الرد بأقرب وقت",
                                           "Write your message — you'll get a reply soon")
@@ -385,7 +390,13 @@ struct HomeNewsView: View {
         let sec: AppSection = page == .archive ? .library : page == .projects ? .projects : page == .contact ? .admin : .news
 
         // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×، بنفس زر الرجوع الموحّد
-        return DSSubPageHeader(title: title, subtitle: subtitle, section: sec, onBack: { activeSubPage = nil }) {
+        return DSSubPageHeader(title: title, subtitle: subtitle, section: sec, onBack: {
+            if page == .archive, archiveFolder != nil {
+                withAnimation(DS.Anim.snappy) { archiveFolder = nil }
+            } else {
+                activeSubPage = nil
+            }
+        }) {
             // التحديد المتعدّد انتقل للهيدر — للإدارة فقط (المكتبة والمشاريع)
             if authVM.isAdmin && (page == .archive || page == .projects) {
                 DSHeaderButton(symbol: "checkmark.circle", label: L10n.t("تحديد متعدّد", "Multi-select"),
@@ -411,6 +422,7 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
+                        AnyView(LineageHomeCard())   // «أكمل حسابك» — له وحده (الحساب المقيّد)
                         AnyView(primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         AnyView(quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         Spacer(minLength: 0)
@@ -425,6 +437,7 @@ struct HomeNewsView: View {
                 // حدود AnyView: تُبقي عمق مكدس الرئيسية تحت الحد (كان ٨٠١ ك.ب بعد دمج ٢٠٢٦-١٠-٢٥ — iOS 16 أحوج)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
+                    AnyView(LineageHomeCard())   // «أكمل حسابك» — له وحده (الحساب المقيّد)
                     AnyView(primaryTilesRow(tileHeight: layout.tileHeight + 12))
                     AnyView(quickAccessGrid(tileHeight: layout.tileHeight + 6))
                     AnyView(newsBentoCard)

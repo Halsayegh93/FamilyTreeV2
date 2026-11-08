@@ -429,7 +429,7 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.sm)
-            .background(shape.fill(selected ? ink.opacity(DS.Opacity.tintFillSoft) : DS.Color.background))
+            .background(shape.fill(selected ? ink.opacity(DS.Opacity.tintFillSoft) : DS.Color.fieldFill))
             .overlay(shape.strokeBorder(selected ? ink.opacity(DS.Opacity.selectedStroke)
                                                  : DS.Color.textTertiary.opacity(DS.Opacity.border),
                                         lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
@@ -824,7 +824,7 @@ struct DSAddChipLabel: View {
     var isLoading: Bool = false
 
     static let dash = StrokeStyle(lineWidth: 1.2, dash: [4, 3])
-    static let strokeOpacity: Double = 0.4
+    static let strokeOpacity: Double = 0.6
 
     var body: some View {
         let ink = tint ?? DS.Color.textSecondary

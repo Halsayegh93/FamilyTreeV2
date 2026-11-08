@@ -21,6 +21,10 @@ struct AdminAllRequestsView: View {
     @State private var showRejectReason = false
     @State private var rejectReasonText: String = ""
     @State private var rejectReasonDetail: RequestDetail? = nil
+    // «حوّل للمدير» — المراقب على طلب انضمام (الرفض = حذف الملف للمالك/المدير وحدهما)، بملاحظة اختيارية
+    @State private var forwardJoinMember: FamilyMember? = nil
+    @State private var forwardJoinNote: String = ""
+    @State private var forwardJoinDone = false
     // حذف نهائي لأي طلب — للمالك/المدير فقط
     @State private var deleteConfirmDetail: RequestDetail? = nil
     // تعديل/إضافة رقم فعلي لعضو معلّق (طلب انضمام)
@@ -254,6 +258,9 @@ struct AdminAllRequestsView: View {
     @State private var registrationMatches: [UUID: [UUID]] = [:]
     /// الأعضاء اللي المدير فتح كل المتطابقين حقهم
     @State private var expandedMatchMembers: Set<UUID> = []
+    /// «الأرجح أولاً»: السجلّ المختار لكل طلب انضمام (بلا اختيار = الأرجح) ودرجاته المحفوظة
+    @State private var joinPicks: [UUID: UUID] = [:]
+    @State private var joinTierCache = JoinTierCache()
 
     @State private var cachedPendingMembers: [FamilyMember] = []
     private var pendingMembers: [FamilyMember] { cachedPendingMembers }
@@ -273,7 +280,7 @@ struct AdminAllRequestsView: View {
         VStack(spacing: 0) {
             AnyView(inboxHeader)
 
-            if segment == .messages {
+            if showsMessages {
                 // «الرسائل» — صفحة الرسائل نفسها بلا رأسها (رأس «الوارد» فوقها) وبحث «الوارد» الواحد
                 AnyView(AdminInboxView(embedded: true, sharedSearch: $searchText))
             } else {
@@ -515,6 +522,27 @@ struct AdminAllRequestsView: View {
                     Text(L10n.t("سيصل السبب كرسالة إلى مقدّم الطلب.",
                                 "The reason will be sent as a message to the requester."))
                 }
+                .dsAlert(L10n.t("حوّل للمدير", "Forward to manager"),
+                         isPresented: Binding(get: { forwardJoinMember != nil },
+                                              set: { if !$0 { forwardJoinMember = nil } })) {
+                    TextField(L10n.t("ملاحظة للمدير (اختياري)", "Note for the manager (optional)"), text: $forwardJoinNote)
+                        .dsAlertField()
+                    Button(L10n.t("تحويل", "Forward")) {
+                        if let m = forwardJoinMember { forwardJoin(m, note: forwardJoinNote) }
+                        forwardJoinMember = nil
+                    }
+                    Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { forwardJoinMember = nil }
+                } message: {
+                    Text(L10n.t("رفض طلب الانضمام للمالك والمدير — يصلهم إشعار بالطلب وملاحظتك ليقرّروا.",
+                                "Rejecting a join request is for the owner and admin — they get a notice with your note to decide."))
+                }
+        }
+        .dsAlert(L10n.t("حُوّل للمدير", "Forwarded to the manager"), isPresented: $forwardJoinDone,
+                 moment: .success) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("وصل المالك والمدير إشعار بالطلب، والطلب باقٍ في «الوارد» حتى يقرّرا.",
+                        "The owner and admin were notified; the request stays in the inbox until they decide."))
         }
         // رفض عبر السحب (الكل) — تأكيد + سبب الرفض
         .dsAlert(
@@ -625,8 +653,9 @@ struct AdminAllRequestsView: View {
         VStack(spacing: 0) {
             AdminBandHeader(title: L10n.t("الوارد", "Inbox"),
                             subtitle: authVM.isAdmin ? nil : heroSubtitle, isAreaRoot: true) {
-                // ⚙︎ بيت «إعدادات مسار الموافقات» الوحيد (المالك يعدّل، المدير يقرأ)
-                if authVM.canViewSystemSettings {
+                // ⚙︎ بيت «إعدادات مسار الموافقات» الوحيد — ظهوره من جدول السيرفر (`inbox.approval_settings`:
+                // المالك يعدّل، المدير يقرأ افتراضاً)؛ الصفحة نفسها تقفل مفاتيحها لغير المالك (`canManageSettings`)
+                if authVM.adminSees(.inboxApprovalSettings) {
                     NavigationLink {
                         AdminLazyPage {
                             AnyView(AdminAppSettingsView(scope: .approvals).adminBackTitle(AdminArea.inbox.title).adminArea(.inbox))
@@ -637,7 +666,7 @@ struct AdminAllRequestsView: View {
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("إعدادات مسار الموافقات", "Approval path settings"))
                 }
-                if segment == .requests && !isSelectMode && itemCount(for: selectedTab) > 0 {
+                if !showsMessages && !isSelectMode && itemCount(for: selectedTab) > 0 {
                     AdminGlassButton(symbol: "checkmark.circle", label: L10n.t("تحديد", "Select")) {
                         withAnimation(DS.Anim.snappy) {
                             isSelectMode = true
@@ -646,25 +675,35 @@ struct AdminAllRequestsView: View {
                     }
                 }
             } accessory: {
-                if segment == .requests && !isSelectMode {
+                if !showsMessages && !isSelectMode {
                     headerFilterChips
                         .padding(.top, DS.Spacing.md)
                 }
             }
 
-            // «الطلبات · الرسائل» شريحتا فلتر (لا مبدّل — طلب المالك «مابي تويب علوي»)
-            DSFilterChips(options: [
-                DSFilterOption(id: InboxSegment.requests, title: L10n.t("الطلبات", "Requests"),
-                               icon: "tray.full.fill", count: isInitialLoading ? nil : cachedTotalCount),
-                DSFilterOption(id: InboxSegment.messages, title: L10n.t("الرسائل", "Messages"),
-                               icon: "bubble.left.and.bubble.right.fill",
-                               count: adminRequestVM.pendingContactMessagesCount)
-            ], selection: $segment)
-            .accessibilityLabel(L10n.t("الطلبات أو الرسائل", "Requests or messages"))
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.sm)
+            // «الطلبات · الرسائل» شريحتا فلتر (لا مبدّل — طلب المالك «مابي تويب علوي») — «الرسائل» رسائل خاصة
+            // لمن يراها في جدول السيرفر (`inbox.messages`: المالك والمدير افتراضاً)، وغيره بلا شرائح
+            if canSeeMessages {
+                DSFilterChips(options: [
+                    DSFilterOption(id: InboxSegment.requests, title: L10n.t("الطلبات", "Requests"),
+                                   icon: "tray.full.fill", count: isInitialLoading ? nil : cachedTotalCount),
+                    DSFilterOption(id: InboxSegment.messages, title: L10n.t("الرسائل", "Messages"),
+                                   icon: "bubble.left.and.bubble.right.fill",
+                                   count: adminRequestVM.pendingContactMessagesCount)
+                ], selection: $segment)
+                .accessibilityLabel(L10n.t("الطلبات أو الرسائل", "Requests or messages"))
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.sm)
+            }
         }
     }
+
+    /// «الرسائل» (رسائل الأعضاء الخاصة) لمن يراها في جدول «مين يشوف وش» — السيرفر يحرسها أيضاً
+    /// (`20261107210000_contact_messages_owner_admin`)
+    private var canSeeMessages: Bool { authVM.adminSees(.inboxMessages) }
+
+    /// الرسائل معروضة الحين — رابط قديم/إشعار بـ`startsWithMessages` لمن لا يراها يبقى على «الطلبات»
+    private var showsMessages: Bool { segment == .messages && canSeeMessages }
 
     /// شرائح المسار فوق الرأس: بانتظارك · مستعجل · متأخر · الكل (المختارة ذهبية) — بأعداد التبويب الحالي
     private var headerFilterChips: some View {
@@ -873,6 +912,7 @@ struct AdminAllRequestsView: View {
     /// هل يقدر المستخدم الحالي يعتمد عناصر هذا التاب؟
     private func canApprove(_ tab: RequestTab) -> Bool {
         if tab == .reports { return authVM.canModerateContent }
+        if tab == .photos { return canHandlePhotos }
         return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canApproveTreeRequests
     }
 
@@ -881,19 +921,28 @@ struct AdminAllRequestsView: View {
     /// كان يظهر للمراقب فيفشل دائماً
     private func canReject(_ tab: RequestTab) -> Bool {
         if tab == .reports { return authVM.canModerateContent }
+        if tab == .photos { return canHandlePhotos }
         if tab == .joinRequests { return authVM.canDeleteMembers }
         return Self.contentTabs.contains(tab) ? authVM.canApproveContent : authVM.canRejectRequests
     }
 
-    /// التابات التي يراها هذا الدور — كل دور يشوف مجاله فقط
+    /// «صور مقترحة» (بيانات عضو — مجال الشجرة، مقترح «أدوار الإدارة» البند ٥): يعالجها من يعدّلها في جدول السيرفر
+    /// (`inbox.photos`) ويملك طلبات الشجرة — المالك والمدير والمراقب دائماً (لا حسب مفتاح المسار)، والمشرف لا
+    /// (السيرفر يرفضها له أصلاً: `can_handle_admin_request`)
+    private var canHandlePhotos: Bool {
+        authVM.adminAccess(.inboxPhotos).canEdit && authVM.canModerateTree
+    }
+
+    /// التابات التي يراها هذا الدور — كل دور يشوف مجاله فقط، و«صور مقترحة» من جدول السيرفر (`inbox.photos`)
     private func tabsForRole(_ tabs: [RequestTab]) -> [RequestTab] {
-        if authVM.isAdmin { return tabs }
+        let photos = Self.reviewIncludesPhotos(for: authVM)
+        if authVM.isAdmin { return tabs.filter { $0 != .photos || photos } }
         if authVM.currentUser?.role == .supervisor {
-            return tabs.filter { $0 == .all || Self.contentTabs.contains($0) }
+            return tabs.filter { $0 == .all || (Self.contentTabs.contains($0) && ($0 != .photos || photos)) }
         }
-        // المراقب: الشجرة والأعضاء — و«صور مقترحة» والمسار شغّال (مختصّها المراقب)
+        // المراقب: الشجرة والأعضاء + «صور مقترحة» دائماً (افتراض الجدول)
         return tabs.filter {
-            $0 == .all || !Self.contentTabs.contains($0) || ($0 == .photos && adminRequestVM.approvalsWorkflowOn)
+            $0 == .all || !Self.contentTabs.contains($0) || ($0 == .photos && photos)
         }
     }
 
@@ -904,7 +953,8 @@ struct AdminAllRequestsView: View {
             memberVM: memberVM, newsVM: newsVM, adminRequestVM: adminRequestVM,
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
             pendingArchiveCount: pendingArchiveItems.count,
-            scope: Self.reviewScope(for: authVM)
+            scope: Self.reviewScope(for: authVM),
+            includePhotos: Self.reviewIncludesPhotos(for: authVM)
         )
         // عرض كل التابات دائماً — حتى الفارغة (المستخدم يبيها كلها مرئية).
         // «مشكلات الشجرة» خرجت من «الوارد» (الدفعة ب ٢٠٢٦-١٠-٢٠): بيتها «العائلة» ← شريحة «مشكلات الشجرة» —
@@ -925,6 +975,12 @@ struct AdminAllRequestsView: View {
         return .tree
     }
 
+    /// «صور مقترحة» ضمن «الوارد» لهذا الدور — خانة `inbox.photos` في جدول السيرفر (المالك والمدير والمراقب افتراضاً)
+    @MainActor
+    static func reviewIncludesPhotos(for authVM: AuthViewModel) -> Bool {
+        authVM.adminSees(.inboxPhotos)
+    }
+
     @MainActor
     static func reviewRequestsTotal(
         memberVM: MemberViewModel,
@@ -933,20 +989,20 @@ struct AdminAllRequestsView: View {
         diwaniyaVM: DiwaniyasViewModel,
         projectsVM: ProjectsViewModel,
         pendingArchiveCount: Int = 0,
-        scope: ReviewScope = .all
+        scope: ReviewScope = .all,
+        includePhotos: Bool = true
     ) -> Int {
         let members = memberVM.allMembers
         let pending = members.filter { $0.role == .pending }.count
 
-        // المحتوى والبلاغات = تبويبات `contentTabs`، والباقي الشجرة والأعضاء
+        // المحتوى والبلاغات = تبويبات `contentTabs` بلا «صور مقترحة»، والباقي الشجرة والأعضاء.
+        // «صور مقترحة» تُضاف لمن يراها في جدول السيرفر (`includePhotos`) أياً كان مجاله — نفس `tabsForRole`
         let content = newsVM.pendingNewsRequests.count
             + adminRequestVM.newsReportRequests.count
             + diwaniyaVM.pendingDiwaniyas.count
-            + adminRequestVM.photoSuggestionRequests.count
             + projectsVM.pendingProjects.count
             + pendingArchiveCount
-        // «مسار الموافقات»: مختص الصور المقترحة المراقب — فتُحسب في مجال الشجرة أيضاً
-        let photosInTree = adminRequestVM.approvalsWorkflowOn ? adminRequestVM.photoSuggestionRequests.count : 0
+        let photos = includePhotos ? adminRequestVM.photoSuggestionRequests.count : 0
         let tree = pending
             + adminRequestVM.phoneChangeRequests.count
             + adminRequestVM.nameChangeRequests.count
@@ -954,11 +1010,10 @@ struct AdminAllRequestsView: View {
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.treeEditRequests.count
             + adminRequestVM.policyRequestsCount
-            + photosInTree
         switch scope {
-        case .all:     return content + tree - photosInTree
-        case .content: return content
-        case .tree:    return tree
+        case .all:     return content + tree + photos
+        case .content: return content + photos
+        case .tree:    return tree + photos
         }
     }
 
@@ -1204,9 +1259,9 @@ struct AdminAllRequestsView: View {
                 selectableRow(
                     id: member.id,
                     accentColor: RequestTab.joinRequests.color,
-                    approveLabel: L10n.t("ربط", "Link"),
+                    approveLabel: joinApproveLabel(member),
                     approveIcon: "link.badge.plus",
-                    onApprove: { memberToLink = member },
+                    onApprove: { joinApprove(member) },
                     onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                     onTap: { selectedDetail = .join(member) }
                 ) {
@@ -1900,7 +1955,7 @@ struct AdminAllRequestsView: View {
                                 .dsFont(.footnote)
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(newDisplay)
-                                .dsFieldFont(.chip)
+                                .dsFieldFont(.adminRowSubtitle)
                                 .foregroundColor(DS.Color.fieldLabel)
                                 .lineLimit(1)
                         }
@@ -2062,8 +2117,8 @@ struct AdminAllRequestsView: View {
         case .join(let member):
             selectableRow(
                 id: member.id, forTab: .joinRequests, accentColor: RequestTab.joinRequests.color,
-                approveLabel: L10n.t("ربط", "Link"), approveIcon: "link.badge.plus",
-                onApprove: { memberToLink = member },
+                approveLabel: joinApproveLabel(member), approveIcon: "link.badge.plus",
+                onApprove: { joinApprove(member) },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                 onTap: { selectedDetail = .join(member) }
             ) { joinRequestRow(for: member) }
@@ -2316,8 +2371,8 @@ struct AdminAllRequestsView: View {
             guard let p = member.phoneNumber, !p.isEmpty else { return nil }
             return p
         }()
-        let results = orderedMatchList(for: member)
-        let hasMatches = !results.isEmpty
+        let tiers = joinTiers(for: member)
+        let hasMatches = tiers.strongCount > 0
         let fromWeb = member.registrationPlatform == "web"
         let age = Self.requestDate(member.createdAt).map { ageText(days: daysWaiting(since: $0)) }
 
@@ -2327,12 +2382,12 @@ struct AdminAllRequestsView: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(member.displayFullName)
-                        .dsFieldFont(.headlineCompact)
+                        .dsFieldFont(.adminRowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     // الأنثى لا تُطابق بشجرة الرجال — سطرها «تُربط بشجرة النساء»
-                    if !member.isFemale { joinStatusLine(matches: results.count, fromWeb: fromWeb) }
+                    if !member.isFemale { joinStatusLine(matches: tiers.strongCount, fromWeb: fromWeb) }
                     if member.isFemale { Self.femaleJoinTag }
                 }
 
@@ -2360,10 +2415,62 @@ struct AdminAllRequestsView: View {
                 .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
             }
 
-            if hasMatches {
-                joinBestMatches(for: member, results: results)
+            if tiers.total > 0 {
+                AnyView(JoinMatchPanel(tiers: tiers, selectedId: joinPickId(member, tiers),
+                                       showsWeak: expandedMatchMembers.contains(member.id),
+                                       onSelect: { joinPicks[member.id] = $0 },
+                                       onToggleWeak: {
+                                           if expandedMatchMembers.contains(member.id) { expandedMatchMembers.remove(member.id) }
+                                           else { expandedMatchMembers.insert(member.id) }
+                                       }))
             }
         }
+    }
+
+    // MARK: «الأرجح أولاً» (اختيار المالك ٢٠٢٦-١١-٠٦ — JoinMatchPanel.swift)
+
+    /// درجات المطابقة: نفس المرشّحين والاستبعاد في `orderedMatchList`، بلا حدّ العشرين (العدد الكامل للدرجات)
+    func joinTiers(for member: FamilyMember) -> JoinMatchTiers {
+        guard !member.isFemale else { return .empty }
+        let accounts = AdminAccountsStore.shared
+        let serverIds = registrationMatches[member.id] ?? []
+        let cfg = AppConfigValues.shared
+        let minDepth = cfg.int("join_match_min_depth", default: 3)
+        let bestOnly = cfg.int("join_match_best_only", default: 1) != 0
+        let key = "\(memberVM.allMembers.count)-\(serverIds.count)-\(accounts.accounts.count)-\(member.fullName)-\(member.birthDate ?? "")-\(minDepth)-\(bestOnly)"
+        return joinTierCache.tiers(for: member.id, key: key) {
+            let existing = memberVM.allMembers.filter { m in
+                m.role != .pending && m.id != member.id && m.hasName && !m.isFemale &&
+                (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                m.isDeceased != true && accounts.info(m.id) == nil
+            }
+            let list = NameMatcher.linkSuggestions(for: member, among: existing, serverIds: Set(serverIds), limit: 500,
+                                                     minDepth: minDepth, bestOnly: bestOnly)
+            return JoinMatchTiers.build(for: member, suggestions: list)
+        }
+    }
+
+    /// المختار — أو الأرجح (مطابق ثم قريب) إن لم يختر المراجع
+    private func joinPickId(_ member: FamilyMember, _ tiers: JoinMatchTiers) -> UUID? {
+        if let id = joinPicks[member.id], tiers.entry(id) != nil { return id }
+        return tiers.suggested?.id
+    }
+
+    /// زرّ البطاقة والسحب: «ربط» بالمختار (تأكيد الدمج نفسه) — وبلا مختار «اختر من الشجرة» (المنتقي نفسه)
+    private func joinApprove(_ member: FamilyMember) {
+        let tiers = joinTiers(for: member)
+        if let pick = tiers.entry(joinPickId(member, tiers)) {
+            mergeTarget = (pendingMember: member, treeMember: pick.member)
+            showMergeConfirm = true
+        } else {
+            memberToLink = member
+        }
+    }
+
+    private func joinApproveLabel(_ member: FamilyMember) -> String {
+        if member.isFemale { return L10n.t("ربط", "Link") }
+        let tiers = joinTiers(for: member)
+        return joinPickId(member, tiers) == nil ? L10n.t("اختر من الشجرة", "Pick from the tree") : L10n.t("ربط", "Link")
     }
 
     /// صورة المنضم في صفّه (= مساحة الضغط) وفي بطاقة تفاصيله
@@ -2445,30 +2552,6 @@ struct AdminAllRequestsView: View {
         .accessibilityLabel(label)
     }
 
-    /// أقرب تطابق فقط — والباقي بزر «عرض كل المطابقات»
-    @ViewBuilder
-    private func joinBestMatches(for member: FamilyMember, results: [JoinMatch]) -> some View {
-        let isExpanded = expandedMatchMembers.contains(member.id)
-        let visible = isExpanded ? results : Array(results.prefix(1))
-        VStack(spacing: DS.Spacing.xsm) {
-            ForEach(visible, id: \.member.id) { match in
-                joinMatchRow(match: match, pendingMember: member)
-            }
-            if results.count > 1 && !isExpanded {
-                // الشريحة الموحّدة في وسط السطر
-                DSChipButton(L10n.t("عرض كل المطابقات (\(results.count))",
-                                    "Show all matches (\(results.count))"),
-                             icon: "chevron.down", tint: AppSection.admin.ink) {
-                    withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
-                        _ = expandedMatchMembers.insert(member.id)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
-    }
-
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
     private func formatRegistrationDate(_ isoString: String) -> String {
         let iso = ISO8601DateFormatter()
@@ -2496,7 +2579,7 @@ struct AdminAllRequestsView: View {
 
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(match.member.displayFullName)
-                    .dsFieldFont(.rowTitleCompact)
+                    .dsFieldFont(.adminRowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2623,7 +2706,10 @@ struct AdminAllRequestsView: View {
             m.isDeceased != true && accounts.info(m.id) == nil
         }
         let serverIds = Set(registrationMatches[member.id] ?? [])
-        return NameMatcher.linkSuggestions(for: member, among: existingMembers, serverIds: serverIds).map { s in
+        let cfg = AppConfigValues.shared
+        return NameMatcher.linkSuggestions(for: member, among: existingMembers, serverIds: serverIds,
+                                           minDepth: cfg.int("join_match_min_depth", default: 3),
+                                           bestOnly: cfg.int("join_match_best_only", default: 1) != 0).map { s in
             (member: s.member, matchCount: s.depth, matchedParts: [], isRegistrationMatch: s.isServer,
              score: s.total > 0 ? s.depth * 100 / s.total : 0, total: s.total, fuzzy: 0)
         }
@@ -3094,7 +3180,7 @@ struct AdminAllRequestsView: View {
                 .frame(width: DS.Glyph.md)
                 .accessibilityHidden(true)
             Text(text)
-                .dsFieldFont(.subtitle)
+                .dsFieldFont(.adminRowSubtitle)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
         }
@@ -3107,7 +3193,7 @@ struct AdminAllRequestsView: View {
                 .dsFont(.badgeCompact)
                 .foregroundColor(DS.Color.textTertiary)
             Text(text)
-                .dsFieldFont(.calloutCompact)
+                .dsFieldFont(.adminRowSubtitle)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3131,7 +3217,7 @@ struct AdminAllRequestsView: View {
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: icon, tint: tint)
+            DSFieldIcon(name: icon, tint: tint, side: DS.Hub.rowIcon)
                 .accessibilityHidden(true)
             rowTitles(title: title, subtitle: subtitle)
             Spacer(minLength: 0)
@@ -3144,12 +3230,12 @@ struct AdminAllRequestsView: View {
     private func rowTitles(title: String, subtitle: String?) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(title)
-                .dsFieldFont(.rowTitle)
+                .dsFieldFont(.adminRowTitle)
                 .foregroundColor(DS.Color.fieldLabel)
                 .lineLimit(1)
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .dsFieldFont(.subtitle)
+                    .dsFieldFont(.adminRowSubtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .lineLimit(2)
             }
@@ -3161,7 +3247,7 @@ struct AdminAllRequestsView: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             content()
         }
-        .padding(.leading, DS.Icon.row + DS.Spacing.sm)
+        .padding(.leading, DS.Hub.rowIcon + DS.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -3172,7 +3258,7 @@ struct AdminAllRequestsView: View {
                 .dsGlyph(DS.Glyph.micro, weight: .semibold)
                 .accessibilityHidden(true)
             Text(text)
-                .dsFont(.footnote)
+                .dsFont(.caption)
                 .monospacedDigit()
                 .lineLimit(1)
         }
@@ -3193,7 +3279,7 @@ struct AdminAllRequestsView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
             Text(trimmed)
-                .dsFieldFont(.subtitle)
+                .dsFieldFont(.adminRowSubtitle)
                 .foregroundColor(DS.Color.fieldValue)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -3205,7 +3291,7 @@ struct AdminAllRequestsView: View {
         HStack(spacing: DS.Spacing.xs) {
             if let old {
                 Text(old)
-                    .dsFieldFont(.subtitle)
+                    .dsFieldFont(.adminRowSubtitle)
                     .foregroundColor(DS.Color.fieldValue)
                     .strikethrough(true, color: DS.Color.error.opacity(DS.Opacity.disabled))
                     .monospacedDigit()
@@ -3366,7 +3452,7 @@ struct AdminAllRequestsView: View {
             onExecute: { approveDetail(detail) },
             onReject: { reason in rejectDetail(detail, reason: reason) },
             onClose: { selectedDetail = nil },
-            otherActions: detailExtraActions(for: detail).filter { $0.id != "reject" }
+            otherActions: detailExtraActions(for: detail).filter { $0.id != "reject" && $0.id != "forward" }
         ) {
             detailBoxContent(detail, meta: meta)
         }
@@ -3392,7 +3478,12 @@ struct AdminAllRequestsView: View {
     /// ← «في الشجرة» (المطابقات بزر «ربط» أو «اسم جديد») ← «الإجراءات». وقت الطلب في الرأس فقط.
     @ViewBuilder
     private func joinDetailContent(_ member: FamilyMember) -> some View {
-        let results = orderedMatchList(for: member)
+        // نفس ترتيب البطاقة «الأرجح أولاً»: مطابق ← قريب ← أضعف (JoinMatchPanel.swift)
+        let tiersAll = joinTiers(for: member)
+        let results: [JoinMatch] = tiersAll.all.map { e in
+            (member: e.member, matchCount: e.depth, matchedParts: [], isRegistrationMatch: e.isServer,
+             score: e.parts.isEmpty ? 0 : e.depth * 100 / e.parts.count, total: e.parts.count, fuzzy: 0)
+        }
         let fromWeb = member.registrationPlatform == "web"
         let uname = member.username?.trimmingCharacters(in: .whitespaces) ?? ""
         let phone = member.phoneNumber?.trimmingCharacters(in: .whitespaces) ?? ""
@@ -3416,7 +3507,7 @@ struct AdminAllRequestsView: View {
                                       : L10n.t("سجّل من الموقع · \u{2066}@\(uname)\u{2069}", "Website · @\(uname)"))
                      : L10n.t("سجّل من التطبيق برقم الجوال", "Signed up in the app by phone"))
             }
-            .dsFieldFont(.chip)
+            .dsFieldFont(.adminRowSubtitle)
             .foregroundColor(fromWeb ? DS.Color.info.dsReadableGlyph : DS.Color.fieldValue)
             if member.isFemale { Self.femaleJoinTag }
         }
@@ -3584,6 +3675,16 @@ struct AdminAllRequestsView: View {
                 rejectReasonText = ""
                 rejectReasonDetail = detail
                 showRejectReason = true
+            })
+        }
+        // «حوّل للمدير» (مقترح «أدوار الإدارة» البند ١١): المراقب يقبل الانضمام ولا يرفضه (الرفض = حذف الملف) —
+        // بدل زرّ ناقص يحوّله للمالك/المدير بإشعار الإدارة الموجود وملاحظة. مع «مسار الموافقات» يحلّ محله «يوصي بالرفض»
+        if decision, case .join(let member) = detail, !canReject(.joinRequests), authVM.canApproveTreeRequests {
+            items.append(DSComposerAction(id: "forward", title: L10n.t("حوّل للمدير", "Forward to manager"),
+                                          icon: "arrowshape.turn.up.left.2", role: .cancel,
+                                          isEnabled: !adminRequestVM.isLoading) {
+                forwardJoinNote = ""
+                forwardJoinMember = member
             })
         }
         // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
@@ -4194,6 +4295,17 @@ struct AdminAllRequestsView: View {
     private func selectedFlowIsExecute(_ detail: RequestDetail) -> Bool {
         guard let id = UUID(uuidString: String(detail.id.split(separator: "-", maxSplits: 1).last ?? "")) else { return false }
         return adminRequestVM.approvalSnapshot(forRowId: id)?.stage == .execute
+    }
+
+    /// «حوّل للمدير» — إشعار الإدارة الموجود (`notifyAdminsWithPush`) بمعرّف العضو المعلّق، فزرّه «مراجعة» في
+    /// «إشعارات الإدارة» يفتح طلبه في «الوارد» ما دام معلّقاً. لا تغيير على الطلب نفسه
+    private func forwardJoin(_ member: FamilyMember, note: String) {
+        Task {
+            if await adminRequestVM.forwardJoinToManager(member: member, note: note) {
+                selectedDetail = nil
+                forwardJoinDone = true
+            }
+        }
     }
 
     private func rejectDetail(_ detail: RequestDetail, reason: String? = nil) {

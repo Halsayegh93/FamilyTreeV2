@@ -171,7 +171,7 @@ struct DeathDatesCampaignPage: View {
         let q = NameSearch.words(trimmedQuery)
         let set = branchSet
         return entries.filter { e in
-            filter.matches(e) && (set?.contains(e.id) ?? true) && (q.isEmpty || NameSearch.matchPosition(queryWords: q, candidateWords: NameSearch.words(e.needle)) != nil)
+            filter.matches(e) && (set?.contains(e.id) ?? true) && (q.isEmpty || NameSearch.score(queryWords: q, candidateWords: NameSearch.words(e.needle)) != nil)
         }
     }
 

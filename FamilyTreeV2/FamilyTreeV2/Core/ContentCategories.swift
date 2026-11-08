@@ -106,6 +106,13 @@ enum CategoryPalette {
         guard let pair = hex[key] else { return DS.Color.brand }   // كحلي ثابت لا يتبع القسم
         return SwiftUI.Color.adaptive(light: pair.light, dark: pair.dark)
     }
+
+    /// تعبئة ثابتة تحت نص أبيض في الوضعين: لون الوضع الفاتح مغمّقاً ٣٠٪ (مجلدات المكتبة)
+    static func folderFill(_ key: String) -> Color {
+        let value = Int((hex[key]?.light ?? "#1F4E79").dropFirst(), radix: 16) ?? 0x1F4E79
+        func channel(_ shift: Int) -> Double { Double((value >> shift) & 0xFF) / 255 * 0.7 }
+        return Color(red: channel(16), green: channel(8), blue: channel(0))
+    }
 }
 
 /// مخزن التصنيفات — يُحمَّل عند فتح التطبيق، ويقرؤه كل من يعرض تصنيفاً

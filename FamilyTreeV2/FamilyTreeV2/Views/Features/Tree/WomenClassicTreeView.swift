@@ -112,7 +112,8 @@ struct WomenClassicTreeView: View {
         for m in members where isWife(m) {
             map[m.husbandId!, default: []].append(m)
         }
-        for k in map.keys { map[k]?.sort { $0.sortOrder < $1.sortOrder } }
+        let orders = WomenStore.wifeOrderByWoman   // ترتيب الإدارة (`wife_order`) أولاً
+        for k in map.keys { map[k]?.sort { WomenStore.wifeOrdered($0, $1, orders: orders) } }
         return map
     }
     private var childrenOf: [UUID: [FamilyMember]] {
@@ -121,9 +122,14 @@ struct WomenClassicTreeView: View {
         // البنت المتزوّجة تظهر تحت أبيها **و** ككبسولة زوجة جنب زوجها معاً —
         // سابقاً كانت تُستثنى من الأبناء كلياً فتختفي من فرع أبيها (طلب المالك).
         // أما الزوجة الوافدة (بلا أب في الشجرة) فتبقى ككبسولة زوجة فقط.
+        // «أبناء البنات من خارج العائلة» (٢٠٢٦-١١-٠٧): الزوج من خارج العائلة (بلا أب في الشجرة) يُرسم تحت زوجته
+        // البنت وعياله تحته — كان سيصير جذراً مستقلاً
+        let outsideWife = outsideWifeOf
         for m in members {
             if let fid = m.fatherId, ids.contains(fid) {
                 map[fid, default: []].append(m)
+            } else if let wid = outsideWife[m.id], ids.contains(wid) {
+                map[wid, default: []].append(m)
             } else if !isWife(m) {
                 map[Self.rootKey, default: []].append(m)
             }
@@ -136,6 +142,35 @@ struct WomenClassicTreeView: View {
         }
         return map
     }
+    /// كبسولة العقدة: الزوج من خارج العائلة، أو ابن البنت صاحب الحساب (أبوه من خارجها)
+    private func outsideTag(_ m: FamilyMember) -> (text: String, fill: Color)? {
+        let outside = WomenStore.outsideFamilyIds
+        guard !outside.isEmpty else { return nil }
+        if outside.contains(m.id) {
+            return (DaughterSons.text("outside_tag", "من خارج العائلة", "Outside the family"), DS.Color.slateFill)
+        }
+        if !m.isFemale, let f = m.fatherId, outside.contains(f), WomenStore.linkedUserByWoman[m.id] != nil {
+            return (DaughterSons.text("son_tag", "ابن بنت", "Daughter's son"), DS.Color.femaleFill)
+        }
+        return nil
+    }
+
+    /// زوج من خارج العائلة ← زوجته (البنت التي يُرسم تحتها) — من `WomenStore.outsideFamilyIds`
+    private var outsideWifeOf: [UUID: UUID] {
+        let outside = WomenStore.outsideFamilyIds
+        guard !outside.isEmpty else { return [:] }
+        var map: [UUID: UUID] = [:]
+        for m in members where m.isFemale {
+            if let h = m.husbandId, outside.contains(h), map[h] == nil { map[h] = m.id }
+        }
+        return map
+    }
+    /// أب العقدة في الرسم: أبوها، أو زوجته البنت للزوج من خارج العائلة
+    private func treeParentId(_ id: UUID) -> UUID? {
+        if let f = byId[id]?.fatherId { return f }
+        return outsideWifeOf[id]
+    }
+
     /// بصمة ما يغيّر الرسم أو التخطيط — `onChange` يعيد بناء الكاش متى تغيّرت
     private var membersSignature: Int {
         var h = Hasher()
@@ -144,6 +179,7 @@ struct WomenClassicTreeView: View {
             h.combine(m.fatherId)
             h.combine(m.motherId)
             h.combine(m.husbandId)
+            h.combine(WomenStore.wifeOrderByWoman[m.id])   // «ترتيب الزوجات» يعيد ترتيبهن في الشجرة
             h.combine(m.isDeceased)
             h.combine(m.deathDate)
             h.combine(m.birthDate)
@@ -153,6 +189,8 @@ struct WomenClassicTreeView: View {
             h.combine(m.isHiddenFromTree)
             h.combine(m.gender)
             h.combine(m.isMarried)
+            h.combine(WomenStore.outsideFamilyIds.contains(m.id))
+            h.combine(WomenStore.linkedUserByWoman[m.id] != nil)
         }
         return h.finalize()
     }
@@ -708,11 +746,11 @@ struct WomenClassicTreeView: View {
         while let c = cur, !seen.contains(c) {
             seen.insert(c)
             path.append(c)
-            cur = byId[c]?.fatherId
+            cur = treeParentId(c)
         }
         // نفس «موقعي» في شجرة العائلة (طلب المالك ٢٠٢٦-١٠-٢٥): خط الأجداد وحده مفتوح وباقي الفروع مطويّة،
         // الزوم كما هو، والعقدة مميّزة بـ «أنت هنا» وإطار ٥ ثوانٍ
-        collapsed = Set(members.compactMap { $0.fatherId }).subtracting(path)
+        collapsed = Set(members.compactMap { $0.fatherId }).union(outsideWifeOf.values).subtracting(path)
         let L = rebuild()
         guard let p = L.positions[target], viewport.width > 0 else { centerOn(target, in: L); return }
         userInteracted = true
@@ -766,14 +804,26 @@ struct WomenClassicTreeView: View {
             ZStack {
                 // الزوجات جنب العضو — دائماً جنب بعض (طلب المالك)؛
                 // الاسم الطويل ينزل على سطرين تحت مربعه بدل تكديس المربعات
+                // الأولى على يمين العضو والثانية (والثالثة بعدها) على يساره (طلب المالك ٢٠٢٦-١١-٠٧) —
+                // الشجرة مرسومة LTR، فاليسار = الأقرب للعضو آخر الصف
                 if !wives.isEmpty {
-                    HStack(alignment: .top, spacing: DS.Spacing.xsm * k) {
-                        ForEach(wives.prefix(3)) { wifeCell($0) }
+                    let shown = Array(wives.prefix(3))
+                    let right = Array(shown.prefix(1))
+                    let left = Array(shown.dropFirst().reversed())
+                    let half: (Int) -> CGFloat = { n in
+                        CIRCLE / 2 + (6 + CGFloat(n) * 30   // نصف عرض خلية الزوجة (٦٠)
+                                      + CGFloat(max(0, n - 1)) * 3) * k
                     }
-                    .offset(x: -(CIRCLE / 2 + (6
-                                 + CGFloat(min(wives.count, 3)) * 30   // نصف عرض خلية الزوجة (٦٠)
-                                 + CGFloat(max(0, min(wives.count, 3) - 1)) * 3) * k),
-                            y: -2 * k)
+                    HStack(alignment: .top, spacing: DS.Spacing.xsm * k) {
+                        ForEach(right) { wifeCell($0) }
+                    }
+                    .offset(x: half(right.count), y: -2 * k)
+                    if !left.isEmpty {
+                        HStack(alignment: .top, spacing: DS.Spacing.xsm * k) {
+                            ForEach(left) { wifeCell($0) }
+                        }
+                        .offset(x: -half(left.count), y: -2 * k)
+                    }
                 }
                 // شكل العضو (squircle) — إطار أخف. المتوفّى: صورة غير ملوّنة.
                 // قاعدة معتمة تحت اللون الشفاف — تمنع ظهور خط القوس خلف خلفية العضو
@@ -873,6 +923,21 @@ struct WomenClassicTreeView: View {
                                 .offset(x: 4 * k, y: -4 * k)
                         }
                     }
+                    // «من خارج العائلة» / «ابن بنت» (أبناء البنات، ٢٠٢٦-١١-٠٧) — كبسولة صغيرة على حافة الصورة السفلى
+                    .overlay(alignment: .bottom) {
+                        if let tag = outsideTag(m) {
+                            Text(tag.text)
+                                .dsTreeFont(.badge, k)
+                                .foregroundColor(DS.Color.textOnPrimary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .padding(.horizontal, DS.Spacing.xsm * k)
+                                .padding(.vertical, DS.Spacing.xxs * k)
+                                .background(Capsule().fill(tag.fill))
+                                .overlay(Capsule().stroke(DS.Color.textOnPrimary, lineWidth: 1 * k))
+                                .offset(y: 6 * k)
+                        }
+                    }
                     // المخفيّ باهت — إشارة ثانية تُقرأ من بعيد دون تمييز الشارة
                     .opacity(m.isHiddenFromTree ? DS.Opacity.disabled : 1)
                     // شارة عدد الأبناء + سهم — فوق يسار الصورة (طلب المالك)
@@ -905,7 +970,7 @@ struct WomenClassicTreeView: View {
                     lastExpandedId = m.id         // أبناؤه يدخلون بتدرّج
                 } else {
                     lastExpandedId = nil
-                    pendingCollapseScroll = m.fatherId ?? m.id   // طي → اطلع لأب العقدة
+                    pendingCollapseScroll = treeParentId(m.id) ?? m.id   // طي → اطلع لأب العقدة
                 }
                 withAnimation(DS.Anim.snappy) { toggle(m.id) }
             }
@@ -994,7 +1059,27 @@ struct WomenClassicTreeView: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.7)
                 .frame(width: 60 * k)
+            // المتوفّاة: «متوفية» تحت اسمها بنفس شريط العقد الكبيرة (طلب المالك ٢٠٢٦-١١-٠٧)
+            if w.isDeceased == true {
+                Text(L10n.t("متوفية", "Deceased"))
+                    .dsTreeFont(.caption, k)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, DS.Spacing.xsm * k)
+                    .padding(.vertical, DS.Spacing.xxs * k)
+                    .background(Capsule().fill(DS.Color.deceasedStrip))
+            }
         }
+        // الضغط على الزوجة يفتح تفاصيلها (طلب المالك ٢٠٢٦-١١-٠٧)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard TreeTapGuard.allowsTap else { return }
+            onSelect?(w)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
     }
 
     /// اسم الزوجة المختصر: الاسم الأول والأخير فقط (طلب المالك).

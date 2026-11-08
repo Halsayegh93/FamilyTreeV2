@@ -21,7 +21,7 @@ serve(async (req) => {
     const body = await req.json();
     const record = body.record || body;
     const targetMemberId = record.target_member_id;
-    const title = record.title || "عائلة المحمدعلي";
+    const title = record.title || "عائلة المحمدعلي 🌿";
     const notifBody = record.body || "لديك إشعار جديد";
     const kind = record.kind || "notification";
     const isJoinRequest = record.request_type === "join_request" || record.request_type === "link_request";
@@ -109,8 +109,7 @@ serve(async (req) => {
 
     for (const entry of tokenEntries) {
       const { token, env } = entry;
-      const host = apnsHostFor(env);
-      const res = await fetch(`${host}/3/device/${token}`, {
+      const sendApns = (host: string) => fetch(`${host}/3/device/${token}`, {
         method: "POST",
         headers: {
           authorization: `bearer ${jwt}`,
@@ -129,13 +128,36 @@ serve(async (req) => {
           ...(typeof record.notification_id === "string" ? { notification_id: record.notification_id } : {}),
         }),
       });
+      let res = await sendApns(apnsHostFor(env));
+      if (res.status === 429) {
+        // ٤٢٩ (٢٠٢٦-١١-٠٦، موافقة المالك): محاولة واحدة بعد ثانية بالرمز نفسه — بلا تجديد له،
+        // فالتجديد المتكرّر هو سبب رفض أبل (TooManyProviderTokenUpdates)
+        await res.text().catch(() => "");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        res = await sendApns(apnsHostFor(env));
+      }
       if (res.ok) {
         sent++;
-      } else {
-        const reason = await res.text();
-        failures.push({ token: token.substring(0, 8) + "...", status: res.status, reason, env });
-        if (res.status === 410) {
-          await supabase.from("device_tokens").delete().eq("token", token);
+        continue;
+      }
+      const reason = await res.text();
+      failures.push({ token: token.substring(0, 8) + "...", status: res.status, reason, env });
+      if (res.status === 410) {
+        await supabase.from("device_tokens").delete().eq("token", token);
+      } else if (res.status === 400 && reason.includes("BadDeviceToken")) {
+        // ٢٠٢٦-١٠-٢١ (موافقة المالك): BadDeviceToken = التوكن لبيئة Apple الثانية (نسخة تجريبية ↔ متجر) أو ميت.
+        // محاولة واحدة على البيئة الثانية: قبلته ← وصل الإشعار ونصحّح العمود؛ رفضته كذلك ← التوكن ميت فيُحذف.
+        const otherEnv = env === "sandbox" ? "production" : "sandbox";
+        const retry = await sendApns(apnsHostFor(otherEnv));
+        if (retry.ok) {
+          sent++;
+          failures.pop();
+          await supabase.from("device_tokens").update({ environment: otherEnv }).eq("token", token);
+        } else {
+          const retryReason = await retry.text();
+          if (retry.status === 410 || (retry.status === 400 && retryReason.includes("BadDeviceToken"))) {
+            await supabase.from("device_tokens").delete().eq("token", token);
+          }
         }
       }
     }

@@ -110,6 +110,15 @@ nonisolated enum PersonName {
         return shorten(u, to: 3).joined(separator: " ")
     }
 
+    /// أول ثلاث وحدات من السلسلة (الأول + الأب + الجد، بلا العائلة) — «علي محمدحسين عبدالله»؛ القصير كما هو
+    static func firstThree(_ units: [String]) -> [String] { Array(units.prefix(3)) }
+
+    /// الثلاثي المتتالي من نص حرّ (أسماء الإشعارات): «علي محمدحسين عبدالله موسى … الصايغ» ← «علي محمدحسين عبدالله»
+    static func firstThree(_ text: String) -> String {
+        let u = units(text)
+        return u.count > 3 ? firstThree(u).joined(separator: " ") : clean(text)
+    }
+
     // MARK: القاعدة ١ — الحفظ والتعديل
 
     /// هل الاسم الكامل يبدأ بالاسم الأول؟ (يساويه، أو يبدأ به + مسافة)

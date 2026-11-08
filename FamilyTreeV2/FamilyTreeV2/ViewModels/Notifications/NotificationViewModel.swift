@@ -338,6 +338,8 @@ class NotificationViewModel: ObservableObject {
             } else {
                 // ✅ نخزّن محلياً أن الجهاز مسجّل — يُستخدم للكشف إذا حُذف لاحقاً
                 NotificationViewModel.markDeviceAsRegistered(memberId: memberId.uuidString, deviceId: deviceId)
+                // رقم نسخة التطبيق على هذا الجهاز («النسخ عند الأعضاء») — دالة منفصلة لا تكسر التسجيل قبل الترحيل
+                await AppUpdateStore.reportBuild(deviceId: deviceId)
                 Log.info("[DEVICE] ✅ تم تسجيل الجهاز بنجاح: \(deviceModelName), platform=\(platform)/\(apnsEnvironment), tokenLen=\(pushToken?.count ?? 0), token=\(tokenPreview)..., rowsAffected=\(response.count)")
             }
         } catch {

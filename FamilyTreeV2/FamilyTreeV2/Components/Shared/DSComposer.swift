@@ -314,6 +314,8 @@ struct DSComposer<Content: View>: View {
     var extraActions: [DSComposerAction] = []
     /// إجراء آخر وحيد بجانب «إلغاء/إغلاق» في صفّه (بلا إجراء رئيسي) بدل صفّ مستقل فوقه — اختياري لكل مربّع
     var extraBesideCancel: Bool = false
+    /// الإجراءات الأخرى في صفّ «الإجراء / إلغاء» نفسه (حفظ · إلغاء · حذف — طلب المالك ٢٠٢٦-١١-٠٥)
+    var extraInline: Bool = false
     /// الإجراء بعرض الشريط في صفّ وحده و«إلغاء» تحته — لنصّ إجراء يقول بالضبط ما سيحدث
     /// («أرسل الحين ← 32 عضو»، منشئ الإعلان، الدفعة ١١). false = الزرّان جنباً إلى جنب كما كانا
     var actionFullRow: Bool = false
@@ -409,7 +411,7 @@ struct DSComposer<Content: View>: View {
                 .foregroundColor(DS.Color.textTertiary)
             }
             // الإجراءات الأخرى — بنفس الزرّ الواحد، زرّان بالصفّ، فوق صفّ «الإجراء / إلغاء»
-            if !extraActions.isEmpty && inlineExtra == nil {
+            if !extraActions.isEmpty && inlineExtra == nil && !extraInline {
                 VStack(spacing: DSBox.buttonSpacing) {
                     ForEach(extraRows.indices, id: \.self) { row in
                         HStack(spacing: DSBox.buttonSpacing) {
@@ -433,6 +435,9 @@ struct DSComposer<Content: View>: View {
                     // «حطلي زر الحذف جنب الاغلاق»)
                     if let inlineExtra { extraButton(inlineExtra) }
                     cancelButton
+                    if extraInline {
+                        ForEach(extraActions) { extraButton($0) }
+                    }
                 }
                 .buttonStyle(DSPressStyle())
             }
@@ -519,7 +524,10 @@ struct DSComposer<Content: View>: View {
                 }
                 Text(item.title)
             }
-            .modifier(DSButtonFace(role: item.role, tint: item.tint, enabled: item.isEnabled && !isBusy))
+            // صفّ «حفظ · إلغاء · حذف» (`extraInline`، مربّع تعديل فرد من «عائلتي»): الحذف أحمر خفيف (٢٠٢٦-١١-٠٦)
+            .modifier(DSButtonFaceSwitch(soft: extraInline && item.role == .destructive && item.tint == nil,
+                                         face: DSButtonFace(role: item.role, tint: item.tint,
+                                                            enabled: item.isEnabled && !isBusy)))
         }
         .disabled(!item.isEnabled || isBusy)
         .accessibilityLabel(item.title)
@@ -642,7 +650,7 @@ struct DSComposerHeader: View {
                 // الاسم الطويل (اسم العضو في مربّعات الطلبات) سطران بدل «…» (طلب المالك ٢٠٢٦-١٠-٢٥)
                 DSBalancedText(subtitle)
                     .dsFont(.footnote)
-                    .foregroundColor(DS.Theme.isCalm ? DS.Color.boxHeaderSubtitle : DS.Color.headerSubtitleOnTile)
+                    .foregroundColor(DS.Theme.isCalm ? DS.Color.boxHeaderSubtitle : DS.Color.headerSubtitle)
                     .lineLimit(2)
                     .minimumScaleFactor(0.9)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1018,12 +1026,14 @@ extension Color {
 struct DSFieldIcon: View {
     let name: String
     var tint: Color = DS.Color.primary
+    /// مقاس صريح لقوائم أصغر من الافتراضي (خارج المربّعات)
+    var side: CGFloat? = nil
     @Environment(\.dsBoxTint) private var boxTint
     @Environment(\.dsInCenterBox) private var inBox
     @Environment(\.dsSection) private var section
     var body: some View {
         let glyph = tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph
-        let side = inBox ? DSFieldMetrics.boxIconSize : DS.Icon.row
+        let side = inBox ? DSFieldMetrics.boxIconSize : (self.side ?? DS.Icon.row)
         if inBox {
             // داخل المربّعات: رمز رفيع بلا مجسّم (طلب المالك ٢٠٢٦-١١-٠١ «ايقونات الخفيفة»)
             Image(dsSymbol: name.dsLightSymbol)
@@ -1180,7 +1190,7 @@ struct DSExtraBox<Content: View>: View {
                 Text(title).dsFont(.headline).foregroundColor(DS.Color.textOnPrimary)
                     .dsEntrance(delay: 0.12, x: -8, animation: DSMotion.text)
                 if let subtitle {
-                    Text(subtitle).dsFont(.footnote).foregroundColor(DS.Color.headerSubtitleOnTile)
+                    Text(subtitle).dsFont(.footnote).foregroundColor(DS.Color.headerSubtitle)
                         .dsEntrance(delay: 0.17, x: -8, animation: DSMotion.text)
                 }
             }

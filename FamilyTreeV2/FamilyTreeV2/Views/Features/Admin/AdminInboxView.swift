@@ -531,7 +531,7 @@ struct AdminInboxView: View {
             kindLabel(info)
         }
         .dsGroupedRow(position, radius: DS.Hub.cardRadius,
-                      dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Icon.avatarRow, selecting: isSelectMode),
+                      dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Hub.iconSquare, selecting: isSelectMode),
                       highlight: isSelectMode && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
     }
 
@@ -581,7 +581,7 @@ struct AdminInboxView: View {
         DSMemberAvatar(
             name: member?.firstName ?? "?",
             avatarUrl: member?.avatarUrl,
-            size: DS.Icon.avatarRow,
+            size: DS.Hub.iconSquare,
             roleColor: member?.roleColor ?? DS.Color.primary
         )
         .overlay(alignment: .bottomTrailing) {
@@ -687,7 +687,7 @@ private struct MessageDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(message.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .dsFont(.headlineCompact)
+                        .dsFont(.adminRowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -732,7 +732,7 @@ private struct MessageDetailSheet: View {
                     DSFieldIcon(name: "checkmark.seal.fill", tint: DS.Color.success)
                         .accessibilityHidden(true)
                     Text(L10n.t("تمّت معالجة هذه الرسالة", "This message was handled"))
-                        .dsFont(.rowTitle)
+                        .dsFont(.adminRowTitle)
                         .foregroundColor(DS.Color.success)
                     Spacer(minLength: 0)
                 }
@@ -1018,7 +1018,7 @@ private struct OfficialReplySheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(memberName.isEmpty ? L10n.t("العضو", "Member") : memberName)
-                        .dsFont(.headlineCompact)
+                        .dsFont(.adminRowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                     Text(to)

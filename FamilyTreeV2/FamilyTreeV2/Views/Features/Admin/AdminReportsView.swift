@@ -86,7 +86,7 @@ enum AdminReportKindUI {
         case .memorial: return L10n.t("سجل الراحلين", "The departed")
         case .calendar: return L10n.t("تقويم الذكرى", "Anniversary calendar")
         case .stats: return L10n.t("الملخّص", "Summary")
-        case .newThisMonth: return L10n.t("المقيّدون هذا الشهر", "Added this month")
+        case .newThisMonth: return L10n.t("المضافون هذا الشهر", "Added this month")
         case .incomplete: return L10n.t("الناقصة بياناتهم", "Missing data")
         case .book: return L10n.t("كتاب الفرع", "Branch book")
         }
@@ -98,7 +98,7 @@ enum AdminReportKindUI {
         case .tree: return L10n.t("رسم الفرع على صفحة أو أكثر", "The branch drawn on one page or more")
         case .branchReport: return L10n.t("غلاف + أرقام + شجرة + سجل + ذكرى", "Cover, numbers, tree, register, memorial")
         case .phones: return L10n.t("أرقام الأحياء — المخفي لا يُطبع", "Living members' numbers — hidden ones aren't printed")
-        case .registered: return L10n.t("مسجّل · مقيّد · موقوف بنسبة لكل فرع", "Registered · listed · suspended per branch")
+        case .registered: return L10n.t("مسجّل · بدون حساب · موقوف بنسبة لكل فرع", "Registered · listed · suspended per branch")
         case .memorial: return L10n.t("التواريخ والذكرى القادمة", "Dates and the next anniversary")
         case .calendar: return L10n.t("صفحة لكل شهر بمن تحلّ ذكراهم", "A page per month with its anniversaries")
         case .stats: return L10n.t("أعداد ورسوم في صفحة أو صفحتين", "Counts and charts on a page or two")
@@ -160,12 +160,10 @@ struct AdminReportsView: View {
         self.scope = scope
     }
 
+    /// «ثلاث أسئلة وملف واحد» (اختيار المالك ٢٠٢٦-١١-٠٦ «أ») — الرفّ القديم باقٍ في الكود (`library`) غير معروض؛
+    /// تقاريره كلها «جاهزة بضغطة» في الصفحة الجديدة
     var body: some View {
-        if let scope {
-            AdminReportFilterPage(kind: .register, scope: scope)
-        } else {
-            library
-        }
+        AdminReportBuilderPage(scope: scope)
     }
 
     private var library: some View {
@@ -367,6 +365,15 @@ enum AdminReportsLayout {
     static let ageTrack: CGFloat = 4
     /// مهلة قبل إعادة الإنشاء (ضغطات وسحبات متتالية = ملف واحد)
     static let debounce: UInt64 = 350_000_000
+    /// «شنو تبي تطبع؟»: أقلّ عرض لمربّع الجزء (خمسة في الصفّ على الآيفون)
+    static let partTile: CGFloat = 58
+    /// رقم السؤال في دائرة
+    static let stepBadge: CGFloat = 22
+    /// صورة الصفحة الأولى في الشريط السفلي
+    static let barThumb: CGFloat = 34
+    /// صفحات المعاينة: الكبيرة (عرض الرسم) وشريط الصفحات
+    static let previewWidth: CGFloat = 420
+    static let stripThumb: CGFloat = 54
 }
 
 // MARK: - عرض الملف كاملاً (PDFKit)

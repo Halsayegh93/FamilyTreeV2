@@ -261,10 +261,14 @@ extension NameMatcher {
 
     /// المقترحون للربط مرتّبين — `candidates` سجلّات الشجرة المسموح بها (الاستبعاد عند المستدعي)
     static func linkSuggestions(for applicant: FamilyMember, among candidates: [FamilyMember],
-                                serverIds: Set<UUID> = [], limit: Int = 20) -> [LinkSuggestion] {
+                                serverIds: Set<UUID> = [], limit: Int = 20,
+                                minDepth: Int = 3, bestOnly: Bool = true) -> [LinkSuggestion] {
         let noise = linkNoise(applicant.familyName)
         let chainA = linkChain(applicant.nameUnits, noise: noise)
         guard chainA.count >= minLinkDepth, let firstA = chainA.first else { return [] }
+        // تشديد (طلب المالك ٢٠٢٦-١١-٠٧ «ليش تظهرلي اسماء وايد»): العمق الأدنى = الأول + الأب + الجد
+        // (أو كل ما كتبه إن كان أقصر)، والقيمة من السيرفر `join_match_min_depth`
+        let needDepth = max(minLinkDepth, min(minDepth, chainA.count))
         let birthA = linkBirth(applicant.birthDate)
         var out: [LinkSuggestion] = []
         for m in candidates {
@@ -272,10 +276,10 @@ extension NameMatcher {
             let full = m.fullName.trimmingCharacters(in: .whitespaces)
             let first = full.hasPrefix(m.firstName) ? m.firstName : PersonName.firstUnit(full)
             let firstKey = linkKey(first)
-            guard firstKey == firstA || firstA.hasPrefix(firstKey) || firstKey.hasPrefix(firstA) else { continue }
+            guard firstKey == firstA else { continue }   // الاسم الأول مطابق تماماً (كان يقبل البادئة)
             let chainB = linkChain(m.nameUnits, noise: m.familyName.map { noise.union([linkKey($0)]) } ?? noise)
             let depth = linkDepth(chainA, chainB)
-            guard depth >= minLinkDepth else { continue }
+            guard depth >= needDepth else { continue }
             // تاريخ الشجرة الوهمي (2026) مجهول لا «بعيد» — كان يؤخّر السجل الصحيح
             let treeBirth = (m.birthDate ?? "").hasPrefix("2026") ? nil : m.birthDate
             let gap: Int? = birthA.flatMap { a in
@@ -295,6 +299,8 @@ extension NameMatcher {
             if a.isServer != b.isServer { return a.isServer }
             return a.member.fullName.localizedStandardCompare(b.member.fullName) == .orderedAscending
         }
+        // الأعمق فقط: إن وُجد من يطابق أبعد، لا تُعرض المطابقات الأقصر (`join_match_best_only`)
+        if bestOnly, let best = out.first?.depth { out = out.filter { $0.depth == best } }
         return Array(out.prefix(limit))
     }
 }
