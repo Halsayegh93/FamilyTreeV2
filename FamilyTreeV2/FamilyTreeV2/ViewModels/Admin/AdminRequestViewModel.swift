@@ -324,9 +324,9 @@ class AdminRequestViewModel: ObservableObject {
         case "approval_needs_manager":
             return L10n.t("الطلب يحتاج اعتماد المدير قبل التنفيذ", "The request needs the manager's approval before it's carried out")
         case "workflow_off":
-            return L10n.t("مسار الموافقات مطفأ الحين — حدّث الصفحة.", "The approvals path is off now — refresh the page.")
+            return L10n.t("مسار الموافقات متوقف حالياً، يرجى تحديث الصفحة.", "The approvals path is off now — refresh the page.")
         case "wrong_stage":
-            return L10n.t("الطلب انتقل لمرحلة ثانية — حدّث الصفحة وشوف وين وصل.",
+            return L10n.t("انتقل الطلب إلى مرحلة أخرى، يرجى تحديث الصفحة لمعرفة حالته.",
                           "The request has moved to another stage — refresh to see where it is.")
         case "note_required":
             return L10n.t("اكتب الملاحظة أولاً.", "Write the note first.")
@@ -543,7 +543,7 @@ class AdminRequestViewModel: ObservableObject {
                 Self.myTrackedRequestTypes.contains($0.requestType) || workflowOn || $0.stage != nil
             }
         } catch {
-            Log.fetchError("فشل جلب طلباتي المعلّقة", error)
+            Log.fetchError("فشل جلب الطلبات المعلّقة", error)
         }
     }
 

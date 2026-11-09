@@ -322,7 +322,7 @@ struct ApprovalPathSummary: View {
                         .accessibilityHidden(true)
                     Text(isOwnRequest
                          ? L10n.t("هذا طلبك — يعالجه مسؤول آخر.", "This is your request — another admin handles it.")
-                         : L10n.t("الطلب الحين عند \(holderTitle).", "The request is now with \(holderTitle)."))
+                         : L10n.t("الطلب حالياً لدى \(holderTitle).", "The request is now with \(holderTitle)."))
                         .dsFieldFont(.subtitle)
                         .foregroundColor(DS.Color.fieldValue)
                         .fixedSize(horizontal: false, vertical: true)
@@ -520,7 +520,7 @@ struct ApprovalRequestBox<Details: View>: View {
     private var notePlaceholder: String {
         if isSpecialistReview { return L10n.t("رأيك للمدير", "Your view for the manager") }
         if primary == .approve { return L10n.t("ملاحظة للمختص أو سبب الرفض", "A note for the specialist, or the reason") }
-        return L10n.t("يوصل للعضو مع الرفض", "Sent to the member with the rejection")
+        return L10n.t("يصل إلى العضو مع الرفض", "Sent to the member with the rejection")
     }
 
     /// أنواع الردود الجاهزة فوق الحقل بحسب القرار الحالي
@@ -611,7 +611,7 @@ struct ApprovalRequestBox<Details: View>: View {
             assignmentRow
             if adminRequestVM.isEscalatedToMe(flow) {
                 NotifContextLine(icon: "arrow.up.forward.circle.fill",
-                                 text: L10n.t("تصعّد لك لتأخره — تقدر تتصرف بدل المختص.",
+                                 text: L10n.t("صُعّد إليك لتأخره، ويمكنك التصرف بدلاً من المختص.",
                                               "Escalated to you for being late — you can act for the specialist."))
             }
             NotifJourneyView(steps: journeySteps)
@@ -620,7 +620,7 @@ struct ApprovalRequestBox<Details: View>: View {
                 NotifContextLine(icon: "hourglass",
                                  text: isOwn
                                     ? L10n.t("هذا طلبك — يعالجه مسؤول آخر.", "This is your request — another admin handles it.")
-                                    : L10n.t("الطلب الحين عند \(holderTitle).", "The request is now with \(holderTitle)."))
+                                    : L10n.t("الطلب حالياً لدى \(holderTitle).", "The request is now with \(holderTitle)."))
             }
 
             details()
@@ -803,15 +803,15 @@ struct ApprovalRequestBox<Details: View>: View {
             // المبدّل الصغير فوق «اعتماد» مباشرة (طلب المالك ٢٠٢٦-١٠-١٦)
             DSSegmentedSwitch(
                 options: [
-                    DSSegmentOption(id: false, title: L10n.t("يرجع للمختص للتنفيذ", "Back to specialist"),
+                    DSSegmentOption(id: false, title: L10n.t("يعود إلى المختص للتنفيذ", "Back to specialist"),
                                     icon: "arrow.uturn.backward"),
-                    DSSegmentOption(id: true, title: L10n.t("تنفيذ الحين", "Carry out now"), icon: "bolt.fill")
+                    DSSegmentOption(id: true, title: L10n.t("التنفيذ الآن", "Carry out now"), icon: "bolt.fill")
                 ],
                 selection: $executeNow,
                 size: .regular
             )
             Text(executeNow
-                 ? L10n.t("«اعتماد» يُنفّذ الطلب الحين ويبلّغ العضو بدون الرجوع للمختص.",
+                 ? L10n.t("«اعتماد» يُنفّذ الطلب فوراً ويبلّغ العضو دون الرجوع إلى المختص.",
                           "«Approve» carries it out now and tells the member, without the specialist.")
                  : L10n.t("«اعتماد» يرجّعه للمختص لينفّذه.", "«Approve» sends it back to the specialist to carry out."))
                 .dsFieldFont(.footnote)
@@ -841,7 +841,7 @@ struct ApprovalRequestBox<Details: View>: View {
                         .accessibilityHint(L10n.t("تستلم الطلب فلا يتصرف فيه غيرك", "You hold the request so no one else acts on it"))
                 }
                 if canRelease {
-                    DSStatusChip(text: L10n.t("عندك", "With you"), icon: "person.crop.circle.badge.checkmark",
+                    DSStatusChip(text: L10n.t("لديك", "With you"), icon: "person.crop.circle.badge.checkmark",
                                  tint: DS.Color.composerDiwaniya)
                     DSChipButton(L10n.t("ترك", "Release"), icon: "hand.raised.slash", tint: DS.Color.textSecondary,
                                  size: .small, isLoading: housekeeping == .release) { runHousekeeping(.release) }
@@ -1030,7 +1030,7 @@ struct ApprovalRequestBox<Details: View>: View {
         case .recommend:
             let action: ApprovalAction = recommendApprove ? .recommendApprove : .recommendReject
             if action.requiresNote && text.isEmpty {
-                noteError = L10n.t("اكتب سبب التوصية بالرفض عشان يشوفه المدير.",
+                noteError = L10n.t("يرجى كتابة سبب التوصية بالرفض ليطّلع عليه المدير.",
                                    "Write why you recommend rejection so the manager sees it.")
                 return
             }
@@ -1050,7 +1050,7 @@ struct ApprovalRequestBox<Details: View>: View {
         noteError = nil
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            noteError = L10n.t("اكتب للمختص شنو المطلوب منه.", "Tell the specialist what you need from them.")
+            noteError = L10n.t("يرجى توضيح المطلوب للمختص.", "Tell the specialist what you need from them.")
             return
         }
         pendingChip = .returnBack
@@ -1061,7 +1061,7 @@ struct ApprovalRequestBox<Details: View>: View {
         noteError = nil
         let text = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            noteError = L10n.t("اكتب سبب الرفض، يوصل للعضو.", "Write the reason — it goes to the member.")
+            noteError = L10n.t("يرجى كتابة سبب الرفض، وسيصل إلى العضو.", "Write the reason — it goes to the member.")
             return
         }
         onReject(text)

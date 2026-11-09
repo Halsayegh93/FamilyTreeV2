@@ -613,7 +613,7 @@ class MemberViewModel: ObservableObject {
     private static func selfChildAddMessage(hint: String?) -> String {
         switch hint {
         case "child_duplicate":
-            return L10n.t("هذا الاسم مسجّل عندك", "This name is already registered under you")
+            return L10n.t("هذا الاسم مسجّل لديك", "This name is already registered under you")
         case "child_birth_future":
             return L10n.t("تاريخ الميلاد في المستقبل", "The birth date is in the future")
         default:

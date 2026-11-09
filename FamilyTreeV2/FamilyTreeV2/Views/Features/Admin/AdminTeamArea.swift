@@ -104,7 +104,7 @@ struct AdminTeamAreaView: View {
                                               "\(open ? "Open" : "Closed") · \(banned) blocked")
         }
         if let now = activeNow, let active = usage?.active {
-            h["access.usage"] = L10n.t("\(now) الحين · \(active) نشط", "\(now) now · \(active) active")
+            h["access.usage"] = L10n.t("\(now) الآن · \(active) نشط", "\(now) now · \(active) active")
         }
         return h
     }
@@ -165,7 +165,7 @@ struct AdminTeamStatusHeader: View {
             if let first = issues.first {
                 AdminTapWrap(tap: .page(first.page), label: AnyView(line(text: lead + first.text, ok: false)))
             } else {
-                line(text: L10n.t("كل شي سليم", "All good"), ok: true)
+                line(text: L10n.t("كل شيء سليم", "All good"), ok: true)
             }
             rings
         }
@@ -173,7 +173,7 @@ struct AdminTeamStatusHeader: View {
     }
 
     private var lead: String {
-        issues.count == 1 ? L10n.t("شي واحد يحتاجك: ", "One thing needs you: ")
+        issues.count == 1 ? L10n.t("أمر واحد يحتاج المتابعة: ", "One thing needs you: ")
                           : L10n.t("\(issues.count) أشياء تحتاجك: ", "\(issues.count) things need you: ")
     }
 
@@ -190,7 +190,7 @@ struct AdminTeamStatusHeader: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.xs)
             if !ok {
-                Text(L10n.t("شوف", "View"))
+                Text(L10n.t("عرض", "View"))
                     .dsFont(.chip)
                     .foregroundColor(DS.Color.accentLight)
             }

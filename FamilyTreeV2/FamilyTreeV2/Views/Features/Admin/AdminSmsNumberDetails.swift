@@ -137,7 +137,7 @@ enum SmsDetailsText {
     /// «انرسل بعد 1.3 ث من الطلب»
     static func sendDelay(_ seconds: Double) -> String {
         let n = String(format: "%.1f", seconds)
-        return L10n.t("انرسل بعد \(n) ث من الطلب", "Sent \(n) s after the request")
+        return L10n.t("أُرسل بعد \(n) ث من الطلب", "Sent \(n) s after the request")
     }
 
     /// «وصلت · خلال ~3 د» (علامة ✓ رمز النظام بجانبها — حرف ✓ في Plex يظهر كـ V)
@@ -159,7 +159,7 @@ enum SmsDetailsText {
 
     /// عناوين أرقام `summary` المعروفة بترتيب العرض
     static let summaryKeys: [(key: String, title: String)] = [
-        ("sent", L10n.t("انرسل", "Sent")),
+        ("sent", L10n.t("أُرسل", "Sent")),
         ("blocked", L10n.t("انرفض", "Refused")),
         ("failed", L10n.t("فشل", "Failed")),
         ("test", L10n.t("تجريبي", "Test")),
@@ -272,9 +272,9 @@ final class SmsNumberDetailsStore: ObservableObject {
                 let cleared = await clearMessages()
                 unlockNotice = SmsNotice(title: L10n.t("انفك القفل", "Unlocked"),
                                          message: cleared
-                                            ? L10n.t("تصفّرت حدوده وانمسحت رسائله القديمة — يقدر يطلب رمز الحين",
+                                            ? L10n.t("صُفّرت حدوده ومُسحت رسائله القديمة، ويستطيع طلب رمز الآن",
                                                      "Limits reset and old messages cleared — they can request a code now")
-                                            : L10n.t("تصفّرت حدوده — يقدر يطلب رمز الحين",
+                                            : L10n.t("صُفّرت حدوده، ويستطيع طلب رمز الآن",
                                                      "Its limits were reset — they can request a code now"))
                 await refresh()
             } catch {
@@ -331,7 +331,7 @@ private struct SmsUnlockAlerts: ViewModifier {
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
                 Button(L10n.t("فك القفل", "Unlock")) { store.unlock() }
             } message: {
-                Text(L10n.t("يقدر صاحب الرقم يطلب رمز دخول فوراً، وتنمسح طلباته الأخيرة من عدّاد القفل.",
+                Text(L10n.t("يستطيع صاحب الرقم طلب رمز دخول فوراً، وتُمسح طلباته الأخيرة من عدّاد القفل.",
                             "The number's owner can request a sign-in code right away, and its recent requests are cleared from the lock counter."))
             }
             .dsAlert(store.unlockNotice?.title ?? "", isPresented: Binding(

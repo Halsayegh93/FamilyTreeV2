@@ -67,7 +67,7 @@ struct OccasionComposerView: View {
             if authVM.canModerate {
                 composer
             } else {
-                DSEmptyView(L10n.t("هذي الصفحة للإدارة والمشرفين", "Admins and moderators only"),
+                DSEmptyView(L10n.t("هذه الصفحة للإدارة والمشرفين", "Admins and moderators only"),
                             icon: "lock.fill")
             }
         }
@@ -272,7 +272,7 @@ struct OccasionComposerView: View {
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(L10n.t("معاينة المنشور", "Post preview"))
-                    .accessibilityHint(L10n.t("اسحب لتحت أو لفوق لتكبير المعاينة أو تصغيرها — تبقى بالحجم اللي تختاره",
+                    .accessibilityHint(L10n.t("اسحب للأسفل أو للأعلى لتكبير المعاينة أو تصغيرها، وتبقى بالحجم المختار",
                                               "Drag down or up to resize the preview — it stays at the size you choose"))
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { setPreviewExpanded(!previewExpanded) }
@@ -438,7 +438,7 @@ struct OccasionComposerView: View {
             }
             .accessibilityLabel(L10n.t("مكان النشر: \(vm.placement.title)", "Where to post: \(vm.placement.title)"))
             if vm.size == .story {
-                Text(L10n.t("الستوري فيه هوامش أمان فوق وتحت حتى ما تغطيها أزرار التطبيقات.",
+                Text(L10n.t("في الستوري هوامش أمان أعلى وأسفل حتى لا تغطيها أزرار التطبيقات.",
                             "Stories keep safe margins at the top and bottom so app buttons don't cover the content."))
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.textTertiary)
@@ -689,7 +689,7 @@ struct OccasionComposerView: View {
             deceasedCard
             nameSection(vm.gender == .male ? L10n.t("اسم الفقيد", "Name of the deceased") : L10n.t("اسم الفقيدة", "Name of the deceased"))
             OccasionFormCard(title: L10n.t("صلة القرابة", "Relation"),
-                             hint: vm.showsPhoto ? L10n.t("اتركها فاضية لتختفي", "Leave empty to hide") : onlyWithPhotoHint) {
+                             hint: vm.showsPhoto ? L10n.t("اتركها فارغة لتختفي", "Leave empty to hide") : onlyWithPhotoHint) {
                 OccasionQuickText(text: vm.text("relation"), suggestions: vm.relationSuggestions,
                                   placeholder: L10n.t("مثال: والد كل من: الأسماء", "e.g. والد كل من: الأسماء"))
                 formatPicker("relation")
@@ -786,7 +786,7 @@ struct OccasionComposerView: View {
     private var relationsCard: some View {
         let male = vm.gender == .male
         return OccasionFormCard(title: L10n.t("القرابة", "Relatives"),
-                                hint: noPhotoOnlyHint ?? L10n.t("أي سطر فاضي يختفي", "Empty lines are hidden")) {
+                                hint: noPhotoOnlyHint ?? L10n.t("أي سطر فارغ يختفي", "Empty lines are hidden")) {
             OccasionFieldLabel(L10n.t("الزوج / الزوجة", "Spouse"))
             OccasionTextInput(text: vm.text("rel1"), placeholder: male ? "زوج: الاسم" : "زوجة: الاسم")
             formatPicker("rel1")
@@ -849,7 +849,7 @@ struct OccasionComposerView: View {
             OccasionQuickText(
                 text: vm.venuePlace(side),
                 suggestions: vm.diwaniyas.map(\.title) + OccasionChoices.venuePresets(vm.gender),
-                placeholder: L10n.t("ديوان العائلة (إذا تركته فاضي)", "Family diwaniya (if left empty)")
+                placeholder: L10n.t("ديوان العائلة (إذا تُرك فارغاً)", "Family diwaniya (if left empty)")
             )
             OccasionFieldLabel(L10n.t("المنطقة", "Area"))
             OccasionAreaField(text: vm.text("\(side)Area"))
@@ -947,9 +947,9 @@ struct OccasionComposerView: View {
                 }
                 if !vm.showsPhoto {
                     Text(vm.isDeath
-                         ? L10n.t("مكان الصورة يروح للآية والقرابة والتشييع وبداية العزاء — بخط أكبر.",
+                         ? L10n.t("تُعطى مساحة الصورة للآية والقرابة والتشييع وبداية العزاء بخط أكبر.",
                                   "The photo's space goes to the verse, relatives, funeral and condolence start, in larger type.")
-                         : L10n.t("مكان الصورة يروح للآية والاسم — بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
+                         : L10n.t("تُعطى مساحة الصورة للآية والاسم بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)
                 }
@@ -984,7 +984,7 @@ struct OccasionComposerView: View {
                 Spacer(minLength: 0)
             }
             if vm.photoFromMember {
-                Label(L10n.t("صورة العضو من شجرة العائلة — تقدر تغيّرها", "The member's photo from the family tree — you can change it"),
+                Label(L10n.t("صورة العضو من شجرة العائلة، ويمكن تغييرها", "The member's photo from the family tree — you can change it"),
                       systemImage: "checkmark.circle.fill")
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.success)
@@ -997,7 +997,7 @@ struct OccasionComposerView: View {
                 photoSlider(L10n.t("يمين / يسار", "Left / right"), value: $vm.photo.x, range: 0...100)
                 photoSlider(L10n.t("فوق / تحت", "Up / down"), value: $vm.photo.y, range: 0...100)
             }
-            Text(L10n.t("الصورة تبقى على جهازك — ما تنرفع لأي مكان.", "The photo stays on your device — it isn't uploaded anywhere."))
+            Text(L10n.t("تبقى الصورة على الجهاز، ولا تُرفع إلى أي مكان.", "The photo stays on your device — it isn't uploaded anywhere."))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textTertiary)
         }
@@ -1030,7 +1030,7 @@ struct OccasionComposerView: View {
                 OccasionRequiredHint(L10n.t("قبل الحفظ أكمل: ", "Before saving, fill in: ") + vm.missing.joined(separator: "، "))
                     .frame(maxWidth: .infinity)
             }
-            Text(L10n.t("الصورة تطلع ", "Exports at ") + "\(Int(vm.size.canvas.width))×\(Int(vm.size.canvas.height)) "
+            Text(L10n.t("الصورة بمقاس ", "Exports at ") + "\(Int(vm.size.canvas.width))×\(Int(vm.size.canvas.height)) "
                  + L10n.t("بكسل — جاهزة لـ ", "px — ready for ") + vm.placement.title)
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textTertiary)

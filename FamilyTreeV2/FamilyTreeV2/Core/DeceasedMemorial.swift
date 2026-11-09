@@ -120,7 +120,7 @@ nonisolated enum DeceasedMemorial {
         }
         switch daysUntil {
         case 0: return "اليوم"
-        case 1: return "بكرة"
+        case 1: return "غداً"
         case 2: return "بعد يومين"
         case 3...10: return "بعد \(daysUntil) أيام"
         default: return "بعد \(daysUntil) يوماً"

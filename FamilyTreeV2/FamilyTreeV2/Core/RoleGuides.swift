@@ -26,9 +26,9 @@ struct RoleGuide: Identifiable {
                 title: L10n.t("المالك", "Owner"),
                 icon: "crown.fill",
                 color: DS.Color.ownerRole,
-                mandate: L10n.t("كل شي — والمالكين الاثنين نفس الشي", "Everything — both owners alike"),
+                mandate: L10n.t("جميع الصلاحيات، والمالكان متساويان فيها", "Everything — both owners alike"),
                 can: [
-                    L10n.t("كل ما يقدر عليه المدير", "Everything an admin can do"),
+                    L10n.t("جميع صلاحيات المدير", "Everything an admin can do"),
                     L10n.t("الأقسام الستة كاملة، وسطر «حالة النظام» في «اليوم»",
                           "All six sections, and the system status line on Today"),
                     L10n.t("قسم «التطبيق»: كل إعدادات التطبيق والتشغيل", "The App section: every app and operations setting"),
@@ -46,7 +46,7 @@ struct RoleGuide: Identifiable {
                 title: L10n.t("المدير", "Admin"),
                 icon: "shield.lefthalf.filled",
                 color: DS.Color.adminRole,
-                mandate: L10n.t("كل شي ما عدا النظام", "Everything except the system"),
+                mandate: L10n.t("جميع الصلاحيات عدا النظام", "Everything except the system"),
                 can: [
                     L10n.t("اعتماد ورفض كل المحتوى: الأخبار، المكتبة، المشاريع، الديوانيات",
                           "Approve and reject all content: news, library, projects, diwaniyas"),
@@ -93,7 +93,7 @@ struct RoleGuide: Identifiable {
                     L10n.t("استكمال تواريخ الوفاة", "Complete death dates"),
                     L10n.t("رؤية «إحصاء الأفراد» في «اليوم» و«المؤشرات ← العائلة»",
                           "See the family census on Today and in Insights → Family"),
-                    L10n.t("الاطلاع على «المناسبات»: الذكرى والوفيات اللي تاريخها ناقص",
+                    L10n.t("الاطلاع على «المناسبات»: الذكرى والوفيات التي تاريخها غير مكتمل",
                           "View Occasions: memorials and deaths with incomplete dates")
                 ],
                 cannot: [

@@ -450,7 +450,7 @@ struct EditChildSheet: View {
 
             isSaving = false
             if success, requestFailed {
-                errorMessage = L10n.t("حُفظت التعديلات، لكن تعذّر إرسال طلب الوفاة للإدارة. حاول مرة ثانية.",
+                errorMessage = L10n.t("حُفظت التعديلات، لكن تعذّر إرسال طلب الوفاة للإدارة. يرجى المحاولة مرة أخرى.",
                                       "Changes saved, but the death request couldn't be sent. Try again.")
                 showErrorAlert = true
             } else if success {

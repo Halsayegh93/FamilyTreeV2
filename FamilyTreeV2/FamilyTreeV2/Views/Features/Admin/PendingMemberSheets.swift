@@ -91,7 +91,7 @@ struct LinkToExistingMemberSheet: View {
                 JoinKindPicker(asDaughterSon: $asDaughterSon)
             }
             if asDaughterSon {
-                DSNoteCard(L10n.t("يُقبل حسابه الآن، وأول ما يفتح التطبيق يختار أمّه من بنات العائلة واسم أبوه — وتؤكّده الإدارة من «الوارد».",
+                DSNoteCard(L10n.t("يُقبل حسابه الآن، وعند فتح التطبيق يختار أمّه من بنات العائلة واسم أبيه — وتؤكّده الإدارة من «الوارد».",
                                   "His account is approved now; on first open he picks his mother and his father's name — admins confirm it in the inbox."),
                            icon: "arrow.triangle.branch", tint: DS.Color.female)
                 if let daughterSonError {

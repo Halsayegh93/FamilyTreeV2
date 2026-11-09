@@ -1,4 +1,5 @@
 import SwiftUI
+import PDFKit
 import UIKit
 
 /// نطاق جاهز من صفحة «العائلة» (الشريحة والبحث الحاليان) — يُحدَّد أعضاؤه في التقرير
@@ -136,6 +137,8 @@ struct AdminReportsView: View {
     @State private var isGenerating = false
     @State private var shareItems: [Any] = []
     @State private var showShareSheet = false
+    /// معاينة التقرير قبل مشاركته (طلب المالك ٢٠٢٦-١١-٠٩)
+    @State private var previewURL: URL? = nil
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var branchRootId: UUID? = nil
@@ -336,6 +339,12 @@ struct AdminReportsView: View {
         .task {
             if memberVM.allMembers.isEmpty {
                 await memberVM.fetchAllMembers()
+            }
+        }
+        .fullScreenCover(isPresented: Binding(get: { previewURL != nil }, set: { if !$0 { previewURL = nil } })) {
+            if let url = previewURL {
+                AdminReportPreview(url: url, title: customTitle.isEmpty ? "تقرير عائلة المحمدعلي" : customTitle)
+                    .dsSectionPage(.admin)
             }
         }
         .sheet(isPresented: $showShareSheet, onDismiss: { cleanupShareState() }) {
@@ -1092,8 +1101,7 @@ struct AdminReportsView: View {
             try reportData.write(to: fileURL, options: .atomic)
 
             await MainActor.run {
-                shareItems = [fileURL]
-                showShareSheet = true
+                previewURL = fileURL
                 isGenerating = false
             }
         } catch {
@@ -1585,5 +1593,61 @@ private struct ReportFieldBox: ViewModifier {
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(DS.Color.fieldFill)
             )
+    }
+}
+
+
+// MARK: - معاينة التقرير قبل المشاركة
+
+/// الـPDF كما سيُرسل: صفحات تتمرّر عمودياً، ورأس فيه الإغلاق و«مشاركة» (حفظ في الملفات، واتساب، طباعة…)
+struct AdminReportPreview: View {
+    let url: URL
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var sharing = false
+
+    private var pageCount: Int { PDFDocument(url: url)?.pageCount ?? 0 }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DSSubPageHeader(title: L10n.t("معاينة التقرير", "Report preview"),
+                            subtitle: pageCount > 0 ? L10n.t("\(title) · \(pageCount) صفحة", "\(title) · \(pageCount) pages") : title,
+                            nav: .close, onBack: { dismiss() }) {
+                DSHeaderButton(symbol: "square.and.arrow.up", label: L10n.t("مشاركة", "Share")) { sharing = true }
+            }
+            AdminReportPDFView(url: url)
+                .background(DS.Color.cardBackgroundSoft)
+            Button { sharing = true } label: {
+                Label(L10n.t("مشاركة التقرير", "Share report"), systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(.ds(size: .large))
+            .padding(.horizontal, DS.Spacing.lg)
+            .padding(.vertical, DS.Spacing.md)
+            .background(DS.Color.background)
+        }
+        .background(DS.Color.background.ignoresSafeArea())
+        .environment(\.layoutDirection, .rightToLeft)
+        .sheet(isPresented: $sharing) {
+            ActivityView(items: [url]) { sharing = false }
+        }
+    }
+}
+
+/// عارض PDF بسيط: الصفحات تحت بعض، تكبير بالقرص
+private struct AdminReportPDFView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PDFView {
+        let v = PDFView()
+        v.autoScales = true
+        v.displayMode = .singlePageContinuous
+        v.displayDirection = .vertical
+        v.backgroundColor = .clear
+        v.document = PDFDocument(url: url)
+        return v
+    }
+
+    func updateUIView(_ v: PDFView, context: Context) {
+        if v.document?.documentURL != url { v.document = PDFDocument(url: url) }
     }
 }

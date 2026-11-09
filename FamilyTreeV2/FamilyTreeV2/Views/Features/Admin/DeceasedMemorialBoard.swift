@@ -125,7 +125,7 @@ struct DeceasedDateBox: View {
     private func save() {
         guard !isSaving else { return }
         guard NetworkMonitor.shared.isConnected else {
-            failure = L10n.t("لا يوجد اتصال — حاول مرة ثانية.", "No connection — please try again.")
+            failure = L10n.t("لا يوجد اتصال، يرجى المحاولة مرة أخرى.", "No connection — please try again.")
             return
         }
         let current = memberVM.member(byId: member.id) ?? member
@@ -164,7 +164,7 @@ struct DeceasedDateBox: View {
                 // يرجع للمحفوظ على السيرفر
                 await memberVM.fetchSingleMember(id: member.id)
                 isSaving = false
-                failure = L10n.t("ما انحفظ التاريخ — حاول مرة ثانية.", "Couldn't save the date — please try again.")
+                failure = L10n.t("لم يُحفظ التاريخ، يرجى المحاولة مرة أخرى.", "Couldn't save the date — please try again.")
                 return
             }
             dismiss()

@@ -37,7 +37,7 @@ struct ForceUpdateView: View {
 
     private var message: String {
         clean(policy?.forceMessage) ?? clean(appSettingsVM.settings.updateMessage) ?? L10n.t(
-            "نسختك قديمة. حدّث من المتجر عشان تكمل استخدام تطبيق عائلة المحمدعلي.",
+            "هذه النسخة قديمة. يرجى التحديث من المتجر لمواصلة استخدام تطبيق عائلة المحمدعلي.",
             "Your version is out of date. Update from the store to keep using the app.")
     }
 
@@ -104,7 +104,7 @@ struct ForceUpdateContent: View {
                     }
                     if let onCheck {
                         Button(action: onCheck) {
-                            Text(checking ? L10n.t("جاري التحقق…", "Checking…") : L10n.t("تحقّق مرة ثانية", "Check Again"))
+                            Text(checking ? L10n.t("جاري التحقق…", "Checking…") : L10n.t("التحقق مرة أخرى", "Check Again"))
                                 .dsFont(.callout)
                                 .foregroundColor(DS.Color.accentLight)
                                 .frame(minHeight: DS.Icon.tapTarget)

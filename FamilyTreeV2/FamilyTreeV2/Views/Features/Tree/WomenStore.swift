@@ -26,6 +26,10 @@ private struct WomenRow: Decodable {
     let wifeOrder: Int?
     /// «زوج من خارج العائلة» (`is_outside_family`، ٢٠٢٦-١١-٠٧) — اختياري: قبل ترحيل السيرفر لا يوجد فيُقرأ nil
     let isOutsideFamily: Bool?
+    /// «ما يظهر في الشجرة» عند البنت (`20261109200000`) — اختيارية: قبل الترحيل nil
+    let spouseShown: Bool?
+    let childrenShown: Bool?
+    let hiddenChildren: [UUID]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -47,6 +51,9 @@ private struct WomenRow: Decodable {
         case createdAt = "created_at"
         case wifeOrder = "wife_order"
         case isOutsideFamily = "is_outside_family"
+        case spouseShown = "spouse_shown"
+        case childrenShown = "children_shown"
+        case hiddenChildren = "hidden_children"
     }
 }
 
@@ -68,6 +75,13 @@ enum WomenStore {
     static var outsideFamilyIds: Set<UUID> = []
     /// العمود موجود على السيرفر (الترحيل طُبّق) — قبله تختفي «زوج من خارج العائلة»
     static var outsideFamilySupported = false
+    /// «ما يظهر في الشجرة» عند البنت (اختيارها هي، ٢٠٢٦-١١-٠٩): بنات زوجهن ظاهر جنبهن، وبنات عيالهن
+    /// (من زوج من خارج العائلة) ظاهرون تحتهن، وعيال بعينهم أخفتهم أمهاتهم. الافتراضي (nil) = مخفي.
+    static var spouseShownIds: Set<UUID> = []
+    static var childrenShownIds: Set<UUID> = []
+    static var hiddenChildIds: Set<UUID> = []
+    /// الأعمدة موجودة على السيرفر (الترحيل طُبّق) — قبله يبقى السلوك القديم (مسعود وعياله ظاهرون)
+    static var visibilitySupported = false
 
     /// ترتيب زوجات الرجل الواحد: `wife_order` أولاً (ما رتّبته الإدارة)، ثم `sort_order` كما كان
     /// (القاموس يُمرَّر — المستدعون يقرؤون `wifeOrderByWoman` مرة ثم يرتّبون في سياق غير معزول)
@@ -105,6 +119,10 @@ enum WomenStore {
         wifeOrderByWoman = wifeOrders
         outsideFamilyIds = Set(rows.lazy.filter { $0.isOutsideFamily == true }.map(\.id))
         outsideFamilySupported = rows.contains { $0.isOutsideFamily != nil }
+        spouseShownIds = Set(rows.lazy.filter { $0.spouseShown == true }.map(\.id))
+        childrenShownIds = Set(rows.lazy.filter { $0.childrenShown == true }.map(\.id))
+        hiddenChildIds = Set(rows.lazy.flatMap { $0.hiddenChildren ?? [] })
+        visibilitySupported = rows.contains { $0.spouseShown != nil || $0.childrenShown != nil }
         let mapped = rows.map { r in
             FamilyMember(
                 id: r.id,

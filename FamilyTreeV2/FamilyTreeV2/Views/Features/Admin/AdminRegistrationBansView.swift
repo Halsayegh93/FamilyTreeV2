@@ -80,7 +80,7 @@ struct AdminRegistrationBansView: View {
         let canBan = authVM.canManageBannedPhones
         return AdminPageHeader(
             title: t("التسجيل والمنع", "Sign-up and blocking"),
-            subtitle: t("من يقدر يسجّل في التطبيق، والأرقام الممنوعة من التسجيل",
+            subtitle: t("من يحق له التسجيل في التطبيق، والأرقام الممنوعة من التسجيل",
                         "Who can sign up, and the numbers blocked from signing up"),
             glyph: "person.crop.circle.badge.checkmark",
             readOnly: !authVM.canManageSettings,
@@ -260,7 +260,7 @@ struct AddBanSheet: View {
         // و«منع الرقم» كحلي يمين / «إلغاء» رمادي يسار
         DSComposer(
             title: t("منع رقم من التسجيل", "Block a number from signing up"),
-            subtitle: t("لا يقدر صاحب الرقم يسجّل أو يدخل التطبيق", "The number can't sign up or sign in"),
+            subtitle: t("لا يستطيع صاحب الرقم التسجيل أو الدخول إلى التطبيق", "The number can't sign up or sign in"),
             icon: "phone.down.fill",
             tint: DS.Color.error,
             actionTitle: t("منع الرقم", "Block number"),

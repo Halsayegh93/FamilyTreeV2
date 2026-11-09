@@ -239,7 +239,7 @@ struct SmsAlertsRows: View {
 
     private func footnote(canEdit: Bool) -> String {
         if saveFailed {
-            return L10n.t("تعذّر الحفظ — رجعت القيم المحفوظة. تأكد من الاتصال وجرّب مرة ثانية.",
+            return L10n.t("تعذّر الحفظ، وأُعيدت القيم المحفوظة. يرجى التحقق من الاتصال والمحاولة مرة أخرى.",
                           "Couldn't save — the saved values are back. Check the connection and retry.")
         }
         let rule = L10n.t("يصل التنبيه بعد أي رمز دخول مقبول والرصيد تحت العتبة. «منخفض» صفر يطفئ التنبيه.",

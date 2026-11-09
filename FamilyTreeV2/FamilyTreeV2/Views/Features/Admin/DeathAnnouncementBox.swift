@@ -298,7 +298,7 @@ struct DeathAnnouncementBox: View {
             return L10n.t("تم الإعلان عن هذه الوفاة من قبل.", "This death was already announced.")
         }
         if code == "42501" {
-            return L10n.t("ما عندك صلاحية نشر إعلان الوفاة.", "You can't publish death announcements.")
+            return L10n.t("لا تملك صلاحية نشر إعلان الوفاة.", "You can't publish death announcements.")
         }
         if code == "22023" {
             return L10n.t("العضو غير مسجّل كمتوفى.", "The member isn't marked as deceased.")
@@ -308,7 +308,7 @@ struct DeathAnnouncementBox: View {
             return L10n.t("لا يمكن إعلان وفاة قديمة — الإعلان متاح خلال ٣٠ يوماً من الوفاة.",
                           "Old deaths can't be announced — announcements are allowed within 30 days.")
         }
-        return L10n.t("تعذّر النشر — تأكّد من الاتصال وحاول مرة ثانية.",
+        return L10n.t("تعذّر النشر، يرجى التحقق من الاتصال والمحاولة مرة أخرى.",
                       "Couldn't publish — check your connection and try again.")
     }
 }

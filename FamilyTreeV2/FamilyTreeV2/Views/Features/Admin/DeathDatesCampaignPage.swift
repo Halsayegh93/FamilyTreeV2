@@ -412,7 +412,7 @@ private struct DeathDatesOwnerControls: View {
             AdminRowDivider()
             AdminControlRow(icon: "star.fill", tint: DS.Color.accent,
                             title: L10n.t("إبرازها في «اليوم»", "Feature on Today"),
-                            subtitle: L10n.t("أوقفها متى شئت — يرجع مكانها «ذكرى الراحلين»", "Stop it any time — Memorials return"),
+                            subtitle: L10n.t("يمكن إيقافها في أي وقت، وتعود مكانها «ذكرى الراحلين»", "Stop it any time — Memorials return"),
                             control: AnyView(Toggle("", isOn: Binding(
                                 get: { store.enabled ?? true },
                                 set: { on in Task { failure = await store.save(enabled: on) } }))
@@ -422,7 +422,7 @@ private struct DeathDatesOwnerControls: View {
             AdminControlRow(icon: "calendar", tint: DS.Color.sadu,
                             title: L10n.t("آخر يوم", "Last day"),
                             subtitle: store.until == nil ? L10n.t("تبقى حتى تكتمل التواريخ", "Stays until the dates are complete")
-                                                         : L10n.t("بعده يرجع مكانها «ذكرى الراحلين»", "Memorials return after it"),
+                                                         : L10n.t("بعده تعود مكانها «ذكرى الراحلين»", "Memorials return after it"),
                             control: AnyView(untilControl))
             if let failure {
                 Text(failure)

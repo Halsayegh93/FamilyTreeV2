@@ -117,7 +117,7 @@ enum AdminAnnounceKit {
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
         switch days {
         case ...0: return L10n.t("اليوم", "today")
-        case 1:    return L10n.t("بكرة", "tomorrow")
+        case 1:    return L10n.t("غداً", "tomorrow")
         case 2..<DeceasedMemorial.weekDays:
             let f = DateFormatter()
             f.locale = LanguageManager.shared.locale
@@ -285,7 +285,7 @@ struct AdminAnnounceComposer: View {
         case .all: break
         case .country:
             if country == nil { return L10n.t("اختر الدولة", "Pick the country") }
-            if targetIds(active)?.isEmpty ?? false { return L10n.t("ما في أعضاء في هذي الدولة", "No members in this country") }
+            if targetIds(active)?.isEmpty ?? false { return L10n.t("لا يوجد أعضاء في هذه الدولة", "No members in this country") }
         case .members:
             if selected.isEmpty { return L10n.t("اختر عضواً واحداً على الأقل", "Pick at least one member") }
         }
@@ -347,7 +347,7 @@ struct AdminAnnounceComposer: View {
         return DSComposer(
             title: isEditing ? L10n.t("تعديل الإشعار المجدول", "Edit scheduled push")
                 : (chooser == nil ? L10n.t("إرسال إشعار", "Send a push") : L10n.t("ماذا تنشئ؟", "What to create?")),
-            subtitle: isEditing ? L10n.t("يوصل في موعده الجديد", "Goes out at the new time")
+            subtitle: isEditing ? L10n.t("يُرسل في موعده الجديد", "Goes out at the new time")
                 : L10n.t("عنوان ونص — للكل أو لدولة أو لأعضاء", "Title and text — everyone, a country or people"),
             icon: isEditing ? "clock.arrow.circlepath" : "megaphone.fill",
             tint: tint,
@@ -389,10 +389,10 @@ struct AdminAnnounceComposer: View {
 
     private var confirmText: String {
         if let date = sendDate {
-            return L10n.t("يوصل الإشعار لكل الأعضاء \(AdminAnnounceKit.when(date)).",
+            return L10n.t("يُرسل الإشعار إلى جميع الأعضاء \(AdminAnnounceKit.when(date)).",
                           "The push reaches every member \(AdminAnnounceKit.when(date)).")
         }
-        return L10n.t("يوصل الإشعار لكل الأعضاء الآن.", "The push reaches every member now.")
+        return L10n.t("يُرسل الإشعار إلى جميع الأعضاء الآن.", "The push reaches every member now.")
     }
 
     private var doneTitle: String {
@@ -553,7 +553,7 @@ struct AdminAnnounceComposer: View {
                 }
                 .buttonStyle(DSPressStyle())
                 .accessibilityAddTraits(audience == .members ? .isSelected : [])
-                .accessibilityHint(L10n.t("يفتح قائمة الأعضاء — تقدر تختار أكثر من عضو", "Opens the member list — pick several"))
+                .accessibilityHint(L10n.t("يفتح قائمة الأعضاء، ويمكن اختيار أكثر من عضو", "Opens the member list — pick several"))
             }
         }
     }
@@ -753,8 +753,8 @@ struct AdminAnnounceComposer: View {
             case .saved:
                 await notificationVM.fetchScheduledNotifications()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                done = sendDate.map { L10n.t("يوصل الإشعار \(AdminAnnounceKit.when($0)) ← \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
-                    ?? L10n.t("يوصل الإشعار ← \(to) خلال دقيقة.", "The push goes → \(to) within a minute.")
+                done = sendDate.map { L10n.t("يُرسل الإشعار \(AdminAnnounceKit.when($0)) إلى \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
+                    ?? L10n.t("يُرسل الإشعار إلى \(to) خلال دقيقة.", "The push goes → \(to) within a minute.")
             case .gone:
                 await notificationVM.fetchScheduledNotifications()
                 failure = L10n.t("هذا الإشعار أُرسل أو أُلغي قبل الحفظ.", "This push was already sent or cancelled.")
@@ -779,7 +779,7 @@ struct AdminAnnounceComposer: View {
         }
         // لحظة النجاح الموجودة (`dsAlert(…, moment: .success)`) + اهتزاز نجاح خفيف (الدفعة ١٠)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        done = sendDate.map { L10n.t("يوصل الإشعار \(AdminAnnounceKit.when($0)) ← \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
+        done = sendDate.map { L10n.t("يُرسل الإشعار \(AdminAnnounceKit.when($0)) إلى \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
             ?? L10n.t("وصل الإشعار ← \(to).", "Push sent → \(to).")
     }
 }

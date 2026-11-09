@@ -94,7 +94,7 @@ struct MainTabView: View {
                     AnyView(ProfileView(selectedTab: crossfadingTab))
                         .dsSection(.profile)
                 } label: {
-                    Label(tabTitle("حسابي", "Profile"), systemImage: AppSection.profile.symbol)
+                    Label(tabTitle("الملف الشخصي", "Profile"), systemImage: AppSection.profile.symbol)
                 }
 
                 if authVM.canModerate {
@@ -139,7 +139,7 @@ struct MainTabView: View {
                 .dsSection(.profile)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? AppSection.profile.symbol : AppSection.profile.symbolOutline)
-                    Text(verticalSizeClass == .compact ? "" : L10n.t("حسابي", "Profile"))
+                    Text(verticalSizeClass == .compact ? "" : L10n.t("الملف الشخصي", "Profile"))
                 }
                 .tag(3)
 
@@ -249,7 +249,7 @@ struct MainTabView: View {
             }
         } message: {
             Text(L10n.t(
-                "فعّل الإشعارات عشان توصلك أخبار العائلة والتحديثات المهمة",
+                "يرجى تفعيل الإشعارات لتصلك أخبار العائلة والتحديثات المهمة",
                 "Enable notifications to receive family news and important updates"
             ))
         }

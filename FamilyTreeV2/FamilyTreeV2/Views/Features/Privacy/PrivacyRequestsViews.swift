@@ -18,9 +18,9 @@ enum TreeDataRequestKind: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .hide: return L10n.t("إخفاء بياناتي", "Hide my data")
-        case .delete: return L10n.t("حذف بياناتي من الشجرة", "Delete my data from the tree")
-        case .correct: return L10n.t("تصحيح بياناتي", "Correct my data")
+        case .hide: return L10n.t("إخفاء البيانات", "Hide my data")
+        case .delete: return L10n.t("حذف البيانات من الشجرة", "Delete my data from the tree")
+        case .correct: return L10n.t("تصحيح البيانات", "Correct my data")
         }
     }
 

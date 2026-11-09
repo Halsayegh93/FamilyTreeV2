@@ -68,7 +68,7 @@ struct WaitingForApprovalView: View {
             MemberContactFormView()
                 .environmentObject(authVM)
         }
-        .dsAlert(L10n.t("حذف حسابي", "Delete My Account"), isPresented: $showDeleteConfirm) {
+        .dsAlert(L10n.t("حذف الحساب", "Delete My Account"), isPresented: $showDeleteConfirm) {
             Button(L10n.t("حذف نهائي", "Delete"), role: .destructive) { performDelete() }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
@@ -172,7 +172,7 @@ struct WaitingForApprovalView: View {
             Button {
                 showDeleteConfirm = true
             } label: {
-                Label(L10n.t("حذف حسابي", "Delete My Account"), systemImage: "trash")
+                Label(L10n.t("حذف الحساب", "Delete My Account"), systemImage: "trash")
                     .dsFont(.chip)
                     .foregroundColor(DS.Color.error)
                     .padding(.vertical, DS.Spacing.xs)

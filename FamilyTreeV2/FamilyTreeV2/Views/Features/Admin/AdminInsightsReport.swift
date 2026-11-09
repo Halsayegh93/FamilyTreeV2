@@ -302,7 +302,7 @@ struct AdminInsightsApprovalsCard: View {
         case .failed:
             note(L10n.t("تعذّر تحميل الأرقام — تحقّق من الاتصال", "Couldn't load the numbers — check the connection"))
         case .loaded where store.report.totals.submitted == 0 && topTypes.isEmpty:
-            note(L10n.t("ما في طلبات خلال آخر 30 يوم", "No requests in the last 30 days"))
+            note(L10n.t("لا توجد طلبات خلال آخر 30 يوماً", "No requests in the last 30 days"))
         default:
             EmptyView()
         }

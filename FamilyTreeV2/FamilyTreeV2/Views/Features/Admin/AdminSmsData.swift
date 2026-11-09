@@ -273,7 +273,7 @@ struct SmsAdminError: Error, Equatable {
         case "bad_msgid":
             return L10n.t("رقم الرسالة غير صالح.", "Invalid message ID.")
         case "network":
-            return L10n.t("تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية.", "Couldn't connect — check the internet and retry.")
+            return L10n.t("تعذّر الاتصال، يرجى التحقق من الإنترنت والمحاولة مرة أخرى.", "Couldn't connect — check the internet and retry.")
         default:
             return L10n.t("حدث خطأ غير متوقع — حدّث التطبيق أو جرّب لاحقاً.", "Something went wrong — update the app or try later.")
         }
@@ -585,7 +585,7 @@ enum SmsText {
         case "ERR024": return L10n.t("عنوان السيرفر غير مسموح في الحساب", "Server IP not allowed")
         case "ERR025": return L10n.t("رقم غير صالح", "Invalid number")
         case "ERR026": return L10n.t("الدولة غير مفعّلة في الحساب", "Country not activated")
-        case "ERR028": return L10n.t("إرسال متكرر لنفس الرقم — انتظر قليلاً", "Repeat send to the same number — wait")
+        case "ERR028": return L10n.t("إرسال متكرر للرقم نفسه، يرجى الانتظار قليلاً", "Repeat send to the same number — wait")
         case "ERR029": return L10n.t("الرسالة غير موجودة عند المزوّد", "Message not found at the provider")
         case "ERR030": return L10n.t("عالقة في الطابور بخطأ", "Stuck in the queue with an error")
         case "TIMEOUT": return L10n.t("انتهت المهلة", "Timed out")

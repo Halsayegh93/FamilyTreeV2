@@ -629,7 +629,7 @@ struct TreeView: View {
                      isPresented: $showNotInTree) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: {
-                Text(L10n.t("طلب انضمامك عند الإدارة لربط حسابك بمكانك في الشجرة. بعد الربط يأخذك «موقعي» إلى اسمك مباشرة.",
+                Text(L10n.t("طلب انضمامك عند الإدارة لربط حسابك بمكانك في الشجرة. بعد الربط يأخذك «موقعك» إلى اسمك مباشرة.",
                             "Your join request is with the admins to link your account to your place in the tree. After that, «Me» takes you straight to your name."))
             }
             // تفاصيل العضو: مربّع بالمنتصف قابل للتوسّع بدل الشيت (طلب المالك)
@@ -865,7 +865,7 @@ struct TreeView: View {
                 FamilyTreeSideTabs(selection: treeTab)
             }
             if authVM.currentUser != nil {
-                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .mini, tint: AppSection.tree.ink) {
                     if let currentUserID = authVM.currentUser?.id,
                        let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID),
@@ -899,7 +899,7 @@ struct TreeView: View {
 
             // زر موقعي — آخر شي
             if authVM.currentUser != nil {
-                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .toolbar, tint: AppSection.tree.ink) {
                     if let currentUserID = authVM.currentUser?.id,
                        let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {

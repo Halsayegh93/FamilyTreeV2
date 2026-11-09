@@ -1480,7 +1480,7 @@ private struct AdminScopeLink: View {
             HStack(spacing: DS.Spacing.md) {
                 AdminIconSquare(symbol: guide.icon, tint: guide.color)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(L10n.t("صلاحياتي", "My permissions"))
+                    Text(L10n.t("الصلاحيات", "My permissions"))
                         .dsFont(.hubRow)
                         .foregroundColor(DS.Color.textPrimary)
                     Text(guide.mandate)

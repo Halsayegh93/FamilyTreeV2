@@ -43,11 +43,11 @@ struct SmsSendingSettingsCard: View {
         AdminRowsCard(title: L10n.t("إعدادات الإرسال", "Sending settings"), footnote: footnote(canEdit: canEdit)) {
             if canEdit {
                 stepperRow("hourglass", DS.Color.info, L10n.t("الانتظار بين رمزين", "Wait between two codes"),
-                           note: L10n.t("أقل شي 30 ثانية", "At least 30 seconds"),
+                           note: L10n.t("30 ثانية كحدّ أدنى", "At least 30 seconds"),
                            value.waitSeconds, AppSettingsViewModel.smsWaitRange, .seconds, ladder: SmsSendingLimits.waitLadder) {
                     var v = value; v.waitSeconds = $0; save(v)
                 }
-                stepperRow("phone.fill", DS.Color.sea, L10n.t("رموز لنفس الرقم بالساعة", "Codes per number per hour"),
+                stepperRow("phone.fill", DS.Color.sea, L10n.t("رموز للرقم نفسه في الساعة", "Codes per number per hour"),
                            value.perNumberHour, AppSettingsViewModel.smsPerNumberHourRange, .count) {
                     var v = value; v.perNumberHour = $0; save(v)
                 }
@@ -56,7 +56,7 @@ struct SmsSendingSettingsCard: View {
                     var v = value; v.allHour = $0; save(v)
                 }
                 stepperRow("archivebox.fill", DS.Color.slate, L10n.t("حفظ «طلبات رمز الدخول»", "Keep “Sign-in code requests”"),
-                           note: L10n.t("التقليل يحذف الأقدم تدريجياً، والزيادة لا تعيد ما انحذف.",
+                           note: L10n.t("التقليل يحذف الأقدم تدريجياً، والزيادة لا تعيد ما حُذف.",
                                         "Lowering deletes older rows gradually; raising doesn't bring them back."),
                            value.retentionDays, AppSettingsViewModel.loginAttemptsRetentionRange, .days,
                            ladder: SmsSendingLimits.retentionLadder) {
@@ -65,7 +65,7 @@ struct SmsSendingSettingsCard: View {
             } else {
                 SmsKVRow(icon: "hourglass", label: L10n.t("الانتظار بين رمزين", "Wait between two codes"),
                          value: L10n.t("\(value.waitSeconds) ثانية", "\(value.waitSeconds) s"), tint: DS.Color.info)
-                SmsKVRow(icon: "phone.fill", label: L10n.t("رموز لنفس الرقم بالساعة", "Codes per number per hour"),
+                SmsKVRow(icon: "phone.fill", label: L10n.t("رموز للرقم نفسه في الساعة", "Codes per number per hour"),
                          value: L10n.t("حتى \(value.perNumberHour)", "Up to \(value.perNumberHour)"), tint: DS.Color.sea)
                 SmsKVRow(icon: "person.3.fill", label: L10n.t("رموز للجميع بالساعة", "Codes for everyone per hour"),
                          value: L10n.t("حتى \(value.allHour)", "Up to \(value.allHour)"), tint: DS.Color.primary)
@@ -103,7 +103,7 @@ struct SmsSendingSettingsCard: View {
 
     private func footnote(canEdit: Bool) -> String {
         if saveFailed {
-            return L10n.t("تعذّر الحفظ — رجعت القيم المحفوظة. تأكد من الاتصال وجرّب مرة ثانية.",
+            return L10n.t("تعذّر الحفظ، وأُعيدت القيم المحفوظة. يرجى التحقق من الاتصال والمحاولة مرة أخرى.",
                           "Couldn't save — the saved values are back. Check the connection and retry.")
         }
         let perSecond = overview?.limits.allPerSecond ?? SmsOverview.Limits().allPerSecond
@@ -349,9 +349,9 @@ struct SmsSenderBox: View {
                 let now = result.inUse ?? name ?? current.defaultName
                 dismiss()
                 let notice = SmsNotice(
-                    title: name == nil ? L10n.t("رجع المرسل للافتراضي", "Sender back to default")
+                    title: name == nil ? L10n.t("أُعيد المرسل إلى الافتراضي", "Sender back to default")
                                        : L10n.t("تم تغيير المرسل", "Sender changed"),
-                    message: L10n.t("رموز الدخول تُرسل الآن باسم «\(SmsText.isolate(now))». جرّب الآن: «إرسال رسالة تجريبية لرقمي» — تصلك رسالة بالاسم الجديد.",
+                    message: L10n.t("رموز الدخول تُرسل الآن باسم «\(SmsText.isolate(now))». جرّب الآن: «إرسال رسالة تجريبية إلى رقم المالك» — تصلك رسالة بالاسم الجديد.",
                                     "Sign-in codes now go out as “\(now)”. Try it now: “Send a test message to my number” — you'll get a message with the new name."),
                     offersTest: true)
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { actions?.notice = notice }

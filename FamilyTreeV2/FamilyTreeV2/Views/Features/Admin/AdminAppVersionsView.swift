@@ -33,7 +33,7 @@ struct AdminAppVersionsView: View {
                 Button(L10n.t("أرسل", "Send")) { remind() }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
-                Text(L10n.t("يوصل \(memberIds.count) عضو إشعار «\(reminderTitle)».",
+                Text(L10n.t("يُرسل إشعار «\(reminderTitle)» إلى \(memberIds.count) عضو.",
                             "\(memberIds.count) members get “\(reminderTitle)”."))
             }
             .dsAlert(L10n.t("تم الإرسال", "Sent"),
@@ -41,7 +41,7 @@ struct AdminAppVersionsView: View {
                      moment: .success) {
                 Button(L10n.t("حسناً", "OK")) {}
             }
-            .dsAlert(L10n.t("ما انرسل", "Not sent"),
+            .dsAlert(L10n.t("لم يُرسل", "Not sent"),
                      isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
                 Button(L10n.t("حسناً", "OK")) {}
             } message: {
@@ -76,12 +76,12 @@ struct AdminAppVersionsView: View {
 
     private var reminderTitle: String {
         let t = policyStore.policy?.reminderTitle.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return t.isEmpty ? L10n.t("فيه تحديث جديد للتطبيق", "A new app update is available") : t
+        return t.isEmpty ? L10n.t("يتوفر تحديث جديد للتطبيق", "A new app update is available") : t
     }
 
     private var reminderBody: String {
         let t = policyStore.policy?.reminderBody.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return t.isEmpty ? L10n.t("نسختك من التطبيق قديمة. حدّث من المتجر عشان توصلك آخر الإضافات.",
+        return t.isEmpty ? L10n.t("نسخة التطبيق قديمة. يرجى التحديث من المتجر للحصول على آخر الإضافات.",
                                   "Your app version is old. Update from the store to get the latest.") : t
     }
 
@@ -94,7 +94,7 @@ struct AdminAppVersionsView: View {
                                                           targetMemberIds: ids, kind: "app_update")
             sending = false
             if ok { sentCount = ids.count } else {
-                alertText = L10n.t("تعذّر إرسال الإشعار — تحقّق من الاتصال وجرّب مرة ثانية.",
+                alertText = L10n.t("تعذّر إرسال الإشعار، يرجى التحقق من الاتصال والمحاولة مرة أخرى.",
                                    "Couldn't send — check the connection and retry.")
             }
         }
@@ -127,7 +127,7 @@ struct AdminAppVersionsView: View {
             return AnyView(AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…"))))
         case .unavailable:
             return AnyView(AdminPageStateCard(.empty(L10n.t("تحتاج تحديث السيرفر", "Needs a server update"),
-                                                     message: L10n.t("الأجهزة ما تسجّل رقم نسختها قبل تطبيق ترحيل «فرض التحديث».",
+                                                     message: L10n.t("لا تسجّل الأجهزة رقم نسختها قبل تطبيق ترحيل «فرض التحديث».",
                                                                      "Devices don't report their build until the server update is applied."))))
         case .failed(let msg) where overview == nil:
             return AnyView(AdminPageStateCard(.error(L10n.t("تعذّر التحميل", "Couldn't load"), message: msg,
@@ -171,7 +171,7 @@ private struct AdminBuildShareCard: View {
         AdminSectionCard(title: title,
                          tag: stats.latest_build > 0 ? L10n.t("الأخيرة \(stats.latest_build)", "Latest \(stats.latest_build)") : nil) {
             if stats.total == 0 {
-                Text(L10n.t("ما فيه أجهزة آخر ٣٠ يوم", "No devices in the last 30 days"))
+                Text(L10n.t("لا توجد أجهزة خلال آخر 30 يوماً", "No devices in the last 30 days"))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
             } else {

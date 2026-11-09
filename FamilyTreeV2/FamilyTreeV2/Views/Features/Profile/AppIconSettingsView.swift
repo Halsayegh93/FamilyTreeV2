@@ -57,7 +57,7 @@ struct AppIconSettingsView: View {
                         }
                     }
                     Text(failed
-                         ? t("تعذّر تغيير الأيقونة، حاول مرة ثانية.", "Couldn't change the icon. Try again.")
+                         ? t("تعذّر تغيير الأيقونة، يرجى المحاولة مرة أخرى.", "Couldn't change the icon. Try again.")
                          : t("تتغير الأيقونة على هذا الجهاز فقط.", "The icon changes on this device only."))
                         .dsFont(.footnote)
                         .foregroundColor(failed ? DS.Color.error : DS.Color.textTertiary)

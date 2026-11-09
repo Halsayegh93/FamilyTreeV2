@@ -300,7 +300,7 @@ struct MemberContactFormView: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             withAnimation(DS.Anim.smooth) { didSend = true }
         } else {
-            errorText = authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة. حاول مرة ثانية.", "Failed to send. Please try again.")
+            errorText = authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة. يرجى المحاولة مرة أخرى.", "Failed to send. Please try again.")
         }
     }
 

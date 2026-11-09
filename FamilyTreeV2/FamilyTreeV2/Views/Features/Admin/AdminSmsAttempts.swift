@@ -156,8 +156,8 @@ enum SmsAttemptsText {
     /// آخر نتيجة بكلام مفهوم
     static func outcome(_ raw: String) -> (title: String, icon: String, tint: Color) {
         switch raw {
-        case "sent":    return (L10n.t("انرسل", "Sent"), "paperplane.fill", DS.Color.success)
-        case "blocked": return (L10n.t("انرفض لكثرة الطلب", "Refused: too many requests"), "hand.raised.fill", DS.Color.warning)
+        case "sent":    return (L10n.t("أُرسل", "Sent"), "paperplane.fill", DS.Color.success)
+        case "blocked": return (L10n.t("رُفض لكثرة الطلبات", "Refused: too many requests"), "hand.raised.fill", DS.Color.warning)
         case "failed":  return (L10n.t("فشل", "Failed"), "xmark.circle.fill", DS.Color.error)
         case "test":    return (L10n.t("تجريبي", "Test"), "flask.fill", DS.Color.info)
         default:        return (L10n.t("غير معروف", "Unknown"), "questionmark.circle.fill", DS.Color.slate)

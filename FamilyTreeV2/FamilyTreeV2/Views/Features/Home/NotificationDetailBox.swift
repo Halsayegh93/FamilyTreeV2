@@ -161,9 +161,9 @@ struct NotificationDetailBox: View {
                     openMember = m
                 }])
             } else if !isStaff {
-                NotifButtonRow(items: [.init(title: L10n.t("عرض ملفي", "View my profile"), kind: .primary,
+                NotifButtonRow(items: [.init(title: L10n.t("عرض الملف الشخصي", "View my profile"), kind: .primary,
                                              action: onOpenProfile)])
-                Text(L10n.t("لو فيه شي غلط، اطلب تصحيحه من ملفك وبتوصل للإدارة.",
+                Text(L10n.t("في حال وجود خطأ، يمكن طلب تصحيحه من الملف الشخصي، وسيصل الطلب إلى الإدارة.",
                             "If something is wrong, request a correction from your profile and it will reach the administration."))
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textSecondary)
@@ -258,7 +258,7 @@ struct NotifMemberRequestSection: View {
             }
             NotifInfoGrid(cells: [
                 NotifInfoCell(label: L10n.t("نوع الطلب", "Request type"), value: NotifBoxText.requestType(request.requestType)),
-                NotifInfoCell(label: L10n.t("وصلك", "Received"), value: NotifBoxText.short(notification.createdDate)),
+                NotifInfoCell(label: L10n.t("تاريخ الوصول", "Received"), value: NotifBoxText.short(notification.createdDate)),
             ])
             buttons
         }
@@ -271,12 +271,12 @@ struct NotifMemberRequestSection: View {
             // «طلب جديد بالتصحيح» و«طلباتي» — كلاهما في «حسابي» (لا مدخل مباشر لكل نوع طلب)
             NotifButtonRow(items: [
                 .init(title: L10n.t("طلب جديد بالتصحيح", "New corrected request"), kind: .primary, action: onOpenProfile),
-                .init(title: L10n.t("طلباتي", "My requests"), kind: .secondary, action: onOpenProfile),
+                .init(title: L10n.t("الطلبات", "My requests"), kind: .secondary, action: onOpenProfile),
             ])
         case ApprovalStatus.approved.rawValue:
-            NotifButtonRow(items: [.init(title: L10n.t("عرض ملفي", "View my profile"), kind: .primary, action: onOpenProfile)])
+            NotifButtonRow(items: [.init(title: L10n.t("عرض الملف الشخصي", "View my profile"), kind: .primary, action: onOpenProfile)])
         default:
-            NotifButtonRow(items: [.init(title: L10n.t("طلباتي", "My requests"), kind: .secondary, action: onOpenProfile)])
+            NotifButtonRow(items: [.init(title: L10n.t("الطلبات", "My requests"), kind: .secondary, action: onOpenProfile)])
         }
     }
 }
@@ -455,7 +455,7 @@ enum NotifRequestCells {
               let father = memberVM.member(byId: fatherId) else { return nil }
         let n = memberVM.allMembers.filter { $0.fatherId == fatherId }.count
         guard n > 0 else { return nil }
-        return L10n.t("بيصير الابن رقم \(n) لـ\(father.firstName) في الشجرة",
+        return L10n.t("سيكون الابن رقم \(n) لـ\(father.firstName) في الشجرة",
                       "Will be child #\(n) of \(father.firstName) in the tree")
     }
 }

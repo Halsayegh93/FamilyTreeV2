@@ -167,7 +167,7 @@ enum AdminToolCatalog {
                                                                         "Members by role and role permissions — add and change")
                                                                : L10n.t("الأعضاء حسب الدور، وصلاحيات الأدوار", "Members by role and role permissions"),
                                icon: "person.3.fill", tint: DS.Color.primary,
-                               keywords: ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "صلاحياتي"],
+                               keywords: ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "الصلاحيات"],
                                kind: page { AdminModeratorsView() }))
         }
         let access = L10n.t("الدخول والأمان", "Sign-in and security")
@@ -193,7 +193,7 @@ enum AdminToolCatalog {
             // دمجت «الأجهزة ووصول الإشعارات» و«الاستخدام» (من «المؤشرات») — الكلمات القديمة للاثنين تجد بيتها هنا
             t.append(AdminTool(id: "access.usage", area: .team, group: access,
                                title: L10n.t("الاستخدام والأجهزة", "Usage and devices"),
-                               subtitle: L10n.t("منو يستخدم التطبيق الحين، الأجهزة ووصول الإشعارات، عدد الأجهزة لكل عضو",
+                               subtitle: L10n.t("من يستخدم التطبيق الآن، الأجهزة ووصول الإشعارات، عدد الأجهزة لكل عضو",
                                                 "Who is using the app now, devices and notification reach, devices per member"),
                                icon: "waveform.path.ecg", tint: DS.Color.palm,
                                keywords: ["الاستخدام", "استخدام", "نشاط", "نشط", "نشطون", "الآن", "الحين", "مستخدمون", "جلسات",
@@ -375,7 +375,7 @@ struct AdminMyScopeView: View {
 
     var body: some View {
         AdminPage(header: AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"),
-                                          title: L10n.t("صلاحياتي · \(guide.title)", "My permissions · \(guide.title)"),
+                                          title: L10n.t("الصلاحيات · \(guide.title)", "My permissions · \(guide.title)"),
                                           subtitle: guide.mandate,
                                           glyph: guide.icon),
                   lead: AnyView(AdminRoleGuideCard(guide: guide, showsTitle: false)),

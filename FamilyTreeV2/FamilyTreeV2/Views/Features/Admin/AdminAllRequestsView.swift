@@ -1210,7 +1210,7 @@ struct AdminAllRequestsView: View {
                     }
                 } else if isApprovalFilterActive && currentTabIds.isEmpty {
                     DSEmptyView(L10n.t("لا طلبات هنا", "Nothing here"),
-                                message: L10n.t("لا طلب يطابق هذا الفلتر الحين.", "No request matches this filter right now."),
+                                message: L10n.t("لا توجد طلبات مطابقة لهذا الفلتر حالياً.", "No request matches this filter right now."),
                                 style: .card)
                         .padding(.top, DS.Spacing.xs)
                         .reviewListRow()
@@ -2347,7 +2347,7 @@ struct AdminAllRequestsView: View {
     private var emptyState: some View {
         DSEmptyView(L10n.t("لا توجد طلبات معلقة", "No pending requests"),
                     message: (totalCount == 0 || selectedTab == .all)
-                        ? L10n.t("كل الطلبات متابَعة — ما فيه شي ينتظر قرارك",
+                        ? L10n.t("جميع الطلبات متابَعة، ولا يوجد ما ينتظر القرار",
                                  "All caught up — nothing is awaiting your decision")
                         : L10n.t("لا شيء في «\(selectedTab.title)» الآن",
                                  "Nothing in \(selectedTab.title) right now"),

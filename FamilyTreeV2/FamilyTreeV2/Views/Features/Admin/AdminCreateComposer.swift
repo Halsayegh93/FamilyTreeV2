@@ -439,7 +439,7 @@ struct AdminCreateCardForm: View {
             linksOpen = true
         }
         .accessibilityLabel(L10n.t("رابط الموقع", "Website link"))
-        .accessibilityHint(L10n.t("المولّد على الموقع لمن عنده الرابط", "The website generator, for whoever has the link"))
+        .accessibilityHint(L10n.t("المولّد على الموقع لمن لديه الرابط", "The website generator, for whoever has the link"))
     }
 
     private var form: some View {
@@ -524,7 +524,7 @@ struct AdminSiteLinksBox: View {
     var body: some View {
         DSComposer(
             title: L10n.t("رابط الموقع", "Website link"),
-            subtitle: L10n.t("نفس المولّد على الموقع بدون تسجيل دخول — لمن عنده الرابط بس",
+            subtitle: L10n.t("المولّد نفسه على الموقع بدون تسجيل دخول، لمن لديه الرابط فقط",
                              "The same generator on the website without signing in — only for whoever has the link"),
             icon: "link",
             tint: DS.Color.actionNavy,

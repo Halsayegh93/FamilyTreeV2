@@ -300,7 +300,7 @@ struct EditProfileView: View {
                 localPreviewImage = nil
             }
         } message: {
-            Text(L10n.t("تُحذف صورتك عند الحفظ. تقدر تتراجع بالضغط على «إلغاء».",
+            Text(L10n.t("تُحذف الصورة عند الحفظ، ويمكن التراجع بالضغط على «إلغاء».",
                         "Your photo is removed when you save. Cancel to keep it."))
         }
     }

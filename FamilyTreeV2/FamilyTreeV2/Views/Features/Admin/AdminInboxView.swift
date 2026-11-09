@@ -457,7 +457,7 @@ struct AdminInboxView: View {
             let other: InboxFilter = filter == .pending ? .handled : .pending
             let otherCount = counts[other] ?? 0
             let showOther: (() -> Void)? = otherCount > 0 ? { showFilter(other) } : nil
-            DSEmptyView(L10n.t("ما فيه رسائل", "No messages"),
+            DSEmptyView(L10n.t("لا توجد رسائل", "No messages"),
                         message: filter == .pending
                             ? L10n.t("تمّت معالجة كل الرسائل", "All messages handled")
                             : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"),

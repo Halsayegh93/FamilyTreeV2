@@ -323,11 +323,11 @@ struct AppUpdateSheet: View {
         if scheduled, let d = policy.deadline {
             return L10n.t("حدّث قبل \(AppUpdateDates.dayLine(d))", "Update before \(AppUpdateDates.dayLine(d))")
         }
-        return L10n.t("فيه تحديث جديد", "A new update is available")
+        return L10n.t("يتوفر تحديث جديد", "A new update is available")
     }
 
     private var subtitle: String {
-        scheduled ? L10n.t("بعدها ما يفتح التطبيق إلا بالنسخة الجديدة", "After that, the app opens only on the new version")
+        scheduled ? L10n.t("بعدها لا يعمل التطبيق إلا بالنسخة الجديدة", "After that, the app opens only on the new version")
                   : policy.versionLine
     }
 
@@ -336,7 +336,7 @@ struct AppUpdateSheet: View {
             if showsLater {
                 DSButton(L10n.t("لاحقاً", "Later"), role: .cancel, size: .large) { onLater() }
             }
-            DSButton(L10n.t("حدّث الحين", "Update now"), size: .large) {
+            DSButton(L10n.t("التحديث الآن", "Update now"), size: .large) {
                 if let storeURL { openURL(storeURL) }
             }
             .disabled(storeURL == nil)

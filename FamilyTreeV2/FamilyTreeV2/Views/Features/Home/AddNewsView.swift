@@ -158,7 +158,7 @@ struct AddNewsView: View {
         ) {
             // المبدّل الموحّد (`DSSegmentedSwitch`) بدل الكبسولة المرسومة باليد
             DSSegmentedSwitch(options: [
-                DSSegmentOption(id: false, title: authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me"),
+                DSSegmentOption(id: false, title: authVM.currentUser?.firstName ?? L10n.t("بالاسم الشخصي", "Me"),
                                 icon: "person.fill"),
                 DSSegmentOption(id: true, title: L10n.t("إدارة العائلة", "Family Admin"), icon: "megaphone.fill")
             ], selection: $postAsAdmin)

@@ -37,7 +37,7 @@ enum AddChildChecks {
     }
 
     static var firstNameOnlyMessage: String {
-        L10n.t("اكتب الاسم الأول فقط، وباقي الاسم ينضاف تلقائياً من اسم الأب.",
+        L10n.t("يُكتب الاسم الأول فقط، ويُضاف باقي الاسم تلقائياً من اسم الأب.",
                "Enter the first name only. The rest is added from the father's name.")
     }
 
@@ -45,7 +45,7 @@ enum AddChildChecks {
     static func compoundNameWarning(_ name: String) -> String? {
         guard firstNameUnits(name) >= 2 else { return nil }
         let cleaned = PersonName.clean(name)
-        return L10n.t("«\(cleaned)» أكثر من كلمة. إذا هو اسم مركّب اضغط متابعة، وإذا فيه اسم الأب عدّله واكتب الاسم الأول فقط.",
+        return L10n.t("«\(cleaned)» أكثر من كلمة. إذا هو اسم مركّب اضغط متابعة، وإذا تضمّن اسم الأب يرجى تعديله وكتابة الاسم الأول فقط.",
                       "«\(cleaned)» has more than one word. If it is a compound name, continue. Otherwise enter the first name only.")
     }
 

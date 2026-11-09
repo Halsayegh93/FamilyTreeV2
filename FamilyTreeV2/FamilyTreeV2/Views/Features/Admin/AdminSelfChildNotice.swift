@@ -71,7 +71,7 @@ struct AdminSelfChildFooter: View {
             Text(notice.review
                  ? L10n.t("راجعه: الاسم الكامل أو تاريخ الميلاد يطابق عضواً آخر، احتمال مكرر.",
                           "Review: the full name or birth date matches another member, possibly a duplicate.")
-                 : L10n.t("ما فيه تكرار تحت نفس الأب", "No duplicate under the same father"))
+                 : L10n.t("لا يوجد تكرار تحت الأب نفسه", "No duplicate under the same father"))
                 .dsFont(.caption)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -225,16 +225,16 @@ struct AdminChildAlertBox: View {
                 return L10n.stored("نأمل مراجعة بيانات «\(child)» التي جرى تعديلها، إذ يُرجَّح وجود خطأ فيها.",
                                    "Please review the edited details of «\(child)», as they may contain an error.")
             case .duplicateName:
-                return L10n.stored("يُرجَّح أن الاسم «\(child)» مكرّر في الشجرة. نأمل التحقق منه، وحذفه من «عائلتي» إن ثبت تكراره.",
+                return L10n.stored("يُرجَّح أن الاسم «\(child)» مكرّر في الشجرة. نأمل التحقق منه، وحذفه من «الأسرة» إن ثبت تكراره.",
                                    "The name «\(child)» may be a duplicate in the tree. Please verify it and delete it from «My Family» if so.")
             case .wrongName:
-                return L10n.stored("نأمل مراجعة الاسم «\(child)» وتصحيحه من «عائلتي»، إذ يُرجَّح وجود خطأ فيه.",
+                return L10n.stored("نأمل مراجعة الاسم «\(child)» وتصحيحه من «الأسرة»، إذ يُرجَّح وجود خطأ فيه.",
                                    "Please review and correct the name «\(child)» from «My Family», as it may contain an error.")
             case .wrongBirth:
-                return L10n.stored("نأمل مراجعة تاريخ ميلاد «\(child)» وتصحيحه من «عائلتي»، إذ يُرجَّح وجود خطأ فيه.",
+                return L10n.stored("نأمل مراجعة تاريخ ميلاد «\(child)» وتصحيحه من «الأسرة»، إذ يُرجَّح وجود خطأ فيه.",
                                    "Please review and correct the birth date of «\(child)» from «My Family», as it may contain an error.")
             case .notYourSon:
-                return L10n.stored("«\(child)» مسجّل ضمن أبنائك. إن لم يكن من أبنائك، نأمل حذفه من «عائلتي».",
+                return L10n.stored("«\(child)» مسجّل ضمن أبنائك. إن لم يكن من أبنائك، نأمل حذفه من «الأسرة».",
                                    "«\(child)» is registered as your son. If he is not, please delete him from «My Family».")
             }
         }

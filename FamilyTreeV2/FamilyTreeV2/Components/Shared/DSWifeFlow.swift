@@ -30,8 +30,9 @@ enum WifeCandidateRules {
     /// ٢) ليست دون ١٨ سنة — حين يُعرف ميلادها (مجهولة الميلاد لا يُحكم عليها بالعمر)
     /// ٣) ليست «مولودة حديثاً»: سجلّ بلا تاريخ ميلاد، أُضيف خلال آخر ١٢ شهراً، وله أب أو أم في الشجرة —
     ///    البنت الجديدة تُضاف تحت أبيها أو أمها بلا عمر غالباً (الزوجة والأم تُضافان بزوج فتسقطان بالقاعدة ١)
+    /// المتوفّاة تظهر أيضاً بعلامة «متوفاة» (طلب المالك ٢٠٢٦-١١-٠٩ «حتى المتوفية»)
     static func isEligible(_ w: FamilyMember, now: Date = Date()) -> Bool {
-        w.isFemale && w.isDeceased != true
+        w.isFemale
             && !isMarried(w) && !isUnderAge(w, now: now) && !isRecentNewborn(w, now: now)
     }
 
@@ -132,11 +133,11 @@ enum WifeCandidateRules {
             .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
     }
 
-    /// بنات الأب الأحياء: المتاحات بترتيبهنّ، وعدد من أخفتهنّ القواعد (لسطر التوضيح)
+    /// بنات الأب (الأحياء والمتوفّيات — المالك ٢٠٢٦-١١-٠٩): المتاحات بترتيبهنّ، وعدد من أخفتهنّ القواعد (لسطر التوضيح)
     static func daughters(of fatherId: UUID, husbandId: UUID, in people: [FamilyMember], showsHidden: Bool,
                           now: Date = Date()) -> (eligible: [FamilyMember], hidden: Int) {
         let all = people.filter {
-            $0.fatherId == fatherId && $0.isFemale && $0.isDeceased != true && $0.id != husbandId
+            $0.fatherId == fatherId && $0.isFemale && $0.id != husbandId
                 && (showsHidden || !$0.isHiddenFromTree)
                 && !$0.firstName.trimmingCharacters(in: .whitespaces).isEmpty
         }
@@ -414,7 +415,7 @@ struct DSWifeFlowBox: View {
             hintMessage: L10n.t("ابدأ باسمه الأول ثم اسم أبيه — مثل «علي حسين».",
                                 "Start with his first name, then his father's — e.g. «Ali Hussain»."),
             emptyTitle: L10n.t("لا رجال في الشجرة بعد", "No men in the tree yet"),
-            noMatchTitle: L10n.t("ما لقينا اسماً مطابقاً", "No matching name"),
+            noMatchTitle: L10n.t("لم يُعثر على اسم مطابق", "No matching name"),
             rowHint: L10n.t("عرض بناته", "Show his daughters"),
             missingTitle: onFatherMissing == nil ? nil : L10n.t("الأب غير موجود؟", "Father not listed?"),
             // البحث من الاسم الأول: «علي» = من اسمه علي، «علي حسين» = علي بن حسين (طلب المالك «الأسماء راح تقل»)
@@ -531,7 +532,7 @@ struct DSWifeFlowBox: View {
                                 icon: "person.fill.questionmark", style: .inline)
                 }
                 ForEach(Array(list.eligible.enumerated()), id: \.element.id) { i, d in
-                    WifeDaughterRow(name: firstName(d), age: WifeCandidateRules.age(d),
+                    WifeDaughterRow(name: firstName(d), age: WifeCandidateRules.age(d), deceased: d.isDeceased == true,
                                     isSelected: selectedId == d.id && !addingNew) {
                         withAnimation(DS.Anim.snappy) { selectedId = d.id; addingNew = false; newName = ""; newDeceased = false }
                     }
@@ -693,8 +694,15 @@ private struct WifeFlowOption: View {
 private struct WifeDaughterRow: View {
     let name: String
     let age: Int?
+    var deceased: Bool = false
     let isSelected: Bool
     let action: () -> Void
+
+    /// السطر تحت الاسم: «متوفاة» للمتوفّاة (بلا عمر — العمر حتى اليوم لا معنى له)، وإلا العمر إن عُرف
+    private var detail: String? {
+        if deceased { return L10n.t("متوفاة", "Deceased") }
+        return age.map { L10n.t("\($0) سنة", "\($0) yrs") }
+    }
 
     var body: some View {
         Button(action: action) {
@@ -704,10 +712,10 @@ private struct WifeDaughterRow: View {
                     Text(name)
                         .dsFieldFont(.memberName)
                         .foregroundColor(DS.Color.fieldValue)
-                    if let age {
-                        Text(L10n.t("\(age) سنة", "\(age) yrs"))
+                    if let detail {
+                        Text(detail)
                             .dsFont(.caption)
-                            .foregroundColor(DS.Color.textTertiary)
+                            .foregroundColor(deceased ? DS.Color.deceased : DS.Color.textTertiary)
                     }
                 }
                 .multilineTextAlignment(.leading)
@@ -722,7 +730,7 @@ private struct WifeDaughterRow: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(age.map { L10n.t("\(name)، \($0) سنة", "\(name), \($0) years") } ?? name)
+        .accessibilityLabel(detail.map { "\(name)، \($0)" } ?? name)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

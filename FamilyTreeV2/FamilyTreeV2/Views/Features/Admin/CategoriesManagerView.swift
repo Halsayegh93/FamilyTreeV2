@@ -59,7 +59,7 @@ struct CategoriesManagerView: View {
                     }
                 }
             } message: {
-                Text(L10n.t("«\(pendingDelete?.nameAr ?? "")» ينحذف نهائياً من التصنيفات.",
+                Text(L10n.t("«\(pendingDelete?.nameAr ?? "")» يُحذف نهائياً من التصنيفات.",
                             "«\(pendingDelete?.nameAr ?? "")» will be permanently deleted."))
             }
             .dsAlert(L10n.t("تعذّر الحذف", "Couldn't delete"),
@@ -551,7 +551,7 @@ struct CategoryEditSheet: View {
             }
             .disabled(count > 0)
             if count > 0 {
-                Text(L10n.t("فيه \(count) عنصر — ما ينحذف إلا وهو فاضي. تقدر تخفيه بدل الحذف.",
+                Text(L10n.t("يحتوي على \(count) عنصر، ولا يُحذف إلا إذا كان فارغاً. يمكن إخفاؤه بدلاً من الحذف.",
                             "It has \(count) items — only empty categories can be deleted. You can hide it instead."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textSecondary)
@@ -566,7 +566,7 @@ struct CategoryEditSheet: View {
                 }
             }
         } message: {
-            Text(L10n.t("«\(category.nameAr)» ينحذف نهائياً من التصنيفات.",
+            Text(L10n.t("«\(category.nameAr)» يُحذف نهائياً من التصنيفات.",
                         "«\(category.nameAr)» will be permanently deleted."))
         }
     }

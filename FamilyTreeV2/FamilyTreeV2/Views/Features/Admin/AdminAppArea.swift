@@ -80,7 +80,7 @@ private struct AdminAppSettingsGroups: View {
                 Task { await appSettingsVM.resetToDefaults(updatedBy: authVM.currentUser?.id) }
             }
         } message: {
-            Text(L10n.t("ترجع كل الإعدادات للقيم الافتراضية.", "Every setting returns to its default value."))
+            Text(L10n.t("تعود جميع الإعدادات إلى القيم الافتراضية.", "Every setting returns to its default value."))
         }
         .dsAlert(L10n.t("إعادة ضبط العدّاد", "Reset the counter"), isPresented: $showResetCooldown) {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
@@ -88,7 +88,7 @@ private struct AdminAppSettingsGroups: View {
                 ProfileEditCooldown.shared.resetAllCooldowns()
             }
         } message: {
-            Text(L10n.t("تُصفَّر فترات الانتظار، ويقدر العضو يعدّل ملفه فوراً.",
+            Text(L10n.t("تُصفَّر فترات الانتظار، ويستطيع العضو تعديل ملفه فوراً.",
                         "Waiting periods are cleared and members can edit their profile right away."))
         }
     }
@@ -241,7 +241,7 @@ private struct AdminAppSettingsGroups: View {
                    isOn: s.maintenanceMode)
             toggle("notifications_paused", icon: "bell.slash.fill", tint: DS.Color.warning,
                    title: L10n.t("إيقاف الإشعارات", "Pause notifications"),
-                   subtitle: L10n.t("يوقف إشعارات الجوال للكل — تبقى داخل التطبيق، ورسائل الدخول ما تتأثر",
+                   subtitle: L10n.t("يوقف إشعارات الجوال للجميع، وتبقى داخل التطبيق، ولا تتأثر رسائل الدخول",
                                     "Stops phone notifications for everyone. They stay inside the app; login messages aren't affected."),
                    isOn: s.notificationsPaused == true)
             AdminTapRow(icon: "arrow.down.app.fill", tint: DS.Color.primary,
@@ -362,7 +362,7 @@ private struct LibraryPolicyControl: View {
         } catch {
             if ErrorHelper.isCancellation(error) { return }
             Log.warning("[CONFIG] تعذّر حفظ \(key): \(error.localizedDescription)")
-            self.error = L10n.t("تأكد من الاتصال وجرّب مرة ثانية.", "Check the connection and try again.")
+            self.error = L10n.t("يرجى التحقق من الاتصال والمحاولة مرة أخرى.", "Check the connection and try again.")
         }
     }
 }

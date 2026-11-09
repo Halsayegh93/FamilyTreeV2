@@ -50,7 +50,7 @@ struct HomeGreetingRow: View {
             .contentShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
         }
         .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(L10n.t("حسابي", "My profile"))
+        .accessibilityLabel(L10n.t("الملف الشخصي", "My profile"))
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 1.5).onEnded { _ in onLongPress?() }
         )

@@ -506,9 +506,9 @@ struct NotificationsAndPrivacyView: View {
 
     private var boxSubtitle: String {
         switch focus {
-        case .all: return t("تحكّم بالتنبيهات ومن يشوف بياناتك", "Control alerts and who sees your data")
+        case .all: return t("التحكم بالتنبيهات ومن يرى البيانات", "Control alerts and who sees your data")
         case .notifications: return t("تحكّم بالتنبيهات التي تصلك", "Control the alerts you get")
-        case .privacy: return t("من يشوف بياناتك ومن حظرته", "Who sees your data, and who you blocked")
+        case .privacy: return t("من يرى البيانات، والأعضاء المحظورون", "Who sees your data, and who you blocked")
         }
     }
 
@@ -531,9 +531,9 @@ struct NotificationsAndPrivacyView: View {
             Kind(key: "likes", icon: "heart.fill", color: DS.Color.sadu,
                  title: t("الإعجابات", "Likes"), subtitle: t("عند إعجاب أحد بخبرك", "When someone likes your post")),
             Kind(key: "requests", icon: "checkmark.seal.fill", color: DS.Color.success,
-                 title: t("الرد على طلباتي", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
+                 title: t("الرد على الطلبات", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
             Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.palm,
-                 title: t("تحديثات ملفي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
+                 title: t("تحديثات الملف الشخصي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
         ]
         if authVM.canModerate {
             list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.primary,
@@ -753,30 +753,116 @@ struct NotificationsAndPrivacyView: View {
             VStack(spacing: DS.Spacing.sm) {
                 switchRow(icon: "phone.down.fill", color: DS.Color.accent,
                           title: t("إخفاء رقم الهاتف", "Hide phone number"),
-                          subtitle: t("ما يظهر رقمك للأعضاء", "Members won't see your number"),
+                          subtitle: t("لا يظهر رقم الهاتف للأعضاء", "Members won't see your number"),
                           isOn: $isPhoneHidden)
                 switchRow(icon: "person.crop.circle.badge.xmark", color: DS.Color.accent,
                           title: t("إخفاء صورتي عن الأعضاء", "Hide my photo from members"),
                           subtitle: t("لا تظهر صورتك للأعضاء", "Members won't see your photo"),
                           isOn: $isPhotoHidden)
                 switchRow(icon: "calendar.badge.minus", color: DS.Color.accent,
-                          title: t("إخفاء تاريخ ميلادي عن الأعضاء", "Hide my birth date from members"),
+                          title: t("إخفاء تاريخ الميلاد عن الأعضاء", "Hide my birth date from members"),
                           subtitle: t("لا يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
                           isOn: $isBirthDateHidden)
                 switchRow(icon: "clock.fill", color: DS.Color.accent,
-                          title: t("إظهار آخر ظهوري ونشاطي", "Show my last seen and activity"),
+                          title: t("إظهار آخر ظهور ونشاط", "Show my last seen and activity"),
                           subtitle: t("عند الإيقاف لا يرى الأعضاء متى كنت متصلاً", "When off, members won't see when you were online"),
                           isOn: $isActivityVisible)
-                sectionNote(t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
+                sectionNote(t("تبقى البيانات محفوظة في الشجرة، لكنها لا تظهر للأعضاء، وتطّلع عليها الإدارة.",
                               "Your data stays in the tree but is hidden from members. Admins can still see it."))
             }
         }
+        if DaughterFamilyAPI.enabled && isFemaleUser { treeShowSection }
         treeDataSection
+    }
+
+    // MARK: - «ما يظهر في الشجرة» (طلب المالك ٢٠٢٦-١١-٠٩ «كله اختياري») — عيّنة قبل دوال السيرفر
+
+    @State private var showSpouse = false
+    @State private var showMyself = true
+    @State private var showChildren = false
+    /// القيم وصلت من السيرفر — قبلها التغيير لا يُحفظ (فلا يكتب التحميل نفسه)
+    @State private var treeShowLoaded = false
+
+    /// عقدتها في شجرة النساء (من آخر جلب، أو عقدة التجربة في نسخة التطوير)
+    private var myTreeNode: FamilyMember? {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["DAUGHTER_PROFILE_TEST"], let id = UUID(uuidString: raw) {
+            return WomenStore.cache.first { $0.id == id }
+        }
+        #endif
+        guard let uid = authVM.currentUser?.id else { return nil }
+        return WomenStore.node(forAccount: uid)
+    }
+
+    private func loadTreeShow() async {
+        if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+        guard let node = myTreeNode else { return }
+        showMyself = !node.isHiddenFromTree
+        showSpouse = WomenStore.spouseShownIds.contains(node.id)
+        showChildren = WomenStore.childrenShownIds.contains(node.id)
+        treeShowLoaded = true
+    }
+
+    private func saveTreeShow(me: Bool? = nil, spouse: Bool? = nil, children: Bool? = nil) {
+        guard treeShowLoaded, WomenStore.visibilitySupported, let node = myTreeNode else { return }
+        // نفس المحفوظ (التحميل نفسه، أو الرجوع بعد خطأ) — لا كتابة
+        if let me, me == !node.isHiddenFromTree { return }
+        if let spouse, spouse == WomenStore.spouseShownIds.contains(node.id) { return }
+        if let children, children == WomenStore.childrenShownIds.contains(node.id) { return }
+        Task {
+            do {
+                try await DaughterFamilyAPI.setVisibility(me: me, spouse: spouse, children: children)
+                _ = try? await WomenStore.fetch()
+            } catch {
+                Log.warning("[DaughterFamily] privacy: \(error.localizedDescription)")
+                await loadTreeShow()   // يرجع المفتاح لحالته المحفوظة
+            }
+        }
+    }
+
+    private var isFemaleUser: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["DAUGHTER_PROFILE_TEST"] != nil { return true }
+        #endif
+        return authVM.currentUser?.isWomanAccount ?? false
+    }
+
+    private var treeShowSection: some View {
+        DSComposerSection(title: t("لا يظهر في الشجرة", "What shows in the tree"), icon: "eye.fill",
+                          tint: DS.Color.palm, index: privacyIndex + 1) {
+            VStack(spacing: DS.Spacing.sm) {
+                // البنت تتحكم في ظهورها هي في الشجرة (طلب المالك ٢٠٢٦-١١-٠٩)
+                if isFemaleUser {
+                    switchRow(icon: "person.fill", color: DS.Color.palm,
+                              title: t("الظهور في الشجرة", "Shown in the tree"),
+                              subtitle: t("عند الإيقاف لا يظهر الاسم في شجرة النساء", "When off, the name is hidden from the women's tree"),
+                              isOn: $showMyself)
+                }
+                switchRow(icon: "heart.fill", color: DS.Color.palm,
+                          title: isFemaleUser ? t("ظهور الزوج", "Husband shown")
+                                              : t("ظهور الزوجة", "Wife shown"),
+                          subtitle: isFemaleUser ? t("يظهر الزوج بجانب الاسم في شجرة النساء", "The husband appears beside the name in the women's tree")
+                                                 : t("تظهر الزوجة بجانب الاسم في شجرة النساء", "The wife appears beside the name in the women's tree"),
+                          isOn: $showSpouse)
+                if isFemaleUser {
+                    switchRow(icon: "person.2.fill", color: DS.Color.palm,
+                              title: t("ظهور الأبناء", "Children shown"),
+                              subtitle: t("يظهر الأبناء تحت الاسم في شجرة النساء", "Children appear under the name in the women's tree"),
+                              isOn: $showChildren)
+                }
+                sectionNote(t("جميع الخيارات اختيارية ويمكن تغييرها في أي وقت.",
+                              "All optional and can be changed at any time."))
+            }
+        }
+        .task { await loadTreeShow() }
+        .onChange(of: showMyself) { v in saveTreeShow(me: v) }
+        .onChange(of: showSpouse) { v in saveTreeShow(spouse: v) }
+        .onChange(of: showChildren) { v in saveTreeShow(children: v) }
     }
 
     /// «بياناتي في الشجرة» — طلب إخفاء أو حذف أو تصحيح تراجعه الإدارة (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
     private var treeDataSection: some View {
-        DSComposerSection(title: t("بياناتي في الشجرة", "My data in the tree"), icon: "tree.fill",
+        DSComposerSection(title: t("البيانات في الشجرة", "My data in the tree"), icon: "tree.fill",
                           tint: DS.Color.palm, index: privacyIndex + 1) {
             VStack(spacing: DS.Spacing.sm) {
                 ForEach(TreeDataRequestKind.allCases) { kind in
@@ -806,13 +892,13 @@ struct NotificationsAndPrivacyView: View {
                 DSFieldIcon(name: on ? "bell.badge.fill" : "bell.slash.fill", tint: tint)
                     .accessibilityHidden(true)   // زخرفة
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(on ? t("الإشعارات شغّالة", "Notifications are on")
+                    Text(on ? t("الإشعارات مفعّلة", "Notifications are on")
                             : (systemBlocked ? t("موقوفة من إعدادات الجهاز", "Blocked in device settings")
                                              : t("الإشعارات موقوفة", "Notifications are off")))
                         .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
-                    Text(on ? t("توصلك تنبيهات العائلة على هذا الجهاز", "Family alerts reach this device")
-                            : t("ما توصلك تنبيهات على هذا الجهاز", "No alerts on this device"))
+                    Text(on ? t("تصل تنبيهات العائلة إلى هذا الجهاز", "Family alerts reach this device")
+                            : t("لا تصل التنبيهات إلى هذا الجهاز", "No alerts on this device"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                 }
@@ -854,8 +940,8 @@ struct NotificationsAndPrivacyView: View {
         switch testState {
         case .idle: return t("جرّب الإشعار", "Send a test notification")
         case .sending: return t("جاري الإرسال…", "Sending…")
-        case .sent: return t("أُرسل — يوصلك خلال ثواني", "Sent — it should arrive in seconds")
-        case .failed: return t("تعذّر الإرسال، حاول مرة ثانية", "Couldn't send, try again")
+        case .sent: return t("أُرسل، ويصل خلال ثوانٍ", "Sent — it should arrive in seconds")
+        case .failed: return t("تعذّر الإرسال، يرجى المحاولة مرة أخرى", "Couldn't send, try again")
         }
     }
 
@@ -866,7 +952,7 @@ struct NotificationsAndPrivacyView: View {
             let row: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(me.uuidString),
                 "title": AnyEncodable(t("إشعار تجربة ✓", "Test notification ✓")),
-                "body": AnyEncodable(t("إذا وصلك هذا، فالإشعارات شغّالة على جهازك.",
+                "body": AnyEncodable(t("عند وصول هذا الإشعار، تكون الإشعارات مفعّلة على هذا الجهاز.",
                                        "If you got this, notifications work on your device.")),
                 "kind": AnyEncodable("test"),
                 "created_by": AnyEncodable(me.uuidString)

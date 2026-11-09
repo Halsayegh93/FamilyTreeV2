@@ -215,7 +215,7 @@ private struct SmsPagePresentations: ViewModifier {
             ), presenting: actions.notice) { notice in
                 if notice.offersTest {
                     Button(L10n.t("لاحقاً", "Later"), role: .cancel) {}
-                    Button(L10n.t("إرسال رسالة تجريبية لرقمي", "Send a test message to my number")) {
+                    Button(L10n.t("إرسال رسالة تجريبية إلى رقم المالك", "Send a test message to my number")) {
                         // بعد أن تُغلق هذه النافذة — ثم تأكيد الاختبار المعتاد (نقطة واحدة)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { actions.confirmTest = true }
                     }
@@ -275,7 +275,7 @@ private struct SmsHeroHeader: View {
                 Divider()
                 if authVM.isOwner {
                     Button { actions.confirmTest = true } label: {
-                        Label(L10n.t("إرسال رسالة تجريبية لرقمي", "Send a test message to my number"), systemImage: "paperplane.fill")
+                        Label(L10n.t("إرسال رسالة تجريبية إلى رقم المالك", "Send a test message to my number"), systemImage: "paperplane.fill")
                     }
                     .disabled(actions.isBusy("test"))
                 }

@@ -335,7 +335,7 @@ struct NotificationChangeCard: View {
                                      value: change.before, imageURL: change.isImage ? change.beforeImageURL : nil,
                                      isImage: change.isImage, subjectName: subjectName,
                                      tint: isStaff ? DS.Color.error : DS.Color.textTertiary, emphasized: false)
-                NotificationValueBox(caption: isStaff ? L10n.t("بعد", "After") : L10n.t("صار", "Now"),
+                NotificationValueBox(caption: isStaff ? L10n.t("بعد", "After") : L10n.t("بعد", "Now"),
                                      value: change.after, imageURL: change.isImage ? change.afterImageURL : nil,
                                      isImage: change.isImage, subjectName: subjectName,
                                      tint: DS.Color.success, emphasized: true)

@@ -432,7 +432,7 @@ struct AdminOccasionsAnnouncementsCard: View {
             }
             Button(L10n.t("تراجع", "Keep it"), role: .cancel) { cancelTarget = nil }
         } message: {
-            Text(L10n.t("«\(cancelTarget.map(Self.previewText) ?? "")» ما راح يوصل.", "“\(cancelTarget.map(Self.previewText) ?? "")” won't be sent."))
+            Text(L10n.t("«\(cancelTarget.map(Self.previewText) ?? "")» لن يُرسل.", "“\(cancelTarget.map(Self.previewText) ?? "")” won't be sent."))
         }
         .dsAlert(L10n.t("تعذّر الإلغاء", "Couldn't cancel"), isPresented: $cancelFailed) {
             Button(L10n.t("حسناً", "OK"), role: .cancel) {}
@@ -487,7 +487,7 @@ struct AdminOccasionsAnnouncementsCard: View {
     private var scheduledBlock: some View {
         if feed.scheduled.isEmpty {
             AdminListRow(icon: "bell.slash", tint: DS.Color.textTertiary,
-                         title: L10n.t("ما في إشعارات مجدولة", "No scheduled pushes"),
+                         title: L10n.t("لا توجد إشعارات مجدولة", "No scheduled pushes"),
                          subtitle: L10n.t("«إرسال إشعار» ← متى؟ ← اختر وقت", "Send a push → When? → Pick a time"),
                          showsChevron: false)
         } else {
@@ -581,7 +581,7 @@ struct AdminUpcomingFeed {
                 return L10n.t("اليوم · \(AdminOccasionsText.dayTitle(Date()))", "Today · \(AdminOccasionsText.dayTitle(Date()))")
             case .tomorrow:
                 let day = AdminOccasionsText.dayTitle(Date().addingTimeInterval(86400))
-                return L10n.t("بكرة · \(day)", "Tomorrow · \(day)")
+                return L10n.t("غداً · \(day)", "Tomorrow · \(day)")
             case .week:  return L10n.t("هذا الأسبوع", "This week")
             case .later: return L10n.t("لاحقاً", "Later")
             }

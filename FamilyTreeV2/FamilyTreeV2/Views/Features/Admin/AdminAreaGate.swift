@@ -42,7 +42,7 @@ private struct AdminAreaLockedPage: View {
         AdminHubPage {
             AdminBandHeader(title: area.title)
         } content: {
-            AdminPageStateCard(.empty(message, message: L10n.t("صلاحياتك في «صلاحياتي» أسفل «اليوم».",
+            AdminPageStateCard(.empty(message, message: L10n.t("صلاحياتك في «الصلاحيات» أسفل «اليوم».",
                                                               "Your permissions are under “My permissions” on Today."),
                                       tint: DS.Color.textTertiary))
         }

@@ -256,7 +256,7 @@ struct AdminPushHealthView: View {
     private var header: AdminPageHeader {
         AdminPageHeader(
             title: L10n.t("الاستخدام والأجهزة", "Usage and devices"),
-            subtitle: L10n.t("منو يستخدم التطبيق، وهل توصله الإشعارات", "Who uses the app, and do notifications reach them"),
+            subtitle: L10n.t("من يستخدم التطبيق، وهل تصله الإشعارات", "Who uses the app, and do notifications reach them"),
             glyph: "iphone.gen3",
             actions: [AdminPageAction(symbol: isRefreshing ? "hourglass" : "arrow.clockwise",
                                       label: L10n.t("تحديث الآن", "Refresh now"), tap: .action { refreshNow() })],
@@ -270,7 +270,7 @@ struct AdminPushHealthView: View {
             guard let ok else {
                 return store.failed ? L10n.t("تعذّر فحص الأجهزة", "Couldn't check devices") : L10n.t("جارٍ الفحص…", "Checking…")
             }
-            return ok ? L10n.t("كل شي سليم — الإشعارات توصل كل الأجهزة", "All good — notifications reach every device")
+            return ok ? L10n.t("كل شيء سليم، والإشعارات تصل إلى جميع الأجهزة", "All good — notifications reach every device")
                       : L10n.t("في أجهزة تسجيلها فاشل — تحت في «الأجهزة»", "Some devices failed to register — see Devices below")
         }()
         return AdminUsageStatusLine(ok: ok, text: text)
@@ -354,7 +354,7 @@ struct AdminPushHealthView: View {
                 AdminRowsCardBody {
                     AdminControlRow(icon: "iphone.gen3.badge.play", tint: DS.Color.info,
                                     title: L10n.t("الأجهزة المسموحة لكل عضو", "Devices allowed per member"),
-                                    subtitle: canEdit ? L10n.t("الجهاز الزايد يطلب يطلع من جهاز ثاني",
+                                    subtitle: canEdit ? L10n.t("يُطلب من صاحب الجهاز الزائد تسجيل الخروج من جهاز آخر",
                                                                "An extra device is asked to sign another one out")
                                                       : AdminPageHeader.readOnlyText,
                                     control: AnyView(limitControl(max, canEdit: canEdit)))
@@ -365,7 +365,7 @@ struct AdminPushHealthView: View {
                     }
                     AdminTapRow(icon: "paperplane.fill", tint: DS.Color.sea,
                                 title: L10n.t("إرسال إشعار تجريبي", "Send a test notification"),
-                                subtitle: L10n.t("يوصل جهازك أنت بس", "Reaches your own device only"),
+                                subtitle: L10n.t("يُرسل إلى جهازك فقط", "Reaches your own device only"),
                                 value: isSendingTest ? L10n.t("جارٍ…", "Sending…") : nil,
                                 tap: .action { Task { await sendTestPush() } })
                     AdminTapRow(icon: "chart.xyaxis.line", tint: DS.Color.accent,
@@ -494,7 +494,7 @@ struct AdminPushHealthView: View {
             let payload: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(memberId.uuidString),
                 "title": AnyEncodable(L10n.t("إشعار تجريبي ✓", "Test notification ✓")),
-                "body": AnyEncodable(L10n.t("إذا وصلك هذا الإشعار، المنظومة تعمل بشكل كامل.",
+                "body": AnyEncodable(L10n.t("عند وصول هذا الإشعار، فالمنظومة تعمل بشكل كامل.",
                                             "If you received this, the system is fully working.")),
                 "kind": AnyEncodable("test"),
                 "created_by": AnyEncodable(memberId.uuidString)
@@ -562,19 +562,19 @@ struct AdminDevicesRingCard: View {
                                spoken: L10n.t("تصل الإشعارات إلى \(s.reachPercent)٪ من الأجهزة", "Notifications reach \(s.reachPercent)% of devices"))
         let legend = VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             legendRow(DS.Color.success, L10n.t("توصلها الإشعارات", "Notifications reach them"), fresh)
-            legendRow(staleTint, L10n.t("توصلها، بس ما انفتحت من 30 يوم", "Reached, but not opened in 30 days"), s.stale)
+            legendRow(staleTint, L10n.t("تصلها، لكن لم تُفتح منذ 30 يوماً", "Reached, but not opened in 30 days"), s.stale)
             if s.invalid > 0 {
                 Button {
                     withAnimation(DSMotion.expand) { failingOpen.toggle() }
                 } label: {
-                    legendRow(DS.Color.error, L10n.t("ما توصلها (تسجيل فاشل)", "Not reached (failed registration)"), s.invalid,
+                    legendRow(DS.Color.error, L10n.t("لا تصلها (تسجيل فاشل)", "Not reached (failed registration)"), s.invalid,
                               chevron: failingOpen ? "chevron.up" : "chevron.down")
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(failingOpen ? L10n.t("يخفي الأجهزة", "Hides the devices") : L10n.t("يعرض الأجهزة وزرّ الحذف", "Shows the devices and the delete button"))
             } else {
-                legendRow(DS.Color.error, L10n.t("ما توصلها (تسجيل فاشل)", "Not reached (failed registration)"), 0)
+                legendRow(DS.Color.error, L10n.t("لا تصلها (تسجيل فاشل)", "Not reached (failed registration)"), 0)
             }
         }
         return VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -609,7 +609,7 @@ struct AdminDevicesRingCard: View {
     /// الأجهزة الفاشلة (الضغط يفتح ورقة صاحبها) + الحذف — نفس الحذف السابق
     private func failingBlock(count: Int) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Text(L10n.t("ما يوصلها شي — ترجع إذا فتح صاحبها التطبيق", "Nothing reaches them — they recover when the owner opens the app"))
+            Text(L10n.t("لا يصلها شيء، وتعود عند فتح صاحبها التطبيق", "Nothing reaches them — they recover when the owner opens the app"))
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)

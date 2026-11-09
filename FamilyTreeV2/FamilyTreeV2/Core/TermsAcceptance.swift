@@ -33,21 +33,52 @@ final class TermsAcceptanceStore: ObservableObject {
         let needs: Bool
     }
 
+    /// آخر إصدار وافق عليه هذا الحساب على هذا الجهاز (بعد قراءة ناجحة من السيرفر) — حتى لا يرجع المربّع لمن وافق
+    /// كلما تعذّرت القراءة لحظة فتح التطبيق (بلاغ المالك ٢٠٢٦-١١-٠٩ «تطلع أكثر من مرة وأوافق عليها»)
+    private static func acceptedKey() -> String? {
+        guard let id = SupabaseConfig.client.auth.currentUser?.id else { return nil }
+        return "terms.accepted.\(id.uuidString.lowercased())"
+    }
+    private static var cachedAccepted: Int {
+        get { acceptedKey().map { UserDefaults.standard.integer(forKey: $0) } ?? 0 }
+        set { if let k = acceptedKey() { UserDefaults.standard.set(newValue, forKey: k) } }
+    }
+
+    private func apply(_ s: Status) {
+        required = s.required
+        statusUnknown = false
+        needsAcceptance = s.needs
+        statusChecked = true
+        errorMessage = nil
+        if !s.needs, s.accepted > 0 { Self.cachedAccepted = s.accepted }
+    }
+
     func refresh() async {
-        do {
-            let s: Status = try await SupabaseConfig.client.rpc("my_terms_status").execute().value
-            required = s.required
-            statusUnknown = false
-            needsAcceptance = s.needs
-            statusChecked = true
-        } catch {
-            if ErrorHelper.isCancellation(error) { return }
-            Log.warning("my_terms_status: \(error.localizedDescription)")
-            // يُقفل عند الفشل — لا دخول بلا تأكيد الموافقة
-            statusUnknown = true
-            errorMessage = Self.statusFailedMessage
-            needsAcceptance = true
+        // ثلاث محاولات قبل الحكم بالفشل — أول طلب بعد فتح التطبيق أو رجوعه قد يسبق الشبكة أو الجلسة
+        var lastError: Error?
+        for attempt in 0..<3 {
+            if attempt > 0 { try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_200_000_000) }
+            do {
+                let s: Status = try await SupabaseConfig.client.rpc("my_terms_status").execute().value
+                apply(s)
+                return
+            } catch {
+                if ErrorHelper.isCancellation(error) { return }
+                lastError = error
+            }
         }
+        Log.warning("my_terms_status: \(lastError?.localizedDescription ?? "")")
+        // وافق قبل على هذا الجهاز — لا يُقفل بسبب تعذّر القراءة
+        if Self.cachedAccepted > 0 {
+            statusUnknown = false
+            needsAcceptance = false
+            statusChecked = true
+            return
+        }
+        // يُقفل عند الفشل لمن لم يُعرف أنه وافق — لا دخول بلا تأكيد الموافقة
+        statusUnknown = true
+        errorMessage = Self.statusFailedMessage
+        needsAcceptance = true
     }
 
     func accept() async {
@@ -63,7 +94,7 @@ final class TermsAcceptanceStore: ObservableObject {
         do {
             let s: Status = try await SupabaseConfig.client
                 .rpc("accept_terms", params: ["p_version": required]).execute().value
-            needsAcceptance = s.needs
+            apply(s)
         } catch {
             Log.error("accept_terms: \(error.localizedDescription)")
             errorMessage = L10n.t("تعذّر حفظ الموافقة. تحقق من الاتصال وحاول مرة أخرى.",

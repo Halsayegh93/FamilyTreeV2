@@ -133,7 +133,7 @@ extension AdminRequestViewModel {
     /// شارة «عندك» / «عند حسين» في صفوف الطاقم — مستلم قديم لمرحلة سابقة لا يظهر
     func approvalHolderLabel(_ snapshot: ApprovalSnapshot) -> String? {
         guard snapshot.hasV2, snapshot.stage != .info, snapshot.assignedTo != nil else { return nil }
-        if isApprovalHeldByMe(snapshot) { return L10n.t("عندك", "With you") }
+        if isApprovalHeldByMe(snapshot) { return L10n.t("لديك", "With you") }
         guard isApprovalHeldByOther(snapshot) else { return nil }
         guard let name = approvalHolder(snapshot)?.firstName, !name.isEmpty else {
             return L10n.t("عند مسؤول آخر", "With another admin")

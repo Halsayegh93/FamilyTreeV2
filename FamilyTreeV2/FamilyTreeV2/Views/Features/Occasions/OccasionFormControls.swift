@@ -501,7 +501,7 @@ struct OccasionNameFormatPicker: View {
         let r = resolution
         if r.autoShortened && r.shrunk { return L10n.t("اختُصر وصغُر الخط ليدخل بسطر واحد", "Shortened and slightly smaller to fit one line") }
         if r.autoShortened { return L10n.t("اختُصر تلقائياً ليدخل بسطر واحد", "Shortened to fit one line") }
-        if r.shrunk { return L10n.t("الخط أصغر شوي ليدخل بسطر واحد", "Slightly smaller to fit one line") }
+        if r.shrunk { return L10n.t("الخط أصغر قليلاً ليتّسع في سطر واحد", "Slightly smaller to fit one line") }
         return ""
     }
 
@@ -699,7 +699,7 @@ struct OccasionMemberPickerSheet: View {
                 if results.isEmpty {
                     Text(query.trimmingCharacters(in: .whitespaces).isEmpty
                          ? L10n.t("اكتب الاسم للبحث في شجرة العائلة", "Type a name to search the family tree")
-                         : L10n.t("ما لقينا أحد بهالاسم — تقدر تكتبه بنفسك.", "No match — you can type the name yourself."))
+                         : L10n.t("لم يُعثر على أحد بهذا الاسم، ويمكن كتابته يدوياً.", "No match — you can type the name yourself."))
                         .font(DS.Font.callout)
                         .foregroundColor(DS.Color.textTertiary)
                         .multilineTextAlignment(.center)

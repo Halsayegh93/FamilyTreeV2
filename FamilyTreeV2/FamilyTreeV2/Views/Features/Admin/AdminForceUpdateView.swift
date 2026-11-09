@@ -55,7 +55,7 @@ struct AdminForceUpdateView: View {
             .onChange(of: store.policy) { p in
                 if let p, !dirty { adopt(p) }
             }
-            .dsAlert(L10n.t("ما انحفظ", "Not saved"),
+            .dsAlert(L10n.t("لم يُحفظ", "Not saved"),
                      isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
                 Button(L10n.t("حسناً", "OK")) {}
             } message: {
@@ -97,7 +97,7 @@ struct AdminForceUpdateView: View {
         let ready = s.updatedAt != nil
         return AdminPageHeader(
             title: L10n.t("فرض التحديث", "Force update"),
-            subtitle: L10n.t("أقل إصدار مسموح لكل منصة — الأقدم تنقفل", "Minimum allowed version per platform — older ones are blocked"),
+            subtitle: L10n.t("أدنى إصدار مسموح لكل منصة، والأقدم تُقفل", "Minimum allowed version per platform — older ones are blocked"),
             glyph: "arrow.down.app.fill",
             readOnly: !canEdit,
             kpis: [
@@ -116,12 +116,12 @@ struct AdminForceUpdateView: View {
             if isNew {
                 AdminInfoRow(icon: "info.circle.fill", tint: DS.Color.info,
                              title: L10n.t("كيف يعمل", "How it works"),
-                             subtitle: L10n.t("نسخة أقدم من آخر نسخة: مربّع «فيه تحديث جديد» (اختياري)، أو مع عدّ لين الموعد ثم قفل، أو قفل الحين. أقل من أقل نسخة مسموحة = قفل دائماً.",
+                             subtitle: L10n.t("نسخة أقدم من آخر نسخة: مربّع «يتوفر تحديث جديد» (اختياري)، أو مع عدّ تنازلي حتى الموعد ثم قفل، أو قفل فوري. أقل من أقل نسخة مسموحة = قفل دائماً.",
                                               "Older than the latest: an update box (optional), a countdown then a lock, or a lock now. Below the minimum = always locked."))
             } else {
                 AdminInfoRow(icon: canEdit ? "info.circle.fill" : "eye.fill", tint: DS.Color.info,
                              title: canEdit ? L10n.t("كيف يعمل", "How it works") : AdminPageHeader.readOnlyText,
-                             subtitle: L10n.t("أي نسخة رقمها أقل من الحد تنقفل بشاشة «حدّث التطبيق» لين يحدّث العضو. 0 = بلا فرض.",
+                             subtitle: L10n.t("أي نسخة رقمها أقل من الحد تُقفل بشاشة «حدّث التطبيق» حتى يحدّث العضو. 0 = بلا فرض.",
                                               "Any build below the minimum is blocked until the member updates. 0 = off."))
             }
         }
@@ -167,8 +167,8 @@ struct AdminForceUpdateView: View {
     private var boxCard: some View {
         AdminSectionCard(title: L10n.t("مربّع التحديث", "Update box")) {
             AdminControlRow(icon: "clock.arrow.circlepath", tint: AppSection.admin.ink,
-                            title: L10n.t("«لاحقاً» يرجع بعد", "“Later” returns after"),
-                            subtitle: L10n.t("يطلع مرة لكل نسخة، وآخر يوم قبل الموعد بلا «لاحقاً»",
+                            title: L10n.t("«لاحقاً» يعيد الإظهار بعد", "“Later” returns after"),
+                            subtitle: L10n.t("يظهر مرة لكل نسخة، وفي آخر يوم قبل الموعد بلا «لاحقاً»",
                                              "Once per version; no “Later” on the last day before the deadline"),
                             control: AnyView(HStack(spacing: DS.Spacing.sm) {
                                 Text(L10n.t("\(snoozeDays) يوم", "\(snoozeDays) d"))
@@ -178,7 +178,7 @@ struct AdminForceUpdateView: View {
                                     .accessibilityHidden(true)
                                 Stepper("", value: $snoozeDays, in: 1...30)
                                     .labelsHidden()
-                                    .accessibilityLabel(L10n.t("«لاحقاً» يرجع بعد", "“Later” returns after"))
+                                    .accessibilityLabel(L10n.t("«لاحقاً» يعيد الإظهار بعد", "“Later” returns after"))
                                     .accessibilityValue(L10n.t("\(snoozeDays) يوم", "\(snoozeDays) days"))
                             }
                             .fixedSize()))
@@ -190,12 +190,12 @@ struct AdminForceUpdateView: View {
             AdminRowsCardBody {
                 AdminTapRow(icon: "text.badge.star", tint: AppSection.admin.ink,
                             title: L10n.t("ما الجديد ونص الشاشة", "What's new and screen text"),
-                            subtitle: L10n.t("يطلع في المربّع وفي شاشة الإجبار — مع معاينة", "Shown in the box and the lock screen — with preview"),
+                            subtitle: L10n.t("يظهر في المربّع وفي شاشة الإجبار مع معاينة", "Shown in the box and the lock screen — with preview"),
                             value: store.policy.map { "\($0.whatsNewLines.count)" },
                             tap: .page { AnyView(AdminUpdateWhatsNewView()) })
                 AdminTapRow(icon: "iphone.and.arrow.forward", tint: AppSection.admin.ink,
                             title: L10n.t("النسخ عند الأعضاء", "Versions on members' devices"),
-                            subtitle: L10n.t("منو للحين على نسخة قديمة — وتذكيرهم بإشعار", "Who's still on an old version — and remind them"),
+                            subtitle: L10n.t("من لا يزال على نسخة قديمة، وتذكيرهم بإشعار", "Who's still on an old version — and remind them"),
                             tap: .page { AnyView(AdminAppVersionsView()) })
             }
         }
@@ -284,7 +284,7 @@ struct AdminForceUpdateView: View {
         AdminSectionCard(title: L10n.t("النسخ القديمة", "Legacy versions")) {
             AdminControlRow(icon: "candybarphone", tint: DS.Color.warning,
                             title: L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"),
-                            subtitle: L10n.t("للنسخ المثبّتة قبل الحد لكل منصة — ما تعرف الإعدادات الجديدة",
+                            subtitle: L10n.t("للنسخ المثبّتة قبل الحد لكل منصة، لأنها لا تعرف الإعدادات الجديدة",
                                              "For copies installed before per-platform limits"),
                             control: AnyView(Toggle("", isOn: Binding(
                                 get: { (s.forceUpdate ?? false) && (s.latestBuild ?? 0) > 1 },
@@ -333,7 +333,7 @@ struct AdminForceUpdateView: View {
                 .padding(.top, DS.Spacing.xxs)
                 .accessibilityHidden(true)
             Text(L10n.t(
-                "المالكان مستثنيان من القفل حتى ما يقفلان نفسيهما لو رفعا الحد قبل ما يحدّثان أجهزتهما.",
+                "المالكان مستثنيان من القفل، حتى لا يُقفل عليهما التطبيق إذا رفعا الحد قبل تحديث أجهزتهما.",
                 "Owners are exempt so you can't lock yourself out."
             ))
             .dsFont(.footnote)
@@ -375,7 +375,7 @@ private struct AdminUpdatePlatformCard: View {
                                                                   label: L10n.t("أقل نسخة — \(title)", "Minimum — \(title)"))))
                 AdminControlRow(icon: "tag.fill", tint: AppSection.admin.ink,
                                 title: L10n.t("اسم النسخة", "Version name"),
-                                subtitle: L10n.t("يطلع في المربّع — مثل 1.0.1", "Shown in the box — e.g. 1.0.1"),
+                                subtitle: L10n.t("يظهر في المربّع، مثل 1.0.1", "Shown in the box — e.g. 1.0.1"),
                                 control: AnyView(AdminShortField(text: $draft.latestVersion, placeholder: "1.0.1",
                                                                  label: L10n.t("اسم النسخة — \(title)", "Version name — \(title)"))))
             }
@@ -392,7 +392,7 @@ private struct AdminUpdatePlatformCard: View {
                 }
                 .padding(.top, DS.Spacing.xs)
             } else {
-                Text(L10n.t("حط رقم آخر نسخة عشان يطلع للأعضاء مربّع التحديث.",
+                Text(L10n.t("يرجى إدخال رقم آخر نسخة ليظهر للأعضاء مربّع التحديث.",
                             "Enter the latest build to show members the update box."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
@@ -423,7 +423,7 @@ private struct AdminUpdatePlatformCard: View {
     @ViewBuilder private var modeDetail: some View {
         switch draft.mode {
         case .optional:
-            AdminUpdateNote(icon: "sparkles", text: L10n.t("مربّع «فيه تحديث جديد» مرة لكل نسخة، و«لاحقاً» يرجّعه بعد الأيام المحددة.",
+            AdminUpdateNote(icon: "sparkles", text: L10n.t("مربّع «يتوفر تحديث جديد» مرة لكل نسخة، و«لاحقاً» يعيد إظهاره بعد الأيام المحددة.",
                                                          "An update box once per version; “Later” brings it back after the set days."))
         case .scheduled:
             AdminControlRow(icon: "calendar", tint: AppSection.admin.ink,
@@ -438,12 +438,12 @@ private struct AdminUpdatePlatformCard: View {
                                 .accessibilityLabel(L10n.t("الموعد", "Deadline"))))
             if let d = draft.deadline, d <= Date() {
                 AdminUpdateNote(icon: "exclamationmark.triangle.fill",
-                                text: L10n.t("الموعد مرّ — النسخ الأقدم تنقفل مباشرة بعد الحفظ.",
+                                text: L10n.t("انقضى الموعد، وتُقفل النسخ الأقدم مباشرة بعد الحفظ.",
                                              "The deadline has passed — older builds lock right after saving."),
                                 tint: DS.Color.warning)
             }
         case .forced:
-            AdminUpdateNote(icon: "lock.fill", text: L10n.t("كل نسخة أقدم من \(latest) تنقفل الحين بشاشة «حدّث التطبيق».",
+            AdminUpdateNote(icon: "lock.fill", text: L10n.t("كل نسخة أقدم من \(latest) تُقفل الآن بشاشة «حدّث التطبيق».",
                                                           "Every build older than \(latest) locks now."),
                             tint: DS.Color.warning)
         }

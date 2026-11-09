@@ -305,7 +305,7 @@ final class OccasionComposerViewModel: ObservableObject {
             // العضو تغيّر، أو المستخدم اختار صورة بنفسه أثناء التحميل
             guard self.member?.id == memberId, self.photo.image == nil || self.photoFromMember else { return }
             guard let image else {
-                self.message = L10n.t("ما قدرنا نحمّل صورة العضو — تقدر تختار صورة بنفسك.",
+                self.message = L10n.t("تعذّر تحميل صورة العضو، ويمكن اختيار صورة أخرى.",
                                       "Couldn't load the member's photo — you can choose one yourself.")
                 return
             }
@@ -332,7 +332,7 @@ final class OccasionComposerViewModel: ObservableObject {
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
                   let image = await Task.detached(priority: .userInitiated, operation: { Self.downscaled(data, maxPixel: 1600) }).value else {
-                message = L10n.t("ما قدرنا نفتح الصورة — جرّب صورة ثانية.", "Couldn't open the photo — try another one.")
+                message = L10n.t("تعذّر فتح الصورة، يرجى اختيار صورة أخرى.", "Couldn't open the photo — try another one.")
                 return
             }
             avatarTask?.cancel()
@@ -344,7 +344,7 @@ final class OccasionComposerViewModel: ObservableObject {
             photoFromMember = false
         } catch {
             Log.error("Occasion photo load failed: \(error.localizedDescription)")
-            message = L10n.t("ما قدرنا نفتح الصورة — جرّب صورة ثانية.", "Couldn't open the photo — try another one.")
+            message = L10n.t("تعذّر فتح الصورة، يرجى اختيار صورة أخرى.", "Couldn't open the photo — try another one.")
         }
     }
 
@@ -412,10 +412,10 @@ final class OccasionComposerViewModel: ObservableObject {
                 let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, data: data, options: nil)
             }
-            message = L10n.t("انحفظ المنشور في الصور ✓", "Saved to Photos ✓")
+            message = L10n.t("حُفظ المنشور في الصور ✓", "Saved to Photos ✓")
         } catch {
             Log.error("Occasion save to Photos failed: \(error.localizedDescription)")
-            message = L10n.t("ما انحفظت الصورة — حاول مرة ثانية.", "Couldn't save the image — please try again.")
+            message = L10n.t("لم تُحفظ الصورة، يرجى المحاولة مرة أخرى.", "Couldn't save the image — please try again.")
         }
     }
 
@@ -448,8 +448,8 @@ final class OccasionComposerViewModel: ObservableObject {
 
     private var renderFailedMessage: String {
         kit.failed
-            ? L10n.t("تعذّر تحميل ملفات التصميم — تأكد من الاتصال وحاول مرة ثانية.", "Couldn't download the design files — check your connection and try again.")
-            : L10n.t("صار خطأ أثناء تجهيز الصورة — حاول مرة ثانية.", "Something went wrong while preparing the image — please try again.")
+            ? L10n.t("تعذّر تحميل ملفات التصميم، يرجى التحقق من الاتصال والمحاولة مرة أخرى.", "Couldn't download the design files — check your connection and try again.")
+            : L10n.t("حدث خطأ أثناء تجهيز الصورة، يرجى المحاولة مرة أخرى.", "Something went wrong while preparing the image — please try again.")
     }
 }
 

@@ -651,7 +651,7 @@ struct HomeNewsView: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
-        .accessibilityValue(isNew ? L10n.t("فيه جديد", "New") : "")
+        .accessibilityValue(isNew ? L10n.t("يوجد جديد", "New") : "")
         // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
         .dsCardCascade(cascade, appeared: appeared)
     }

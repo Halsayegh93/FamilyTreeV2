@@ -411,7 +411,7 @@ struct FamilyProjectsView: View {
             if pendingCount > 0 || filter == .pending {
                 let on = filter == .pending
                 // الشريحة الموحّدة بلون المعنى (بانتظار = تحذير) والعدد بعد النص
-                DSChipButton(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("طلباتي", "Mine"),
+                DSChipButton(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("الطلبات", "Mine"),
                              icon: "clock.fill", tint: DS.Color.warning, isSelected: on, count: pendingCount) {
                     // تبديل القائمة بنابض هادئ مثل فلتر الديوانيات — «تقليل الحركة»: تلاشٍ قصير
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.15)
@@ -702,7 +702,7 @@ struct AddProjectView: View {
             Button(L10n.t("لا", "No")) { Task { await saveProject(isOwner: false) } }
             Button(L10n.t("رجوع", "Back"), role: .cancel) {}
         } message: {
-            Text(L10n.t("إذا اخترت «لا» ما يظهر اسمك على المشروع، والإدارة تحدّد صاحبه.",
+            Text(L10n.t("عند اختيار «لا» لا يظهر الاسم على المشروع، وتحدّد الإدارة صاحبه.",
                         "If you choose No, your name won't show on the project; the admins can set its owner."))
         }
     }

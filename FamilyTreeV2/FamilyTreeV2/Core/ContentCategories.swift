@@ -203,7 +203,7 @@ final class CategoryStore: ObservableObject {
         } catch {
             let text = "\(error)"
             if text.contains("category_not_empty") {
-                errorMessage = L10n.t("لا يمكن حذفه — فيه عناصر. انقلها لتصنيف آخر أو أخفِ التصنيف.",
+                errorMessage = L10n.t("لا يمكن حذفه لاحتوائه على عناصر. يرجى نقلها إلى تصنيف آخر أو إخفاء التصنيف.",
                                       "Can't delete — it has items. Move them or hide the category.")
             } else if text.contains("protected_category") {
                 errorMessage = L10n.t("هذا تصنيف أساسي ولا يُحذف.", "This is a core category and can't be deleted.")

@@ -110,7 +110,7 @@ enum AdminLiveUsage {
         case "home":      return L10n.t("الرئيسية", "Home")
         case "tree":      return L10n.t("الشجرة", "Tree")
         case "diwaniyas": return L10n.t("الديوانيات", "Diwaniyas")
-        case "profile":   return L10n.t("حسابي", "Profile")
+        case "profile":   return L10n.t("الملف الشخصي", "Profile")
         case "admin":     return L10n.t("الإدارة", "Admin")
         case "news":      return L10n.t("الأخبار", "News")
         case "projects":  return L10n.t("المشاريع", "Projects")
@@ -263,7 +263,7 @@ enum AdminUsageStep: String, CaseIterable, Identifiable {
         case .registered: return L10n.t("سجّلوا في التطبيق", "Signed in to the app")
         case .device:     return L10n.t("جهازهم مسجّل", "Device registered")
         case .active:     return L10n.t("استخدموا خلال 3 أسابيع", "Used it in 3 weeks")
-        case .now:        return L10n.t("يستخدمونه الحين", "Using it now")
+        case .now:        return L10n.t("يستخدمونه الآن", "Using it now")
         }
     }
 
@@ -319,7 +319,7 @@ struct AdminUsageFunnelCard: View {
                                    page: { AnyView(AdminMembersPage(chip: .registered, sub: .noPush).adminArea(.family)) }))
                 }
             }
-            Text(L10n.t("اضغط أي درجة تشوف أسماءهم", "Tap any step to see the names"))
+            Text(L10n.t("اضغط أي درجة لعرض الأسماء", "Tap any step to see the names"))
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .frame(maxWidth: .infinity)
@@ -438,7 +438,7 @@ struct AdminUsageStepPage: View {
             return AnyView(AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…"))))
         }
         if entries.isEmpty {
-            return AnyView(DSEmptyView(L10n.t("لا أحد هنا الحين", "No one here right now"), style: .card))
+            return AnyView(DSEmptyView(L10n.t("لا أحد متصل الآن", "No one here right now"), style: .card))
         }
         let ids = entries.map(\.memberId)
         return AnyView(AdminSectionCard(spacing: 0) {
@@ -588,7 +588,7 @@ struct AdminLiveActivityCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminSectionLabel(title: L10n.t("النشاط", "Activity"),
-                              trailing: L10n.t("الحين وآخر 24 ساعة · يتحدّث كل 15 ثانية",
+                              trailing: L10n.t("الآن وآخر 24 ساعة · يُحدَّث كل 15 ثانية",
                                                "Now and last 24 hours · refreshes every 15 seconds"))
             card
         }

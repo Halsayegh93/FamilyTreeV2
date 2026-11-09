@@ -76,7 +76,7 @@ struct AdminMemberSheet: View {
                 onCancel: { dismiss() }
             ) {
                 DSEmptyView(L10n.t("العضو غير موجود", "Member not found"),
-                            message: L10n.t("ربما حُذف أو تغيّر — ارجع للقائمة", "It may have been deleted — go back to the list"),
+                            message: L10n.t("ربما حُذف أو تغيّر، يرجى العودة إلى القائمة", "It may have been deleted — go back to the list"),
                             style: .card)
             })
         }
@@ -294,7 +294,7 @@ struct AdminMemberSheet: View {
                 if canRegister {
                     AdminSheetRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
                                   title: L10n.t("تسجيل في التطبيق", "Register in the app"),
-                                  value: L10n.t("يتيح له الدخول برقمه فيصير «عضواً مسجّلاً»",
+                                  value: L10n.t("يتيح له الدخول برقمه ليصبح «عضواً مسجّلاً»",
                                                 "Lets them sign in with their number"),
                                   action: (L10n.t("تسجيل", "Register"), { confirm = .register }),
                                   busy: busy == AdminMemberConfirm.register.id)

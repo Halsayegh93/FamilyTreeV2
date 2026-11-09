@@ -269,7 +269,7 @@ struct AdminTreeEditRequestsView: View {
     private func emptyState(total: Int, counts: [TreeEditAction: Int]) -> some View {
         if total == 0 {
             DSEmptyView(L10n.t("لا توجد طلبات معلقة", "No pending requests"),
-                        message: L10n.t("كل طلبات الشجرة متابَعة — ما فيه شي ينتظر قرارك",
+                        message: L10n.t("جميع طلبات الشجرة متابَعة، ولا يوجد ما ينتظر القرار",
                                         "All tree requests are handled — nothing is awaiting your decision"),
                         tint: DS.Color.success, style: .compact)
         } else if let next = allActions.first(where: { (counts[$0] ?? 0) > 0 }) {

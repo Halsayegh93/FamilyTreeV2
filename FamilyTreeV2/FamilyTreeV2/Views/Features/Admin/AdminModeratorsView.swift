@@ -608,7 +608,7 @@ struct ChangeRoleSheet: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
             Text(L10n.t(
-                "\(member.firstName) يصير «\(roleTitle(selected))» — \(RoleGuide.forRole(selected)?.mandate ?? "")",
+                "\(member.firstName) يصبح «\(roleTitle(selected))» — \(RoleGuide.forRole(selected)?.mandate ?? "")",
                 "\(member.firstName) becomes «\(roleTitle(selected))» — \(RoleGuide.forRole(selected)?.mandate ?? "")"
             ))
         }

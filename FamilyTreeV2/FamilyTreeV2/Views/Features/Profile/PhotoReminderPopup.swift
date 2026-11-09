@@ -22,7 +22,7 @@ enum ProfileAvatarChange {
     @MainActor
     static func run(_ image: UIImage, for member: FamilyMember,
                     memberVM: MemberViewModel, adminRequestVM: AdminRequestViewModel) async -> Result {
-        let failed = Result(outcome: .failed, message: L10n.t("تعذّر رفع الصورة. حاول مرة ثانية.", "Couldn't upload the photo. Try again."))
+        let failed = Result(outcome: .failed, message: L10n.t("تعذّر رفع الصورة. يرجى المحاولة مرة أخرى.", "Couldn't upload the photo. Try again."))
         let cooldown = ProfileEditCooldown.shared
         if cooldown.canEdit(.avatar) {
             guard await memberVM.uploadAvatar(image: image, for: member.id) else { return failed }
@@ -40,7 +40,7 @@ enum ProfileAvatarChange {
         return ok
             ? Result(outcome: .sentForApproval,
                      message: L10n.t("تجاوزت ٣ تغييرات — أُرسلت الصورة للإدارة للموافقة", "Over 3 changes — sent to the admins for approval"))
-            : Result(outcome: .failed, message: L10n.t("تعذّر إرسال الطلب. حاول مرة ثانية.", "Couldn't send the request. Try again."))
+            : Result(outcome: .failed, message: L10n.t("تعذّر إرسال الطلب. يرجى المحاولة مرة أخرى.", "Couldn't send the request. Try again."))
     }
 }
 

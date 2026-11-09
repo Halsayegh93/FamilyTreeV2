@@ -26,7 +26,7 @@ struct SmsGuardKey: Identifiable, Equatable {
     static let all: [SmsGuardKey] = [
         SmsGuardKey(id: "sms_one_code_seconds", icon: "key.fill",
                     title: L10n.t("رمز واحد لكل", "One code per"),
-                    note: L10n.t("ما يوصله رمز ثاني ما دام الأول صالح", "No second code while the first one is still valid"),
+                    note: L10n.t("لا يصله رمز آخر ما دام الأول صالحاً", "No second code while the first one is still valid"),
                     range: 0...900, ladder: [0, 60, 120, 180, 300, 600, 900], unit: .minutes, storedInSeconds: true),
         SmsGuardKey(id: "sms_daily_per_number", icon: "calendar",
                     title: L10n.t("أقصى رسائل للرقم باليوم", "Max messages per number per day"),
@@ -113,7 +113,7 @@ final class SmsLoginGuardStore: ObservableObject {
             if ErrorHelper.isCancellation(error) { return nil }
             Log.warning("[KWT SMS] تعذّر حفظ \(key): \(error.localizedDescription)")
             guard let pg = error as? PostgrestError else {
-                return L10n.t("تعذّر الحفظ — تأكد من الاتصال وجرّب مرة ثانية.", "Couldn't save — check the connection and retry.")
+                return L10n.t("تعذّر الحفظ، يرجى التحقق من الاتصال والمحاولة مرة أخرى.", "Couldn't save — check the connection and retry.")
             }
             switch pg.hint {
             case "bad_value":
@@ -125,7 +125,7 @@ final class SmsLoginGuardStore: ObservableObject {
                 if pg.code == "42501" || pg.hint == "not_allowed" {
                     return L10n.t("تعديل الحماية للمالك فقط.", "Only the owner can change the protection.")
                 }
-                return L10n.t("تعذّر الحفظ — جرّب مرة ثانية.", "Couldn't save — try again.")
+                return L10n.t("تعذّر الحفظ، يرجى المحاولة مرة أخرى.", "Couldn't save — try again.")
             }
         }
     }

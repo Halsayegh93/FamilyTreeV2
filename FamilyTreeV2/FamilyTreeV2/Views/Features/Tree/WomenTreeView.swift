@@ -138,7 +138,25 @@ struct WomenTreeView: View {
     /// (عين مشطوبة + تعتيم) — فالإدارة تحتاج رؤيته لتديره، والعلامة تمنع
     /// الالتباس الذي كان: إخفاء بلا أثر مرئيّ يوحي أن الإعداد لا يعمل.
     private func visible(_ rows: [FamilyMember]) -> [FamilyMember] {
-        authVM.canEditMembers ? rows : rows.filter { !$0.isHiddenFromTree }
+        if authVM.canEditMembers { return rows }
+        var out = rows.filter { !$0.isHiddenFromTree }
+        // «ما يظهر في الشجرة» — اختيار البنت (٢٠٢٦-١١-٠٩): زوجها من خارج العائلة وعيالها منه مخفيون إلا بإظهارها
+        guard WomenStore.visibilitySupported else { return out }
+        let outside = WomenStore.outsideFamilyIds
+        guard !outside.isEmpty else { return out }
+        let spouseOn = WomenStore.spouseShownIds, kidsOn = WomenStore.childrenShownIds, hiddenKids = WomenStore.hiddenChildIds
+        var hiddenHusbands = Set<UUID>()
+        for w in out where w.isFemale {
+            if let h = w.husbandId, outside.contains(h), !spouseOn.contains(w.id) { hiddenHusbands.insert(h) }
+        }
+        out.removeAll { m in
+            if hiddenHusbands.contains(m.id) { return true }
+            if let f = m.fatherId, outside.contains(f), let mom = m.motherId {
+                return !kidsOn.contains(mom) || hiddenKids.contains(m.id)
+            }
+            return false
+        }
+        return out
     }
 
     /// إعادة الجلب عند وصول تغيير حيّ من جهاز آخر.
@@ -1191,7 +1209,7 @@ struct WomanDetailSheet: View {
     private var actionsBoxTitle: String {
         switch mode {
         case .direct: return L10n.t("الإدارة", "Manage")
-        case .selfFamily: return L10n.t("عائلتي", "My family")
+        case .selfFamily: return L10n.t("الأسرة", "My family")
         case .request, .viewOnly: return L10n.t("طلب إضافة", "Request an addition")
         }
     }

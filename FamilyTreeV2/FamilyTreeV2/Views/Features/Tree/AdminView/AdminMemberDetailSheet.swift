@@ -864,7 +864,7 @@ struct AdminMemberDetailSheet: View {
             return L10n.t("طلب انضمام قيد المراجعة — القرار من «الوارد».", "A join request under review — decide in the Inbox.")
         }
         return canActivate
-            ? L10n.t("يتيح له الدخول برقمه فيصير «عضواً مسجّلاً».", "Lets them sign in with their number.")
+            ? L10n.t("يتيح له الدخول برقمه ليصبح «عضواً مسجّلاً».", "Lets them sign in with their number.")
             : nil
     }
     /// منع الأرقام للمالك وحده (نفس صفحة «الأرقام الممنوعة من التسجيل» وصلاحية السيرفر)

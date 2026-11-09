@@ -151,7 +151,7 @@ struct OccasionLinksSection: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { linkToDelete = nil }
         } message: { _ in
-            Text(L10n.t("الرابط يوقف عند كل اللي عندهم، ولا يمكن إرجاعه.",
+            Text(L10n.t("يتوقف الرابط لدى كل من يملكه، ولا يمكن إرجاعه.",
                         "The link stops working for everyone who has it. This can't be undone."))
         }
     }
@@ -169,7 +169,7 @@ struct OccasionLinksSection: View {
                     Text(L10n.t("رابط الموقع", "Website link"))
                         .dsFont(.headline)
                         .foregroundColor(DS.Color.fieldLabel)
-                    Text(L10n.t("نفس المولّد على الموقع بدون تسجيل دخول — لمن عنده الرابط بس",
+                    Text(L10n.t("المولّد نفسه على الموقع بدون تسجيل دخول، لمن لديه الرابط فقط",
                                 "The same generator on the website without signing in — only for whoever has the link"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.fieldValue)
@@ -217,7 +217,7 @@ struct OccasionLinksSection: View {
     private var list: some View {
         if let links = model.links {
             if links.isEmpty {
-                Text(L10n.t("ما فيه روابط للحين — أنشئ رابط وشاركه مع من تبي.",
+                Text(L10n.t("لا توجد روابط حتى الآن. يمكن إنشاء رابط ومشاركته.",
                             "No links yet — create one and share it."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)

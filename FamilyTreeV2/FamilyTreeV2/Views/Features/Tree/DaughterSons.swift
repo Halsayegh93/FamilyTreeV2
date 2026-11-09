@@ -373,7 +373,17 @@ private struct LineageGateModifier: ViewModifier {
     @ObservedObject private var store = LineageGateStore.shared
     @ObservedObject private var terms = TermsAcceptanceStore.shared
 
+    /// عرض الصفحة على المحاكي بلا حساب بهذه الحالة (نسخة التطوير فقط): متغيّر البيئة LINEAGE_PAGE_TEST=1
+    @State private var debugShow: Bool = {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["LINEAGE_PAGE_TEST"] == "1"
+        #else
+        return false
+        #endif
+    }()
+
     private var showGate: Bool {
+        if debugShow { return true }
         guard terms.statusChecked && !terms.needsAcceptance else { return false }
         return (store.status?.needs == true && !store.postponed) || (store.pageRequested && store.isRestricted)
     }
@@ -393,10 +403,10 @@ private struct LineageGateModifier: ViewModifier {
                 guard store.status?.flagged == true, store.status?.completed == false else { return }
                 Task { await store.refresh() }
             }
-            .fullScreenCover(isPresented: Binding(get: { showGate }, set: { if !$0 { store.postponed = true; store.pageRequested = false } })) {
+            .fullScreenCover(isPresented: Binding(get: { showGate }, set: { if !$0 { debugShow = false; store.postponed = true; store.pageRequested = false } })) {
                 LineagePage(status: store.status, onSent: { store.markSent() },
                             onLater: (DaughterSons.allowsLater || store.status?.needs != true)
-                                ? { store.postponed = true; store.pageRequested = false } : nil)
+                                ? { debugShow = false; store.postponed = true; store.pageRequested = false } : nil)
                     .interactiveDismissDisabled()
             }
     }
@@ -444,9 +454,9 @@ struct LineageLockedView: View {
         let pending = store.isPending
         return DSEmptyView(
             pending ? DaughterSons.text("locked_pending_title", "حسابك قيد المراجعة", "Your account is under review")
-                    : DaughterSons.text("locked_title", "أكمل حسابك عشان تشوف هذا القسم", "Complete your account to see this section"),
+                    : DaughterSons.text("locked_title", "يرجى إكمال الحساب لعرض هذا القسم", "Complete your account to see this section"),
             message: pending
-                ? DaughterSons.text("locked_pending_body", "يفتح هذا القسم أول ما توافق الإدارة على بياناتك.",
+                ? DaughterSons.text("locked_pending_body", "يُفتح هذا القسم فور موافقة الإدارة على البيانات.",
                                     "This section opens as soon as the admins approve your details.")
                 : DaughterSons.text("locked_body", "اختر أمك واكتب اسم أبوك، وبعد موافقة الإدارة يفتح لك.",
                                     "Pick your mother and add your father's name; it opens once the admins approve."),
@@ -477,19 +487,19 @@ struct LineageHomeCard: View {
     @ViewBuilder
     private func content(_ s: DaughterSons.Status) -> some View {
         if s.pending {
-            DSNoteCard(DaughterSons.text("home_pending_body", "نبلغك أول ما توافق الإدارة",
+            DSNoteCard(DaughterSons.text("home_pending_body", "يصلك إشعار فور موافقة الإدارة",
                                          "We'll let you know as soon as the admins approve"),
                        title: DaughterSons.text("home_pending_title", "حسابك قيد المراجعة", "Your account is under review"),
                        icon: "hourglass", tint: DS.Color.info)
         } else if s.wasRejected {
             DSNoteCard(s.rejectedReason.map { L10n.t("السبب: ", "Reason: ") + $0 }
-                       ?? DaughterSons.text("home_rejected_body", "ما تأكّدت بياناتك السابقة — عدّلها وأرسلها.",
+                       ?? DaughterSons.text("home_rejected_body", "لم تُعتمد البيانات السابقة، يرجى تعديلها وإرسالها.",
                                             "Your previous details weren't confirmed — edit and send them."),
                        title: DaughterSons.text("home_rejected_title", "راجع بياناتك وأرسلها من جديد",
                                                 "Review your details and send them again"),
                        icon: "arrow.uturn.backward.circle.fill", tint: DS.Color.warning)
         } else {
-            DSNoteCard(DaughterSons.text("home_body", "اختر أمك واكتب اسم أبوك، عشان يكتمل حسابك ويفتح لك كل شي.",
+            DSNoteCard(DaughterSons.text("home_body", "يرجى اختيار الأم وكتابة اسم الأب لإكمال الحساب وفتح جميع الأقسام.",
                                          "Pick your mother and add your father's name to complete your account and unlock everything."),
                        title: DaughterSons.text("home_title", "أكمل حسابك", "Complete your account"),
                        icon: "person.crop.circle.badge.exclamationmark", tint: DS.Color.accent)
@@ -642,7 +652,7 @@ struct LineagePage: View {
                     .dsFont(.title)
                     .foregroundColor(DS.Color.textPrimary)
                 Text(DaughterSons.text("intro_body",
-                                       "اختر أمك من بنات العائلة واكتب اسم أبوك، عشان يكتمل حسابك وتنضاف في الشجرة مكانك الصحيح.",
+                                       "يرجى اختيار الأم من بنات العائلة وكتابة اسم الأب، لإكمال الحساب والإضافة إلى الشجرة في الموضع الصحيح.",
                                        "Pick your mother from the family's daughters and add your father's name to complete your account and be placed correctly in the tree."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textSecondary)
@@ -700,7 +710,7 @@ struct LineagePage: View {
                 } else if searching && results.isEmpty {
                     DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
                 } else if results.isEmpty {
-                    DSEmptyView(L10n.t("ما لقينا اسمها", "No match"),
+                    DSEmptyView(L10n.t("لم يُعثر على الاسم", "No match"),
                                 message: L10n.t("تأكد من اسمها واسم أبيها وجدها، أو تواصل مع الإدارة.",
                                                 "Check her, her father's and grandfather's names, or contact the admins."),
                                 style: .compact)
@@ -739,7 +749,7 @@ struct LineagePage: View {
                 DSSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
                 fatherFields(motherName: newMotherName)
                 DSNoteCard(DaughterSons.text("pending_note",
-                                             "اختيارك يوصل الإدارة للتأكيد، وبعدها تنضاف في شجرة النساء تحت أمك.",
+                                             "يُرسل الاختيار إلى الإدارة للتأكيد، ثم تتم الإضافة في شجرة النساء تحت الأم.",
                                              "Your choice goes to the admins to confirm; then you're added in the women's tree under your mother."),
                            icon: "checkmark.shield.fill", tint: DS.Color.info)
             }
@@ -762,7 +772,7 @@ struct LineagePage: View {
                     fatherFields(motherName: m.fullName)
                 }
                 DSNoteCard(DaughterSons.text("pending_note",
-                                             "اختيارك يوصل الإدارة للتأكيد، وبعدها تنضاف في شجرة النساء تحت أمك.",
+                                             "يُرسل الاختيار إلى الإدارة للتأكيد، ثم تتم الإضافة في شجرة النساء تحت الأم.",
                                              "Your choice goes to the admins to confirm; then you're added in the women's tree under your mother."),
                            icon: "checkmark.shield.fill", tint: DS.Color.info)
             }
@@ -839,7 +849,7 @@ struct LineagePage: View {
                 } else if menSearching && menResults.isEmpty {
                     DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
                 } else if menResults.isEmpty {
-                    DSEmptyView(L10n.t("ما لقينا اسمه", "No match"),
+                    DSEmptyView(L10n.t("لم يُعثر على الاسم", "No match"),
                                 message: L10n.t("تأكد من الاسم، أو تواصل مع الإدارة.", "Check the name, or contact the admins."),
                                 style: .compact)
                 } else {
@@ -862,7 +872,7 @@ struct LineagePage: View {
                 newMotherMode = false
                 newMotherName = ""; newMotherFather = nil; menSearch = ""; newMotherDeceased = false
             } label: {
-                Text(L10n.t("رجوع للبحث عن أمي", "Back to searching for my mother"))
+                Text(L10n.t("العودة إلى البحث عن الأم", "Back to searching for my mother"))
                     .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
                     .frame(minHeight: DS.Icon.tapTarget)
             }
@@ -909,7 +919,7 @@ struct LineagePage: View {
                 DSSegmentOption(id: false, title: L10n.t("حي", "Living"), icon: "heart"),
                 DSSegmentOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "heart.slash")
             ], selection: $deceased, size: .regular)
-            DSNoteCard(L10n.t("يطلع في شجرة النساء فقط: \(shortName(motherName)) ← زوجها ← أنت",
+            DSNoteCard(L10n.t("يظهر في شجرة النساء فقط: \(shortName(motherName)) ← زوجها ← أنت",
                               "Shown in the women's tree only: \(shortName(motherName)) → her husband → you"),
                        icon: "arrow.triangle.branch", tint: DS.Color.accent)
         }
@@ -922,7 +932,7 @@ struct LineagePage: View {
             DSStateIcon("paperplane.fill", tint: DS.Color.success, size: DS.Icon.state)
             Text(DaughterSons.text("pending_title", "حسابك قيد المراجعة", "Your account is under review"))
                 .dsFont(.title).foregroundColor(DS.Color.textPrimary)
-            Text(DaughterSons.text("sent_body", "نبلغك أول ما توافق الإدارة، وتنضاف في الشجرة ويكتمل حسابك.",
+            Text(DaughterSons.text("sent_body", "يصلك إشعار فور موافقة الإدارة، وتتم الإضافة إلى الشجرة ويكتمل الحساب.",
                                    "We'll let you know as soon as the admins approve; then you're added to the tree and your account is complete."))
                 .dsFont(.footnote).foregroundColor(DS.Color.textSecondary).multilineTextAlignment(.center)
         }
@@ -1152,7 +1162,7 @@ struct LineageDetailsGroups: View {
             group(L10n.t("صاحب الطلب", "Applicant")) { applicant }
             group(L10n.t("الأم", "Mother")) { mother }
             group(L10n.t("الأب", "Father")) { father }
-            group(L10n.t("منو سجّل", "Who registered")) { registeredBy }
+            group(L10n.t("من سجّل", "Who registered")) { registeredBy }
             group(L10n.t("الجهاز", "Device")) { devices }
         }
     }
@@ -1433,7 +1443,7 @@ struct AdminLineageRequestCard: View {
             Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) { decide(approve: false, reason: reason) }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.t("يرجع له «أكمل حسابك» ليختار من جديد، ويصله السبب.", "He gets «Complete your account» again with the reason."))
+            Text(L10n.t("تعود له خانة «أكمل حسابك» ليختار من جديد، ويصله السبب.", "He gets «Complete your account» again with the reason."))
         }
     }
 

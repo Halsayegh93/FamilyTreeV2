@@ -48,7 +48,7 @@ private struct BlockMemberFlowModifier: ViewModifier {
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { target = nil }
             } message: { t in
                 Text(L10n.t(
-                    "لن تظهر لك أخبار «\(t.name)» ولا تعليقاته. لا يُبلَّغ العضو بأنك حظرته، وتقدر تلغي الحظر من الإعدادات ← الإشعارات والخصوصية.",
+                    "لن تظهر لك أخبار «\(t.name)» ولا تعليقاته. لا يُبلَّغ العضو بأنك حظرته، ويمكن إلغاء الحظر من الإعدادات ← الإشعارات والخصوصية.",
                     "You won't see posts or comments from “\(t.name)”. They won't be notified. You can unblock them from Settings → Notifications & Privacy."
                 ))
             }
@@ -68,7 +68,7 @@ private struct BlockMemberFlowModifier: ViewModifier {
                 Button(L10n.t("حسناً", "OK")) {}
             } message: {
                 Text(L10n.t(
-                    "لن يظهر لك محتوى «\(blockedName ?? "")» بعد الآن. تقدر تلغي الحظر من الإعدادات ← الإشعارات والخصوصية.",
+                    "لن يظهر لك محتوى «\(blockedName ?? "")» بعد الآن. يمكن إلغاء الحظر من الإعدادات ← الإشعارات والخصوصية.",
                     "You won't see content from “\(blockedName ?? "")” anymore. You can unblock them from Settings → Notifications & Privacy."
                 ))
             }

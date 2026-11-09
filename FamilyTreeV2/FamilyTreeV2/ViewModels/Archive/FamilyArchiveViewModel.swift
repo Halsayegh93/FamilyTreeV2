@@ -290,7 +290,7 @@ final class FamilyArchiveViewModel: ObservableObject {
                 if status == .approved {
                     await notificationVM?.sendNotification(
                         title: L10n.stored("تم اعتماد إضافتك للمكتبة", "Your Library Item Was Approved"),
-                        body: L10n.stored("«\(item.title)» صار ظاهراً في مكتبة العائلة.",
+                        body: L10n.stored("«\(item.title)» أصبح ظاهراً في مكتبة العائلة.",
                                     "«\(item.title)» is now visible in the family library."),
                         targetMemberIds: [item.uploadedBy],
                         kind: NotificationKind.archiveApproved.rawValue

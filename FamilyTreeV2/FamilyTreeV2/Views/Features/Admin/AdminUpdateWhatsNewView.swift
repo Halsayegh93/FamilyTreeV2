@@ -48,7 +48,7 @@ struct AdminUpdateWhatsNewView: View {
                                            forceTitle: trimmed(forceTitle).isEmpty ? L10n.t("حدّث التطبيق", "Update the App") : trimmed(forceTitle),
                                            forceMessage: trimmed(forceMessage)))
             }
-            .dsAlert(L10n.t("ما انحفظ", "Not saved"),
+            .dsAlert(L10n.t("لم يُحفظ", "Not saved"),
                      isPresented: Binding(get: { alertText != nil }, set: { if !$0 { alertText = nil } })) {
                 Button(L10n.t("حسناً", "OK")) {}
             } message: {
@@ -94,7 +94,7 @@ struct AdminUpdateWhatsNewView: View {
         return AnyView(VStack(spacing: DS.Hub.stackSpacing) {
             AdminSectionCard(title: L10n.t("ما الجديد (سطر لكل نقطة)", "What's new (one line per point)"),
                              tag: "\(whatsNew.count)/1200") {
-                field(L10n.t("إضافة الأبناء مباشرة من «عائلتي»", "Add sons right from “My family”"),
+                field(L10n.t("إضافة الأبناء مباشرة من «الأسرة»", "Add sons right from “My family”"),
                       text: $whatsNew, lines: 4...12, limit: 1200)
             }
             AdminSectionCard(title: L10n.t("شاشة الإجبار", "Lock screen")) {
@@ -102,7 +102,7 @@ struct AdminUpdateWhatsNewView: View {
                     label(L10n.t("العنوان", "Title"))
                     field(L10n.t("حدّث التطبيق", "Update the App"), text: $forceTitle, lines: 1...1, limit: 60)
                     label(L10n.t("الرسالة", "Message"))
-                    field(L10n.t("نسختك قديمة. حدّث من المتجر عشان تكمل…", "Your version is out of date…"),
+                    field(L10n.t("نسخة التطبيق قديمة. يرجى التحديث من المتجر للمتابعة…", "Your version is out of date…"),
                           text: $forceMessage, lines: 2...5, limit: 400)
                 }
             }
@@ -110,7 +110,7 @@ struct AdminUpdateWhatsNewView: View {
                              tag: L10n.t("من «النسخ عند الأعضاء»", "From “Versions”")) {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     label(L10n.t("العنوان", "Title"))
-                    field(L10n.t("فيه تحديث جديد للتطبيق", "A new app update"), text: $reminderTitle, lines: 1...1, limit: 80)
+                    field(L10n.t("يتوفر تحديث جديد للتطبيق", "A new app update"), text: $reminderTitle, lines: 1...1, limit: 80)
                     label(L10n.t("النص", "Text"))
                     field(L10n.t("نسختك قديمة. حدّث من المتجر…", "Your version is old…"), text: $reminderBody, lines: 2...4, limit: 300)
                 }
@@ -186,7 +186,7 @@ private struct AdminUpdatePreview: View {
             } else {
                 ForceUpdateContent(title: forceTitle,
                                    message: forceMessage.isEmpty
-                                       ? L10n.t("نسختك قديمة. حدّث من المتجر عشان تكمل استخدام تطبيق عائلة المحمدعلي.",
+                                       ? L10n.t("هذه النسخة قديمة. يرجى التحديث من المتجر لمواصلة استخدام تطبيق عائلة المحمدعلي.",
                                                 "Your version is out of date. Update from the store to keep using the app.")
                                        : forceMessage,
                                    lines: lines, onOpenStore: {})

@@ -238,7 +238,7 @@ final class DeathDatesCampaignStore: ObservableObject {
             if ErrorHelper.isCancellation(error) { return nil }
             Log.warning("[DEATH DATES] تعذّر حفظ إعداد الحملة: \(error.localizedDescription)")
             guard let pg = error as? PostgrestError else {
-                return L10n.t("تعذّر الحفظ — تأكد من الاتصال وجرّب مرة ثانية.", "Couldn't save — check the connection and retry.")
+                return L10n.t("تعذّر الحفظ، يرجى التحقق من الاتصال والمحاولة مرة أخرى.", "Couldn't save — check the connection and retry.")
             }
             switch pg.hint {
             case "unknown_key":
@@ -250,7 +250,7 @@ final class DeathDatesCampaignStore: ObservableObject {
                 if pg.code == "42501" || pg.hint == "not_allowed" {
                     return L10n.t("إعداد الحملة للمالك فقط.", "Only the owner can change the campaign.")
                 }
-                return L10n.t("تعذّر الحفظ — جرّب مرة ثانية.", "Couldn't save — try again.")
+                return L10n.t("تعذّر الحفظ، يرجى المحاولة مرة أخرى.", "Couldn't save — try again.")
             }
         }
     }

@@ -304,17 +304,17 @@ private struct GuidePage {
     static var tree: [GuidePage] {
         [
             GuidePage(title: L10n.t("اضغط على الصورة", "Tap the photo"),
-                      text: L10n.t("يظهر أبناء العضو تحته، واضغط عليها مرة ثانية لإخفائهم.",
+                      text: L10n.t("يظهر أبناء العضو تحته، والضغط مرة أخرى يخفيهم.",
                                    "The member's children appear below; tap it again to hide them."),
                       visual: .tap(before: "GuideTreeBefore", after: "GuideTreeAfter",
                                    at: CGPoint(x: 0.5, y: 0.71), aspect: treeAspect)),
             GuidePage(title: L10n.t("اضغط على الاسم", "Tap the name"),
-                      text: L10n.t("تنفتح تفاصيل العضو: معلوماته وعائلته وصلة القرابة.",
+                      text: L10n.t("تُفتح تفاصيل العضو: بياناته وأسرته وصلة القرابة.",
                                    "The member's details open: info, family and kinship."),
                       visual: .tap(before: "GuideNameBefore", after: "GuideNameAfter",
                                    at: CGPoint(x: 0.5, y: 0.485), aspect: nameAspect)),
             GuidePage(title: L10n.t("الرقم فوق الصورة", "The number on the photo"),
-                      text: L10n.t("عدد أبناء العضو — والسهم يعني إنك تقدر تفتحهم.",
+                      text: L10n.t("عدد أبناء العضو، والسهم يدل على إمكانية عرضهم.",
                                    "How many children the member has — the arrow means you can open them."),
                       visual: .spot(image: "GuideTreeBefore", at: CGPoint(x: 0.435, y: 0.629),
                                     radius: 0.075, aspect: treeAspect)),
@@ -324,12 +324,12 @@ private struct GuidePage {
                       visual: .spot(image: "GuideTreeAfter", at: CGPoint(x: 0.5, y: 0.757),
                                     radius: 0.14, aspect: treeAspect)),
             GuidePage(title: L10n.t("المتوفّى", "Deceased"),
-                      text: L10n.t("صورته رمادية، وتحت اسمه شريط أحمر فيه سنة الوفاة ثم الميلاد.",
+                      text: L10n.t("صورته رمادية، وتحت اسمه شريط أحمر يتضمن سنة الوفاة ثم الميلاد.",
                                    "Their photo is grey, with a red strip under the name showing the death then birth year."),
                       visual: .spot(image: "GuideTreeBefore", at: CGPoint(x: 0.5, y: 0.35),
                                     radius: 0.15, aspect: treeAspect)),
             GuidePage(title: L10n.t("أزرار الشجرة", "Tree buttons"),
-                      text: L10n.t("هذي الأزرار في أعلى الشجرة.",
+                      text: L10n.t("هذه الأزرار في أعلى الشجرة.",
                                    "These buttons are at the top of the tree."),
                       visual: .toolbar)
         ]
@@ -355,7 +355,7 @@ private struct GuideChapter: Identifiable {
             // رمز الديوانيات الموحّد «مجلس» (sofa.fill) — قرار المالك ٢٠٢٦-١٠-٠٧ (كان map.fill)
             GuideChapter(id: "diwaniyas", title: L10n.t("الديوانيات", "Diwaniyas"), icon: "sofa.fill",
                          tint: AppSection.diwaniyas.fill, pages: GuidePage.diwaniyas),
-            GuideChapter(id: "profile", title: L10n.t("حسابي", "My Account"), icon: "person.crop.circle.fill",
+            GuideChapter(id: "profile", title: L10n.t("الملف الشخصي", "My Account"), icon: "person.crop.circle.fill",
                          tint: AppSection.profile.fill, pages: GuidePage.profile),
             GuideChapter(id: "notifications", title: L10n.t("الإشعارات", "Notifications"), icon: "bell.badge.fill",
                          tint: AppSection.home.fill, pages: GuidePage.notifications),
@@ -441,13 +441,13 @@ extension GuidePage {
                       visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.292, y: 0.292),
                                     radius: 0.09, aspect: shotAspect)),
             // «طلباتي» بترتيب الصفحة: المعلومات ← طلباتي ← عائلتي
-            GuidePage(title: L10n.t("طلباتي", "My requests"),
+            GuidePage(title: L10n.t("الطلبات", "My requests"),
                       text: L10n.t("طلباتك المرسلة للإدارة تظهر هنا «تحت المراجعة» — واضغط «سحب» لإلغاء أي طلب.",
                                    "Requests you sent to the admins show here «Under review» — tap «Withdraw» to cancel one."),
                       visual: .rect(image: "GuideProfileRequests", rect: CGRect(x: 0.035, y: 0.21, width: 0.93, height: 0.613),
                                     aspect: shotAspect)),
-            GuidePage(title: L10n.t("عائلتي", "My family"),
-                      text: L10n.t("يظهر لما تكون حالتك «متزوج»: أضف زوجتك واختر أمك، و«إضافة ابن» لابن أو بنت بموافقة الإدارة.",
+            GuidePage(title: L10n.t("الأسرة", "My family"),
+                      text: L10n.t("يظهر عندما تكون الحالة «متزوج»: إضافة الزوجة واختيار الأم، و«إضافة ابن» لإضافة ابن أو بنت بموافقة الإدارة.",
                                    "Shows when your status is «Married»: add your wife and pick your mother; «Add child» adds a son or daughter after admin approval."),
                       visual: .rect(image: "GuideProfileFamily", rect: CGRect(x: 0.035, y: 0.164, width: 0.93, height: 0.707),
                                     aspect: shotAspect)),
@@ -462,7 +462,7 @@ extension GuidePage {
     fileprivate static var notifications: [GuidePage] {
         [
             GuidePage(title: L10n.t("الإشعارات | المستجدات", "Notifications | Updates"),
-                      text: L10n.t("«الإشعارات» ما يخصّك، و«المستجدات» أخبار التطبيق — والرقم الأحمر يعني جديد.",
+                      text: L10n.t("«الإشعارات» لما يخصّك، و«المستجدات» لأخبار التطبيق، والرقم الأحمر يدل على جديد.",
                                    "«Notifications» are yours, «Updates» are app news — a red number means new."),
                       visual: .rect(image: "GuideNotifs", rect: CGRect(x: 0.035, y: 0.026, width: 0.93, height: 0.142),
                                     aspect: shotAspect)),
@@ -551,7 +551,7 @@ extension GuidePage {
                                     aspect: nameAspect)),
             // تفاصيل مشروع العضو نفسه — زر «تعديل» (القلم) أعلاها
             GuidePage(title: L10n.t("صاحب المشروع", "Project owner"),
-                      text: L10n.t("أنت صاحب مشروعك: تعدّله أو تحذفه من داخله، والمعلّق منه في «طلباتي».",
+                      text: L10n.t("أنت صاحب مشروعك: تعدّله أو تحذفه من داخله، والمعلّق منه في «الطلبات».",
                                    "You own your project: edit or delete it from inside it; pending ones are under «Mine»."),
                       visual: .spot(image: "GuideProjectOwner", at: CGPoint(x: 0.233, y: 0.142),
                                     radius: 0.07, aspect: shotAspect))
@@ -1042,13 +1042,13 @@ private struct GuideToolbarScene: View {
                  detail: L10n.t("ابحث عن أي عضو باسمه", "Find any member by name")),
             Item(id: 2, look: .circle("house.fill"),
                  title: L10n.t("البداية", "Start"),
-                 detail: L10n.t("يرجعك لأعلى الشجرة", "Back to the top of the tree")),
+                 detail: L10n.t("يعيدك إلى أعلى الشجرة", "Back to the top of the tree")),
             Item(id: 3, look: .switcher,
                  title: L10n.t("العائلة / النساء", "Family / Women"),
                  detail: L10n.t("تبدّل بين الشجرتين", "Switch between the two trees")),
             Item(id: 4, look: .circle("location.fill"),
-                 title: L10n.t("موقعي", "Me"),
-                 detail: L10n.t("يوصلك لمكانك «أنت هنا»", "Takes you to your place"))
+                 title: L10n.t("موقعك", "Me"),
+                 detail: L10n.t("ينقلك إلى موقعك «أنت هنا»", "Takes you to your place"))
         ]
     }
 

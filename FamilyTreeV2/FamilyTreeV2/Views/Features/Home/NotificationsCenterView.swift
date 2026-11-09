@@ -201,7 +201,7 @@ struct NotificationsCenterView: View {
     /// وزخرفة «مجسّمات» تحته بلون القسم — كان نسخة يدوية من رأس صفحات الرئيسية
     private var notificationsHeader: some View {
         DSSubPageHeader(title: L10n.t("الإشعارات", "Notifications"),
-                        subtitle: L10n.t("آخر ما وصلك من العائلة", "The latest from your family"),
+                        subtitle: L10n.t("آخر ما وصل من العائلة", "The latest from your family"),
                         section: pageSection, icon: "bell.fill",
                         onBack: { dismiss() })
     }
@@ -575,7 +575,7 @@ struct NotificationsCenterView: View {
         DSSegmentedSwitch(
             options: [
                 DSSegmentOption(id: NotifTab.notifications,
-                                title: L10n.t("إشعاراتي", "My notifications"),
+                                title: L10n.t("الإشعارات الخاصة", "My notifications"),
                                 icon: "bell.badge.fill", count: notifCount),
                 DSSegmentOption(id: NotifTab.activity,
                                 title: L10n.t("المستجدات", "Activity"),

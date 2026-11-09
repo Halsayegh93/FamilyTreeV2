@@ -24,7 +24,7 @@ nonisolated struct AdminUpdatePlatform: Equatable, Decodable {
             switch self {
             case .optional: return L10n.t("اختياري", "Optional")
             case .scheduled: return L10n.t("إجباري من تاريخ", "Required from date")
-            case .forced: return L10n.t("إجباري الحين", "Required now")
+            case .forced: return L10n.t("إجباري فوراً", "Required now")
             }
         }
         var icon: String {
@@ -178,13 +178,13 @@ final class AdminUpdatePolicyStore: ObservableObject {
 
     static func message(_ error: Error) -> String {
         guard let pg = error as? PostgrestError else {
-            return L10n.t("تعذّر الاتصال — تحقّق من الإنترنت وجرّب مرة ثانية.", "Couldn't connect — check the internet and retry.")
+            return L10n.t("تعذّر الاتصال، يرجى التحقق من الإنترنت والمحاولة مرة أخرى.", "Couldn't connect — check the internet and retry.")
         }
         if pg.code == "42501" || pg.hint == "not_allowed" {
             return L10n.t("«فرض التحديث» للمالك فقط.", "Force update is for the owner only.")
         }
         if pg.code == "22023" || pg.code == "23514", !pg.message.isEmpty { return pg.message }
-        return L10n.t("تعذّر الحفظ — جرّب مرة ثانية.", "Couldn't save — try again.")
+        return L10n.t("تعذّر الحفظ، يرجى المحاولة مرة أخرى.", "Couldn't save — try again.")
     }
 }
 
