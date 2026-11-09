@@ -43,6 +43,8 @@ struct AdminMembersPage: View {
 
     /// رأس الحلقات (`AdminMembersHeader.swift`): أرقامها، شجرة النساء (لعدد النساء)، والطيّ عند التمرير
     @State private var census = AdminFamilyCensus()
+    /// من دخل التطبيق — «لهم حساب» تحت «خارج العائلة» (أبناء البنات خارج قوائم «استخدام التطبيق»)
+    @State private var signedIn: Set<UUID>? = nil
     @State private var womenRows: [FamilyMember] = WomenStore.cache
     @State private var collapsed = false
     @State private var compactLine: CGFloat = DS.Hub.compactBar
@@ -81,7 +83,12 @@ struct AdminMembersPage: View {
     private static let searchAnchor = "adminMembersSearch"
 
     /// `sub` باقٍ لمن يفتح الصفحة به (الشرائح الفرعية حُذفت في التبسيط) — يُتجاهل إلا «تاريخ الوفاة غير مكتمل»
-    init(chip: AdminMemberChip = .all, sub: AdminMemberSub = .all) {
+    /// `womenOutside`: يفتح «شجرة النساء ← فرع خارج العائلة» (حلقة «خارج العائلة» في «اليوم»)
+    init(chip: AdminMemberChip = .all, sub: AdminMemberSub = .all, womenOutside: Bool = false) {
+        if womenOutside {
+            _scope = State(initialValue: .women)
+            _womenChipRequest = State(initialValue: .outside)
+        }
         _chip = State(initialValue: chip.shownChip)
         _review = State(initialValue: chip.review ?? (chip == .deceased && sub == .deathIncomplete ? .death : nil))
     }
@@ -122,6 +129,10 @@ struct AdminMembersPage: View {
             rebuild()
             await sons.refresh()
             await accounts.refresh()
+            if signedIn == nil, let ids = await AdminTodayFetch.signedInIds() {
+                signedIn = ids
+                refreshCensus()
+            }
             // عدد النساء في الحلقة — من كاش شجرة النساء، أو جلب للقراءة مرة إن لم تُحمَّل
             if womenRows.isEmpty, let fetched = try? await WomenStore.fetch() {
                 womenRows = fetched
@@ -160,7 +171,7 @@ struct AdminMembersPage: View {
 
     /// أرقام الحلقات — مع كل بناء للفهرس، وبعد وصول شجرة النساء
     private func refreshCensus() {
-        census = AdminFamilyCensus.make(members: memberVM.allMembers, women: womenRows)
+        census = AdminFamilyCensus.make(members: memberVM.allMembers, women: womenRows, signedIn: signedIn)
     }
 
     /// القوائم الأربع: «هل ما زالوا أحياء؟» بلا من راجعه المستخدم («حي ✓») · تاريخ وفاة غير مكتمل · بيانات ناقصة

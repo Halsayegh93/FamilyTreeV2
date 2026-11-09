@@ -2526,6 +2526,8 @@ extension DS {
         static let census = Size(side: 88, line: 8, value: .hubKPI, caption: .micro)
         /// «إحصاء الأفراد» مع XXXL — أصغر قليلاً (الأسماء والأعداد أكبر)
         static let censusCompact = Size(side: 80, line: 8, value: .hubKPI, caption: .micro)
+        /// خمس حلقات في صفّ في «إحصائيات العائلة» بـ«اليوم» (طلب المالك ٢٠٢٦-١١-٠٩ «نكرر الحلقات… ونضيف المستخدمين»)
+        static let todayCensus = Size(side: 50, line: 5, value: .hubLabel, caption: nil)
         /// المتوسطة بجانب النص من أحجام إمكانية الوصول (بلا رقم داخلها — الرقم بجانبها)
         static let mediumStacked = Size(side: 52, line: 6, value: nil, caption: nil)
         /// بطل الصفحة (ملخّص إحصاءات العائلة، رصيد رسائل الدخول)

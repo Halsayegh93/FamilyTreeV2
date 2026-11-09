@@ -39,6 +39,11 @@ final class AppConfigValues: ObservableObject {
         return t.isEmpty ? nil : t
     }
 
+    /// حسابات مراجعة أبل (`review_account_ids` على السيرفر) — «حساب فاضي» لا يُحسب في أي عدد (طلب المالك ٢٠٢٦-١١-٠٩)
+    var reviewAccountIds: Set<UUID> {
+        Set((values["review_account_ids"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(UUID.init(uuidString:)) })
+    }
+
     /// رقم صحيح من السيرفر — وإلا `fallback`
     func int(_ key: String, default fallback: Int) -> Int {
         if let n = values[key] as? NSNumber { return n.intValue }

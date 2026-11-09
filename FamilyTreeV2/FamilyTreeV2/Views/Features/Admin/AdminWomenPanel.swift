@@ -108,7 +108,9 @@ struct AdminWomenPanel: View {
         }
         // فرع خارج العائلة: أبناء البنات (حساباتهم) ثم أزواج البنات من خارج العائلة
         var outsideRows: [AdminWomenEntry] = []
-        let sonMembers = AdminGrouping.alphabetical(memberVM.allMembers.filter { sons.contains($0.id) })
+        // حساب مراجعة أبل ليس فرداً في «فرع خارج العائلة»
+        let review = AppConfigValues.shared.reviewAccountIds
+        let sonMembers = AdminGrouping.alphabetical(memberVM.allMembers.filter { sons.contains($0.id) && !review.contains($0.id) })
         for s in sonMembers {
             let node = WomenStore.womanByLinkedUser[s.id].flatMap { map[$0] }
             let mother = node?.motherId.flatMap { map[$0] }

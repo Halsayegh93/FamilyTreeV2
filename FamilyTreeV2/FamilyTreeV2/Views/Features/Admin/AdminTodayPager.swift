@@ -291,12 +291,20 @@ struct AdminFamilyStats: Equatable {
     var counts = AdminMemberCounts()
     var branches: Int? = nil
     var joinedThisMonth: Int? = nil
+    /// «خارج العائلة» — نفس تعريف حلقة صفحة «العائلة» (`AdminFamilyCensus`): أبناء البنات وأزواجهن من خارج العائلة + نساء خارجها
+    var outsideMale: Int? = nil
+    var outsideFemale: Int? = nil
+    var outsideTotal: Int? { outsideMale.flatMap { m in outsideFemale.map { m + $0 } } }
 
     @MainActor
     static func make(members all: [FamilyMember]) -> AdminFamilyStats {
         var s = AdminFamilyStats()
         s.counts = AdminMemberCounts.seeded(members: all)
         guard !all.isEmpty else { return s }
+        let census = AdminFamilyCensus.make(members: all, women: WomenStore.cache)
+        s.outsideMale = census.outsideMale
+        s.outsideFemale = census.outsideFemale
+
         let tree = all.filter { $0.role != .pending }
         if let root = BranchPickerSheet.familyRoot(in: tree) {
             s.branches = tree.filter { $0.fatherId == root.id && $0.hasName && !$0.isWomanAccount }.count
@@ -319,30 +327,7 @@ struct AdminFamilyStatsPage: View {
     @ObservedObject private var verified = AdminLivingVerifiedStore.shared
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    private enum Target { case overview, directory, women, accounts }
-
-    private struct Item: Identifiable {
-        let id: String
-        let value: Int?
-        let label: String
-        let icon: String
-        let tint: Color
-        let target: Target
-    }
-
-    private var items: [Item] {
-        let c = stats.counts
-        return [
-            Item(id: "total", value: c.total, label: L10n.t("الأفراد", "Members"), icon: "person.3",
-                 tint: DS.Color.accent, target: .overview),
-            Item(id: "men", value: c.men, label: L10n.t("الرجال", "Men"), icon: "figure.stand",
-                 tint: DS.Color.male, target: .directory),
-            Item(id: "women", value: c.women, label: L10n.t("النساء", "Women"), icon: "figure.stand.dress",
-                 tint: DS.Color.female, target: .women),
-            Item(id: "accounts", value: c.accounts, label: L10n.t("المسجّلون", "Registered"), icon: "checkmark.seal",
-                 tint: DS.Color.success.dsReadableGlyph, target: .accounts)
-        ]
-    }
+    private enum Target { case overview, directory, women, accounts, outside }
 
     /// أحياء تقديريون: في «تحقق من الأحياء» من لم يراجعه المستخدم
     private var estimated: Bool {
@@ -355,7 +340,6 @@ struct AdminFamilyStatsPage: View {
                 link(.overview, face: AnyView(insightsLink))
             }
             numbers
-            AnyView(factsRow)
         }
         .padding(.horizontal, DS.Hub.swipePadding)
         .padding(.top, DS.Hub.swipePadding)
@@ -366,31 +350,107 @@ struct AdminFamilyStatsPage: View {
 
     // MARK: الأرقام
 
+    /// حلقات صفحة «العائلة» نفسها + «المستخدمين» (طلب المالك ٢٠٢٦-١١-٠٩): العنوان فوق الحلقة، العدد في وسطها،
+    /// والحلقة نسبة الأحياء (والمستخدمين: نسبة المسجّلين من الأحياء)، وتحتها سطران صغيران
+    private struct Ring: Identifiable {
+        let id: String
+        let title: String
+        let tint: Color
+        let total: Int?
+        let progress: Double?
+        let line1: String
+        let line2: String
+        let target: Target
+    }
+
+    private var rings: [Ring] {
+        let c = stats.counts
+        func share(_ part: Int?, _ whole: Int?) -> Double? {
+            guard let part, let whole, whole > 0 else { return nil }
+            return Double(part) / Double(whole)
+        }
+        // «المستخدمين» (طلب المالك ٢٠٢٦-١١-٠٩): العدد = من لهم رقم هاتف، والحلقة من دخل منهم؛ تحتها دخلوا · ما دخلوا أبداً
+        // صياغة يفهمها المدير الجديد (طلب المالك ٢٠٢٦-١١-٠٩): من فتح التطبيق، ومن له رقم ولم يفتحه بعد
+        let users = (c.accounts.map { L10n.t("\($0) فتحوا التطبيق", "\($0) opened the app") } ?? "—",
+                     c.neverLogged.map { L10n.t("\($0) لم يفتحوه بعد", "\($0) not yet") } ?? "—")
+        return [
+            Ring(id: "total", title: L10n.t("الإجمالي", "Total"), tint: DS.Color.accent, total: c.total,
+                 progress: share(c.totalAlive, c.total),
+                 line1: Self.aliveText(c.totalAlive, estimated: estimated), line2: Self.deceasedText(c.totalDeceased),
+                 target: .overview),
+            Ring(id: "men", title: L10n.t("الرجال", "Men"), tint: DS.Color.male, total: c.men,
+                 progress: share(c.menAlive, c.men),
+                 line1: Self.aliveText(c.menAlive, estimated: estimated), line2: Self.deceasedText(c.menDeceased), target: .directory),
+            Ring(id: "women", title: L10n.t("النساء", "Women"), tint: DS.Color.female, total: c.women,
+                 progress: share(c.womenAlive, c.women),
+                 line1: Self.aliveText(c.womenAlive, estimated: false), line2: Self.deceasedText(c.womenDeceased), target: .women),
+            Ring(id: "outside", title: L10n.t("خارج العائلة", "Outside"), tint: DS.Color.slate, total: stats.outsideTotal,
+                 progress: share(stats.outsideMale, stats.outsideTotal),
+                 line1: stats.outsideMale.map { L10n.t("\($0) ذكور", "\($0) male") } ?? "—",
+                 line2: stats.outsideFemale.map { L10n.t("\($0) إناث", "\($0) female") } ?? "—", target: .outside),
+            Ring(id: "users", title: L10n.t("المستخدمين", "Users"), tint: DS.Color.success.dsReadableGlyph, total: c.withPhone,
+                 progress: share(c.accounts, c.withPhone),
+                 line1: users.0, line2: users.1, target: .accounts)
+        ]
+    }
+
     @ViewBuilder
     private var numbers: some View {
-        let list = items
         if typeSize.isAccessibilitySize {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) { cell(list[0], divided: false); cell(list[1], divided: true) }
-                hairline(horizontal: true)
-                HStack(spacing: 0) { cell(list[2], divided: false); cell(list[3], divided: true) }
+            // أحجام إمكانية الوصول: كل حلقة صفّ (حلقة صغيرة بجانب الاسم والعدد)
+            VStack(spacing: DS.Spacing.xs) {
+                ForEach(rings) { r in
+                    link(r.target, face: AnyView(HStack(spacing: DS.Spacing.md) {
+                        DSRingGauge(progress: r.progress, tint: r.tint, size: DS.Ring.mediumStacked,
+                                    track: DS.Ring.restTrack, center: .count(r.total))
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(verbatim: "\(r.title) \(r.total.map { "\($0)" } ?? "—")")
+                                .dsFont(.hubRow).foregroundColor(r.tint)
+                            Text(verbatim: "\(r.line1) · \(r.line2)")
+                                .dsFont(.caption).foregroundColor(DS.Color.textSecondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: DS.Icon.tapTarget)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spoken(r))))
+                }
             }
         } else {
-            HStack(spacing: 0) {
-                ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
-                    cell(item, divided: index > 0)
+            HStack(alignment: .top, spacing: DS.Spacing.xxs) {
+                ForEach(rings) { r in
+                    link(r.target, face: AnyView(column(r)))
                 }
             }
         }
     }
 
-    private func cell(_ item: Item, divided: Bool) -> some View {
-        link(item.target, face: AnyView(AdminAttentionNumber(value: item.value, label: item.label, icon: item.icon, tint: item.tint)))
-            .overlay(alignment: .leading) {
-                if divided {
-                    hairline(horizontal: false).padding(.vertical, DS.Spacing.sm)
-                }
+    private func column(_ r: Ring) -> some View {
+        VStack(spacing: DS.Spacing.xs) {
+            Text(r.title)
+                .dsFont(.hubLabel)
+                .foregroundColor(r.tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            DSRingGauge(progress: r.progress, tint: r.tint, size: DS.Ring.todayCensus,
+                        track: DS.Ring.restTrack, center: .count(r.total))
+            VStack(spacing: 0) {
+                Text(verbatim: r.line1).foregroundColor(r.tint)
+                Text(verbatim: r.line2).foregroundColor(DS.Color.textTertiary)
             }
+            .dsFont(.micro)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(r))
+    }
+
+    private func spoken(_ r: Ring) -> String {
+        "\(r.title) \(r.total.map { "\($0)" } ?? "—")، \(r.line1)، \(r.line2)"
     }
 
     private func hairline(horizontal: Bool) -> some View {
@@ -413,45 +473,6 @@ struct AdminFamilyStatsPage: View {
         .frame(minHeight: DS.Icon.section)
         .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.section)
         .accessibilityLabel(L10n.t("المؤشرات: إحصاء الأفراد كاملاً", "Insights: the full family census"))
-    }
-
-    // MARK: سطر الأعداد
-
-    /// «2,582 حياً · 557 متوفى · 5 فروع · +9 هذا الشهر» — يقصر إن ضاق (يُسقط الفروع والشهر) فيبقى سطراً واحداً
-    private var factsRow: some View {
-        let c = stats.counts
-        let alive = Self.aliveText(c.totalAlive, estimated: estimated)
-        let dead = Self.deceasedText(c.totalDeceased)
-        var tail: [String] = []
-        if let b = stats.branches, b > 0 { tail.append(Self.branchesText(b)) }
-        if let j = stats.joinedThisMonth, j > 0 {
-            tail.append(L10n.t("\u{2066}+\(j)\u{2069} هذا الشهر", "+\(j) this month"))
-        }
-        let full = ([alive, dead] + tail).joined(separator: " · ")
-        let short = [alive, dead].joined(separator: " · ")
-        return AdminSlimRow(ink: DS.Color.textSecondary, fill: DS.Color.cardBackgroundSoft) {
-            HStack(spacing: DS.Spacing.xsm) {
-                Image(systemName: "chart.bar.fill")
-                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
-                    .foregroundColor(DS.Color.accent)
-                    .accessibilityHidden(true)
-                ViewThatFits(in: .horizontal) {
-                    factsText(full)
-                    factsText(short)
-                }
-            }
-        } trailing: {
-            EmptyView()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(full)
-    }
-
-    private func factsText(_ text: String) -> some View {
-        Text(verbatim: text)
-            .dsFont(.hubLabel)
-            .monospacedDigit()
-            .lineLimit(1)
     }
 
     // MARK: الروابط
@@ -479,6 +500,7 @@ struct AdminFamilyStatsPage: View {
                                             .adminArea(.metrics).adminBackTitle(today))
         case .directory: return AnyView(AdminMembersPage().adminArea(.family).adminBackTitle(today))
         case .accounts:  return AnyView(AdminMembersPage(chip: .registered).adminArea(.family).adminBackTitle(today))
+        case .outside:   return AnyView(AdminMembersPage(womenOutside: true).adminArea(.family).adminBackTitle(today))
         case .women:     return AnyView(EmptyView())
         }
     }

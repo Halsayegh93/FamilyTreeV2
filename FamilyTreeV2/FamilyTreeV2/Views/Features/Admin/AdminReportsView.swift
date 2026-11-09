@@ -9,6 +9,7 @@ struct AdminReportScope {
 
 struct AdminReportsView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var authVM: AuthViewModel
 
     enum ReportType: String, CaseIterable {
         case family
@@ -73,7 +74,7 @@ struct AdminReportsView: View {
 
     /// الحقول الديناميكية المتاحة للتقرير
     enum ReportField: String, CaseIterable, Identifiable {
-        case fullName, firstName, phone, age, birthDate, deathDate, role, status, gender, married
+        case fullName, firstName, phone, age, birthDate, deathDate, gender, married, role, status
 
         var id: String { rawValue }
 
@@ -138,6 +139,9 @@ struct AdminReportsView: View {
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
     @State private var branchRootId: UUID? = nil
+    /// «شجرة العائلة | شجرة النساء» فوق الصفحة — نفس مفتاح صفحة «العائلة» (طلب المالك ٢٠٢٦-١١-٠٩)
+    @State private var treeScope: AdminFamilyScope = .family
+    @State private var womenRows: [FamilyMember] = WomenStore.cache
     @State private var branchPickerOpen = false
     @State private var customTitle: String = "تقرير عائلة المحمدعلي"
     @State private var selectedFields: Set<ReportField> = [.fullName, .phone, .age]
@@ -157,8 +161,14 @@ struct AdminReportsView: View {
         return minVal > 0 && maxVal > 0 && minVal > maxVal
     }
 
+    /// أعضاء الشجرة المختارة في المفتاح
+    private var sourceMembers: [FamilyMember] {
+        // شجرة النساء: الإناث فقط — مثل لوحة النساء في صفحة «العائلة» (الآباء فيها عُقد ربط)
+        treeScope == .women ? womenRows.filter(\.isFemale) : memberVM.allMembers
+    }
+
     private var activeMembers: [FamilyMember] {
-        memberVM.allMembers.filter {
+        sourceMembers.filter {
             $0.role != .pending &&
             !$0.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
@@ -166,7 +176,7 @@ struct AdminReportsView: View {
 
     private var childrenByFather: [UUID: [FamilyMember]] {
         var map: [UUID: [FamilyMember]] = [:]
-        for m in memberVM.allMembers {
+        for m in sourceMembers {
             if let f = m.fatherId {
                 map[f, default: []].append(m)
             }
@@ -191,7 +201,7 @@ struct AdminReportsView: View {
 
     private var branchRootMember: FamilyMember? {
         guard let id = branchRootId else { return nil }
-        return memberVM.allMembers.first { $0.id == id }
+        return sourceMembers.first { $0.id == id }
     }
 
     private var filteredMembers: [FamilyMember] {
@@ -284,12 +294,24 @@ struct AdminReportsView: View {
 
     var body: some View {
         ScrollView(showsIndicators: false) {
+          VStack(spacing: DS.Spacing.md) {
+            // «شجرة النساء» للمالك والمدير فقط — مثل صفحة «العائلة»
+            if authVM.isAdmin {
+                DSSegmentedSwitch(options: AdminFamilyScope.options, selection: Binding(
+                    get: { treeScope },
+                    set: { v in
+                        var t = Transaction()
+                        t.disablesAnimations = true
+                        withTransaction(t) { switchTree(to: v) }
+                    }), size: .regular)
+            }
             // الوضع الأفقي: الإعدادات/النتائج/التصدير على عمودين
             AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {
                 settingsCard
                 resultsSection
                 exportSection
             }
+          }
             .padding(.horizontal, DS.Spacing.lg)
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxxl)
@@ -298,7 +320,7 @@ struct AdminReportsView: View {
             // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
             .sheet(isPresented: $branchPickerOpen) {
                 BranchPickerSheet(
-                    allMembers: memberVM.allMembers,
+                    allMembers: sourceMembers,
                     onSelect: { id in
                         branchRootId = id
                         branchPickerOpen = false
@@ -328,6 +350,29 @@ struct AdminReportsView: View {
         }
     }
 
+    /// تبديل الشجرة: يمسح التحديد والفرع، والعنوان الافتراضي يتبع الشجرة
+    private func switchTree(to v: AdminFamilyScope) {
+        guard v != treeScope else { return }
+        let familyTitle = "تقرير عائلة المحمدعلي", womenTitle = "تقرير شجرة النساء"
+        if customTitle == familyTitle || customTitle == womenTitle || customTitle.isEmpty {
+            customTitle = v == .women ? womenTitle : familyTitle
+        }
+        treeScope = v
+        if v == .women {
+            selectedFields.subtract([.phone, .role, .status, .gender])
+            if selectedFields.isEmpty { selectedFields = [.fullName] }
+            if statusFilter == .withPhone || statusFilter == .withoutPhone { statusFilter = .all }
+        }
+        selectedMemberIds.removeAll()
+        branchRootId = nil
+        displayLimit = 20
+        if v == .women && womenRows.isEmpty {
+            Task {
+                if let rows = try? await WomenStore.fetch() { womenRows = rows }
+            }
+        }
+    }
+
     // MARK: - كرت الإعدادات (موحّد)
 
     private var settingsCard: some View {
@@ -353,19 +398,11 @@ struct AdminReportsView: View {
                 VStack(spacing: DS.Spacing.sm) {
                     // عنوان
                     TextField("عنوان التقرير", text: $customTitle)
-                        .font(DS.Font.callout)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, 10)
-                        .background(DS.Color.background)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                                .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                        )
+                        .dsFont(.fieldValue)
+                        .modifier(ReportFieldBox())
 
-                    // فرع
-                    branchFilterRow
+                    // فرع — لشجرة العائلة فقط
+                    if treeScope == .family { branchFilterRow }
                 }
             }
 
@@ -375,65 +412,36 @@ struct AdminReportsView: View {
             innerSection(icon: "person.crop.circle.badge.checkmark", title: "تصفية") {
                 VStack(spacing: DS.Spacing.sm) {
                     // فلتر الحالة
-                    Picker("", selection: $statusFilter) {
-                        ForEach(StatusFilter.allCases, id: \.self) { s in
-                            Text(s.label).tag(s)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: statusFilter) { _ in displayLimit = 20 }
+                    DSFilterChips(options: statusOptions, selection: $statusFilter)
+                        .onChange(of: statusFilter) { _ in displayLimit = 20 }
 
-                    // نطاق العمر (إن لزم)
+                    // نطاق العمر (إن لزم): «العمر» ثم خانتان متساويتان
                     if needsAgeFilter {
                         HStack(spacing: DS.Spacing.sm) {
-                            Image(systemName: "calendar")
-                                .font(DS.Font.scaled(11, weight: .semibold))
-                                .foregroundColor(DS.Color.warning)
-                            Text("العمر:")
-                                .font(DS.Font.caption1)
+                            Text("العمر")
+                                .dsFont(.label)
                                 .foregroundColor(DS.Color.textSecondary)
-                            TextField("من", text: $minAgeText)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(DS.Font.callout)
-                                .frame(width: 56, height: 32)
-                                .background(DS.Color.background)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                        .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                                )
-                                .onChange(of: minAgeText) { _ in displayLimit = 20 }
-                            Text("→")
-                                .font(DS.Font.caption2)
+                            ageField("من", text: $minAgeText)
+                            Text("–")
+                                .dsFont(.label)
                                 .foregroundColor(DS.Color.textTertiary)
-                            TextField("إلى", text: $maxAgeText)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(DS.Font.callout)
-                                .frame(width: 56, height: 32)
-                                .background(DS.Color.background)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-                                        .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.5) : DS.Color.textTertiary.opacity(0.2), lineWidth: 1)
-                                )
-                                .onChange(of: maxAgeText) { _ in displayLimit = 20 }
-                            if ageRangeInvalid {
-                                Text("غلط")
-                                    .font(DS.Font.caption2)
-                                    .foregroundColor(DS.Color.error)
-                            }
-                            Spacer()
+                            ageField("إلى", text: $maxAgeText)
+                        }
+                        if ageRangeInvalid {
+                            Text("«من» أكبر من «إلى»")
+                                .dsFont(.caption)
+                                .foregroundColor(DS.Color.error)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
 
                     // البحث
                     HStack(spacing: DS.Spacing.sm) {
                         Image(systemName: "magnifyingglass")
+                            .dsGlyph(DS.Glyph.md)
                             .foregroundColor(DS.Color.textTertiary)
-                        TextField("بحث بالاسم أو الرقم...", text: $searchText)
-                            .font(DS.Font.callout)
+                        TextField(treeScope == .women ? "بحث بالاسم..." : "بحث بالاسم أو الرقم...", text: $searchText)
+                            .dsFont(.fieldValue)
                             .onChange(of: searchText) { _ in displayLimit = 20 }
                         if !searchText.isEmpty {
                             Button {
@@ -445,14 +453,7 @@ struct AdminReportsView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, DS.Spacing.md)
-                    .padding(.vertical, 10)
-                    .background(DS.Color.background)
-                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                            .stroke(DS.Color.textTertiary.opacity(0.15), lineWidth: 1)
-                    )
+                    .modifier(ReportFieldBox())
                 }
             }
 
@@ -462,12 +463,12 @@ struct AdminReportsView: View {
             innerSection(
                 icon: "list.bullet.rectangle",
                 title: "الحقول",
-                trailing: "\(selectedFields.count) مختارة"
+                trailing: "\(selectedFields.filter(availableFields.contains).count) مختارة"
             ) {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: 6)],
-                          alignment: .leading,
-                          spacing: 6) {
-                    ForEach(ReportField.allCases) { field in
+                // عمودان متساويان (أزواج: الاسمان، الهاتف والعمر، الميلاد والوفاة، الجنس ومتزوج، الدور والحالة)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: 2),
+                          spacing: DS.Spacing.sm) {
+                    ForEach(availableFields) { field in
                         fieldChip(field)
                     }
                 }
@@ -517,29 +518,67 @@ struct AdminReportsView: View {
         let active = selectedFields.contains(field)
         return Button {
             if active {
-                if selectedFields.count > 1 {
+                // يبقى حقل واحد على الأقل
+                if selectedFields.filter(availableFields.contains).count > 1 {
                     selectedFields.remove(field)
                 }
             } else {
                 selectedFields.insert(field)
             }
         } label: {
-            Text(field.label)
-                .font(DS.Font.caption2)
-                .fontWeight(active ? .bold : .semibold)
-                .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(active ? DS.Color.primary : Color.clear)
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule().stroke(
-                        active ? Color.clear : DS.Color.textTertiary.opacity(0.25),
-                        lineWidth: 0.8
-                    )
-                )
+            HStack(spacing: DS.Spacing.xs) {
+                if active {
+                    Image(systemName: "checkmark")
+                        .dsGlyph(DS.Glyph.xs)
+                }
+                Text(field.label)
+                    .dsFont(.chip)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .foregroundColor(active ? DS.Color.textOnPrimary : DS.Color.textSecondary)
+            .frame(maxWidth: .infinity, minHeight: 36)
+            .padding(.horizontal, DS.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(active ? DS.Color.primaryFill : DS.Color.fieldFill)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(active ? .isSelected : [])
+    }
+
+    /// خانة رقم العمر — بعرض متساوٍ
+    private func ageField(_ placeholder: String, text: Binding<String>) -> some View {
+        TextField(placeholder, text: text)
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.center)
+            .dsFont(.fieldValue)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.fieldFill)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.6) : Color.clear, lineWidth: 1)
+            )
+            .onChange(of: text.wrappedValue) { _ in displayLimit = 20 }
+    }
+
+    /// الحقول المتاحة للشجرة المختارة — شجرة النساء بلا هاتف ولا دور ولا حالة حساب ولا جنس (كلهن إناث)
+    private var availableFields: [ReportField] {
+        treeScope == .women
+            ? ReportField.allCases.filter { ![.phone, .role, .status, .gender].contains($0) }
+            : ReportField.allCases
+    }
+
+    /// فلاتر الحالة — شجرة النساء بلا فلاتر الهاتف
+    private var statusOptions: [DSFilterOption<StatusFilter>] {
+        StatusFilter.allCases
+            .filter { treeScope == .family || ($0 != .withPhone && $0 != .withoutPhone) }
+            .map { DSFilterOption(id: $0, title: $0.label) }
     }
 
     // متى نظهر نطاق العمر
@@ -942,7 +981,8 @@ struct AdminReportsView: View {
             return member.firstName
         case .phone:
             let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            return phone.isEmpty ? "—" : KuwaitPhone.display(phone)
+            // عزل اتجاه الرقم (LTR) حتى لا تنقلب «+» داخل سطر عربي
+            return phone.isEmpty ? "—" : "\u{2066}" + KuwaitPhone.display(phone) + "\u{2069}"
         case .age:
             return ageResolver(member).map { "\($0)" } ?? "—"
         case .birthDate:
@@ -1022,7 +1062,7 @@ struct AdminReportsView: View {
         }
 
         // ابنِ أعمدة ديناميكية من الحقول المختارة (مرتبة حسب الـ enum)
-        let orderedFields = ReportField.allCases.filter { selectedFields.contains($0) }
+        let orderedFields = availableFields.filter { selectedFields.contains($0) }
 
         do {
             let reportData = try MembersPDFBuilder.makeCustomReport(
@@ -1092,7 +1132,16 @@ private enum MembersPDFBuilder {
     private struct ReportColumn {
         let title: String
         let ratio: CGFloat
+        var alignment: NSTextAlignment = .right
         let value: (FamilyMember, Int) -> String
+
+        init(title: String, ratio: CGFloat, alignment: NSTextAlignment = .right,
+             value: @escaping (FamilyMember, Int) -> String) {
+            self.title = title
+            self.ratio = ratio
+            self.alignment = alignment
+            self.value = value
+        }
     }
 
     private struct PDFTheme {
@@ -1113,15 +1162,23 @@ private enum MembersPDFBuilder {
     ) throws -> Data {
         let uiAccent = UIColor(accent)
 
+        // توزيع الأعمدة: الحقول القصيرة بعرضها الثابت وفي الوسط، والاسم يأخذ الباقي (طلب المالك ٢٠٢٦-١١-٠٩)
         var columns: [ReportColumn] = [
-            ReportColumn(title: "م", ratio: 0.06) { _, index in "\(index)" }
+            ReportColumn(title: "م", ratio: 0.06, alignment: .center) { _, index in "\(index)" }
         ]
-        let fieldsTotalRatio = fields.reduce(0.0) { $0 + $1.ratio }
         let availableRatio: CGFloat = 0.94
-        let normalizer: CGFloat = fieldsTotalRatio > 0 ? availableRatio / fieldsTotalRatio : 1.0
+        let nameFields = fields.filter { $0 == .fullName || $0 == .firstName }
+        let shortTotal = fields.filter { !nameFields.contains($0) }.reduce(0.0) { $0 + $1.ratio }
+        let shortScale: CGFloat = nameFields.isEmpty
+            ? (shortTotal > 0 ? availableRatio / shortTotal : 1)
+            : min(1, (availableRatio - 0.30 * CGFloat(nameFields.count)) / max(shortTotal, 0.01))
+        let nameRatioTotal = nameFields.reduce(0.0) { $0 + $1.ratio }
+        let nameRoom = availableRatio - shortTotal * shortScale
         for field in fields {
-            let normalizedRatio = field.ratio * normalizer
-            columns.append(ReportColumn(title: field.label, ratio: normalizedRatio) { member, _ in
+            let isName = nameFields.contains(field)
+            let ratio = isName ? nameRoom * field.ratio / max(nameRatioTotal, 0.01) : field.ratio * shortScale
+            columns.append(ReportColumn(title: field.label, ratio: ratio,
+                                        alignment: isName ? .right : .center) { member, _ in
                 AdminReportsView.formatField(field, for: member, ageResolver: ageResolver)
             })
         }
@@ -1289,11 +1346,22 @@ private enum MembersPDFBuilder {
         let topY: CGFloat = 36
         let contentWidth = rightEdge - leftEdge
 
-        // (1) شعار العائلة "ALMOHAMMADALI FAMILY" — يمين أعلى الصفحة (RTL = visual right)
+        // (0) شعار العائلة الجديد (الكحلي) — يمين أعلى الصفحة، والعنوان على يساره (طلب المالك ٢٠٢٦-١١-٠٩)
+        var textWidth = contentWidth
+        if let logo = UIImage(named: "FamilyLogoNavy", in: nil,
+                              compatibleWith: UITraitCollection(userInterfaceStyle: .light)),
+           logo.size.width > 0, logo.size.height > 0 {
+            let h: CGFloat = 48
+            let w = h * logo.size.width / logo.size.height
+            logo.draw(in: CGRect(x: rightEdge - w, y: topY - 2, width: w, height: h))
+            textWidth = contentWidth - w - 12
+        }
+
+        // (1) "ALMOHAMMADALI FAMILY" — يمين أعلى الصفحة بجانب الشعار (RTL = visual right)
         let brand = "ALMOHAMMADALI FAMILY"
         drawRTLText(
             brand,
-            in: CGRect(x: leftEdge, y: topY, width: contentWidth, height: 12),
+            in: CGRect(x: leftEdge, y: topY, width: textWidth, height: 12),
             font: brandFont,
             color: textTertiary,
             alignment: .right,
@@ -1318,10 +1386,18 @@ private enum MembersPDFBuilder {
         )
 
         // (3) عنوان التقرير الرئيسي — كبير وعريض
+        // يبقى العنوان بعيداً عن التاريخ ورقم التقرير على اليسار، ويصغر خطه لو طال
+        let titleRoom = textWidth - 150
+        var fittedTitleFont = titleFont
+        let titleW = (context.title as NSString).size(withAttributes: [.font: titleFont]).width
+        if titleW > titleRoom, titleW > 0 {
+            fittedTitleFont = titleFont.withSize(max(14, titleFont.pointSize * titleRoom / titleW * 0.85))
+        }
         drawRTLText(
             context.title,
-            in: CGRect(x: leftEdge, y: topY + 16, width: contentWidth, height: 36),
-            font: titleFont,
+            in: CGRect(x: leftEdge + 150, y: topY + 16 + (titleFont.pointSize - fittedTitleFont.pointSize) / 2,
+                       width: titleRoom, height: 36),
+            font: fittedTitleFont,
             color: textPrimary,
             alignment: .right
         )
@@ -1396,7 +1472,7 @@ private enum MembersPDFBuilder {
         for (index, column) in columns.enumerated() {
             let width = totalWidth * column.ratio
             let rect = CGRect(x: cursor - width, y: y + 5, width: width - 8, height: rowHeight - 10)
-            drawRTFText(texts[index], in: rect, font: font, color: textColor)
+            drawRTFText(texts[index], in: rect, font: font, color: textColor, alignment: column.alignment)
             cursor -= width
         }
     }
@@ -1434,9 +1510,10 @@ private enum MembersPDFBuilder {
         path.stroke()
     }
 
-    private static func drawRTFText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor) {
+    private static func drawRTFText(_ text: String, in rect: CGRect, font: UIFont, color: UIColor,
+                                    alignment: NSTextAlignment = .right) {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.alignment = .right
+        paragraph.alignment = alignment
         paragraph.baseWritingDirection = .rightToLeft
         (text as NSString).draw(
             in: rect,
@@ -1495,4 +1572,18 @@ private struct ActivityView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+
+/// خانة نص في إعدادات التقرير — تعبئة الحقول الموحّدة وارتفاع ٤٤
+private struct ReportFieldBox: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: 44)
+            .background(
+                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.fieldFill)
+            )
+    }
 }

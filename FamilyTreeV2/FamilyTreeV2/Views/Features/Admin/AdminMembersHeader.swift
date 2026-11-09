@@ -19,19 +19,39 @@ struct AdminFamilyCensus: Equatable {
     var outsideMale: Int?
     var outsideFemale: Int?
     var outsideTotal: Int? { outsideMale.flatMap { m in outsideFemale.map { m + $0 } } }
+    /// «N لهم حساب» تحت الرجال والنساء وخارج العائلة (طلب المالك ٢٠٢٦-١١-٠٩ — في «العائلة» لا في «اليوم»):
+    /// الرجال من قوائم «استخدام التطبيق» (`AdminAccountsStore`)، النساء من ربط عقدتها بحساب (`WomenStore.linkedUserByWoman`)،
+    /// وأبناء البنات من `get_members_last_signin` (`signedIn`) لأن السيرفر يستبعدهم من القوائم. nil قبل وصول البيانات
+    var menAccounts: Int?
+    var womenAccounts: Int?
+    var outsideAccounts: Int?
 
     @MainActor
-    static func make(members: [FamilyMember], women: [FamilyMember]) -> AdminFamilyCensus {
+    static func make(members: [FamilyMember], women: [FamilyMember], signedIn: Set<UUID>? = nil) -> AdminFamilyCensus {
         var c = AdminFamilyCensus()
         let outside = WomenStore.outsideFamilyIds
         c.counts.setMen(from: members)
         c.counts.setWomen(women, excluding: outside)
         let sons = DaughterSonsIndex.shared.ids
-        let sonCount = members.filter { sons.contains($0.id) && $0.hasName }.count
+        // حساب مراجعة أبل مسجّل كابن بنت — لا يُحسب
+        let review = AppConfigValues.shared.reviewAccountIds
+        let sonCount = members.filter { sons.contains($0.id) && $0.hasName && !review.contains($0.id) }.count
         if !women.isEmpty {
             let outsideRows = women.filter { outside.contains($0.id) && $0.hasName }
             c.outsideMale = sonCount + outsideRows.filter { !$0.isFemale }.count
             c.outsideFemale = outsideRows.filter(\.isFemale).count
+            let linked = WomenStore.linkedUserByWoman
+            c.womenAccounts = women.filter { $0.isFemale && $0.hasName && !outside.contains($0.id) && linked[$0.id] != nil }.count
+            if let signedIn {
+                c.outsideAccounts = members.filter { sons.contains($0.id) && $0.hasName && !review.contains($0.id) && signedIn.contains($0.id) }.count
+                    + outsideRows.filter { linked[$0.id] != nil }.count
+            }
+        }
+        let accounts = AdminAccountsStore.shared
+        if accounts.loaded {
+            c.menAccounts = members.filter { m in
+                m.role != .pending && m.hasName && !m.isWomanAccount && !sons.contains(m.id) && accounts.info(m.id) != nil
+            }.count
         }
         return c
     }
@@ -63,6 +83,8 @@ struct AdminFamilyCensusBand: View {
         var estimated = false
         /// «خارج العائلة»: سطرا «N ذكور · M إناث» بدل الأحياء والمتوفين
         var lines: (String, String)? = nil
+        /// «N لهم حساب» — الرجال والنساء وخارج العائلة
+        var accounts: String? = nil
     }
 
     private var estimated: Bool {
@@ -75,13 +97,16 @@ struct AdminFamilyCensusBand: View {
             Gauge(id: "total", title: L10n.t("الإجمالي", "Total"), tint: DS.Color.accentLight,
                   total: c.total, alive: c.totalAlive, deceased: c.totalDeceased, target: .overview, estimated: estimated),
             Gauge(id: "men", title: L10n.t("الرجال", "Men"), tint: DS.Hub.censusMale,
-                  total: c.men, alive: c.menAlive, deceased: c.menDeceased, target: .men, estimated: estimated),
+                  total: c.men, alive: c.menAlive, deceased: c.menDeceased, target: .men, estimated: estimated,
+                  accounts: Self.accountsText(census.menAccounts)),
             Gauge(id: "women", title: L10n.t("النساء", "Women"), tint: DS.Hub.censusFemale,
-                  total: c.women, alive: c.womenAlive, deceased: c.womenDeceased, target: .women),
+                  total: c.women, alive: c.womenAlive, deceased: c.womenDeceased, target: .women,
+                  accounts: Self.accountsText(census.womenAccounts)),
             Gauge(id: "outside", title: L10n.t("خارج العائلة", "Outside"), tint: DS.Hub.censusOutside,
                   total: census.outsideTotal, alive: census.outsideMale, deceased: nil, target: .outside,
                   lines: (census.outsideMale.map { L10n.t("\($0) ذكور", "\($0) male") } ?? L10n.t("— ذكور", "— male"),
-                          census.outsideFemale.map { L10n.t("\($0) إناث", "\($0) female") } ?? L10n.t("— إناث", "— female")))
+                          census.outsideFemale.map { L10n.t("\($0) إناث", "\($0) female") } ?? L10n.t("— إناث", "— female")),
+                  accounts: Self.accountsText(census.outsideAccounts))
         ]
     }
 
@@ -136,6 +161,8 @@ struct AdminFamilyCensusBand: View {
                 HStack(spacing: DS.Spacing.xs) { aliveText(g); dot; deceasedText(g) }
                 VStack(spacing: 0) { aliveText(g); deceasedText(g) }
             }
+            // سطر محجوز في كل الأعمدة (الحلقات بطول واحد)
+            accountsText(g)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
@@ -155,6 +182,7 @@ struct AdminFamilyCensusBand: View {
                     .fixedSize(horizontal: false, vertical: true)
                 aliveText(g)
                 deceasedText(g)
+                if g.accounts != nil { accountsText(g) }
             }
             Spacer(minLength: 0)
         }
@@ -180,6 +208,19 @@ struct AdminFamilyCensusBand: View {
             .monospacedDigit()
             .foregroundColor(DS.Hub.onBandMuted)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func accountsText(_ g: Gauge) -> some View {
+        Text(verbatim: g.accounts ?? " ")
+            .dsFont(.caption)
+            .monospacedDigit()
+            .foregroundColor(DS.Color.accentLight)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    static func accountsText(_ n: Int?) -> String {
+        n.map { L10n.t("\($0) لهم حساب", "\($0) with accounts") } ?? L10n.t("— لهم حساب", "— with accounts")
     }
 
     private var dot: some View {

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// الشاشات التي يمكن دفعها عبر NavigationPath من إشعار خارجي
 enum AdminReviewDestination: Hashable {
@@ -111,6 +112,9 @@ struct AdminDashboardView: View {
                 }
             }
             .onDisappear { rootVisible = false }
+            // أبناء البنات قد يصلون بعد الأعضاء — يُعاد الحساب حتى لا يُعدّوا في «الرجال» ولا تنقص «خارج العائلة»
+            // (نفس أرقام حلقات صفحة «العائلة»)
+            .onReceive(DaughterSonsIndex.shared.$ids.dropFirst().removeDuplicates()) { _ in recalculate() }
             .toolbar(.hidden, for: .navigationBar)
         }
         // بعد مغادرة تبويب «الإدارة» يفقد المكدس وجهاته (مثلث أصفر بدل الصفحة — بلاغ المالك ٢٠٢٦-١١-٠٨، مثبت بسجلّ الجهاز:

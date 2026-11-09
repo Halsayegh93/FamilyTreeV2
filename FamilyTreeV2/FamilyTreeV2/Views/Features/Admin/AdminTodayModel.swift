@@ -203,6 +203,10 @@ struct AdminMemberCounts: Equatable {
     var accounts: Int? = nil
     /// كل الأحياء في «استخدام التطبيق» (مقام نسبة الحسابات)
     var living: Int? = nil
+    /// الأحياء المسجّل لهم رقم (دخلوا أو لا) — حلقة «المستخدمين» في «اليوم»
+    var withPhone: Int? = nil
+    /// لهم رقم وما دخلوا التطبيق أبداً
+    var neverLogged: Int? = nil
     /// مرشّحو «تحقق من الأحياء» (كبار السن بلا وفاة مسجّلة) — قبل استبعاد ما راجعه المستخدم «حي ✓» على جهازه.
     /// ما دام منهم من لم يُراجَع فأحياء الرجال والإجمالي «تقديري»
     var oldLiving: Set<UUID>? = nil
@@ -254,6 +258,8 @@ struct AdminMemberCounts: Equatable {
         // «الأعضاء المسجّلون» = لهم حساب دخول (نفس شريحة «مسجّلون» في العائلة)
         accounts = u.active + u.idle + u.loginNoDevice
         living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
+        withPhone = u.active + u.idle + u.loginNoDevice + u.neverLogged
+        neverLogged = u.neverLogged
     }
 
     /// أعداد البداية من آخر ما حُمّل (الشجرة، كاش شجرة النساء، آخر «استخدام التطبيق») — بلا طلب جديد
@@ -643,6 +649,15 @@ final class AdminTodayTaskStore: ObservableObject {
 // MARK: - قراءات إضافية من دوال موجودة (لا شيء جديد على السيرفر)
 
 enum AdminTodayFetch {
+    /// من دخل التطبيق ولو مرة (`get_members_last_signin` — المالك والمدير والمراقب). لأبناء البنات في «خارج العائلة»:
+    /// قوائم «استخدام التطبيق» تستبعدهم على السيرفر. nil إن تعذّر الجلب
+    static func signedInIds() async -> Set<UUID>? {
+        struct Row: Decodable { let member_id: UUID }
+        guard let rows: [Row] = try? await SupabaseConfig.client
+            .rpc("get_members_last_signin").execute().value else { return nil }
+        return Set(rows.map(\.member_id))
+    }
+
     /// الوفيات المعلن عنها — nil إن تعذّر الجلب (فلا يظهر تنبيه «لم يُعلن عنها» خطأً)
     static func announcedDeathIds() async -> Set<UUID>? {
         struct Row: Decodable { let member_id: UUID }
