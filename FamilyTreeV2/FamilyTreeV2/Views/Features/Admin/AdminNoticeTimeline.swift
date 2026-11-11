@@ -52,8 +52,8 @@ enum AdminTimelineMetrics {
     static let rail: CGFloat = DS.Spacing.md
     static let railGap: CGFloat = DS.Spacing.sm
     /// النقطة وحلقة عنوان القسم وسُمك الخطّ
-    static let dot: CGFloat = DS.Spacing.sm + DS.Spacing.xxs
-    static let ring: CGFloat = DS.Spacing.sm + DS.Spacing.xxs
+    static let dot: CGFloat = DS.Spacing.smd
+    static let ring: CGFloat = DS.Spacing.smd
     static let line: CGFloat = DS.Border.widthBold
     /// النقطة على مستوى عنوان البطاقة
     static let dotTop: CGFloat = DSNoticeMetrics.paddingV + DS.Spacing.xs

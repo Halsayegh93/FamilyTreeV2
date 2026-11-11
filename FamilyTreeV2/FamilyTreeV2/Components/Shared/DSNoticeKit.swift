@@ -14,7 +14,7 @@ import SwiftUI
 enum DSNoticeMetrics {
     /// حشوة الصفّ داخل بطاقة اليوم، والفراغ بين الأيقونة والنص وبين الأسطر
     static let paddingH: CGFloat = DS.Hub.cardPadding
-    static let paddingV: CGFloat = DS.Spacing.sm + DS.Spacing.xxs
+    static let paddingV: CGFloat = DS.Spacing.smd
     static let gap: CGFloat = DS.Spacing.md
     static let lineGap: CGFloat = DS.Spacing.xxs
     /// نقطة «جديد» الذهبية بجانب الوقت

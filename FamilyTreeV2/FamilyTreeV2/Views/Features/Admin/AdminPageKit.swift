@@ -227,7 +227,7 @@ struct AdminPageBand: View {
             }
         }
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
-        .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Spacing.lg)
+        .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Page.margin)
         .padding(.top, DS.Hub.headerTop)
         .padding(.bottom, overlapped ? DS.Hub.headerBottom : DS.Hub.headerBottomCompact)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -391,7 +391,7 @@ struct AdminPage: View {
                     if let lead { inPage(lead).dsCardCascade(0, appeared: appeared) }
                     inPage(content).dsCardCascade(lead == nil ? 0 : 1, appeared: appeared)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.top, lead != nil ? -DS.Hub.headerOverlap : DS.Hub.stackSpacing)
                 .padding(.bottom, DS.Spacing.xxxl)
                 .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
@@ -411,7 +411,7 @@ struct AdminPage: View {
                 if let lead {
                     inPage(lead)
                         .dsCardCascade(0, appeared: appeared)
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, -DS.Hub.headerOverlap)
                         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
                         .frame(maxWidth: .infinity)
@@ -455,7 +455,7 @@ private struct AdminPageRowModifier: ViewModifier {
             .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
             .listRowBackground(DS.Hub.background)
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: top, leading: DS.Spacing.lg, bottom: bottom, trailing: DS.Spacing.lg))
+            .listRowInsets(EdgeInsets(top: top, leading: DS.Page.margin, bottom: bottom, trailing: DS.Page.margin))
     }
 }
 
@@ -593,8 +593,42 @@ struct AdminControlRow: View {
             Spacer(minLength: DS.Spacing.xs)
             control
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(minHeight: DS.Icon.tapTarget)
+    }
+}
+
+/// صفّ إعداد باختيار من خيارين أو ثلاثة: الرمز والعنوان والشرح، ثم الاختيار الموحّد (`DSChoiceTiles`) بعرض الصفّ تحته
+/// (طلب المالك ٢٠٢٦-١١-١١ — بدل القائمة الأصلية في طرف الصفّ)
+struct AdminSettingChoiceRow: View {
+    let icon: String
+    var tint: Color = DS.Color.primary
+    let title: String
+    var subtitle: String? = nil
+    let control: AnyView
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.md) {
+                AdminIconSquare(symbol: icon, tint: tint)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(title)
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                Spacer(minLength: 0)
+            }
+            control
+        }
+        .padding(.vertical, DS.Spacing.sm)
     }
 }
 

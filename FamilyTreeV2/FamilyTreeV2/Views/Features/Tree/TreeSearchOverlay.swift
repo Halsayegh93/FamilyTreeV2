@@ -74,7 +74,7 @@ struct TreeSearchOverlay: View {
             switch self {
             case .all: return "person.3.fill"
             case .alive: return "heart.fill"
-            case .deceased: return "heart.slash.fill"
+            case .deceased: return "leaf.fill"
             }
         }
     }
@@ -465,7 +465,7 @@ struct TreeSearchOverlay: View {
                            size: DS.Icon.avatarRow, roleColor: result.member.roleColor)
                 .overlay(alignment: .bottomTrailing) {
                     if result.member.isDeceased ?? false {
-                        Image(systemName: "heart.slash.fill")
+                        Image(systemName: "leaf.fill")
                             .dsGlyph(DS.Glyph.micro)
                             .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                             .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)

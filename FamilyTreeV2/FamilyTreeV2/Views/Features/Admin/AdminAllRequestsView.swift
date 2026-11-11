@@ -148,13 +148,13 @@ struct AdminAllRequestsView: View {
             case .nameChange: return "rectangle.and.pencil.and.ellipsis"
             case .diwaniya: return "tent.fill"
             case .archive: return "archivebox.fill"
-            case .deceased: return "bolt.heart.fill"
+            case .deceased: return "leaf.fill"
             case .children: return "person.badge.plus"
             case .treeAdd: return "person.crop.circle.badge.plus"
             case .treeEditName: return "pencil.line"
             case .treeEditPhone: return "phone.arrow.up.right"
-            case .treeEditBirth: return "birthday.cake"
-            case .treeDeceased: return "heart.slash"
+            case .treeEditBirth: return "calendar"
+            case .treeDeceased: return "leaf.fill"
             case .treeAddDeathDate: return "calendar.badge.exclamationmark"
             case .treeAddPhoto: return "photo.badge.plus"
             case .treeDelete: return "person.badge.minus"
@@ -288,7 +288,7 @@ struct AdminAllRequestsView: View {
                 // — يحلّ محل الفلاتر كما كان، ويبقى ظاهراً مهما نزلت القائمة.
                 if isSelectMode && totalCount > 0 {
                     selectionSummaryBar
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                         .transition(.opacity)
@@ -553,6 +553,7 @@ struct AdminAllRequestsView: View {
             )
         ) {
             TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $swipeRejectReason)
+                .dsAlertField()
             Button(L10n.t("تأكيد الرفض", "Confirm Reject"), role: .destructive) {
                 if let d = swipeRejectDetail {
                     let trimmed = swipeRejectReason.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -692,7 +693,7 @@ struct AdminAllRequestsView: View {
                                    count: adminRequestVM.pendingContactMessagesCount)
                 ], selection: $segment)
                 .accessibilityLabel(L10n.t("الطلبات أو الرسائل", "Requests or messages"))
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.top, DS.Spacing.sm)
             }
         }
@@ -1117,7 +1118,7 @@ struct AdminAllRequestsView: View {
             }
             .disabled(adminRequestVM.isLoading)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .background(
             DS.Color.surface
@@ -2561,10 +2562,7 @@ struct AdminAllRequestsView: View {
         guard let date = iso.date(from: isoString) ?? iso2.date(from: isoString) else {
             return String(isoString.prefix(16)).replacingOccurrences(of: "T", with: " ")
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ar")
-        formatter.dateFormat = "d MMM yyyy · h:mm a"
-        return formatter.string(from: date)
+        return DateHelper.displayDateTime(date)
     }
 
     private func joinMatchRow(match: JoinMatch, pendingMember: FamilyMember) -> some View {
@@ -2861,7 +2859,7 @@ struct AdminAllRequestsView: View {
     private func deceasedRow(for request: AdminRequest) -> some View {
         let requester = memberVM.allMembers.first(where: { $0.id == request.requesterId })
         return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-            requestRowHeader(icon: "bolt.heart.fill",
+            requestRowHeader(icon: "leaf.fill",
                              tint: DS.Color.error,
                              title: L10n.t("تسجيل وفاة", "Deceased"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
@@ -3544,7 +3542,7 @@ struct AdminAllRequestsView: View {
                 Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
                 joinFactRow(icon: "calendar", tint: DS.Color.neonPurple,
                             label: L10n.t("تاريخ الميلاد", "Birth date"),
-                            value: birth.isEmpty ? L10n.t("غير مذكور", "Not given") : birth) { EmptyView() }
+                            value: birth.isEmpty ? L10n.t("غير مذكور", "Not given") : (DateHelper.displayDate(birth) ?? birth)) { EmptyView() }
                 if member.isFemale {
                     Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
                     joinFactRow(icon: "figure.stand.dress", tint: DS.Color.female,
@@ -3552,7 +3550,7 @@ struct AdminAllRequestsView: View {
                                 value: L10n.t("أنثى — تُربط بشجرة النساء", "Female — belongs in the women's tree")) { EmptyView() }
                 }
             }
-            .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+            .padding(.horizontal, DS.Spacing.smd)
             // البطاقة الواحدة (صندوق فوق بطاقة القسم)
             .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
         }
@@ -3625,6 +3623,75 @@ struct AdminAllRequestsView: View {
                           tint: AppSection.admin.ink,
                           index: 1) {
             detailContent(for: detail)
+        }
+
+        // «المرسل»: من أرسل الطلب ومن أين أُرسل (طلب المالك ٢٠٢٦-١١-١١)
+        DSComposerSection(title: L10n.t("المرسل", "Sender"),
+                          icon: "paperplane.fill",
+                          tint: AppSection.admin.ink,
+                          index: 2) {
+            if let sender = senderName(for: detail) {
+                infoCard(icon: "person.crop.circle", label: L10n.t("أرسله", "Sent by"),
+                         value: sender, color: DS.Color.info)
+            }
+            infoCard(icon: "arrow.turn.down.left", label: L10n.t("من أين", "Sent from"),
+                     value: requestSource(for: detail), color: DS.Color.info)
+        }
+    }
+
+    /// اسم مرسل الطلب كاملاً من الأعضاء المحمّلين
+    private func senderName(for detail: RequestDetail) -> String? {
+        let id: UUID? = {
+            switch detail {
+            case .join(let m): return m.id
+            case .news(let p): return p.ownerId
+            case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r):
+                return r.requesterId
+            case .treeEdit(let r, _): return r.requesterId
+            case .phone(let r): return r.requesterId ?? r.memberId
+            case .diwaniya(let d): return d.ownerId
+            case .project(let p): return p.ownerId
+            case .archive(let a): return a.uploadedBy
+            }
+        }()
+        guard let id else { return nil }
+        // الاسم الرباعي (الأول + الثاني + الثالث + العائلة) — طلب المالك ٢٠٢٦-١١-١١
+        return memberVM.allMembers.first { $0.id == id }?.fourPartName
+    }
+
+    /// من أين أُرسل الطلب — من نوعه وحمولته (يعمل للطلبات القديمة أيضاً، بلا تغيير في السيرفر)
+    private func requestSource(for detail: RequestDetail) -> String {
+        let arrow = L10n.t(" ← ", " → ")
+        switch detail {
+        case .join(let m):
+            return m.registrationPlatform == "web" ? L10n.t("الموقع", "Website") + arrow + L10n.t("التسجيل", "Sign-up")
+                                                   : L10n.t("التطبيق", "App") + arrow + L10n.t("التسجيل", "Sign-up")
+        case .news: return L10n.t("الرئيسية", "Home") + arrow + L10n.t("خبر جديد", "New post")
+        case .diwaniya: return L10n.t("الديوانيات", "Diwaniyas") + arrow + L10n.t("إضافة ديوانية", "Add diwaniya")
+        case .project: return L10n.t("مشاريع العائلة", "Family projects") + arrow + L10n.t("إضافة مشروع", "Add project")
+        case .archive: return L10n.t("مكتبة العائلة", "Family library") + arrow + L10n.t("رفع ملف", "Upload")
+        case .phone: return L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("تغيير الرقم", "Change phone")
+        case .nameChange: return L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("تعديل البيانات", "Edit details")
+        case .child: return L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("الأسرة", "Family") + arrow + L10n.t("إضافة الأبناء", "Add children")
+        case .deceased: return L10n.t("الشجرة", "Tree") + arrow + L10n.t("تفاصيل العضو", "Member details") + arrow + L10n.t("تسجيل وفاة", "Report death")
+        case .photo: return L10n.t("الشجرة", "Tree") + arrow + L10n.t("تفاصيل العضو", "Member details") + arrow + L10n.t("اقتراح صورة", "Suggest photo")
+        case .report(let r):
+            return r.requestType == "news_report" || r.requestType == "content_report"
+                ? L10n.t("الرئيسية", "Home") + arrow + L10n.t("بلاغ عن منشور", "Report a post")
+                : L10n.t("التواصل", "Contact") + arrow + L10n.t("رسالة للإدارة", "Message to admins")
+        case .treeEdit(let r, let action):
+            let p = r.treeEditPayload
+            if let notes = p?.notes, let women = WomenTreeRequestLines(notes) {
+                // شجرة النساء: تفاصيل المرأة نفسها ← «طلب إضافة»
+                let whom = women.forWhom.map { L10n.t("تفاصيل ", "Details of ") + $0 } ?? L10n.t("تفاصيل العضو", "Member details")
+                return L10n.t("شجرة النساء", "Women's tree") + arrow + whom + arrow + L10n.t("طلب إضافة", "Add request")
+            }
+            if let reason = p?.reason, reason.hasPrefix("profile_") {
+                return L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("تعديل البيانات", "Edit details")
+            }
+            let whom = (p?.targetMemberName).map { L10n.t("تفاصيل ", "Details of ") + $0 } ?? L10n.t("تفاصيل العضو", "Member details")
+            let what = action == .add ? L10n.t("طلب إضافة", "Add request") : L10n.t("طلب تعديل", "Edit request")
+            return L10n.t("الشجرة", "Tree") + arrow + whom + arrow + what
         }
     }
 
@@ -3743,7 +3810,7 @@ struct AdminAllRequestsView: View {
                          title: L10n.t("طلب ديوانية", "Diwaniya Request"),
                          timestamp: nil)
         case .deceased(let r):
-            return .init(icon: "bolt.heart.fill", color: DS.Color.slate,
+            return .init(icon: "leaf.fill", color: DS.Color.slate,
                          title: L10n.t("تسجيل وفاة", "Deceased"),
                          timestamp: r.createdAt.map { formatRegistrationDate($0) })
         case .child(let r):
@@ -3788,7 +3855,7 @@ struct AdminAllRequestsView: View {
             }
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
-                         value: birth, color: DS.Color.palm)
+                         value: DateHelper.displayDate(birth) ?? birth, color: DS.Color.palm)
             }
             if member.isFemale {
                 infoCard(icon: "figure.stand.dress", label: L10n.t("الجنس", "Gender"),
@@ -4003,14 +4070,14 @@ struct AdminAllRequestsView: View {
                          value: memberName, color: AppSection.admin.ink)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Death Date"),
-                             value: death, color: DS.Color.slate)
+                             value: DateHelper.displayDate(death) ?? death, color: DS.Color.slate)
                 }
             case .addDeathDate:
                 infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 if let death = payload?.deathDate, !death.isEmpty {
                     infoCard(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Death Date"),
-                             value: death, color: DS.Color.slate)
+                             value: DateHelper.displayDate(death) ?? death, color: DS.Color.slate)
                 }
             case .addPhoto:
                 infoCard(icon: "person.fill", label: memberLabel,
@@ -4019,11 +4086,23 @@ struct AdminAllRequestsView: View {
                     photoCard(url: url)
                 }
             case .add:
-                infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
-                         value: payload?.newMemberName ?? memberName, color: DS.Color.palm)
-                if let parent = payload?.parentMemberName, !parent.isEmpty {
-                    infoCard(icon: "person.2.fill", label: L10n.t("الأب", "Father"),
-                             value: parent, color: AppSection.admin.ink)
+                // طلب من شجرة النساء: الطلب معلّق على أقرب سجلّ في الشجرة العامة (غالباً مقدّم الطلب)، فاسمه ليس
+                // الاسم الجديد ولا الأب — الاسم ولمن من سطري «الاسم:» و«لـ:» في الملاحظات (كان يعرض «الاسم الجديد:
+                // فيصل… · الأب: فيصل…» فقُبل طلبا ليلى وريم بلا إضافة، ٢٠٢٦-١١-١١)
+                if let women = payload?.notes.flatMap(WomenTreeRequestLines.init) {
+                    infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
+                             value: women.name, color: DS.Color.female)
+                    if let forWhom = women.forWhom {
+                        infoCard(icon: "person.2.fill", label: L10n.t("لـ (شجرة النساء)", "For (women's tree)"),
+                                 value: forWhom, color: AppSection.admin.ink)
+                    }
+                } else {
+                    infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
+                             value: payload?.newMemberName ?? memberName, color: DS.Color.palm)
+                    if let parent = payload?.parentMemberName, !parent.isEmpty {
+                        infoCard(icon: "person.2.fill", label: L10n.t("الأب", "Father"),
+                                 value: parent, color: AppSection.admin.ink)
+                    }
                 }
             case .delete:
                 infoCard(icon: "person.fill", label: memberLabel,
@@ -4032,7 +4111,7 @@ struct AdminAllRequestsView: View {
                 infoCard(icon: "person.fill", label: memberLabel,
                          value: memberName, color: AppSection.admin.ink)
                 if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
-                    infoCard(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
+                    infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد الجديد", "New Birth Date"),
                              value: newDate, color: DS.Color.palm)
                 }
             case .other:
@@ -4051,8 +4130,16 @@ struct AdminAllRequestsView: View {
                              label: L10n.t("السبب", "Reason"), text: reason)
             }
             if let notes = payload?.notes, !notes.isEmpty {
-                longTextCard(icon: "note.text",
-                             label: L10n.t("ملاحظات", "Notes"), text: notes)
+                // سطر «⚠︎ تنبيه للإدارة» يُعرض بطاقة تحذير بارزة أعلى الملاحظات (طلب المالك ٢٠٢٦-١١-١١:
+                // أبناء امرأة بلا زوج مسجّل — تُضاف الإدارة الزوج أولاً)
+                let split = notes.adminNoticeSplit
+                ForEach(split.notices, id: \.self) { notice in
+                    DSNoteCard(notice, icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+                }
+                if !split.rest.isEmpty {
+                    longTextCard(icon: "note.text",
+                                 label: L10n.t("ملاحظات", "Notes"), text: split.rest)
+                }
             }
 
         }
@@ -4500,5 +4587,50 @@ private struct RequestSwipeActions: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+
+// MARK: - تنبيه إداري داخل ملاحظات الطلب
+
+extension String {
+    /// أسطر تبدأ بـ«⚠︎» = تنبيهات للإدارة تُعرض بارزة، والباقي ملاحظات عادية
+    var adminNoticeSplit: (notices: [String], rest: String) {
+        var notices: [String] = []
+        var rest: [String] = []
+        for line in components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("⚠︎") || trimmed.hasPrefix("⚠") {
+                let body = trimmed.drop { $0 == "⚠" || $0 == "\u{FE0E}" || $0 == "\u{FE0F}" || $0 == " " }
+                notices.append(String(body))
+            } else {
+                rest.append(line)
+            }
+        }
+        return (notices, rest.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+}
+
+
+/// سطور طلب «شجرة النساء» في الملاحظات: «الاسم: …» و«لـ: …» (يكتبها `WomanDetailSheet.requestPayload`)
+struct WomenTreeRequestLines {
+    let name: String
+    let forWhom: String?
+
+    init?(_ notes: String) {
+        let lines = notes.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard lines.contains(where: { $0.hasPrefix("شجرة النساء") || $0.hasPrefix("Women's tree") }) else { return nil }
+        func value(_ prefixes: [String]) -> String? {
+            for line in lines {
+                for p in prefixes where line.hasPrefix(p) {
+                    let v = line.dropFirst(p.count).trimmingCharacters(in: .whitespaces)
+                    if !v.isEmpty { return v }
+                }
+            }
+            return nil
+        }
+        guard let name = value(["الاسم:", "Name:"]) else { return nil }
+        self.name = name
+        self.forWhom = value(["لـ:", "For:"])
     }
 }

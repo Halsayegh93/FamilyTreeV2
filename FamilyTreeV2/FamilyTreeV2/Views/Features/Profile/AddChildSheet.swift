@@ -188,74 +188,51 @@ struct AddChildSheet: View {
 
     /// البيانات — نفس أقسام وحقول مربّعات الإضافة («أسلوب واحد»): الاسم، الجنس، الهاتف، التواريخ
     private var basicInfoSection: some View {
-        DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+        DSComposerSection(title: L10n.t("البيانات الشخصية", "Personal Info"),
                           icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
             DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
                             placeholder: L10n.t("الاسم الأول فقط", "First name only"),
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
-            // اختيار الجنس — أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
-            DSGenderPicker(selection: $selectedGender)
+            // الجنس زرّان، ثم الميلاد والحالة متجاوران (وتاريخ الوفاة بعدها) — قرار المالك ٢٠٢٦-١١-١١
+            // أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
+            DSGenderPicker(selection: $selectedGender, buttons: true)
+            DSTileGrid(dataTiles)
 
             // الهاتف — للابن (الذكر) فقط
             if selectedGender == "male" {
-                DSFieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
-                    DSPhoneField(
-                        country: $selectedPhoneCountry,
-                        digits: $phoneNumber,
-                        placeholder: L10n.t("اختياري", "Optional"),
-                        compact: true,
-                        bordered: false
-                    )
-                }
-            }
-
-            // تاريخ الميلاد (اختياري: يُرسل فقط إذا حدّده المستخدم)
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
-                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    value: birthDateProvided ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
-                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                                    initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
-                    guard let picked else { return }
-                    birthDate = picked
-                    birthDateProvided = true
-                }
-            }
-
-            // متوفى — صفّ بإطار حقول المربّعات
-            DSRow(icon: "leaf.fill", tint: DS.Color.error, title: L10n.t("متوفى", "Deceased")) {
-                Toggle("", isOn: $isDeceased.animation(DS.Anim.snappy))
-                    .labelsHidden()
-                    .tint(DS.Color.error)
-                    // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
-                    .accessibilityLabel(L10n.t("متوفى", "Deceased"))
-            }
-
-            if isDeceased {
-                dateRow(icon: "calendar", tint: DS.Color.error,
-                        title: L10n.t("تاريخ الوفاة", "Death Date"),
-                        value: DSDateText.display(deathDate)) {
-                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                                        initial: deathDate, allowClear: false) { picked in
-                        if let picked { deathDate = picked }
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"))
             }
         }
     }
 
-    /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف
-    private func dateRow(icon: String, tint: Color, title: String, value: String,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: value) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
-            }
-            .contentShape(Rectangle())
+    private var dataTiles: [DSTileItem] {
+        var items: [DSTileItem] = [
+            // تاريخ الميلاد (اختياري: يُرسل فقط إذا حدّده المستخدم) — «بدون تاريخ» داخل المنتقي
+            .half(DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                 hasDate: birthDateProvided, dateText: DSDateText.display(birthDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                    initial: birthDateProvided ? birthDate : nil, allowClear: birthDateProvided) { picked in
+                    if let picked { birthDate = picked; birthDateProvided = true } else { birthDateProvided = false }
+                }
+            }),
+            .half(DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                DSChoiceOption(id: true, title: selectedGender == "female" ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
+                               icon: "leaf.fill")
+            ], selection: $isDeceased.animation(DS.Anim.snappy)))
+        ]
+        if isDeceased {
+            items.append(.half(DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                              hasDate: true, dateText: DSDateText.display(deathDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                    initial: deathDate, allowClear: false) { picked in
+                    if let picked { deathDate = picked }
+                }
+            }))
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
+        return items
     }
 
     /// حارس محلي يمنع الإضافة المكرّرة — isLoading في الـ VM يتأخر لحظة

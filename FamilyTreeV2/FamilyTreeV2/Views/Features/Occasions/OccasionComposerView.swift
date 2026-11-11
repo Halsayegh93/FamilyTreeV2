@@ -92,7 +92,8 @@ struct OccasionComposerView: View {
                 withAnimation(DS.Anim.quick) { vm.pickMember(m) }
             }
         }
-        .alert(vm.message ?? "", isPresented: Binding(
+        // التنبيه الموحّد (`dsAlert`) بدل تنبيه النظام
+        .dsAlert(vm.message ?? "", isPresented: Binding(
             get: { vm.message != nil },
             set: { if !$0 { vm.message = nil } }
         )) {
@@ -356,7 +357,7 @@ struct OccasionComposerView: View {
 
     private var templateSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("القالب", "Template"), icon: "square.grid.2x2.fill")
+            DSBoxSectionTitle(title: L10n.t("القالب", "Template"), icon: "square.grid.2x2.fill")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.sm) {
                     ForEach(vm.templates) { t in
@@ -367,7 +368,7 @@ struct OccasionComposerView: View {
                         .frame(width: 104)
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, DS.Spacing.xxs)
             }
         }
     }
@@ -376,7 +377,7 @@ struct OccasionComposerView: View {
 
     private var modelSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("النموذج", "Design"), icon: "rectangle.on.rectangle")
+            DSBoxSectionTitle(title: L10n.t("النموذج", "Design"), icon: "rectangle.on.rectangle")
             HStack(spacing: DS.Spacing.sm) {
                 ForEach(vm.template.models) { m in
                     modelCard(m)
@@ -399,7 +400,7 @@ struct OccasionComposerView: View {
 
     private var placementSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("مكان النشر", "Where to post"), icon: "paperplane.fill")
+            DSBoxSectionTitle(title: L10n.t("مكان النشر", "Where to post"), icon: "paperplane.fill")
             // قائمة منسدلة (المالك ٢٠٢٦-١١-٠٨) بدل مربعات الأماكن العشرة: الاسم والمقاس، والمختار عليه علامة
             Menu {
                 ForEach(vm.placements) { p in
@@ -417,7 +418,7 @@ struct OccasionComposerView: View {
                     Image(systemName: "paperplane.fill")
                         .dsGlyph(DS.Glyph.sm)
                         .foregroundColor(DS.Color.accent)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(vm.placement.title)
                             .dsFont(.rowTitle)
                             .foregroundColor(DS.Color.textPrimary)
@@ -450,7 +451,7 @@ struct OccasionComposerView: View {
 
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("التفاصيل", "Details"), icon: "checklist")
+            DSBoxSectionTitle(title: L10n.t("التفاصيل", "Details"), icon: "checklist")
             // «الألوان» أول شي في التفاصيل (مثل الموقع)
             if vm.template.hasPalette { paletteCard }
             HStack(spacing: DS.Spacing.sm) {
@@ -540,7 +541,7 @@ struct OccasionComposerView: View {
     private func selectedMember(_ m: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.md) {
             OccasionMemberAvatar(member: m, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(vm.nameResolution("name")?.option.name ?? vm.name)
                     .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
@@ -939,7 +940,7 @@ struct OccasionComposerView: View {
 
     private var photoSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("الصورة", "Photo"), icon: "photo.fill")
+            DSBoxSectionTitle(title: L10n.t("الصورة", "Photo"), icon: "photo.fill")
             if vm.template.photoOptional {
                 OccasionChips(options: [L10n.t("مع صورة", "With photo"), L10n.t("بدون صورة", "No photo")],
                               selected: vm.withPhoto ? 0 : 1) { i in
@@ -970,7 +971,7 @@ struct OccasionComposerView: View {
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm + 2)
+                        .padding(.vertical, DS.Spacing.smd)
                         .background(Capsule().fill(DS.Color.primary))
                 }
                 if vm.photo.image != nil {
@@ -1004,7 +1005,7 @@ struct OccasionComposerView: View {
     }
 
     private func photoSlider(_ title: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(title)
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)

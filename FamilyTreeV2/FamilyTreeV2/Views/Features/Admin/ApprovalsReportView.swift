@@ -40,7 +40,7 @@ enum ApprovalTypeTitle {
         switch type {
         case RequestType.childAdd.rawValue: return "person.badge.plus"
         case RequestType.treeEdit.rawValue: return "arrow.triangle.branch"
-        case RequestType.deceasedReport.rawValue: return "heart.slash.fill"
+        case RequestType.deceasedReport.rawValue: return "leaf.fill"
         case RequestType.nameChange.rawValue, RequestType.familyChange.rawValue: return "character.cursor.ibeam"
         case RequestType.phoneChange.rawValue: return "phone.arrow.right"
         case RequestType.photoSuggestion.rawValue: return "photo.fill"
@@ -329,7 +329,7 @@ struct ApprovalsReportView: View {
                              icon: "arrow.up.forward.circle.fill", tint: DS.Color.error, size: .mini)
             }
         }
-        .padding(.vertical, DS.Spacing.sm + DS.Spacing.xxs)
+        .padding(.vertical, DS.Spacing.smd)
         .accessibilityElement(children: .combine)
     }
 }

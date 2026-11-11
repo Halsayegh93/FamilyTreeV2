@@ -610,7 +610,7 @@ struct AdminRowDivider: View {
 
 /// شبكة المربّعات (الأقسام، «نبض العائلة»): عمودان عمودياً، وأعمدة متكيّفة أفقياً
 enum AdminGrid {
-    static let spacing: CGFloat = DS.Spacing.sm + 2
+    static let spacing: CGFloat = DS.Spacing.smd
 
     static func columns(landscape: Bool) -> [GridItem] {
         landscape
@@ -770,7 +770,7 @@ struct AdminListRow<Trailing: View>: View {
             trailing()
             if showsChevron { DSChevron() }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -899,7 +899,7 @@ struct AdminHubPage<Header: View, Content: View>: View {
                 _VariadicView.Tree(AdminCascadeLayout(appeared: appeared)) {
                     content()
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.top, DS.Hub.stackSpacing)
                 .padding(.bottom, DS.Spacing.xxxl)
                 .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)

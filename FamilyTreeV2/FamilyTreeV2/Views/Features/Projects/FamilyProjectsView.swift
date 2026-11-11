@@ -55,14 +55,14 @@ struct FamilyProjectsView: View {
                 // شريط التحديد العلوي يحلّ محل صف الفلاتر في وضع التحديد
                 if selectionMode {
                     selectionTopBar
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 } else if hasToolbarRow {
                     // التصنيفات أُزيلت (طلب المالك) — يبقى فقط زر الطلبات المعلّقة إن وُجدت؛
                     // زر التحديد انتقل لهيدر الصفحة
                     toolbarRow
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 }
@@ -110,18 +110,12 @@ struct FamilyProjectsView: View {
             }
         }
         // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-        .fullScreenCover(isPresented: $showingAddProject) {
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                AddProjectView(showAddedAlert: $showAddedAlert)
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
-                    .environmentObject(memberVM)
-                    .dsSectionPage(.projects)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
-            }
-            .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            if showingAddProject { t.disablesAnimations = true }
+        .dsCenterBox(isPresented: $showingAddProject) {
+            AddProjectView(showAddedAlert: $showAddedAlert)
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .dsSectionPage(.projects)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
         }
         .dsAlert(
             L10n.t("تم إرسال المشروع", "Project Submitted"),
@@ -145,17 +139,13 @@ struct FamilyProjectsView: View {
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
         }
-        .fullScreenCover(item: $projectToEdit) { project in
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                EditProjectView(project: project, didEdit: $didEditProject)
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
-                    .environmentObject(memberVM)
-                    .dsSectionPage(.projects)
-            }
-            .background(ClearPresentationBackground())
+        .dsCenterBox(item: $projectToEdit) { project in
+            EditProjectView(project: project, didEdit: $didEditProject)
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .dsSectionPage(.projects)
         }
-        .transaction { t in if projectToEdit != nil { t.disablesAnimations = true } }
         .dsAlert(L10n.t("إبلاغ عن مشروع", "Report Project"), isPresented: Binding(
             get: { projectToReport != nil },
             set: { if !$0 { projectToReport = nil } }
@@ -277,7 +267,7 @@ struct FamilyProjectsView: View {
                         .dsCardCascade(index, appeared: appeared)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 // البطاقات تبدأ تحت الرأس بمسافة (طلب المالك ٢٠٢٦-١٠-٢٣ — كانت ملاصقة له)، مثل المكتبة
                 .padding(.top, hasToolbarRow ? DS.Spacing.xs : DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxxl)
@@ -467,7 +457,7 @@ struct FamilyProjectsView: View {
             }
             .disabled(selectedIDs.isEmpty)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .dsGlass(Rectangle())
         .overlay(

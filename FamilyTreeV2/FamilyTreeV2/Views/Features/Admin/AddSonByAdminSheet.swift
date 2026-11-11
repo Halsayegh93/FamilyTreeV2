@@ -198,35 +198,27 @@ struct AddSonByAdminSheet: View {
 
     // MARK: - البيانات الأساسية: الاسم، الجنس، الرقم
     private var basicsCard: some View {
-        DSFormCard(L10n.t("البيانات الأساسية", "Basic Info"),
-                   icon: "person.text.rectangle.fill", color: chromeInk) {
-            DSFieldBox(L10n.t("الاسم الأول", "First Name")) {
-                TextField(L10n.t("الاسم الأول فقط", "First name only"), text: $firstName)
-                    .onChange(of: firstName) { _ in
-                        if firstName.count > 50 { firstName = String(firstName.prefix(50)) }
-                    }
-            }
+        // قسم وحقول المربّعات الموحّدة (طلب المالك ٢٠٢٦-١١-١١)
+        DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
+                          icon: "person.text.rectangle.fill", tint: chromeInk, index: 1) {
+            DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
+                            placeholder: L10n.t("الاسم الأول فقط", "First name only"),
+                            text: $firstName, limit: 50)
 
             DSGenderPicker(selection: $selectedGender)
 
             if !isDeceased {
-                DSFieldBox(L10n.t("رقم الهاتف (اختياري)", "Phone (optional)")) {
-                    DSPhoneField(
-                        country: $selectedPhoneCountry,
-                        digits: $phoneNumber,
-                        placeholder: L10n.t("اختياري", "Optional"),
-                        compact: true,
-                        bordered: false
-                    )
-                }
+                DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
+                                title: L10n.t("رقم الهاتف", "Phone number"),
+                                placeholder: L10n.t("اختياري", "Optional"))
             }
         }
     }
 
     // MARK: - التواريخ والحالة (طلب المالك)
     private var datesCard: some View {
-        DSFormCard(L10n.t("التواريخ والحالة", "Dates & Status"),
-                   icon: "calendar", color: DS.Color.palm) {
+        DSComposerSection(title: L10n.t("التواريخ والحالة", "Dates & Status"),
+                          icon: "calendar", tint: DS.Color.palm, index: 2) {
             DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
                            isDeceased: $isDeceased,
                            hasDeathDate: $hasDeathDate, deathDate: $deathDate,

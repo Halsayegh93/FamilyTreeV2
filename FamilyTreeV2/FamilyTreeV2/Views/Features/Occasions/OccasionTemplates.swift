@@ -524,7 +524,7 @@ extension OccasionTemplate {
                              theme: .navy, verse: .grad, verseScale: 0.86, hasPhoto: true, m1: .grad,
                              noPhoto: OccasionNoPhotoSpec(verse: .grad, m1Width: 637, m1Top: 50, m2Width: 623, m2Top: 30)),
             // «إعلان عزاء» (طلب المالك ٢٠٢٦-١٠-١٧): قالب واحد بنسختين «مع صورة / بدون صورة» (layout(withPhoto:))
-            OccasionTemplate(id: "death", title: L10n.t("إعلان عزاء", "Condolence notice"), icon: "moon.stars.fill",
+            OccasionTemplate(id: "death", title: L10n.t("إعلان عزاء", "Condolence notice"), icon: "leaf.fill",
                              kind: .death, hasPhoto: true),
             OccasionTemplate(id: "solace", title: L10n.t("مشاركة عزاء", "Condolences"), icon: "hands.sparkles.fill",
                              kind: .solace, verse: .sabr, hasPhoto: false),

@@ -496,27 +496,16 @@ struct CategoryEditSheet: View {
     }
 
     private var visibilitySection: some View {
+        // قسم «الخصوصية» الموحّد (`DSVisibilityPicker`) بدل المفتاح — المخزّن «ظاهر»، والمخفي عكسه
         DSComposerSection(title: L10n.t("الظهور", "Visibility"), icon: "eye.fill",
-                          tint: DS.Color.success, index: 4) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: isActive ? "eye.fill" : "eye.slash.fill",
-                            tint: isActive ? DS.Color.success : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-                Toggle(isOn: $isActive) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                        Text(L10n.t("ظاهر للأعضاء", "Visible to members"))
-                            .dsFieldFont(.rowTitle)
-                            .foregroundColor(DS.Color.fieldLabel)
-                        Text(L10n.t("الإخفاء يشيله من الاختيارات، والمحتوى القديم يبقى بتصنيفه",
-                                    "Hiding removes it from choices; existing content keeps it"))
-                            .dsFont(.footnote)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .tint(AppSection.admin.ink)
-            }
-            .dsRowBox()
+                          tint: DS.Color.primary, index: 4) {
+            DSVisibilityPicker(hidden: Binding(get: { !isActive }, set: { isActive = !$0 }),
+                               shownLine: L10n.t("يظهر في الاختيارات للأعضاء.", "Shown in members' choices."),
+                               hiddenLine: L10n.t("لا يظهر في الاختيارات، والمحتوى السابق يبقى بتصنيفه.",
+                                                  "Removed from choices; existing content keeps it."),
+                               rowTitle: L10n.t("الظهور في الاختيارات", "Shown in choices"),
+                               shownState: L10n.t("يظهر للأعضاء", "Shown to members"),
+                               hiddenState: L10n.t("مخفي عن الأعضاء", "Hidden from members"))
         }
     }
 

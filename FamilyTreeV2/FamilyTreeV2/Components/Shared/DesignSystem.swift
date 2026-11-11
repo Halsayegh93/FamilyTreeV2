@@ -140,6 +140,19 @@ enum DS {
         /// حقل الإدخال داخل المربّعات — صندوق رمادي بلا إطار يتميّز عن أرضية المربّع في الفاتح والداكن،
         /// والإطار بلون القسم عند الكتابة فقط (طلب المالك ٢٠٢٦-١١-٠٢ «صندوق رمادي بدون إطار»)
         static let fieldFill        = SwiftUI.Color.adaptive(light: "#F0F0F2", dark: "#282B31")
+        // حكم مراجعة التصميم ٢٠٢٦-١١-١١ (قرارات المالك) — مكان واحد لكل لون:
+        /// النص الثانوي الذهبي فوق الرؤوس الكحلية (وصف رأس الصفحة والمربّع) — أفتح من `accentLight` ليُقرأ فوق الكحلي
+        static let accentOnBand     = SwiftUI.Color.adaptive(light: "#E2CB97", dark: "#E2CB97")
+        /// حبّة/بطاقة الخيار المختار في `DSChoiceTiles` / `DSOptionTiles`
+        static let choicePill       = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#3A414C")
+        /// إطار الخيار المختار (١ نقطة): كحلي العلامة بشفافية الإطار المختار في الفاتح (#172536 × 0.55 فوق الأبيض ≈ #7F8791)،
+        /// وكحلي فاتح في الداكن (#7FA8D6 — ٥٫٧:١ فوق مسار الحقل #282B31)
+        static let selectionStroke  = SwiftUI.Color.adaptive(light: "#7F8791", dark: "#7FA8D6")
+        /// خلية البيانات: العنوان الصغير رمادي، والقيمة بلون النص الأساسي (قرار المالك ٢٠٢٦-١١-١١ «د»)
+        static var tileLabel: SwiftUI.Color { textSecondary }
+        static var tileValue: SwiftUI.Color { textPrimary }
+        /// الشفة السفلية لصفّ الحقل — مع «زيادة التباين» فقط (قاعدة المالك: الحقل رمادي بلا إطار)
+        static let fieldLip         = SwiftUI.Color.adaptive(light: "#8791A0", dark: "#7A8391")
         static let actionRowFill    = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25")
         static let actionRowOverlay = SwiftUI.Color.adaptive(light: "#F2EBDD", dark: "#23272E")
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
@@ -151,7 +164,7 @@ enum DS {
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#172536", dark: "#FFFFFF") // ink
         static let textSecondary = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#C9CED5") // ink-muted
         /// ink-subtle في الهوية — نص ثالث (تلميحات، أسهم الصفوف، الحالات المعطّلة)؛ مقروء (AA) على الأبيض والأسود
-        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // ink-subtle
+        static let textTertiary  = SwiftUI.Color.adaptive(light: "#646C79", dark: "#8A93A0") // ink-subtle
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = accent // ذهبي
         /// أيقونة/نص فوق مربّع معبّأ بلون متكيّف (مثل palm أو primary): أبيض في الفاتح، وحبر غامق في الداكن
@@ -537,12 +550,70 @@ enum DS {
         /// ٦ — بين أيقونة صغيرة ونصّها، وبين عناصر الشبكات الضيقة (كان `spacing: 6` في ٤٥ ملفاً)
         static let xsm:   CGFloat = 6
         static let sm:    CGFloat = 8
+        /// ١٠ — حشوة الصفوف والشرائح الأفقية (كان `sm + 2` في ٢٤ موضعاً) — جولة المسافات ٢٠٢٦-١١-١١
+        static let smd:   CGFloat = 10
         static let md:    CGFloat = 12
         static let lg:    CGFloat = 16
         static let xl:    CGFloat = 20
         static let xxl:   CGFloat = 24
         static let xxxl:  CGFloat = 32
         static let xxxxl: CGFloat = 40
+    }
+
+    // MARK: Page — مسافات الصفحات الموحّدة (جولة المسافات ٢٠٢٦-١١-١١)
+    //
+    // ┌─ خريطة «عدّل هنا ← يتغيّر في كل الأقسام» (طلب المالك: «التعديل يكون من مكان واحد») ───────────────────────────┐
+    //  الصفحات
+    //   DS.Page.margin        ١٦  الهامش الجانبي لكل صفحات التبويبات والصفحات الفرعية ورؤوسها (`.dsPageMargin()`)
+    //   DS.Page.cardGap       ١٦  بين بطاقة وبطاقة / قسم وقسم في الصفحة (`DS.Page.cardGap` في قوائم الصفحات)
+    //   DS.Page.titleGap       ٨  بين عنوان القسم ومحتواه في الصفحة
+    //   DS.Page.top           ١٦  أعلى محتوى الصفحة تحت الرأس
+    //   DS.Page.rowMinHeight  ٤٤  أدنى ارتفاع لصفّ قائمة يُضغط (= مساحة اللمس `DS.Icon.tapTarget`)
+    //  البطاقات
+    //   DS.Card.padding       ١٢  حشوة كل بطاقة (`.dsCard()`) · DSBox.sectionPadding ١٢ حشوة قسم المربّع (`DSComposerSection`)
+    //   DS.Card.radius        ١٢  زوايا كل بطاقة = `DSBox.sectionRadius`
+    //  المربّعات (كل `DSComposer` / `dsCenterBox` / التنبيهات)
+    //   DSBox.contentPadding  ١٦  الحشوة الجانبية داخل المربّع
+    //   DSBox.sectionSpacing  ١٢  بين قسم وقسم داخل المربّع
+    //   DSBox.sectionInnerSpacing ٨  بين عنوان القسم وصفوفه، وبين الصفوف
+    //   DSBox.headerHeight    ٦٤  ارتفاع رأس المربّع · DSBox.composerIcon ٤٠ مربّع رمز الرأس · DSBox.sectionIcon ١٦ رمز عنوان القسم
+    //   DSBox.fieldMinHeight  ٤٤  ارتفاع صفّ الحقل · DSBox.fieldHorizontalPadding ١٢ / fieldVerticalPadding ٦ حشوته (`.dsRowBox()`)
+    //   DSBox.fieldIcon       ٢٢  رمز صفّ الحقل (`DSFieldIcon`)
+    //   DSBox.tileMinHeight / tileGap ٨  خلية البيانات الواحدة وشبكتها (`DSFieldTileFace` · `DSMenuTile` · `DSDateFieldRow` · `DSTileGrid`)
+    //   DSBox.choiceTrackHeight ٤٠ ارتفاع مسار الاختيار (`DSChoiceTiles`) · choiceTrackInset ٢ · optionTilePadding ٨ (`DSOptionTiles`)
+    //   DSBox.commandRowHeight ٤٨ صفّ الأمر (`DSCommandRow`)
+    //   DSBox.buttonHeight    ٤٤  زرّ التذييل وكل الأزرار (`DSButtonFace`) · buttonSpacing ٨ · buttonRadius ٢٢ (حبّة)
+    //   DSBox.choiceCompactWidth ١٥٠ / choiceCompactHeight ٣٦  الاختيار المضغوط (`DSChoiceTiles(compact:)`)
+    //   DSBox.chipHeight ٣٤ / chipPadding ١٢  حبّة القائمة المنسدلة في صفّ «الخصوصية» الواحد (`DSVisibilityPicker`)
+    //   DSBox.footerHorizontal ١٦ / footerTop ١٢ / footerBottom ١٢  شريط أزرار المربّع
+    //   DSBox.alertPadding    ١٢  حشوة التنبيه الصغير (`dsAlert`)
+    //  الألوان والخيط الذهبي
+    //   DS.Color.accentOnBand  النص الذهبي فوق الرؤوس الكحلية · DS.Color.choicePill / selectionStroke  الخيار المختار
+    //   DS.Color.bandFill  لون رأس المربّع الصلب · DS.Thread (color / tick ٣×١٢ / hairline ١)  الخيط الذهبي
+    //  الرموز
+    //   DS.Icon.row ٣٢ رمز الصفّ · DS.Icon.rowLarge ٣٦ · DS.Icon.section ٢٢ · DS.Icon.tapTarget ٤٤ مساحة اللمس
+    //  السلّم الخام (لا يُستعمل مباشرة لمعنى له اسم أعلاه): DS.Spacing ٢·٤·٦·٨·١٠·١٢·١٦·٢٠·٢٤·٣٢·٤٠ ، DS.Radius ٨·١٢·١٦·٢٠·٢٤·٢٨
+    //  الحارس: `scripts/check-layout-literals.sh` يعدّ الأرقام الثابتة الخارجة عن هذه الأسماء.
+    // └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    enum Page {
+        /// الهامش الجانبي للصفحة (١٦) — استعمله بـ`.dsPageMargin()`
+        static let margin: CGFloat = Spacing.lg
+        /// بين بطاقة وبطاقة أو قسم وقسم (١٢)
+        static let cardGap: CGFloat = Spacing.lg
+        /// بين عنوان القسم ومحتواه (٨)
+        static let titleGap: CGFloat = Spacing.sm
+        /// أعلى محتوى الصفحة تحت الرأس (١٢)
+        static let top: CGFloat = Spacing.lg
+        /// أدنى ارتفاع لصفّ قائمة يُضغط (٤٤)
+        static var rowMinHeight: CGFloat { Icon.tapTarget }
+    }
+
+    // MARK: Thread — الخيط الذهبي (علامة قبل عناوين أقسام المربّعات، وخطّ أسفل رأس المربّع)
+    enum Thread {
+        static var color: SwiftUI.Color { DS.Color.accentLight }
+        static let tickWidth: CGFloat = 3
+        static let tickHeight: CGFloat = Spacing.md
+        static let hairline: CGFloat = Border.width
     }
 
     // MARK: Radius — حواف حديثة ناعمة
@@ -663,7 +734,7 @@ enum DS {
         /// زوايا كل البطاقات (= بطاقة قسم المربّع)
         static var radius: CGFloat { DSBox.sectionRadius }
         /// حشوة البطاقة (= بطاقة قسم المربّع)
-        static var padding: CGFloat { DSBox.sectionPadding }
+        static let padding: CGFloat = DS.Spacing.md
         static let strokeWidth: CGFloat = 1
         /// لمسة الطين: إضاءة علوية داخلية (فاتح/داكن) وعرضها
         static let highlightLight: Double = 0.9
@@ -835,13 +906,13 @@ extension DS.TextRole {
     /// نص جانبي وتلميح (طرف عنوان القسم) — Caption 1 (١٢)
     static let caption      = DS.TextRole(.caption, weight: .medium)
     /// شارة حالة — Caption 2 (١١)
-    static let badge        = DS.TextRole(.caption2, weight: .semibold)
+    static let badge        = DS.TextRole(.caption, weight: .semibold)
     /// عنوان قسم داخل المربّع (`DSComposerSection`) — Footnote (١٣)
     static let boxSectionTitle = DS.TextRole(.footnote, weight: .semibold)
     /// ملاحظة صغيرة (فوق أزرار المربّع) — Footnote (١٣)
     static let footnote     = DS.TextRole(.footnote)
     /// عدّاد ورقم صغير — Caption 2 (١١)
-    static let micro        = DS.TextRole(.caption2, weight: .medium)
+    static let micro        = DS.TextRole(.caption, weight: .medium)
     /// نص الزرّ الواحد (٤٤ في المربّعات والصفحات) — Body (١٧) شبه عريض كأزرار iOS
     static let button       = DS.TextRole(.subheadline, weight: .medium)
     /// زرّ ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة) — Body (١٧)
@@ -917,6 +988,14 @@ extension View {
     func dsGlyph(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> some View {
         font(DS.Glyph.font(size, weight: weight))
     }
+}
+
+// MARK: - هامش الصفحة الواحد
+extension View {
+    /// الهامش الجانبي الموحّد لمحتوى الصفحات ورؤوسها (`DS.Page.margin`) — تغييره هناك يحرّك كل الصفحات
+    func dsPageMargin() -> some View { padding(.horizontal, DS.Page.margin) }
+    /// حشوة محتوى الصفحة من كل الجهات بالهامش الموحّد (قوائم البطاقات)
+    func dsPagePadding() -> some View { padding(DS.Page.margin) }
 }
 
 // MARK: - Color Hex Extension
@@ -1425,7 +1504,7 @@ enum DSBox {
     static let compactHeaderHeight: CGFloat = 56
     /// أقل حشوة رأسية فوق عنوان الرأس وتحته — الرأس يطول مع خط الجهاز بدل أن يُقصّ (مقاسات Apple ٢٠٢٦-١٠-٠٨)؛
     /// ٣ = العنوان (١٧) والوصف (١٥) يملآن الرأس المضغوط ٥٦ بالضبط في الحجم الافتراضي
-    static let headerVerticalPadding: CGFloat = 3
+    static let headerVerticalPadding: CGFloat = DS.Spacing.xs
     static let compactHeaderIcon: CGFloat = 30
     static let compactWatermark: CGFloat = 80
     static let compactWatermarkOpacity: Double = 0.18
@@ -1439,15 +1518,15 @@ enum DSBox {
     // الحدّ: نص القيمة ≥ ١٣ نقطة والأزرار ≥ ٤٠ نقطة وصناديق الحقول ≥ ٣٦ (مساحة اللمس والقراءة) —
     // عندها يتوقّف التصغير قبل ٣٠٪ ويُذكر ذلك في التعليق.
     /// هامش محتوى مربّع العمل الجانبي (١٦ ← ١١) وأعلاه (١٢ ← ٨) وأسفله (٨ ← ٦)
-    static let contentPadding: CGFloat = 11
-    static let contentTop: CGFloat = 8
-    static let contentBottom: CGFloat = 6
+    static let contentPadding: CGFloat = DS.Spacing.lg
+    static let contentTop: CGFloat = DS.Spacing.md
+    static let contentBottom: CGFloat = DS.Spacing.xsm
     /// بين الأقسام (١٢ ← ٨)
-    static let sectionSpacing: CGFloat = 8
+    static let sectionSpacing: CGFloat = DS.Spacing.md
     /// بطاقة القسم: حشوة (١٢ ← ٨)، زوايا (١٦ ← ١٢)، المسافة بين عنوانها ومحتواها (١٠ ← ٧)
-    static let sectionPadding: CGFloat = 8
-    static let sectionRadius: CGFloat = 12
-    static let sectionInnerSpacing: CGFloat = 7
+    static let sectionPadding: CGFloat = DS.Spacing.md
+    static let sectionRadius: CGFloat = DS.Radius.md
+    static let sectionInnerSpacing: CGFloat = DS.Spacing.sm
     /// أيقونة عنوان القسم (٢٢ ← ١٦) وخطّه (١٢٫٥ ← ١١ — حدّ القراءة، لا ٨٫٧٥)
     static let sectionIcon: CGFloat = 16
     static var sectionTitleFont: Font { DS.Font.role(.boxSectionTitle) }
@@ -1455,9 +1534,29 @@ enum DSBox {
     /// أدنى ارتفاع لصندوق الحقل (٤٢ ← ٣٦ — حدّ اللمس، لا ٣٢)، وخط القيمة = Body وعنوانه = Footnote
     /// (مقاسات Apple الافتراضية، طلب المالك ٢٠٢٦-١٠-٠٨)
     static let fieldIcon: CGFloat = 22
-    static let fieldVerticalPadding: CGFloat = 4
-    static let fieldHorizontalPadding: CGFloat = 7
-    static let fieldMinHeight: CGFloat = 36
+    static let fieldVerticalPadding: CGFloat = DS.Spacing.xsm
+    static let fieldHorizontalPadding: CGFloat = DS.Spacing.md
+    static let fieldMinHeight: CGFloat = 44
+    // الشكل الخفيف الموحّد (طلب المالك ٢٠٢٦-١١-١١ «المسافات والأحجام»): مقاس واحد لكل عنصر
+    /// ارتفاع مسار الاختيار (`DSChoiceTiles`) المرئي = ارتفاع صفّ الحقل؛ اللمس ٤٤ بالحشوة الشفافة
+    /// خلية البيانات (`DSFieldTileFace` / `DSMenuTile` / `DSDateFieldRow`): أدنى ارتفاع المحتوى، والفاصل بين الخلايا في `DSTileGrid`
+    static var tileMinHeight: CGFloat { fieldMinHeight - 2 * fieldVerticalPadding }
+    static var tileGap: CGFloat { sectionInnerSpacing }
+    static let choiceTrackHeight: CGFloat = 40
+    /// الاختيار المضغوط في طرف صفّ (صفّ «الخصوصية» الواحد): عرض ثابت وارتفاع مسار أصغر، واللمس ٤٤
+    static let choiceCompactWidth: CGFloat = 150
+    static let choiceCompactHeight: CGFloat = 36
+    /// الحشوة الرأسية لمربّع الخيار في `DSOptionTiles`
+    static let optionTilePadding: CGFloat = DS.Spacing.sm
+    /// حشوة المسار حول الحبّة المختارة (والفاصل بين مربّعات `DSOptionTiles`)
+    static let choiceTrackInset: CGFloat = DS.Spacing.xxs
+    /// ظلّ الحبّة/البطاقة المختارة الناعم
+    static let choiceShadowRadius: CGFloat = DS.Spacing.xs
+    static let choiceShadowY: CGFloat = 1
+    /// ارتفاع صفّ الأمر (`DSCommandRow`) = مساحة اللمس
+    static let commandRowHeight: CGFloat = 48
+    /// نقطة الحالة في الشرائح الخفيفة
+    static let statusDot: CGFloat = DS.Spacing.xsm
     static var fieldValueSize: CGFloat { DS.TextRole.fieldValue.size }
     static var fieldLabelSize: CGFloat { DS.TextRole.label.size }
     /// صور المربّع: مربّع الصورة المصغّرة في شريط الصور (٧٦ ← ٥٦) ودائرة الشعار (٩٢ ← ٦٤) — كانت
@@ -1468,13 +1567,13 @@ enum DSBox {
     /// اللمس، لا ٣٦)، قرص الأيقونة (٤٦ ← ٣٢)، الهامش الجانبي (١٦ ← ١١)
     static let formRowHeight: CGFloat = 40
     static let formRowIcon: CGFloat = 32
-    static let formRowPadding: CGFloat = 11
+    static let formRowPadding: CGFloat = DS.Spacing.md
 
     // مربّع التنبيه/التأكيد — نفس النسبة
     /// هامش المحتوى (٢٠ ← ١٤)، المسافة بين عناصره (١٢ ← ٨)، العنوان (١٧ ← ١٥)، النص (١٤ ← ١٣ — حدّ
     /// القراءة)، قرص الأيقونة (٣٦ ← ٢٨)، وعرضه الأقصى (٣٤٠ ← ٣٢٠)
-    static let alertPadding: CGFloat = 14
-    static let alertSpacing: CGFloat = 8
+    static let alertPadding: CGFloat = DS.Spacing.md
+    static let alertSpacing: CGFloat = DS.Spacing.sm
     static let alertMaxWidth: CGFloat = 320
     static var alertTitleFont: Font { DS.Font.role(.headline) }
     static var alertBodyFont: Font { DS.Font.role(.callout) }
@@ -1485,8 +1584,9 @@ enum DSBox {
     static let buttonHeight: CGFloat = 44
     /// الإجراء الرئيسي في شاشات ملء الشاشة (الدخول، التسجيل، الانتظار، التجميد، التحديث) — كان ٥٨/٥٢
     static let buttonHeightLarge: CGFloat = 48
-    static let buttonRadius: CGFloat = 12
-    static let buttonSpacing: CGFloat = 7
+    /// حبّة (كبسولة): نصف ارتفاع الزرّ — قرار المالك ٢٠٢٦-١١-١١ «حبّات متساوية»
+    static let buttonRadius: CGFloat = 22
+    static let buttonSpacing: CGFloat = DS.Spacing.sm
     static var buttonFont: Font { DS.Font.role(.button) }
     static var buttonFontLarge: Font { DS.Font.role(.buttonLarge) }
     /// الزرّ المدمج (أزرار رأس تفاصيل العضو — طلب المالك ٢٠٢٦-١٠-٢٥ «صغر حجمه شوي زيادة»): شكله ٣٦، ومساحة
@@ -1498,14 +1598,14 @@ enum DSBox {
     /// `buttonHeight` حدّ أدنى يكبر مع الخط (ن-٥ فحص ٢٠٢٦-١٠-٠٧: كان «حفظ/إضافة/نشر» يلتفّ ويُقصّ)
     static let buttonLabelMinScale: CGFloat = 0.7
     /// شريط الأزرار السفلي لمربّع العمل: هوامشه (١٦/٨/١٢ ← ١١/٦/٨)
-    static let footerHorizontal: CGFloat = 11
-    static let footerTop: CGFloat = 6
-    static let footerBottom: CGFloat = 8
+    static let footerHorizontal: CGFloat = DS.Spacing.lg
+    static let footerTop: CGFloat = DS.Spacing.md
+    static let footerBottom: CGFloat = DS.Spacing.md
 
     // الشرائح (أزرار صغيرة، فلاتر، «+ صور») — `DSChipButton` / `DSExtraChip`
     /// ارتفاع الشريحة (كانت ٢٨–٣٨ في الشاشات) وحشوتها الجانبية
     static let chipHeight: CGFloat = 34
-    static let chipPadding: CGFloat = 12
+    static let chipPadding: CGFloat = DS.Spacing.md
 
     /// زوايا قرص الأيقونة المستدير داخل المربّعات (في الصفحات `DS.Icon.discRadius`)
     static let iconRadius: CGFloat = DS.Icon.discRadiusSmall
@@ -1766,6 +1866,7 @@ struct DSButtonFace: ViewModifier {
         let capped = fullWidth && landscape && !inCenterBox
         return content
             .font(size.font)
+            // «إلغاء» خفيف: نصّ ثانوي على تعبئة فاتحة جداً (طلب المالك ٢٠٢٦-١١-١٠ «خفيف»)
             .foregroundColor(cancel ? DS.Color.textPrimary : .white)
             // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
             .dsButtonLabelFit()
@@ -1789,7 +1890,8 @@ struct DSButtonFace: ViewModifier {
         } else if role == .destructive {
             DSBox.buttonShape.fill(DS.Color.errorFill)
         } else if role == .cancel {
-            DSBox.buttonShape.fill(DS.Color.mutedBackground.opacity(0.8))
+            // «إلغاء»: حبّة رمادية فاتحة بلا إطار (من عائلة `fieldFill` — قرار المالك ٢٠٢٦-١١-١١)
+            DSBox.buttonShape.fill(DS.Color.fieldFill)
         } else {
             DSBox.buttonShape.fill(DSActionFill.style())
         }
@@ -2257,7 +2359,7 @@ extension DS.TextRole {
     static let calloutCompact  = DS.TextRole(.subheadline)
     static let chipCompact     = DS.TextRole(.footnote, weight: .medium)
     static let captionCompact  = DS.TextRole(.caption, weight: .medium)
-    static let badgeCompact    = DS.TextRole(.caption2, weight: .semibold)
+    static let badgeCompact    = DS.TextRole(.caption, weight: .semibold)
     static let footnoteCompact = DS.TextRole(.footnote)
     static let microCompact    = DS.TextRole(.caption2, weight: .medium)
 }
@@ -2303,7 +2405,7 @@ extension DS.Icon {
 
 extension DSBox {
     /// كبسولة بارتفاع ٣٠ (شارة إحصاء في اللوحة، صندوق السنة) — بين الصغيرة ٢٨ والعادية ٣٤
-    static let chipHeightCompact: CGFloat = 30
+    static var chipHeightCompact: CGFloat { chipHeightSmall }
 }
 
 // MARK: - قسم «العائلة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٠٧: الخط كما كان قبل التوحيد)

@@ -70,7 +70,7 @@ struct FamilyArchiveView: View {
                 // شريط التحديد العلوي يحلّ محل صف الفئات في وضع التحديد
                 if selectionMode {
                     selectionTopBar
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                         .transition(.opacity)
@@ -128,7 +128,7 @@ struct FamilyArchiveView: View {
                                 .dsCardCascade(index, appeared: appeared)
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xxxxl)
                         .onAppear { appeared = true }
@@ -179,15 +179,9 @@ struct FamilyArchiveView: View {
             }
         }
         // «إضافة إلى المكتبة» مربّع بمنتصف الشاشة (طلب المالك)
-        .fullScreenCover(isPresented: $showingUpload) {
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: .documents, defaultKey: openFolder)
-                    .dsSectionPage(.library)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
-            }
-            .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            if showingUpload { t.disablesAnimations = true }
+        .dsCenterBox(isPresented: $showingUpload) {
+            ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: .documents, defaultKey: openFolder)
+                .dsSectionPage(.library)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
         }
         // تفاصيل العنصر — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
         // يُغلق بـ× أو بالضغط خارجه
@@ -197,14 +191,10 @@ struct FamilyArchiveView: View {
             // العارض بملء الشاشة يقلّب بين صور القائمة المعروضة (نفس التصنيف المختار)
             ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item), isAdmin: authVM.isAdmin)
         }
-        .fullScreenCover(item: $itemToEdit) { item in
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                ArchiveEditSheet(archiveVM: archiveVM, item: item)
-                    .dsSectionPage(.library)
-            }
-            .background(ClearPresentationBackground())
+        .dsCenterBox(item: $itemToEdit) { item in
+            ArchiveEditSheet(archiveVM: archiveVM, item: item)
+                .dsSectionPage(.library)
         }
-        .transaction { t in if itemToEdit != nil { t.disablesAnimations = true } }
         .dsAlert(L10n.t("إبلاغ عن عنصر", "Report Item"), isPresented: Binding(
             get: { itemToReport != nil },
             set: { if !$0 { itemToReport = nil } }
@@ -378,7 +368,7 @@ struct FamilyArchiveView: View {
             }
             .disabled(isEmpty)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .dsGlass(Rectangle())
         .overlay(
@@ -451,7 +441,7 @@ struct FamilyArchiveView: View {
                     }
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxxl)
             .onAppear { appeared = true }
@@ -1410,11 +1400,11 @@ struct ArchiveItemViewer: View {
                                 .onAppear { sheetWidth = geo.size.width }
                                 .onChange(of: geo.size.width) { sheetWidth = $0 }
                         })
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.md)
 
                     indexCard
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.bottom, DS.Spacing.md)
                 }
                 .dsPanelContentHeight(extra: headerH)
@@ -1730,10 +1720,17 @@ struct ArchiveCategoryChips: View {
     var tint: Color = DS.Color.tileLibrary
 
     var body: some View {
-        DSFilterChips(options: ArchiveItem.selectableCategoryKeys.map {
-                          DSFilterOption(id: $0, title: ArchiveItem.categoryName($0), icon: ArchiveItem.categoryIcon($0))
-                      },
-                      selection: $key, tint: tint)
+        // اختيار داخل مربّع (طلب المالك ٢٠٢٦-١١-١٠): ٣ أقسام أو أقل = الاختيار الموحّد، وأكثر = مربّعات الاختيار
+        let keys = ArchiveItem.selectableCategoryKeys
+        if keys.count <= 3 {
+            DSChoiceTiles(options: keys.map { DSChoiceOption(id: $0, title: ArchiveItem.categoryName($0),
+                                                              icon: ArchiveItem.categoryIcon($0)) },
+                          selection: $key)
+        } else {
+            DSOptionTiles(keys.map { DSOptionTile($0, title: ArchiveItem.categoryName($0),
+                                                  icon: ArchiveItem.categoryIcon($0), tint: tint) },
+                          selection: $key, columns: 2)
+        }
     }
 }
 

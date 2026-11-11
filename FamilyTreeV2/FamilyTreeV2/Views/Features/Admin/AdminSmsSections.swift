@@ -90,7 +90,7 @@ private struct SmsSendRow: View {
             Spacer(minLength: 0)
             if !stacked, let msgid = send.msgid { checkButton(msgid) }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
     }
 
     private var timeText: some View {

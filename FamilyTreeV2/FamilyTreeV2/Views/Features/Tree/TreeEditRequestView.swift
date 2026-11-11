@@ -216,20 +216,13 @@ struct TreeEditRequestView: View {
                             placeholder: L10n.t("اكتب الاسم الجديد...", "Enter new name..."),
                             text: $primaryText, tint: actionColor)
         case .editBirth:
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
+            dateRow(icon: "calendar", tint: DS.Color.warning,
                     title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"), date: $birthDate)
         case .editPhone:
-            DSFieldBox(L10n.t("الرقم الجديد", "New Phone Number")) {
-                DSPhoneField(
-                    country: $phoneCountry,
-                    digits: $localPhoneDigits,
-                    placeholder: L10n.t("رقم الهاتف", "Phone number"),
-                    compact: true,
-                    bordered: false
-                )
-            }
+            DSPhoneFieldRow(country: $phoneCountry, digits: $localPhoneDigits,
+                            title: L10n.t("الرقم الجديد", "New Phone Number"))
         case .deceased, .addDeathDate:
-            dateRow(icon: "calendar", tint: DS.Color.error,
+            dateRow(icon: "calendar.badge.minus", tint: DS.Color.error,
                     title: L10n.t("تاريخ الوفاة", "Date of Death"), date: $deathDate)
         case .addPhoto:
             // عنوان الحقل بخط عناوين حقول المربّعات، والصورة بلا صندوق حقل حولها (مثل «إضافة ابن»)
@@ -252,18 +245,13 @@ struct TreeEditRequestView: View {
 
     /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف (حتى اليوم) — نفس صفوف التاريخ في «إضافة ابن»
     private func dateRow(icon: String, tint: Color, title: String, date: Binding<Date>) -> some View {
-        Button {
+        // صفّ التاريخ الموحّد (`DSDateFieldRow`) — الطلب يحمل تاريخاً دائماً، فلا «بدون تاريخ»
+        DSDateFieldRow(icon: icon, title: title, hasDate: true,
+                       dateText: DSDateText.display(date.wrappedValue)) {
             dsPresentDatePicker(title: title, initial: date.wrappedValue, allowClear: false) { picked in
                 if let picked { date.wrappedValue = picked }
             }
-        } label: {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: DSDateText.display(date.wrappedValue)) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
     // MARK: - Notes / Reason

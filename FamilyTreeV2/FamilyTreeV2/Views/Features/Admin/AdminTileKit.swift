@@ -18,7 +18,7 @@ enum AdminTileMetrics {
     /// حشوة المربّع: فوق الأيقونة أوسع قليلاً من تحت الاسم (توازن بصري)، والجانبان أضيق (الاسم يتّسع). أضيق من قبل
     /// (طلب المالك ٢٠٢٦-١٠-٢٥ «ملمومة قراب من بعض» — كانت ١٦ و١٢)
     static let paddingTop: CGFloat = DS.Spacing.md
-    static let paddingBottom: CGFloat = DS.Spacing.sm + DS.Spacing.xxs
+    static let paddingBottom: CGFloat = DS.Spacing.smd
     static let paddingSide: CGFloat = DS.Spacing.sm
     /// أسطر الاسم: بالحجم الافتراضي، ومع خط الجهاز الأكبر
     static let titleLines = 2

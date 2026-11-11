@@ -693,7 +693,7 @@ struct LineagePage: View {
 
     private var pickContent: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionTitle(title: DaughterSons.text("mother_title", "اسم الأم", "Mother's name"), icon: "heart.fill", tint: DS.Color.female)
+            DSBoxSectionTitle(title: DaughterSons.text("mother_title", "اسم الأم", "Mother's name"), icon: "person.fill", tint: DS.Color.female)
             if let m = mother {
                 motherRow(m, selected: true) {
                     mother = nil; fatherChoice = nil
@@ -746,7 +746,7 @@ struct LineagePage: View {
             }
 
             if newMotherMode && newMotherReady {
-                DSSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
+                DSBoxSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
                 fatherFields(motherName: newMotherName)
                 DSNoteCard(DaughterSons.text("pending_note",
                                              "يُرسل الاختيار إلى الإدارة للتأكيد، ثم تتم الإضافة في شجرة النساء تحت الأم.",
@@ -755,7 +755,7 @@ struct LineagePage: View {
             }
 
             if let m = mother {
-                DSSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
+                DSBoxSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
                 if let hid = m.husbandId {
                     VStack(spacing: 0) {
                         choiceRow(icon: "person.2.fill", title: shortName(m.husbandName ?? ""),
@@ -835,7 +835,7 @@ struct LineagePage: View {
                             label: DaughterSons.text("new_mother_name_title", "اسم الأم الكامل", "Mother's full name"),
                             placeholder: L10n.t("مثلاً: منيرة سعود", "e.g. Munira Saud"),
                             text: $newMotherName, limit: 120, required: true)
-            DSSectionTitle(title: DaughterSons.text("new_mother_father_title", "أبوها", "Her father") + " *",
+            DSBoxSectionTitle(title: DaughterSons.text("new_mother_father_title", "أبوها", "Her father") + " *",
                            icon: "person.fill", tint: DS.Color.male)
             if let f = newMotherFather {
                 manRow(f, selected: true) { newMotherFather = nil }
@@ -862,10 +862,10 @@ struct LineagePage: View {
                     .dsCard(padding: DS.Spacing.sm)
                 }
             }
-            DSSegmentedSwitch(options: [
-                DSSegmentOption(id: false, title: L10n.t("حية", "Living"), icon: "heart"),
-                DSSegmentOption(id: true, title: L10n.t("متوفاة", "Deceased"), icon: "heart.slash")
-            ], selection: $newMotherDeceased, size: .regular)
+            DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                DSChoiceOption(id: true, title: L10n.t("متوفاة", "Deceased"), icon: "leaf.fill")
+            ], selection: $newMotherDeceased)
             DSNoteCard(L10n.t("تضيفها الإدارة بنتاً لأبيها عند الموافقة.", "The admins add her as her father's daughter on approval."),
                        title: L10n.t("أم جديدة", "New mother"), icon: "person.badge.plus", tint: DS.Color.info)
             Button {
@@ -915,10 +915,10 @@ struct LineagePage: View {
                 Text(L10n.t("اكتب \(DaughterSons.fatherMinWords) أسماء على الأقل", "Type at least \(DaughterSons.fatherMinWords) names"))
                     .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
             }
-            DSSegmentedSwitch(options: [
-                DSSegmentOption(id: false, title: L10n.t("حي", "Living"), icon: "heart"),
-                DSSegmentOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "heart.slash")
-            ], selection: $deceased, size: .regular)
+            DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                DSChoiceOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
+            ], selection: $deceased)
             DSNoteCard(L10n.t("يظهر في شجرة النساء فقط: \(shortName(motherName)) ← زوجها ← أنت",
                               "Shown in the women's tree only: \(shortName(motherName)) → her husband → you"),
                        icon: "arrow.triangle.branch", tint: DS.Color.accent)
@@ -1099,26 +1099,18 @@ nonisolated struct LineageFullDetails: Decodable, Sendable {
         case member, mother, father, requester, join, lineage, devices, deviceCount = "device_count"
     }
 
-    /// تاريخ السيرفر (ISO بأجزاء الثانية أو بدونها) ← «13 مارس 2026» ميلادي
+    /// تاريخ السيرفر (ISO بأجزاء الثانية أو بدونها) ← «13/03/2026» (الصيغة الموحّدة)
     static func date(_ raw: String?) -> String? {
         guard var s = raw, !s.isEmpty else { return nil }
         if let dot = s.firstIndex(of: "."), let tz = s[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) {
             s.removeSubrange(dot..<tz)
         }
         guard let d = isoParser.date(from: s) else { return nil }
-        displayFormatter.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
-        return displayFormatter.string(from: d)
+        return DateHelper.displayDate(d)
     }
     private static let isoParser: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-    private static let displayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.dateStyle = .medium
-        f.timeStyle = .none
         return f
     }()
 
@@ -1539,7 +1531,10 @@ struct OutsideHusbandBox: View {
                 DSComposerField(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full name"),
                                 placeholder: L10n.t("مثلاً: فهد ناصر العتيبي", "e.g. Fahad Nasser Al-Otaibi"),
                                 text: $name, limit: 120, required: true)
-                DSToggleBox(title: L10n.t("متوفى", "Deceased"), isOn: $deceased)
+                DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                    DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                    DSChoiceOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
+                ], selection: $deceased)
                 if let errorText {
                     DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
                 }
@@ -1570,37 +1565,18 @@ struct JoinKindPicker: View {
     @Binding var asDaughterSon: Bool
 
     var body: some View {
-        DSComposerSection(title: L10n.t("كيف ننضمه؟", "How does he join?"), icon: "questionmark.circle", index: 0) {
-            VStack(spacing: DS.Spacing.xsm) {
-                option(title: L10n.t("ربط بالشجرة", "Link to tree"),
-                       subtitle: L10n.t("من أبناء العائلة، نختار مكانه", "A son of the family — pick his place"),
-                       selected: !asDaughterSon) { asDaughterSon = false }
-                option(title: DaughterSons.text("option_title", "ابن بنت من خارج العائلة", "A daughter's son from outside the family"),
-                       subtitle: DaughterSons.text("option_subtitle", "بعد الموافقة يختار أمه واسم أبوه",
-                                                   "After approval he picks his mother and his father's name"),
-                       selected: asDaughterSon) { asDaughterSon = true }
-            }
+        // خياران = الاختيار الموحّد (طلب المالك ٢٠٢٦-١١-١١)، وشرح المختار تحته
+        DSComposerSection(title: L10n.t("طريقة الانضمام", "How does he join?"), icon: "questionmark.circle", index: 0) {
+            DSChoiceTiles(options: [
+                DSChoiceOption(id: false, title: L10n.t("ربط بالشجرة", "Link to tree"), icon: "link"),
+                DSChoiceOption(id: true, title: DaughterSons.text("option_short", "ابن بنت", "A daughter's son"),
+                               icon: "arrow.triangle.branch")
+            ], selection: $asDaughterSon,
+               note: asDaughterSon
+                ? DaughterSons.text("option_title", "ابن بنت من خارج العائلة", "A daughter's son from outside the family")
+                  + " — " + DaughterSons.text("option_subtitle", "بعد الموافقة يختار أمه واسم أبيه",
+                                              "After approval he picks his mother and his father's name")
+                : L10n.t("من أبناء العائلة، ويُحدَّد مكانه في الشجرة", "A son of the family — pick his place"))
         }
-    }
-
-    private func option(title: String, subtitle: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.sm) {
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                    Text(subtitle).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .dsGlyph(DS.Glyph.lg)
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
-            .dsRowBox()
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

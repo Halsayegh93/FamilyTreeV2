@@ -444,7 +444,7 @@ struct AdminMembersPage: View {
             HStack(spacing: DS.Spacing.xxs) {
                 Button { showBranchPicker = true } label: {
                     AdminChoiceChip(title: L10n.t("الفرع: \(branchFilterTitle ?? "الكل")", "Branch: \(branchFilterTitle ?? "All")"),
-                                    isSelected: branchFilterTitle != nil, expands: true)
+                                    isSelected: branchFilterTitle != nil, expands: true, inTrack: false)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(L10n.t("يفتح قائمة الفروع", "Opens the branch list"))
@@ -815,7 +815,7 @@ struct AdminMembersFilterBar: View {
         HStack(spacing: DS.Spacing.xxs) {
             Button(action: pickBranch) {
                 AdminChoiceChip(title: L10n.t("الفرع: \(branchTitle ?? "الكل")", "Branch: \(branchTitle ?? "All")"),
-                                isSelected: branchTitle != nil, expands: true)
+                                isSelected: branchTitle != nil, expands: true, inTrack: false)
             }
             .buttonStyle(.plain)
             .accessibilityHint(L10n.t("يفتح قائمة الفروع", "Opens the branch list"))

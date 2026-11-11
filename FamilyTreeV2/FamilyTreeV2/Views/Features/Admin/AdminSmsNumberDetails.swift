@@ -523,7 +523,7 @@ private struct SmsNumberRequestRow: View {
                               tint: DS.Color.error)
             }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }

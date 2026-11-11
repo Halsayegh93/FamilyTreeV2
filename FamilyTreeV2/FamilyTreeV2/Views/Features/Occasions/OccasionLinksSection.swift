@@ -165,7 +165,7 @@ struct OccasionLinksSection: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 DSStateIcon("link", tint: tint, size: DS.Icon.sizeSm)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("رابط الموقع", "Website link"))
                         .dsFont(.headline)
                         .foregroundColor(DS.Color.fieldLabel)
@@ -280,7 +280,7 @@ struct OccasionLinksSection: View {
                     Image(systemName: "trash")
                         .dsGlyph(DS.Glyph.sm)
                         .foregroundColor(DS.Color.error)
-                        .frame(width: 36, height: DSBox.chipHeightSmall)
+                        .frame(width: DS.Icon.rowLarge, height: DSBox.chipHeightSmall)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(DSPressStyle())

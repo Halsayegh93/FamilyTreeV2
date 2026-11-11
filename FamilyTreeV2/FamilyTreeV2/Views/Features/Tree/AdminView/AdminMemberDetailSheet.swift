@@ -200,13 +200,19 @@ struct AdminMemberDetailSheet: View {
         DSComposer(
             title: deathOnly ? L10n.t("تسجيل الوفاة", "Record death") : L10n.t("بيانات العضو", "Member details"),
             subtitle: member.displayFullName,
-            icon: deathOnly ? "heart.text.square.fill" : "person.badge.shield.checkmark.fill",
+            icon: deathOnly ? "leaf.fill" : "person.badge.shield.checkmark.fill",
             tint: deathOnly || member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
             canSubmit: deathOnly || (isPhoneValid && isFirstNameValid),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
+            // «حذف العضو نهائياً» سطراً أحمر هادئاً تحت «حفظ/إلغاء» (تذييل المربّعات الموحّد) — التأكيد كما هو
+            extraActions: (!deathOnly && showsAccount && !isMonitorOnly && canDeleteMember)
+                ? [DSComposerAction(id: "delete-member", title: L10n.t("حذف", "Delete"),
+                                    icon: "trash", role: .destructive) { showDeleteConfirmation = true }]
+                : [],
+            extraInline: true,
             onSubmit: saveAction,
             onCancel: { dismiss() }
         ) {
@@ -219,7 +225,6 @@ struct AdminMemberDetailSheet: View {
                 if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
                 bioCard.dsStaggerIn(4)
                 if showsAccount && showsAccountCard { accountCard.dsStaggerIn(5) }
-                if showsAccount, !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
             }
         }
             // كل نوافذ التعديل المباشر ألواح بمنتصف الشاشة (طلب المالك)
@@ -239,23 +244,11 @@ struct AdminMemberDetailSheet: View {
                     }
                 )
             }
-            .fullScreenCover(isPresented: $showAddSonSheet) {
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    AddSonByAdminSheet(parent: member)
-                }
-                .background(ClearPresentationBackground())
+            .dsCenterBox(isPresented: $showAddSonSheet) {
+                AddSonByAdminSheet(parent: member)
             }
-            .fullScreenCover(item: $childToEdit) { child in
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    AddSonByAdminSheet(parent: member, editingChild: child)
-                }
-                .background(ClearPresentationBackground())
-            }
-            .transaction { t in
-                // بلا انزلاق من الأسفل — الألواح تظهر في المنتصف
-                if showAddSonSheet || childToEdit != nil {
-                    t.disablesAnimations = true
-                }
+            .dsCenterBox(item: $childToEdit) { child in
+                AddSonByAdminSheet(parent: member, editingChild: child)
             }
             .onAppear { setupLocalChildren() }
             .task {
@@ -473,7 +466,11 @@ struct AdminMemberDetailSheet: View {
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() },
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        DSFormCard(title, icon: icon, color: color, trailing: trailing, content: content)
+        // قسم المربّعات الموحّد (`DSComposerSection`، طلب المالك ٢٠٢٦-١١-١١) بدل بطاقة النموذج القديمة
+        DSComposerSection(title: title, icon: icon, tint: color, index: 0,
+                          accessory: Trailing.self == EmptyView.self ? nil : AnyView(trailing())) {
+            content()
+        }
     }
 
     /// الاسم الأول موجود والاسم الكامل يبدأ فيه
@@ -493,8 +490,29 @@ struct AdminMemberDetailSheet: View {
         if PersonName.clean(updated) != PersonName.clean(fullName) { fullName = updated }
     }
 
-    private func fieldBox<Content: View>(_ label: String, @ViewBuilder content: @escaping () -> Content) -> some View {
-        DSFieldBox(label, content: content)
+    /// صفّ الحقل الموحّد: رمز + عنوان صغير + الحقل في صندوق الصفوف (نفس `DSComposerField`)
+    private func fieldBox<Content: View>(_ label: String, icon: String,
+                                         @ViewBuilder content: @escaping () -> Content) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(label)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.tileLabel)
+                content()
+                    .dsFieldFont(.fieldValue)
+                    .foregroundColor(DS.Color.tileValue)
+            }
+            // الرمز الواحد في طرف الخلية: قلم = تُكتب (الهاتف له قائمته، فبلا قلم)
+            if icon != "phone.fill" {
+                Image(systemName: "pencil")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(chromeInk)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: DSBox.fieldMinHeight)
+        .dsRowBox()
     }
 
     private func toggleBox(_ title: String, isOn: Binding<Bool>, tint: Color) -> some View {
@@ -505,9 +523,8 @@ struct AdminMemberDetailSheet: View {
     private var basicsCard: some View {
         adminCard(L10n.t("البيانات الأساسية", "Basic Info"),
                   icon: "person.text.rectangle.fill", color: chromeInk) {
-            fieldBox(L10n.t("الاسم الأول", "First Name")) {
+            fieldBox(L10n.t("الاسم الأول", "First Name"), icon: "person.fill") {
                 TextField(L10n.t("الاسم الأول", "First Name"), text: $firstName)
-                    .padding(.vertical, DS.Spacing.sm)
                     .onChange(of: firstName) { _ in applyFirstNameToFullName() }
             }
             Text(L10n.t("للأسماء المركبة مثل زين العابدين اكتبها كاملة هنا",
@@ -515,10 +532,9 @@ struct AdminMemberDetailSheet: View {
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
 
-            fieldBox(L10n.t("الاسم الكامل", "Full Name")) {
+            fieldBox(L10n.t("الاسم الكامل", "Full Name"), icon: "person.text.rectangle") {
                 TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName, axis: .vertical)
                     .lineLimit(1...3)
-                    .padding(.vertical, DS.Spacing.sm)
                     .onChange(of: fullName) { _ in
                         if fullName.count > 100 { fullName = String(fullName.prefix(100)) }
                     }
@@ -532,7 +548,7 @@ struct AdminMemberDetailSheet: View {
 
             // رأس الشجرة: اسمه هو العائلة نفسها — لا حقل «اسم العائلة» (طلب المالك)
             if !isFamilyRoot {
-                fieldBox(L10n.t("اسم العائلة", "Family Name")) {
+                fieldBox(L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill") {
                     TextField(L10n.t("اسم العائلة", "Family Name"), text: $familyName)
                         .onChange(of: familyName) { _ in
                             if familyName.count > 50 { familyName = String(familyName.prefix(50)) }
@@ -542,7 +558,7 @@ struct AdminMemberDetailSheet: View {
 
             // المتوفّى بلا رقم هاتف (طلب المالك)
             if !isDeceased {
-                fieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
+                fieldBox(L10n.t("رقم الهاتف", "Phone Number"), icon: "phone.fill") {
                     DSPhoneField(
                         country: $selectedPhoneCountry,
                         digits: $phoneNumber,
@@ -707,7 +723,7 @@ struct AdminMemberDetailSheet: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 if let birth = child.birthDate, !birth.isEmpty {
-                    Text(birth)
+                    Text(DateHelper.displayDate(birth) ?? birth)
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -1059,24 +1075,6 @@ struct AdminMemberDetailSheet: View {
         guard canBan, showsAccountCard, !savedPhone.isEmpty else { return }
         let ban = await authVM.activeBan(for: savedPhone)
         withAnimation(DS.Anim.snappy) { activeBan = ban }
-    }
-
-    // MARK: - حذف السجل
-    /// نصّ أحمر صغير في آخر المربّع مع تنبيه تحته — يختلف بالشكل والحجم والمكان عن «حظر الرقم»
-    /// (طلب المالك ٢٠٢٦-١٠-١١، نفس تفريق «حذف الحساب» في الإعدادات) — التأكيد كما هو
-    private var deleteButton: some View {
-        VStack(spacing: DS.Spacing.xs) {
-            DSDangerTextButton(L10n.t("حذف العضو نهائياً", "Delete member permanently")) {
-                showDeleteConfirmation = true
-            }
-            Text(L10n.t("يحذف العضو وكل بياناته من الشجرة، ولا يمكن التراجع عنه.",
-                        "Removes the member and all their data from the tree. This can't be undone."))
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Setup / Validation Helpers

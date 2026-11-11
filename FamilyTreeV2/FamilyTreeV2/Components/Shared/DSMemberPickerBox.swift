@@ -88,7 +88,7 @@ struct DSMemberPickerBox: View {
         let list = capped ? Array(matched.prefix(Self.maxShown)) : matched
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
-            extras.append(DSComposerAction(id: "remove", title: removeTitle, role: .destructive, action: onRemove))
+            extras.append(DSComposerAction(id: "remove", title: removeTitle, icon: "trash", role: .destructive, action: onRemove))
         }
         return DSComposer(
             title: title,
@@ -99,7 +99,9 @@ struct DSMemberPickerBox: View {
             actionIcon: "checkmark",
             showsAction: onDone != nil,
             canSubmit: onDone != nil,
+            // «إزالة» سطراً أحمر هادئاً تحت «حفظ/إلغاء» (نمط تذييل المربّعات الموحّد) بدل صفّ فوقها
             extraActions: extras,
+            extraInline: true,
             onSubmit: { onDone?() },
             onCancel: onCancel
         ) {

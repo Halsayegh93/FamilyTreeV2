@@ -484,7 +484,7 @@ struct AdminModeratorsView: View {
             }
             DSChevron()
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

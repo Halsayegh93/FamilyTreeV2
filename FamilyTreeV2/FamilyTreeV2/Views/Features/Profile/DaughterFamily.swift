@@ -293,19 +293,20 @@ struct DaughterHusbandBox: View {
                 }
             }
             if !fromFamily {
-                DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "heart.text.square", tint: DS.Color.male, index: 1) {
-                    DSSegmentedSwitch(options: [
-                        DSSegmentOption(id: false, title: L10n.t("حي", "Alive"), icon: "heart.fill"),
-                        DSSegmentOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
-                    ], selection: $deceased, size: .regular)
+                DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "leaf.fill", tint: DS.Color.male, index: 1) {
+                    DSChoiceTiles(options: [
+                        DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                        DSChoiceOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
+                    ], selection: $deceased)
                 }
             }
-            DSComposerSection(title: L10n.t("ظهور الزوج في الشجرة", "Show him beside me?"), icon: "eye.fill",
-                              tint: DS.Color.male, index: 2) {
-                DSSegmentedSwitch(options: [
-                    DSSegmentOption(id: true, title: L10n.t("إظهار", "Show"), icon: "eye.fill"),
-                    DSSegmentOption(id: false, title: L10n.t("إخفاء", "Hide"), icon: "eye.slash.fill")
-                ], selection: $visible, size: .regular)
+            // قسم «الخصوصية» الموحّد (طلب المالك ٢٠٢٦-١١-١٠ «وبقية العينات») — نفس القيمة `visible` ونفس الحفظ
+            DSComposerSection(title: L10n.t("الخصوصية", "Privacy"), icon: "lock.fill", tint: DS.Color.male, index: 2) {
+                DSVisibilityPicker(
+                    hidden: Binding(get: { !visible }, set: { visible = !$0 }),
+                    shownLine: L10n.t("يظهر الزوج بجانبك في شجرة النساء.", "He is shown beside you in the women's tree."),
+                    hiddenLine: L10n.t("لا يظهر الزوج في شجرة النساء.", "He is hidden in the women's tree."),
+                    rowTitle: L10n.t("الظهور في شجرة النساء", "Shown in the women's tree"))
             }
             if let errorText { DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error) }
             if let sentText { DSNoteCard(sentText, icon: "paperplane.fill", tint: DS.Color.success) }
@@ -386,19 +387,25 @@ struct DaughterChildBox: View {
                     .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.cardBackgroundSoft))
                 }
             }
-            DSComposerSection(title: L10n.t("تاريخ الميلاد (اختياري)", "Birth date (optional)"), icon: "gift.fill",
-                              tint: DS.Color.palm, index: 2) {
-                Toggle(L10n.t("تاريخ الميلاد معروف", "I know the birth date"), isOn: $hasBirth).dsFont(.body)
-                if hasBirth {
-                    DatePicker("", selection: $birth, in: ...Date(), displayedComponents: .date)
-                        .datePickerStyle(.compact).labelsHidden()
-                }
+            DSComposerSection(title: L10n.t("تاريخ الميلاد", "Birth date"), icon: "calendar",
+                              tint: DS.Color.palm, trailing: L10n.t("اختياري", "Optional"), index: 2) {
+                // صفّ التاريخ الموحّد — نفس القيم (`hasBirth`/`birth`)
+                DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth date"),
+                               hasDate: hasBirth, dateText: DSDateText.display(birth),
+                               onClear: { hasBirth = false },
+                               onEdit: {
+                                   dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth date"),
+                                                       initial: hasBirth ? birth : nil, allowClear: false) { picked in
+                                       guard let picked else { return }
+                                       birth = picked; hasBirth = true
+                                   }
+                               })
             }
-            DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "heart.text.square", tint: DS.Color.palm, index: 3) {
-                DSSegmentedSwitch(options: [
-                    DSSegmentOption(id: false, title: L10n.t("حي", "Alive"), icon: "heart.fill"),
-                    DSSegmentOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
-                ], selection: $deceased, size: .regular)
+            DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "leaf.fill", tint: DS.Color.palm, index: 3) {
+                DSChoiceTiles(options: [
+                    DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                    DSChoiceOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
+                ], selection: $deceased)
             }
             if let errorText { DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error) }
             if let sentText { DSNoteCard(sentText, icon: "paperplane.fill", tint: DS.Color.success) }

@@ -92,7 +92,7 @@ struct FamilyTreeTabBar: View {
     }
 }
 
-/// نفس التبويب في الشريط الجانبي العمودي (الوضع الأفقي) — شريحتان مصغّرتان من العُدّة (`DSChipButton(.mini)`)
+/// نفس التبويب في الشريط الجانبي العمودي (الوضع الأفقي) — شريحتان صغيرتان من العُدّة (`DSChipButton(.small)` — قابلة للضغط)
 /// فوق بعض بالعنوانين القصيرين «العائلة» / «النساء»
 struct FamilyTreeSideTabs: View {
     @Binding var selection: Int
@@ -100,7 +100,7 @@ struct FamilyTreeSideTabs: View {
     var body: some View {
         VStack(spacing: DS.Spacing.xs) {
             ForEach(FamilyTreeTabs.shortOptions) { option in
-                DSChipButton(option.title, isSelected: selection == option.id, size: .mini) {
+                DSChipButton(option.title, isSelected: selection == option.id, size: .small) {
                     guard selection != option.id else { return }
                     UISelectionFeedbackGenerator().selectionChanged()
                     // الشجرتان شاشتان — تذوب إحداهما في الأخرى (`DSScreenCrossfade`)

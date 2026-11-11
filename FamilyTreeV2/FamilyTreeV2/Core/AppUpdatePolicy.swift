@@ -290,32 +290,30 @@ struct AppUpdateSheet: View {
     private var showsLater: Bool { policy.canSnooze || policy.exempt }
 
     var body: some View {
-        ScrollView {
+        // هيكل المربّعات الموحّد (طلب المالك ٢٠٢٦-١١-١١): الرأس الكحلي، ثم «التحديث الآن» و«لاحقاً» الخفيف —
+        // «لاحقاً» تختفي حين لا تأجيل (آخر يوم) كما كانت
+        DSComposer(
+            title: title,
+            subtitle: subtitle,
+            icon: scheduled ? "calendar" : "sparkles",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("التحديث الآن", "Update now"),
+            actionIcon: "arrow.down.circle",
+            cancelTitle: L10n.t("لاحقاً", "Later"),
+            showsCancel: showsLater,
+            canSubmit: storeURL != nil,
+            onSubmit: { if let storeURL { openURL(storeURL) } },
+            onCancel: onLater
+        ) {
             VStack(spacing: DS.Spacing.lg) {
-                AppUpdateIconTile(symbol: scheduled ? "calendar" : "sparkles")
-                    .padding(.top, DS.Spacing.xl)
-                VStack(spacing: DS.Spacing.xxs) {
-                    Text(title)
-                        .dsFont(.headline)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.center)
-                    Text(subtitle)
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .multilineTextAlignment(.center)
-                }
-                .accessibilityElement(children: .combine)
                 if scheduled, let d = policy.deadline {
                     AppUpdateCountdown(deadline: d, now: serverNow)
                 }
                 if !policy.whatsNew.isEmpty {
                     AppUpdateWhatsNewList(lines: policy.whatsNew, showsLabel: !scheduled, onBand: false)
                 }
-                buttons
-                    .padding(.top, DS.Spacing.xs)
             }
-            .padding(.horizontal, DS.Spacing.xl)
-            .padding(.bottom, DS.Spacing.xl)
+            .frame(maxWidth: .infinity)
         }
     }
 
@@ -331,17 +329,6 @@ struct AppUpdateSheet: View {
                   : policy.versionLine
     }
 
-    private var buttons: some View {
-        HStack(spacing: DS.Spacing.sm) {
-            if showsLater {
-                DSButton(L10n.t("لاحقاً", "Later"), role: .cancel, size: .large) { onLater() }
-            }
-            DSButton(L10n.t("التحديث الآن", "Update now"), size: .large) {
-                if let storeURL { openURL(storeURL) }
-            }
-            .disabled(storeURL == nil)
-        }
-    }
 }
 
 /// مربّع الأيقونة في أعلى المربّع والشاشة

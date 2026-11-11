@@ -71,7 +71,7 @@ extension ApprovalInfoField {
     var icon: String {
         switch self {
         case .phone: return "phone.fill"
-        case .birthDate: return "gift.fill"
+        case .birthDate: return "calendar"
         case .deathDate: return "calendar.badge.minus"
         case .fullName: return "person.text.rectangle.fill"
         case .text: return "text.bubble.fill"
@@ -746,16 +746,11 @@ struct ApprovalRequestBox<Details: View>: View {
 
     @ViewBuilder private var decisionContent: some View {
         if isSpecialistReview && !askOpen {
-            DSSegmentedSwitch(
-                options: [
-                    DSSegmentOption(id: true, title: L10n.t("أوصي بالموافقة", "Recommend approval"),
-                                    icon: "hand.thumbsup.fill"),
-                    DSSegmentOption(id: false, title: L10n.t("أوصي بالرفض", "Recommend rejection"),
-                                    icon: "hand.thumbsdown.fill")
-                ],
-                selection: $recommendApprove,
-                size: .regular
-            )
+            // خياران = الاختيار الموحّد (طلب المالك ٢٠٢٦-١١-١١)، بصياغة رسمية بلا «ي» المتكلّم
+            DSChoiceTiles(options: [
+                DSChoiceOption(id: true, title: L10n.t("التوصية بالموافقة", "Recommend approval"), icon: "hand.thumbsup.fill"),
+                DSChoiceOption(id: false, title: L10n.t("التوصية بالرفض", "Recommend rejection"), icon: "hand.thumbsdown.fill")
+            ], selection: $recommendApprove)
         }
         if showsNote {
             ApprovalTemplateChips(adminRequestVM: adminRequestVM, kinds: noteTemplateKinds) { insert($0, into: $note) }
@@ -801,15 +796,10 @@ struct ApprovalRequestBox<Details: View>: View {
         }
         if primary == .approve {
             // المبدّل الصغير فوق «اعتماد» مباشرة (طلب المالك ٢٠٢٦-١٠-١٦)
-            DSSegmentedSwitch(
-                options: [
-                    DSSegmentOption(id: false, title: L10n.t("يعود إلى المختص للتنفيذ", "Back to specialist"),
-                                    icon: "arrow.uturn.backward"),
-                    DSSegmentOption(id: true, title: L10n.t("التنفيذ الآن", "Carry out now"), icon: "bolt.fill")
-                ],
-                selection: $executeNow,
-                size: .regular
-            )
+            DSChoiceTiles(options: [
+                DSChoiceOption(id: false, title: L10n.t("يعود إلى المختص للتنفيذ", "Back to specialist"), icon: "arrow.uturn.backward"),
+                DSChoiceOption(id: true, title: L10n.t("التنفيذ الآن", "Carry out now"), icon: "bolt.fill")
+            ], selection: $executeNow)
             Text(executeNow
                  ? L10n.t("«اعتماد» يُنفّذ الطلب فوراً ويبلّغ العضو دون الرجوع إلى المختص.",
                           "«Approve» carries it out now and tells the member, without the specialist.")

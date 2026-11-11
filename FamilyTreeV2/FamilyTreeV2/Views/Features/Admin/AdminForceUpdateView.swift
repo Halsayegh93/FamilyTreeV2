@@ -286,7 +286,7 @@ struct AdminForceUpdateView: View {
                             title: L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"),
                             subtitle: L10n.t("للنسخ المثبّتة قبل الحد لكل منصة، لأنها لا تعرف الإعدادات الجديدة",
                                              "For copies installed before per-platform limits"),
-                            control: AnyView(Toggle("", isOn: Binding(
+                            control: AnyView(Toggle(L10n.t("إيقاف نسخ الأندرويد القديمة", "Block old Android versions"), isOn: Binding(
                                 get: { (s.forceUpdate ?? false) && (s.latestBuild ?? 0) > 1 },
                                 set: { on in
                                     Task {
@@ -382,12 +382,11 @@ private struct AdminUpdatePlatformCard: View {
 
             if latest > 0 {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                    Text(L10n.t("نوع التحديث للنسخ الأقدم من \(latest)", "Update type for builds older than \(latest)"))
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textSecondary)
-                    DSSegmentedSwitch(options: AdminUpdatePlatform.Mode.allCases.map {
-                        DSSegmentOption(id: $0, title: $0.title, icon: $0.icon)
-                    }, selection: modeBinding, size: .regular)
+                    // ثلاثة خيارات = الاختيار الموحّد بسؤاله فوقه (طلب المالك ٢٠٢٦-١١-١١)
+                    DSChoiceTiles(label: L10n.t("نوع التحديث للنسخ الأقدم من \(latest)", "Update type for builds older than \(latest)"),
+                                  options: AdminUpdatePlatform.Mode.allCases.map {
+                                      DSChoiceOption(id: $0, title: $0.title, icon: $0.icon)
+                                  }, selection: modeBinding)
                     modeDetail
                 }
                 .padding(.top, DS.Spacing.xs)

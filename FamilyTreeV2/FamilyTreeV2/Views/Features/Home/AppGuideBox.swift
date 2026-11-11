@@ -189,7 +189,7 @@ struct AppGuideBox: View {
 
     /// شريط تقدّم مقسّم بعدد النقاط: ما مضى وما أنت فيه كحلي، والباقي رمادي — يُضغط للانتقال
     private var progressBar: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: DS.Spacing.xs) {
             ForEach(pages.indices, id: \.self) { i in
                 let slideIndex = i
                 let reached = page >= slideIndex
@@ -430,8 +430,8 @@ extension GuidePage {
                                    "Tap the pencil to edit your photo and info — the first 3 changes to each field apply directly, then admin approval."),
                       visual: .spot(image: "GuideProfileTop", at: CGPoint(x: 0.218, y: 0.744),
                                     radius: 0.07, aspect: shotAspect)),
-            GuidePage(title: L10n.t("رمز QR", "QR code"),
-                      text: L10n.t("يعرض رمزك لتشاركه مع قريبك.",
+            GuidePage(title: L10n.t("رمز العضو", "Member code"),
+                      text: L10n.t("يعرض رمز العضو لمشاركته مع الأقارب.",
                                    "Shows your code to share with a relative."),
                       visual: .spot(image: "GuideProfileInfo", at: CGPoint(x: 0.131, y: 0.292),
                                     radius: 0.075, aspect: shotAspect)),
@@ -616,7 +616,7 @@ private struct GuidePageView: View {
                     .foregroundColor(chapterTint.dsReadableGlyph)
                     .monospacedDigit()
                     .padding(.horizontal, DS.Spacing.sm)
-                    .padding(.vertical, DS.Spacing.xxs + 1)
+                    .padding(.vertical, DS.Spacing.xs)
                     .background(Capsule().fill(chapterTint.dsReadableGlyph.opacity(DS.Opacity.tintFill)))
             }
             .accessibilityElement(children: .combine)
@@ -1065,7 +1065,7 @@ private struct GuideToolbarScene: View {
 
             LazyVGrid(columns: columns, spacing: DS.Spacing.sm) {
                 ForEach(items) { item in
-                    VStack(spacing: DS.Spacing.xs + 1) {
+                    VStack(spacing: DS.Spacing.xs) {
                         look(item.look)
                             .frame(height: GuideMetrics.toolbarLook)
                         Text(item.title)

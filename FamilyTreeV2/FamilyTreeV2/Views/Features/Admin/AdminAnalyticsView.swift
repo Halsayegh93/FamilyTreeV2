@@ -324,7 +324,7 @@ struct AdminAnalyticsView: View {
                     DSStatTile(value: aliveW.formatted(), label: L10n.t("على قيد الحياة", "Alive"),
                                icon: "heart.circle.fill", tint: DS.Color.success)
                     DSStatTile(value: deceasedW.formatted(), label: L10n.t("متوفيات", "Deceased"),
-                               icon: "heart.slash.fill", tint: DS.Color.femaleDeceased)
+                               icon: "leaf.fill", tint: DS.Color.femaleDeceased)
                     DSStatTile(value: linked.formatted(), label: L10n.t("مرتبطة بحساب", "Linked accounts"),
                                icon: "link.circle.fill", tint: DS.Color.warning)
                 }
@@ -453,7 +453,7 @@ struct AdminAnalyticsView: View {
                            icon: "star.fill", tint: DS.Color.success)
                 DSStatTile(value: L10n.t("\(ratio)٪", "\(ratio)%"),
                            label: L10n.t("نسبة المتوفين", "Deceased %"),
-                           icon: "heart.slash.fill", tint: DS.Color.textSecondary,
+                           icon: "leaf.fill", tint: DS.Color.textSecondary,
                            ring: totalMembers > 0 ? Double(deceased.count) / Double(totalMembers) : nil)
             }
 

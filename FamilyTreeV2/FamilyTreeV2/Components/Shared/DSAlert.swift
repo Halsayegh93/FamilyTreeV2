@@ -69,10 +69,11 @@ extension View {
             .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.sm)
-            .frame(minHeight: 38, alignment: .topLeading)
+            .frame(minHeight: DSBox.fieldMinHeight, alignment: .topLeading)
             // مملوء بخلفية هادئة (نفس رمادي زرّ «إلغاء») بدل الأبيض المحدّد — طلب المالك ٢٠٢٦-١٠-٠٧
-            .background(DS.Color.mutedBackground.opacity(0.8))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            // تعبئة حقول المربّعات الموحّدة (`fieldFill`، زوايا `Radius.md`) — طلب المالك ٢٠٢٦-١١-١٠ «موحّد وخفيف»
+            .background(DS.Color.fieldFill)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .layoutValue(key: DSAlertIsFieldKey.self, value: true)
     }
 }

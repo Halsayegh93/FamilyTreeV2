@@ -102,6 +102,7 @@ struct AdminTreeEditRequestsView: View {
                 isPresented: $showRejectAlert
             ) {
                 TextField(L10n.t("اكتب سبب الرفض (اختياري)", "Reason (optional)"), text: $rejectReasonText)
+                    .dsAlertField()
                 Button(L10n.t("رفض", "Reject"), role: .destructive) {
                     if let req = rejectingRequest {
                         let reason = rejectReasonText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -344,7 +345,13 @@ struct AdminTreeEditRequestsView: View {
                 }
 
                 // «طلب آخر» يعرض ملاحظته أعلاه («الطلب») — لا تتكرّر
-                if action != .other, let notes = payload?.notes, !notes.isEmpty {
+                // تنبيه للإدارة (سطر «⚠︎») بارز فوق الملاحظات
+                if let notes = payload?.notes {
+                    ForEach(notes.adminNoticeSplit.notices, id: \.self) { notice in
+                        DSNoteCard(notice, icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+                    }
+                }
+                if action != .other, let notes = payload?.notes.map({ $0.adminNoticeSplit.rest }), !notes.isEmpty {
                     HStack(alignment: .top, spacing: DS.Spacing.xs) {
                         Image(systemName: "text.bubble")
                             .dsGlyph(DS.Glyph.xs, weight: .semibold)
@@ -476,12 +483,12 @@ struct AdminTreeEditRequestsView: View {
 
         case .deceased:
             if let deathDate = payload?.deathDate {
-                detailRow(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Date of death"), value: deathDate)
+                detailRow(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Date of death"), value: DateHelper.displayDate(deathDate) ?? deathDate)
             }
 
         case .addDeathDate:
             if let deathDate = payload?.deathDate, !deathDate.isEmpty {
-                detailRow(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Date of death"), value: deathDate)
+                detailRow(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Date of death"), value: DateHelper.displayDate(deathDate) ?? deathDate)
             }
 
         case .addPhoto:
@@ -504,7 +511,7 @@ struct AdminTreeEditRequestsView: View {
 
         case .editBirth:
             if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
-                detailRow(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.palm)
+                detailRow(icon: "calendar", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.palm)
             }
 
         case .other:
@@ -606,11 +613,7 @@ struct AdminTreeEditRequestsView: View {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
-            let display = DateFormatter()
-            display.dateStyle = .medium
-            display.timeStyle = .short
-            display.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
-            return display.string(from: date)
+            return DateHelper.displayDateTime(date)
         }
         return iso
     }

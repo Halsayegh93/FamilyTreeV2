@@ -44,6 +44,9 @@ struct MemberDetailsView: View {
     /// نموذج الطلب المختار من «طلب تعديل» — «ابن» هنا أبناء ذكور فقط (البنت والزوجة في شجرة النساء)
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
+    /// مربّع «اتصال / واتساب» من بلاطة الهاتف (تدقيق ٢٠٢٦-١١-١٠ #3) — الرقم الظاهر فقط
+    @State private var phoneActionsNumber: String? = nil
+    @Environment(\.openURL) private var openURL
     @State private var reportReason = ""
     @State private var reportSent = false
     /// حظر العضو / إلغاء حظره (Guideline 1.2) — بجانب «إبلاغ»
@@ -317,29 +320,16 @@ struct MemberDetailsView: View {
                     AdminMemberDetailSheet(member: member)
                 }
             }
-            .transaction { t in
-                // بلا انزلاق من الأسفل — اللوح يظهر بنفسه في المنتصف
-                if pendingEditAction != nil || showEditActions {
-                    t.disablesAnimations = true
-                }
+            // اختيار نوع الطلب، و«طلب تعديل»، و«إضافة ابن» — مربّعات المنتصف الموحّدة (`dsCenterBox`)
+            // بدل نوافذ مكتوبة باليد (طلب المالك ٢٠٢٦-١١-١٠)
+            .dsCenterBox(isPresented: $showEditActions, onBackgroundTap: { showEditActions = false }) {
+                editActionsGrid
             }
-            // اختيار نوع الطلب — مربّع بمنتصف الشاشة (طلب المالك)
-            .fullScreenCover(isPresented: $showEditActions) {
-                DSCenterPanel(onBackgroundTap: { showEditActions = false }, hugsContent: true) {
-                    editActionsGrid
-                }
-                .background(ClearPresentationBackground())
+            .dsCenterBox(item: $pendingEditAction) { action in
+                TreeEditRequestView(member: member, action: action)
             }
-            // «طلب تعديل» كذلك لوح بمنتصف الشاشة (طلب المالك)
-            .fullScreenCover(item: $pendingEditAction) { action in
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    TreeEditRequestView(member: member, action: action)
-                }
-                .background(ClearPresentationBackground())
-            }
-            .fullScreenCover(isPresented: $showSelfAddChild) {
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { AddChildSheet(member: member) }
-                    .background(ClearPresentationBackground())
+            .dsCenterBox(isPresented: $showSelfAddChild) {
+                AddChildSheet(member: member)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .memberDeleted)) { notification in
@@ -360,7 +350,7 @@ struct MemberDetailsView: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
-            Text(L10n.t("هل تريد حذف السيرة الذاتية؟", "Delete biography?"))
+            Text(L10n.t("حذف السيرة الذاتية؟", "Delete biography?"))
         }
         .dsAlert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
@@ -387,8 +377,23 @@ struct MemberDetailsView: View {
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) { }
         } message: {
-            Text(L10n.t("شكراً لك، وصل بلاغك للإدارة وستتم مراجعته خلال ٢٤ ساعة.",
+            Text(L10n.t("وصل البلاغ إلى الإدارة، وتتم مراجعته خلال ٢٤ ساعة.",
                         "Thank you — your report reached the admins and will be reviewed within 24 hours."))
+        }
+        // بلاطة الهاتف: «اتصال» / «واتساب» — الرقم الظاهر فقط (تدقيق ٢٠٢٦-١١-١٠ #3)
+        .dsAlert(L10n.t("التواصل", "Contact"),
+                 isPresented: Binding(get: { phoneActionsNumber != nil },
+                                      set: { if !$0 { phoneActionsNumber = nil } }),
+                 icon: "phone.fill") {
+            if let url = KuwaitPhone.telURL(phoneActionsNumber) {
+                Button(L10n.t("اتصال", "Call")) { openURL(url) }
+            }
+            if let url = KuwaitPhone.whatsappURL(phoneActionsNumber) {
+                Button(L10n.t("واتساب", "WhatsApp")) { openURL(url) }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+        } message: {
+            Text(verbatim: "\u{2066}\(KuwaitPhone.display(phoneActionsNumber))\u{2069}")
         }
         // حظر العضو / إلغاء الحظر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة عند الحظر)
         .dsBlockMemberFlow(target: $blockTarget)
@@ -444,7 +449,7 @@ struct MemberDetailsView: View {
                             .fill(DS.Color.background)
                             .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
                             .overlay(
-                                Image(systemName: "heart.slash.fill")
+                                Image(systemName: "leaf.fill")
                                     .dsGlyph(DS.Glyph.xlCompact)
                                     .foregroundColor(DS.Color.textTertiary)
                             )
@@ -504,7 +509,7 @@ struct MemberDetailsView: View {
                 let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
                 // حبّة ساكنة بمقاس شريحة العُدّة وشكلها (جنب شريحة «صلة القرابة»)
                 HStack(spacing: DS.Spacing.xsm) {
-                    Image(systemName: isDeceased ? "heart.slash.fill" : "timelapse")
+                    Image(systemName: isDeceased ? "leaf.fill" : "timelapse")
                         .dsGlyph(DS.Glyph.sm)
                         .accessibilityHidden(true)   // زخرفة
                     Text("\(age) " + L10n.t("سنة", "yrs"))
@@ -637,13 +642,15 @@ struct MemberDetailsView: View {
         let value: String
         let color: Color
         var ltr = false
+        /// الرقم الخام لبلاطة الهاتف الظاهر — يجعلها قابلة للضغط (اتصال/واتساب)
+        var phone: String? = nil
     }
 
     /// المعلومات في بلاطات أيقونية: الميلاد، الهاتف، الوفاة (بلا الأب والأبناء — طلب المالك)
     private var infoTiles: [InfoTileData] {
         cachedBasicInfoRows.enumerated().map { idx, row in
             InfoTileData(id: "info-\(idx)", icon: row.icon, label: row.label, value: row.value,
-                         color: row.color, ltr: row.icon == "phone.fill")
+                         color: row.color, ltr: row.icon == "phone.fill", phone: row.phone)
         }
     }
 
@@ -671,8 +678,20 @@ struct MemberDetailsView: View {
         }
     }
 
-    /// صف معلومة: أيقونة الحقل + العنوان الغامق + القيمة — نفس صفوف المربّعات
+    /// بلاطة الهاتف الظاهر تفتح «اتصال / واتساب»؛ غيرها للقراءة فقط
+    @ViewBuilder
     private func infoTileView(_ tile: InfoTileData) -> some View {
+        if let phone = tile.phone {
+            Button { phoneActionsNumber = phone } label: { infoTileBody(tile) }
+                .buttonStyle(DSPressStyle())
+                .accessibilityHint(L10n.t("اضغط للاتصال أو المراسلة عبر واتساب", "Tap to call or message on WhatsApp"))
+        } else {
+            infoTileBody(tile)
+        }
+    }
+
+    /// صف معلومة: أيقونة الحقل + العنوان الغامق + القيمة — نفس صفوف المربّعات
+    private func infoTileBody(_ tile: InfoTileData) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: tile.icon, tint: tile.color)
                 .accessibilityHidden(true)   // زخرفة
@@ -688,6 +707,12 @@ struct MemberDetailsView: View {
                     .environment(\.layoutDirection, tile.ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
             }
             Spacer(minLength: 0)
+            if tile.phone != nil {
+                Image(systemName: "chevron.forward")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
         }
         .frame(maxWidth: .infinity)
         .dsRowBox()
@@ -701,6 +726,8 @@ struct MemberDetailsView: View {
         let label: String
         let value: String
         let color: Color
+        /// الرقم الخام حين يكون ظاهراً للمشاهد (نفس قاعدة العرض)
+        var phone: String? = nil
     }
 
     private func computeBasicInfoRows(for m: FamilyMember) -> [InfoRowData] {
@@ -714,7 +741,7 @@ struct MemberDetailsView: View {
             // للمتوفى: السنة فقط بدل التاريخ الكامل
             let displayValue = shouldHide
                 ? L10n.t("مخفي", "Hidden")
-                : (isDeceased ? Self.yearOnly(birth) : birth)
+                : (isDeceased ? Self.yearOnly(birth) : (DateHelper.displayDate(birth) ?? birth))
             rows.append(.init(
                 icon: "calendar",
                 label: L10n.t("الميلاد", "Birth"),
@@ -731,7 +758,8 @@ struct MemberDetailsView: View {
                 icon: "phone.fill",
                 label: L10n.t("الهاتف", "Phone"),
                 value: KuwaitPhone.display(phone),
-                color: DS.Color.sea
+                color: DS.Color.sea,
+                phone: phone
             ))
         } else if !isDeceased, m.isPhoneHidden == true, !isSelf, !canMod {
             rows.append(.init(
@@ -745,7 +773,7 @@ struct MemberDetailsView: View {
         if isDeceased,
            let death = m.deathDate, !death.isEmpty {
             rows.append(.init(
-                icon: "heart.slash.fill",
+                icon: "calendar.badge.minus",
                 label: L10n.t("الوفاة", "Death"),
                 value: Self.yearOnly(death),
                 color: DS.Color.textTertiary
@@ -966,7 +994,7 @@ struct MemberDetailsView: View {
             actionTitle: "",
             showsAction: false,
             canSubmit: false,
-            note: L10n.t("يصل الطلب للإدارة لمراجعته", "The request goes to the admins for review"),
+            note: L10n.t("يُرسل الطلب إلى الإدارة للمراجعة", "The request goes to the admins for review"),
             onSubmit: {},
             onCancel: { showEditActions = false }
         ) {
@@ -1013,7 +1041,8 @@ struct MemberDetailsView: View {
     /// نُغلق مربّع الاختيار أولاً ثم نفتح نموذج الطلب (عرضان متتاليان)
     private func pick(_ action: TreeEditAction, closing: (() -> Void)? = nil) {
         if let closing { closing() } else { showEditActions = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+        // بعد خروج مربّع الاختيار (حركة الخروج ثم إغلاق نافذته) — نافذة واحدة في كل مرّة
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.panelOutDuration + 0.15) {
             pendingEditAction = action
         }
     }
@@ -1138,7 +1167,7 @@ struct MemberDetailsView: View {
         } else if isViewingSelf && !member.isDeleted {
             DSLiveButton(L10n.t("إضافة ابن", "Add Child"), icon: "plus",
                          tint: DSMemberKit.directTint, motion: .write,
-                         hint: L10n.t("يضيف ابنك للشجرة", "Adds your child to the tree"), tile: true) {
+                         hint: L10n.t("إضافة ابن إلى الشجرة", "Adds your child to the tree"), tile: true) {
                 showSelfAddChild = true
             }
         }

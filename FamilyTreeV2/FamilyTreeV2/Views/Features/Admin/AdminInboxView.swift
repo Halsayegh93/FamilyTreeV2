@@ -162,7 +162,7 @@ struct AdminInboxView: View {
         // صفّ الأرقام ← البحث والفلاتر ← الرسائل: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
         return ScrollView(showsIndicators: false) {
             AnyView(pageContent(messages: messages, counts: counts, kinds: kinds, selectedKind: selected))
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.top, DS.Spacing.sm)
                 .padding(.bottom, DS.Spacing.xxxl)
         }
@@ -437,7 +437,7 @@ struct AdminInboxView: View {
             }
             .disabled(selectedIDs.isEmpty || isDeleting)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .dsGlass(Rectangle())
         .overlay(Divider(), alignment: .top)
@@ -1093,12 +1093,8 @@ private struct ReplyComposerField: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            Image(systemName: "square.and.pencil")
-                .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
-                .foregroundColor(focused ? DS.Color.textOnPrimary : tint)
-                .frame(width: DS.Icon.row, height: DS.Icon.row)
-                .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
-                    .fill(focused ? tint : tint.opacity(DS.Opacity.tintFill)))
+            // رمز الحقل الموحّد (`DSFieldIcon`) كبقية حقول المربّعات
+            DSFieldIcon(name: "square.and.pencil", tint: tint)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
@@ -1111,8 +1107,7 @@ private struct ReplyComposerField: View {
                     .focused($focused)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
-        .padding(.vertical, DS.Spacing.sm)
+        .dsRowBox()
         .dsFocusFieldBox(focused: focused, tint: tint)
         .contentShape(Rectangle())
         .onTapGesture { focused = true }

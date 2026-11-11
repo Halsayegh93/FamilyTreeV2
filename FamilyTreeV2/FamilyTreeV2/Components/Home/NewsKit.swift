@@ -62,7 +62,8 @@ enum NewsKit {
         return date < limit
     }
 
-    /// وقت الخبر: «قبل ساعتين»، وما تجاوز الشهرين بتاريخه «٣ مايو ٢٠٢٦»
+    /// وقت الخبر: «قبل ساعتين»، وما تجاوز الشهرين بتاريخه «٣ مايو ٢٠٢٦» —
+    /// الأخبار تبقى بالتاريخ المكتوب لا الصيغة الرقمية الموحّدة (طلب المالك ٢٠٢٦-١١-١١)
     static func timeText(_ date: Date) -> String {
         if isOld(date) {
             dateFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")

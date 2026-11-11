@@ -296,6 +296,8 @@ struct DSComposer<Content: View>: View {
     var showsAction: Bool = true
     /// نص الزر الرمادي — «إغلاق» لمربّعات العرض فقط (تفاصيل، قوائم)
     var cancelTitle: String = L10n.t("إلغاء", "Cancel")
+    /// false = بلا «إلغاء» (مثل «حدّث قبل…» حين لا تأجيل) — الإجراء وحده بعرض الشريط
+    var showsCancel: Bool = true
     var canSubmit: Bool
     var isBusy: Bool = false
     /// ملاحظة صغيرة فوق الأزرار (مثل «يحتاج موافقة الإدارة»)
@@ -338,6 +340,7 @@ struct DSComposer<Content: View>: View {
     @State private var openedAt = Date()
     /// «تقليل الحركة» من إعدادات الجهاز (توصية أبل): بلا تصغير ولا نبض
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// قسم التبويب — كحلي المربّع (إطاره) يتبع لونه
     @Environment(\.dsSection) private var section
 
@@ -425,18 +428,23 @@ struct DSComposer<Content: View>: View {
             if actionFullRow && showsAction {
                 VStack(spacing: DSBox.buttonSpacing) {
                     actionButton
-                    cancelButton
+                    if showsCancel { cancelButton }
                 }
                 .buttonStyle(DSPressStyle())
             } else {
-                HStack(spacing: DSBox.buttonSpacing) {
+                // صفّ واحد من حبّات متساوية (قرار المالك ٢٠٢٦-١١-١١): «حفظ» · «إلغاء» · «حذف» الأحمر — بلا سطر حذف منفصل.
+                // بأحجام إمكانية الوصول تُرصّ عمودياً، ومع الخط الكبير جداً يصير «حذف» رمزاً فقط (باسمه للقارئ الصوتي)
+                let pills = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: DSBox.buttonSpacing))
+                    : AnyLayout(HStackLayout(spacing: DSBox.buttonSpacing))
+                pills {
                     if showsAction { actionButton }
-                    // بلا إجراء رئيسي وإجراء آخر واحد: بجانب «إلغاء/إغلاق» في الصفّ نفسه (طلب المالك ٢٠٢٦-١٠-٢٥
-                    // «حطلي زر الحذف جنب الاغلاق»)
+                    // بلا إجراء رئيسي وإجراء آخر واحد: بجانب «إلغاء/إغلاق» في الصفّ نفسه
                     if let inlineExtra { extraButton(inlineExtra) }
-                    cancelButton
+                    if showsCancel { cancelButton }
                     if extraInline {
-                        ForEach(extraActions) { extraButton($0) }
+                        ForEach(extraActions.filter { $0.role != .destructive }) { extraButton($0) }
+                        ForEach(extraActions.filter { $0.role == .destructive }) { extraButton($0) }
                     }
                 }
                 .buttonStyle(DSPressStyle())
@@ -451,7 +459,7 @@ struct DSComposer<Content: View>: View {
         .background(
             DS.Color.background
                 .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(0.12)).frame(height: 1)
+                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.border)).frame(height: DS.Border.width)
                 }
                 // الخط الفاصل بعرض الورقة كاملاً أفقياً (داخل المربّع الوسطي لا أثر له)
                 .ignoresSafeArea(edges: .horizontal)
@@ -516,30 +524,42 @@ struct DSComposer<Content: View>: View {
     }
 
     /// زرّ إجراء آخر — وجه الزرّ الواحد بدوره (الحذف/الرفض أحمر، الثانوي رمادي، أو لون معنى)
-    private func extraButton(_ item: DSComposerAction) -> some View {
-        Button(action: item.action) {
+    private func extraButton(_ item: DSComposerAction) -> AnyView {
+        // «حذف» في صفّ الحبّات: رمز فقط مع الخط الكبير جداً (ثلاث حبّات لا تتّسع بنصوصها)
+        let softDelete = extraInline && item.role == .destructive && item.tint == nil
+        let iconOnly = softDelete && item.icon != nil && showsAction && showsCancel
+            && typeSize >= .xxLarge && !typeSize.isAccessibilitySize
+        // «حذف» في صفّ الحبّات: زرّ أحمر دائري بالرمز فقط (قرار المالك ٢٠٢٦-١١-١١) — اسمه للقارئ الصوتي
+        if softDelete {
+            return AnyView(
+                Button(action: item.action) {
+                    Image(dsSymbol: item.icon ?? "trash.fill")
+                        .dsGlyph(DSButtonSize.regular.glyph)
+                        .modifier(DSDeleteCircleFace(enabled: item.isEnabled && !isBusy))
+                }
+                .disabled(!item.isEnabled || isBusy)
+                .accessibilityLabel(item.title)
+            )
+        }
+        return AnyView(Button(action: item.action) {
             HStack(spacing: DSBox.buttonSpacing) {
                 if let icon = item.icon {
                     Image(dsSymbol: icon).dsGlyph(DSButtonSize.regular.glyph)
                 }
-                Text(item.title)
+                if !iconOnly { Text(item.title) }
             }
-            // صفّ «حفظ · إلغاء · حذف» (`extraInline`، مربّع تعديل فرد من «عائلتي»): الحذف أحمر خفيف (٢٠٢٦-١١-٠٦)
-            .modifier(DSButtonFaceSwitch(soft: extraInline && item.role == .destructive && item.tint == nil,
-                                         face: DSButtonFace(role: item.role, tint: item.tint,
-                                                            enabled: item.isEnabled && !isBusy)))
+            .modifier(DSButtonFace(role: item.role, tint: item.tint, enabled: item.isEnabled && !isBusy))
         }
         .disabled(!item.isEnabled || isBusy)
-        .accessibilityLabel(item.title)
+        .accessibilityLabel(item.title))
     }
 
     private var cancelButton: some View {
         Button {
             if hasUnsavedChanges { confirmDiscard = true } else { onCancel() }
         } label: {
-            // وجه الزرّ الواحد بدور «إلغاء» (الرمادي) — نفس أزرار التنبيه والبطاقات والصفحات
-            Text(cancelTitle)
-                .modifier(DSButtonFace(role: .cancel))
+            // وجه «إلغاء» الواحد (`DSButtonFace(role: .cancel)`): حبّة بيضاء بإطار رفيع ونصّ أساسي
+            Text(cancelTitle).modifier(DSButtonFace(role: .cancel))
         }
         .disabled(isBusy)
     }
@@ -603,7 +623,7 @@ struct DSComposerHeader: View {
         // شكل مربّع الإشعار الغني لكل المربّعات (طلب المالك ٢٠٢٦-١١-٠١ «ابى كل المربعات بنفس النظام بكل الواجهات
         // مع ايقونات الخفيفة وهيدر المربع شوي نقلله»): كحلي متدرّج ثابت، مربّع ذهبي برمز رفيع، عنوان أبيض ووصف
         // كريمي — بلا مجسّم ولا نسخة مائلة ولا هالة. ألوان المعاني (رفض/حذف…) في الأزرار تحت لا في الرأس
-        HStack(spacing: dense ? DS.Spacing.sm + 2 : DS.Spacing.md) {
+        HStack(spacing: dense ? DS.Spacing.smd : DS.Spacing.md) {
             NotifBoxTileView(tile: tile ?? .glyph(icon),
                              side: compact ? DSBox.compactHeaderIcon : (landscape ? DS.Landscape.boxHeaderIcon : DSBox.composerIcon))
                 .grayscale(tileMuted ? 1 : 0)
@@ -627,6 +647,8 @@ struct DSComposerHeader: View {
                 DSRichBoxBand()
             }
         }
+        // الخيط الذهبي: خطّ ١ نقطة يتلاشى عند الطرفين أسفل الرأس (قرار المالك ٢٠٢٦-١١-١١)
+        .overlay(alignment: .bottom) { if !DS.Theme.isCalm { DSThreadHairline() } }
         // القارئ الصوتي: الرأس يُقرأ عنواناً واحداً (العنوان ثم الوصف) + زرّ الإغلاق إن وُجد
         .accessibilityElement(children: onClose == nil ? .ignore : .contain)
         .accessibilityLabel(subtitle.isEmpty ? title : "\(title)، \(subtitle)")
@@ -767,14 +789,14 @@ struct DSComposerSection<Content: View>: View {
     var body: some View {
         if flat && isOpen == nil {
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-                if let accessory {
-                    HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                        NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
+                // الخيط الذهبي قبل عنوان القسم (قرار المالك ٢٠٢٦-١١-١١) — في الشكل المسطّح أيضاً
+                HStack(alignment: .center, spacing: DS.Spacing.sm) {
+                    DSThreadTick()
+                    NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
+                    if let accessory {
                         Spacer(minLength: 0)
                         accessory
                     }
-                } else {
-                    NotifBoxLabel(text: trailing.map { "\(title) · \($0)" } ?? title)
                 }
                 content()
             }
@@ -794,9 +816,9 @@ struct DSComposerSection<Content: View>: View {
                 } label: {
                     headerRow(chevronUp: isOpen.wrappedValue)
                         // مساحة ضغط ٤٤ نقطة (حد أبل) والعنوان بنفس ارتفاعه
-                        .padding(.vertical, 11)
+                        .padding(.vertical, DS.Spacing.md)
                         .contentShape(Rectangle())
-                        .padding(.vertical, -11)
+                        .padding(.vertical, -DS.Spacing.md)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(.isHeader)
@@ -829,6 +851,7 @@ struct DSComposerSection<Content: View>: View {
     /// عنوان القسم: أيقونة بدائرة + العنوان + نص جانبي (+ سهم للقسم القابل للطي)
     private func headerRow(chevronUp: Bool?) -> some View {
         HStack(spacing: DSBox.sectionInnerSpacing) {
+            DSThreadTick()
             Image(dsSymbol: icon)
                 .dsGlyph(DS.Glyph.lg, weight: .light)
                 .foregroundColor(tint.dsHarmonized(with: boxTint, in: section).dsReadableGlyph)
@@ -924,12 +947,12 @@ struct DSComposerField: View {
                 .frame(width: side, height: side)
                 .scaleEffect(iconPop ? 1.08 : 1)
             }
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 HStack {
                     HStack(spacing: DS.Spacing.xxs) {
                         Text(label)
                             .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
-                            .foregroundColor(focused ? tint : DS.Color.fieldLabel)
+                            .foregroundColor(focused ? tint : (inBox ? DS.Color.tileLabel : DS.Color.fieldLabel))
                         if required {
                             Text("*")
                                 .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
@@ -960,8 +983,15 @@ struct DSComposerField: View {
                 .environment(\.layoutDirection, ltr ? .leftToRight : LanguageManager.shared.layoutDirection)
                 .focused($focused)
             }
+            // الرمز الواحد في طرف الخلية: قلم = تُكتب (قاعدة خلية البيانات ٢٠٢٦-١١-١١) — داخل المربّعات، ويختفي أثناء الكتابة
+            if inBox && !focused {
+                Image(systemName: "pencil")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(tint)
+                    .accessibilityHidden(true)
+            }
         }
-        .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.sm + 2)
+        .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.smd)
         .padding(.vertical, inBox ? DSBox.fieldVerticalPadding : DS.Spacing.sm)
         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
         .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -1169,7 +1199,7 @@ struct DSExtraBox<Content: View>: View {
                     buttonsRow
                         .dsEntrance(delay: 0.28, y: DSMotion.footerRise, animation: DSMotion.footer)
                 }
-                .padding(DS.Spacing.lg + 2)
+                .padding(DS.Spacing.lg)
             }
             .frame(maxWidth: landscape ? DS.Landscape.extraBoxMaxWidth : 380)
             .background(DS.Color.background)
@@ -1194,10 +1224,10 @@ struct DSExtraBox<Content: View>: View {
     }
 
     private var headerRow: some View {
-        HStack(spacing: DS.Spacing.sm + 2) {
+        HStack(spacing: DS.Spacing.smd) {
             NotifBoxTileView(tile: .glyph(icon))
             .modifier(DSIconPop())
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(title).dsFont(.headline).foregroundColor(DS.Color.textOnPrimary)
                     .dsEntrance(delay: 0.12, x: -8, animation: DSMotion.text)
                 if let subtitle {
@@ -1239,12 +1269,8 @@ struct DSExtraBox<Content: View>: View {
                 .disabled(!doneEnabled)
             }
             Button { close(onCancel) } label: {
-                Text(L10n.t("إلغاء", "Cancel"))
-                    .font(DSBox.buttonFont)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .dsButtonLabelFit()
-                    .frame(maxWidth: .infinity).frame(minHeight: DSBox.buttonHeight)
-                    .background(DSBox.buttonShape.fill(DS.Color.mutedBackground.opacity(0.8)))
+                // وجه «إلغاء» الواحد
+                Text(L10n.t("إلغاء", "Cancel")).modifier(DSButtonFace(role: .cancel))
             }
         }
         .buttonStyle(DSPressStyle())
@@ -1313,12 +1339,12 @@ struct DSComposerPhotoStrip: View {
                     PhotosPicker(selection: $pickerItems,
                                  maxSelectionCount: max(1, limit - images.count),
                                  matching: .images) {
-                        VStack(spacing: 4) {
+                        VStack(spacing: DS.Spacing.xs) {
                             if loading {
                                 ProgressView().tint(tint)
                             } else {
                                 Image(systemName: "photo.badge.plus")
-                                    .font(.system(size: 19, weight: .semibold))
+                                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
                                 Text(L10n.t("إضافة", "Add")).dsFont(.badge)
                             }
                         }
@@ -1346,13 +1372,13 @@ struct DSComposerPhotoStrip: View {
                                 }
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(size: 9.5, weight: .heavy))
+                                    .dsGlyph(DS.Glyph.micro, weight: .heavy)
                                     .foregroundColor(.white)
-                                    .frame(width: 22, height: 22)
+                                    .frame(width: DS.Icon.section, height: DS.Icon.section)
                                     .background(Circle().fill(Color.black.opacity(0.55)))
-                                    .padding(5)
+                                    .padding(DS.Spacing.xs)
                                     // مساحة ضغط ٤٤ نقطة حول الشارة الصغيرة (حد أبل)
-                                    .frame(width: 44, height: 44, alignment: .topLeading)
+                                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget, alignment: .topLeading)
                                     .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
@@ -1361,7 +1387,7 @@ struct DSComposerPhotoStrip: View {
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.5).combined(with: .opacity))
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, DS.Spacing.xxs)
         }
         .onChange(of: pickerItems) { items in
             guard !items.isEmpty else { return }
@@ -1406,7 +1432,7 @@ struct DSComposerLogoPicker: View {
     @State private var showPicker = false
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: DS.Spacing.xsm) {
             Button { showPicker = true } label: {
                 ZStack {
                     if let image {
@@ -1433,7 +1459,7 @@ struct DSComposerLogoPicker: View {
                             .frame(width: size, height: size)
                             .modifier(DSAmbientSpin())
                         // ما بداخل الدائرة يتبع قطرها (الدائرة أصغر الآن — `DSBox.logoSide`)
-                        VStack(spacing: 2) {
+                        VStack(spacing: DS.Spacing.xxs) {
                             Image(systemName: "camera.fill").font(.system(size: size * 0.28, weight: .semibold))
                             Text(L10n.t("شعار", "Logo")).font(DS.Font.plex(max(9.5, size * 0.155), weight: .bold))
                         }
@@ -1444,9 +1470,9 @@ struct DSComposerLogoPicker: View {
                 }
                 .overlay(alignment: .bottomTrailing) {
                     Image(systemName: (image == nil && existingURL == nil) ? "plus" : "pencil")
-                        .font(.system(size: 10, weight: .heavy))
+                        .dsGlyph(DS.Glyph.xs, weight: .heavy)
                         .foregroundColor(.white)
-                        .frame(width: 24, height: 24)
+                        .frame(width: DS.Spacing.xxl, height: DS.Spacing.xxl)
                         .background(Circle().fill(tint))
                         .overlay(Circle().strokeBorder(DS.Color.background, lineWidth: 2.5))
                         .offset(x: 2, y: 2)
@@ -1744,12 +1770,23 @@ private struct DSSheetItemBoxModifier<Item: Identifiable, Box: View, Style: View
 /// صندوق صف داخل قسم — أقصر قليلاً داخل المربّعات بالمنتصف (طلب المالك)
 private struct DSRowBoxModifier: ViewModifier {
     @Environment(\.dsInCenterBox) private var inBox
+    @Environment(\.colorSchemeContrast) private var contrast
     func body(content: Content) -> some View {
         content
-            .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.sm + 2)
+            .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.smd)
             .padding(.vertical, inBox ? DSBox.fieldVerticalPadding : DS.Spacing.sm)
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
-
+            // الشفة السفلية مع «زيادة التباين» فقط (قاعدة المالك: الحقل رمادي بلا إطار)
+            .overlay {
+                if contrast == .increased {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Rectangle().fill(DS.Color.fieldLip).frame(height: DS.Border.widthBold)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                    .allowsHitTesting(false)
+                }
+            }
     }
 }
 

@@ -46,6 +46,72 @@ enum DateHelper {
         return relativeTime(from: date)
     }
 
+    // MARK: - العرض الموحّد (قرار المالك ٢٠٢٦-١١-١٠)
+    // كل تاريخ معروض بصيغة واحدة: يوم/شهر/سنة بخانتين — «25/03/1993» — ميلادي وبأرقام لاتينية
+    // كأرقام الهواتف والعدّادات في التطبيق. للعرض فقط: صيغ السيرفر والإدخال كما هي.
+    // يُحاط بعزل LTR (U+2066…U+2069) فلا ينقلب الترتيب داخل نص عربي.
+
+    private static let displayDayFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "dd/MM/yyyy"
+        return f
+    }()
+
+    private static func clockFormatter(_ locale: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: locale)
+        f.dateFormat = "h:mm a"
+        return f
+    }
+    private static let clockAr = clockFormatter("ar@numbers=latn")
+    private static let clockEn = clockFormatter("en_US")
+
+    private static let iso8601Plain = ISO8601DateFormatter()
+
+    /// أيام السيرفر بلا وقت: «yyyy-MM-dd» أو «yyyy/MM/dd» (وخانة واحدة مقبولة)
+    private static let dayParsers: [DateFormatter] = ["yyyy-MM-dd", "yyyy/MM/dd", "yyyy-M-d", "yyyy/M/d"].map {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = $0
+        return f
+    }
+
+    private static func isolatedLTR(_ s: String) -> String { "\u{2066}\(s)\u{2069}" }
+
+    /// Date → «25/03/1993»
+    static func displayDate(_ date: Date) -> String {
+        isolatedLTR(displayDayFormatter.string(from: date))
+    }
+
+    /// نص السيرفر (يوم «yyyy-MM-dd» أو ISO8601 بوقت) → «25/03/1993».
+    /// فارغ → nil · غير مفهوم → النص كما هو (لا يضيع شيء من العرض).
+    static func displayDate(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        if raw.count > 10, let d = iso8601.date(from: raw) ?? iso8601Plain.date(from: raw) {
+            return displayDate(d)
+        }
+        let day = String(raw.prefix(10))
+        for f in dayParsers { if let d = f.date(from: day) { return displayDate(d) } }
+        return raw
+    }
+
+    /// Date → «25/03/1993 · 9:10 م» — للطوابع التي تحتاج الوقت مع التاريخ
+    static func displayDateTime(_ date: Date) -> String {
+        let clock = (L10n.isArabic ? clockAr : clockEn).string(from: date)
+        return isolatedLTR(displayDayFormatter.string(from: date)) + " · " + clock
+    }
+
+    /// نص ISO8601 → «25/03/1993 · 9:10 م» · غير مفهوم → النص كما هو
+    static func displayDateTime(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        guard let d = iso8601.date(from: raw) ?? iso8601Plain.date(from: raw) else { return displayDate(raw) }
+        return displayDateTime(d)
+    }
+
     /// الآن كـ ISO8601
     static var now: String {
         iso8601.string(from: Date())

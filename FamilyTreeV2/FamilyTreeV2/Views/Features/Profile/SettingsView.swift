@@ -86,7 +86,7 @@ struct SettingsView: View {
                 .padding(.top, DS.Spacing.lg)
                 .dsStaggerIn(allTiles.count + 1)
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxl)
         }
@@ -236,10 +236,10 @@ struct SettingsView: View {
             // الشريط السفلي — مثل ظهر البطاقة
             HStack(spacing: DS.Spacing.xl) {
                 cardFact(icon: "calendar", title: t("عضو منذ", "Member since"), value: shortDate(user?.createdAt))
-                cardFact(icon: "gift.fill", title: t("الميلاد", "Born"), value: shortDate(user?.birthDate))
+                cardFact(icon: "calendar", title: t("الميلاد", "Born"), value: shortDate(user?.birthDate))
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.vertical, DS.Spacing.sm)
             .background(DS.Color.background)
         }
@@ -408,17 +408,10 @@ struct SettingsView: View {
         }
     }
 
-    /// «١٩٩٣/٠٣/٢٥» → «مارس ١٩٩٣» — التاريخ مختصر بالشهر نصاً
+    /// «1993-03-25» → «25/03/1993» — الصيغة الموحّدة (`DateHelper.displayDate`)
     private func shortDate(_ raw: String?) -> String {
         guard let raw, raw.count >= 10 else { return "—" }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        guard let d = f.date(from: String(raw.prefix(10))) else { return "—" }
-        let out = DateFormatter()
-        out.locale = LanguageManager.shared.locale
-        out.dateFormat = "MMMM yyyy"
-        return out.string(from: d)
+        return DateHelper.displayDate(raw) ?? "—"
     }
 
     private var versionLabel: some View {
@@ -748,25 +741,32 @@ struct NotificationsAndPrivacyView: View {
     }
 
     @ViewBuilder private var privacySection: some View {
+        // «الخصوصية» بالتصميم الموحّد (طلب المالك ٢٠٢٦-١١-١٠): كل معلومة كتلة بعنوانها و«ظاهر للأعضاء / مخفي»
+        // (`DSVisibilityPicker`) — صفحة إعدادات بلا ضغطات إضافية، والحفظ كما كان (عند تغيّر القيمة)
         DSComposerSection(title: t("الخصوصية", "Privacy"), icon: "lock.fill",
-                          tint: DS.Color.accent, index: privacyIndex) {
-            VStack(spacing: DS.Spacing.sm) {
-                switchRow(icon: "phone.down.fill", color: DS.Color.accent,
-                          title: t("إخفاء رقم الهاتف", "Hide phone number"),
-                          subtitle: t("لا يظهر رقم الهاتف للأعضاء", "Members won't see your number"),
-                          isOn: $isPhoneHidden)
-                switchRow(icon: "person.crop.circle.badge.xmark", color: DS.Color.accent,
-                          title: t("إخفاء صورتي عن الأعضاء", "Hide my photo from members"),
-                          subtitle: t("لا تظهر صورتك للأعضاء", "Members won't see your photo"),
-                          isOn: $isPhotoHidden)
-                switchRow(icon: "calendar.badge.minus", color: DS.Color.accent,
-                          title: t("إخفاء تاريخ الميلاد عن الأعضاء", "Hide my birth date from members"),
-                          subtitle: t("لا يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
-                          isOn: $isBirthDateHidden)
-                switchRow(icon: "clock.fill", color: DS.Color.accent,
-                          title: t("إظهار آخر ظهور ونشاط", "Show my last seen and activity"),
-                          subtitle: t("عند الإيقاف لا يرى الأعضاء متى كنت متصلاً", "When off, members won't see when you were online"),
-                          isOn: $isActivityVisible)
+                          tint: DS.Color.primary, index: privacyIndex) {
+            VStack(spacing: DSBox.sectionInnerSpacing) {
+                visibilityBlock(icon: "phone.fill", title: t("رقم الهاتف", "Phone number"),
+                                hidden: $isPhoneHidden,
+                                shownLine: t("يظهر رقم الهاتف لأعضاء العائلة.", "Your number is shown to family members."),
+                                hiddenLine: t("لا يظهر رقم الهاتف للأعضاء، ويبقى ظاهراً لك وللإدارة.",
+                                              "Members won't see your number; you and the admins still do."))
+                visibilityBlock(icon: "camera.fill", title: t("الصورة الشخصية", "Profile photo"),
+                                hidden: $isPhotoHidden,
+                                shownLine: t("تظهر صورتك لأعضاء العائلة.", "Your photo is shown to family members."),
+                                hiddenLine: t("لا تظهر صورتك للأعضاء، وتبقى ظاهرة لك وللإدارة.",
+                                              "Members won't see your photo; you and the admins still do."),
+                                feminine: true)
+                visibilityBlock(icon: "calendar", title: t("تاريخ الميلاد", "Birth date"),
+                                hidden: $isBirthDateHidden,
+                                shownLine: t("يظهر تاريخ ميلادك لأعضاء العائلة.", "Your birth date is shown to family members."),
+                                hiddenLine: t("لا يظهر تاريخ ميلادك للأعضاء، ويبقى ظاهراً لك وللإدارة.",
+                                              "Members won't see your birth date; you and the admins still do."))
+                // المخزّن «إظهار» — المخفي عكسه
+                visibilityBlock(icon: "person.badge.clock.fill", title: t("آخر ظهور ونشاط", "Last seen and activity"),
+                                hidden: Binding(get: { !isActivityVisible }, set: { isActivityVisible = !$0 }),
+                                shownLine: t("يرى الأعضاء متى كنت متصلاً.", "Members see when you were online."),
+                                hiddenLine: t("لا يرى الأعضاء متى كنت متصلاً.", "Members won't see when you were online."))
                 sectionNote(t("تبقى البيانات محفوظة في الشجرة، لكنها لا تظهر للأعضاء، وتطّلع عليها الإدارة.",
                               "Your data stays in the tree but is hidden from members. Admins can still see it."))
             }
@@ -828,27 +828,31 @@ struct NotificationsAndPrivacyView: View {
     }
 
     private var treeShowSection: some View {
-        DSComposerSection(title: t("لا يظهر في الشجرة", "What shows in the tree"), icon: "eye.fill",
-                          tint: DS.Color.palm, index: privacyIndex + 1) {
-            VStack(spacing: DS.Spacing.sm) {
+        // نفس كتل «الخصوصية» الموحّدة — «ظاهر في الشجرة / مخفي» (المخزّن «يظهر»، والمخفي عكسه)
+        DSComposerSection(title: t("الظهور في شجرة النساء", "What shows in the women's tree"), icon: "eye.fill",
+                          tint: DS.Color.primary, index: privacyIndex + 1) {
+            VStack(spacing: DSBox.sectionInnerSpacing) {
                 // البنت تتحكم في ظهورها هي في الشجرة (طلب المالك ٢٠٢٦-١١-٠٩)
                 if isFemaleUser {
-                    switchRow(icon: "person.fill", color: DS.Color.palm,
-                              title: t("الظهور في الشجرة", "Shown in the tree"),
-                              subtitle: t("عند الإيقاف لا يظهر الاسم في شجرة النساء", "When off, the name is hidden from the women's tree"),
-                              isOn: $showMyself)
-                }
-                switchRow(icon: "heart.fill", color: DS.Color.palm,
-                          title: isFemaleUser ? t("ظهور الزوج", "Husband shown")
-                                              : t("ظهور الزوجة", "Wife shown"),
-                          subtitle: isFemaleUser ? t("يظهر الزوج بجانب الاسم في شجرة النساء", "The husband appears beside the name in the women's tree")
-                                                 : t("تظهر الزوجة بجانب الاسم في شجرة النساء", "The wife appears beside the name in the women's tree"),
-                          isOn: $showSpouse)
+                    visibilityBlock(icon: "person.fill", title: t("الاسم", "Name"),
+                                    hidden: Binding(get: { !showMyself }, set: { showMyself = !$0 }),
+                                    shownLine: t("يظهر الاسم في شجرة النساء.", "The name is shown in the women's tree."),
+                                    hiddenLine: t("لا يظهر الاسم في شجرة النساء.", "The name is hidden from the women's tree."),
+                                    inTree: true)
+                    }
+                visibilityBlock(icon: "heart.fill", title: isFemaleUser ? t("الزوج", "Husband") : t("الزوجة", "Wife"),
+                                hidden: Binding(get: { !showSpouse }, set: { showSpouse = !$0 }),
+                                shownLine: isFemaleUser ? t("يظهر الزوج بجانب الاسم في شجرة النساء.", "The husband appears beside the name in the women's tree.")
+                                                        : t("تظهر الزوجة بجانب الاسم في شجرة النساء.", "The wife appears beside the name in the women's tree."),
+                                hiddenLine: isFemaleUser ? t("لا يظهر الزوج في شجرة النساء.", "The husband is hidden from the women's tree.")
+                                                         : t("لا تظهر الزوجة في شجرة النساء.", "The wife is hidden from the women's tree."),
+                                inTree: true, feminine: !isFemaleUser)
                 if isFemaleUser {
-                    switchRow(icon: "person.2.fill", color: DS.Color.palm,
-                              title: t("ظهور الأبناء", "Children shown"),
-                              subtitle: t("يظهر الأبناء تحت الاسم في شجرة النساء", "Children appear under the name in the women's tree"),
-                              isOn: $showChildren)
+                        visibilityBlock(icon: "person.2.fill", title: t("الأبناء", "Children"),
+                                    hidden: Binding(get: { !showChildren }, set: { showChildren = !$0 }),
+                                    shownLine: t("يظهر الأبناء تحت الاسم في شجرة النساء.", "Children appear under the name in the women's tree."),
+                                    hiddenLine: t("لا يظهر الأبناء في شجرة النساء.", "Children are hidden from the women's tree."),
+                                    inTree: true)
                 }
                 sectionNote(t("جميع الخيارات اختيارية ويمكن تغييرها في أي وقت.",
                               "All optional and can be changed at any time."))
@@ -903,7 +907,7 @@ struct NotificationsAndPrivacyView: View {
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 Spacer(minLength: DS.Spacing.sm)
-                Toggle("", isOn: $notificationsEnabled)
+                Toggle(t("الإشعارات", "Notifications"), isOn: $notificationsEnabled)
                     .labelsHidden()
                     .tint(DS.Color.primary)
                     // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
@@ -988,7 +992,7 @@ struct NotificationsAndPrivacyView: View {
             // يُقرأ اسماً ووصفاً للمفتاح نفسه (لا يُكرَّر)
             .accessibilityHidden(true)
             Spacer(minLength: DS.Spacing.sm)
-            Toggle("", isOn: isOn)
+            Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .tint(chromeInk)
                 // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه ووصفه صراحةً
@@ -996,6 +1000,15 @@ struct NotificationsAndPrivacyView: View {
                 .accessibilityHint(subtitle)
         }
         .dsRowBox()
+    }
+
+    /// كتلة خصوصية واحدة: عنوان المعلومة برمزها، ثم «ظاهر / مخفي» وسطر يشرح الاختيار (`DSVisibilityPicker`)
+    private func visibilityBlock(icon: String, title: String, hidden: Binding<Bool>,
+                                 shownLine: String, hiddenLine: String, inTree: Bool = false,
+                                 feminine: Bool = false) -> some View {
+        // صفّ «الخصوصية» الواحد (`DSVisibilityPicker`، قرار المالك ٢٠٢٦-١١-١١): العنوان والحالة، والاختيار المضغوط في الطرف
+        DSVisibilityPicker(hidden: hidden, shownLine: shownLine, hiddenLine: hiddenLine,
+                           rowTitle: title, rowIcon: icon, feminine: feminine)
     }
 
     private func sectionNote(_ text: String) -> some View {
@@ -1102,21 +1115,6 @@ struct AppearanceSettingsView: View {
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
-    private var appearanceOptions: [DSOptionTile<String>] {
-        // كل خيار بلون مشهده (نفس لون المربّع حين يُختار)
-        [DSOptionTile("system", title: t("حسب الجهاز", "System"), icon: "iphone",
-                      tint: AppearanceSkyScene.tint(for: "system")),
-         DSOptionTile("light", title: t("فاتح", "Light"), icon: "sun.max.fill",
-                      tint: AppearanceSkyScene.tint(for: "light")),
-         DSOptionTile("dark", title: t("داكن", "Dark"), icon: "moon.stars.fill",
-                      tint: AppearanceSkyScene.tint(for: "dark"))]
-    }
-
-    private var languageOptions: [DSOptionTile<String>] {
-        [DSOptionTile("ar", title: "العربية", icon: "character.book.closed.fill"),
-         DSOptionTile("en", title: "English", icon: "textformat.abc")]
-    }
-
     /// اختيار المستخدم يثبّت لغته — ولا تغيّرها اللغة الرسمية بعدها
     /// (اختيار اللغة الحالية لا يغيّر شيئاً — المربّعات لا تعيد اختيار المختار)
     private var languageSelection: Binding<String> {
@@ -1144,7 +1142,12 @@ struct AppearanceSettingsView: View {
                         // مشهد صباح / ليل متحرّك يتبع الاختيار (طلب المالك ٢٠٢٦-١٠-١٠)
                         AppearanceSkyScene(mode: appearanceMode)
                         // مربّعات الاختيار الواحد المشتركة
-                        DSOptionTiles(appearanceOptions, selection: $appearanceMode, columns: 3)
+                        // ثلاثة خيارات = الاختيار الموحّد (`DSChoiceTiles`، طلب المالك ٢٠٢٦-١١-١٠)
+                        DSChoiceTiles(options: [
+                            DSChoiceOption(id: "system", title: t("حسب الجهاز", "System"), icon: "iphone"),
+                            DSChoiceOption(id: "light", title: t("فاتح", "Light"), icon: "sun.max.fill"),
+                            DSChoiceOption(id: "dark", title: t("داكن", "Dark"), icon: "moon.stars.fill")
+                        ], selection: $appearanceMode)
                             // التغيير لحظي على كل النوافذ — لا ينتظر إغلاق المربّع (طلب المالك ٢٠٢٦-١٠-٠٧)
                             .onChange(of: appearanceMode) { mode in AppAppearance.apply(mode) }
                         note(appearanceDescription)
@@ -1156,7 +1159,10 @@ struct AppearanceSettingsView: View {
                 DSComposerSection(title: t("اللغة", "Language"), icon: "character.bubble.fill",
                                   tint: DS.Color.primary, index: showsAppearance ? 1 : 0) {
                     VStack(spacing: DS.Spacing.sm) {
-                        DSOptionTiles(languageOptions, selection: languageSelection, columns: 2)
+                        DSChoiceTiles(options: [
+                            DSChoiceOption(id: "ar", title: "العربية", icon: "character.book.closed.fill"),
+                            DSChoiceOption(id: "en", title: "English", icon: "textformat.abc")
+                        ], selection: languageSelection)
                         note(langManager.languageChosenByUser
                              ? t("اخترت لغتك بنفسك — لا تتأثر بلغة التطبيق الرسمية.",
                                  "You chose your language — the app's official language won't change it.")
@@ -1849,24 +1855,7 @@ struct LinkedDevicesSettingsSheet: View {
     }
 
     private func formattedDate(_ isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        return isoString
+        DateHelper.displayDateTime(isoString) ?? isoString
     }
 }
 

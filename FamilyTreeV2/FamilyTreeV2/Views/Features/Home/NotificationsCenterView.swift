@@ -175,22 +175,12 @@ struct NotificationsCenterView: View {
         return f
     }()
 
-    private static let fullDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .full
-        f.timeStyle = .short
-        return f
-    }()
-
     private func relativeTime(_ date: Date) -> String {
         Self.relativeDateFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
         return Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private func fullDateTime(_ date: Date) -> String {
-        Self.fullDateFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return Self.fullDateFormatter.string(from: date)
-    }
+    private func fullDateTime(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 
     // MARK: - الهيدر — نفس رأس صفحات الرئيسية الفرعية (المكتبة، المشاريع، الأخبار…)
 
@@ -226,7 +216,7 @@ struct NotificationsCenterView: View {
                     let activityUnread = visible.filter { belongsToActivityTab($0) && !$0.read }.count
 
                     segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread)
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 }
@@ -351,7 +341,7 @@ struct NotificationsCenterView: View {
                         }
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.vertical, DS.Spacing.xs)
                 .animation(reduceMotion ? nil : DS.Anim.snappy, value: isSelecting)
                 .animation(reduceMotion ? nil : DS.Anim.snappy, value: selectedIds.count)
@@ -434,7 +424,7 @@ struct NotificationsCenterView: View {
         }
         .padding(DS.Spacing.lg)
         .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous).fill(DS.Color.navyDeep))
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -484,10 +474,10 @@ struct NotificationsCenterView: View {
                 Task { await notificationVM.deleteNotifications(ids: ids) }
             }
         }
-        .padding(DS.Spacing.sm + DS.Spacing.xxs)
+        .padding(DS.Spacing.smd)
         .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous).fill(DS.Color.navyDeep))
         .dsGlowShadow()
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.bottom, DS.Spacing.sm)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -738,7 +728,8 @@ struct NotificationsCenterView: View {
                         .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.lg, bottom: 0, trailing: DS.Spacing.lg))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        // الحذف بضغطة على الزرّ فقط — السحب الكامل كان يحذف بلا تراجع (تدقيق ٢٠٢٦-١١-١٠ #14)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             // كل عضو يحذف نسخته الخاصة من الإشعار
                             Button(role: .destructive) {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -796,12 +787,9 @@ struct NotificationsCenterView: View {
                 }
                 UISelectionFeedbackGenerator().selectionChanged()
             } else {
-                if item.kind == NotificationKind.guardianConsent.rawValue {
-                    // موافقة ولي الأمر: القرار في «حسابي» لا في تفاصيل الإشعار
-                    NotificationCenter.default.post(name: .openProfileTab, object: nil)
-                } else {
-                    selectedNotification = item
-                }
+                // كل صفّ يفتح مربّع تفاصيله (طلب المالك ٢٠٢٦-١١-١٠) — موافقة ولي الأمر أيضاً، وزرّ «فتح الملف
+                // الشخصي» داخل المربّع (القرار نفسه في «حسابي»)
+                selectedNotification = item
                 if isUnread {
                     Task { await notificationVM.markNotificationAsRead(id: item.id) }
                 }
@@ -933,7 +921,8 @@ struct NotificationsCenterView: View {
             sender: senderInfo(notification, iconInfo: iconInfo),
             kindLabel: iconInfo.label,
             kindIcon: iconInfo.icon,
-            time: relativeTime(notification.createdDate),
+            // التاريخ بالصيغة الموحّدة مع الوقت (`DateHelper.displayDateTime`)
+            time: fullDateTime(notification.createdDate),
             quote: detailQuote(notification),
             changes: rowChanges(notification),
             subjectMember: subject,
@@ -993,7 +982,7 @@ struct NotificationsCenterView: View {
         .dsAlert(L10n.t("تم إرسال ردّك", "Reply sent"), isPresented: $approvalReplySent, moment: .sentForApproval) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
-            Text(L10n.t("وصل ردّك للإدارة، ويكمل طلبك مراجعته.",
+            Text(L10n.t("وصل الرد إلى الإدارة، ويُستكمل الطلب بعد المراجعة.",
                         "Your reply reached the administration, and your request continues its review."))
         }
         .confirmationDialog(
@@ -1132,6 +1121,17 @@ struct NotificationsCenterView: View {
         // والطاقم «فتح في طلبات المراجعة» والمسار شغّال (داخل approvalLinkSection)
         if notification.details?.type == "approval_workflow" {
             approvalLinkSection(notification, index: kindIndex)
+        }
+
+        // موافقة ولي الأمر: القرار في «حسابي» — زرّ يفتحه من المربّع (كان الصفّ يقفز إليه مباشرة بلا تفاصيل)
+        if notification.kind == NotificationKind.guardianConsent.rawValue {
+            DSButton(L10n.t("فتح الملف الشخصي", "Open my profile"), icon: "person.crop.circle.fill") {
+                selectedNotification = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    NotificationCenter.default.post(name: .openProfileTab, object: nil)
+                }
+            }
+            .dsStaggerIn(kindIndex)
         }
 
         // «رصيد رسائل الدخول منخفض» ← صفحة رسائل الدخول في «الدخول والأمان» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠)
@@ -1582,7 +1582,7 @@ struct NotificationsCenterView: View {
     ) -> some View {
         if isLoading {
             // التحميل الموحّد (مجسّم يتنفّس + نص قصير) بدل الدوّارة
-            DSPageLoader(L10n.t("جاري البحث عن مطابقات...", "Searching for matches..."),
+            DSPageLoader(L10n.t("جارٍ البحث عن التطابقات…", "Searching for matches..."),
                          icon: "person.2.fill", size: DSBox.composerIcon, fillsSpace: false)
                 .dsRowBox()
         } else if candidates.isEmpty {

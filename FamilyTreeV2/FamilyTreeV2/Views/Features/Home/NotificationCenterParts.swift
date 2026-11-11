@@ -400,15 +400,5 @@ enum NotificationDetailParts {
             ?? n.subjectMemberId.flatMap(member)
     }
 
-    private static let fullFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .full
-        f.timeStyle = .short
-        return f
-    }()
-
-    static func fullDate(_ date: Date) -> String {
-        fullFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return fullFormatter.string(from: date)
-    }
+    static func fullDate(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 }

@@ -50,7 +50,7 @@ struct NotifBandChip: View {
             .dsFont(.badge)
             .foregroundColor(tone == .gold ? DS.Color.headerSubtitleOnTile : DS.Color.textOnPrimary)
             .lineLimit(1)
-            .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+            .padding(.horizontal, DS.Spacing.smd)
             .padding(.vertical, DS.Spacing.xs)
             .background(RoundedRectangle(cornerRadius: DS.Radius.sm + DS.Spacing.xxs, style: .continuous)
                 .fill(tone.bandFill))
@@ -94,9 +94,12 @@ struct NotificationRichBox: View {
     let subtitle: String
     let onClose: () -> Void
     let content: AnyView
+    /// شريط «إغلاق» الخفيف أسفل المربّع (تذييل `DSComposer` الموحّد) — لمن لا تحمل أزراره «إغلاق» بنفسها
+    var showsCloseFooter: Bool = false
 
     @State private var headerH: CGFloat = 0
     @State private var contentH: CGFloat = 0
+    @State private var footerH: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -107,51 +110,67 @@ struct NotificationRichBox: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .readHeight($contentH)
             }
+            if showsCloseFooter {
+                closeFooter.readHeight($footerH)
+            }
         }
         // الداكن: أسود صافٍ بلا رمادي (طلب المالك ٢٠٢٦-١١-٠٧) — الفاتح أبيض كما كان
         .background(DS.Color.background)
-        .preference(key: SheetContentHeightKey.self, value: headerH > 0 ? headerH + contentH : 0)
+        .preference(key: SheetContentHeightKey.self, value: headerH > 0 ? headerH + contentH + (showsCloseFooter ? footerH : 0) : 0)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
-    /// الرأس الأصغر (٢٠٢٦-١١-٠١): الشرائح وزرّ × في صفّ، ثم المربّع ٤٠ والعنوان — حشوة ١٢ بدل ١٦
+    /// الرأس الموحّد (`DSComposerHeader` — نفس رأس كل المربّعات، طلب المالك ٢٠٢٦-١١-١١ «كمل على التوحيد»)،
+    /// والشرائح (النوع والحالة) صفّاً خفيفاً تحته
     private var header: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.xsm) {
-                ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
-                    NotifBandChip(text: chip.0, tone: chip.1)
-                }
-                Spacer(minLength: DS.Spacing.xs)
-                // بلا × — «إغلاق» في شريط المربّع السفلي (طلب المالك ٢٠٢٦-١١-٠١)
-            }
-            HStack(spacing: DS.Spacing.md) {
-                NotifBoxTileView(tile: tile)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(verbatim: title)
-                        .dsFont(.headline)
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !subtitle.isEmpty {
-                        Text(verbatim: subtitle)
-                            .dsFont(.footnote)
-                            .foregroundColor(DS.Color.headerSubtitleOnTile)
-                            .lineLimit(2)
+        VStack(spacing: 0) {
+            DSComposerHeader(title: title, subtitle: subtitle, icon: "bell.fill", tint: DS.Color.actionNavy, tile: tile)
+            if !chips.isEmpty {
+                NotifFlow(spacing: DS.Spacing.xsm) {
+                    ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
+                        NotifLightChip(text: chip.0, tone: chip.1)
                     }
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .accessibilityElement(children: .combine)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DSRichBoxBand())
+    }
+
+    /// تذييل المربّعات الموحّد: «إغلاق» الخفيف بعرض الشريط فوق خطّ رفيع
+    private var closeFooter: some View {
+        Button(L10n.t("إغلاق", "Close"), action: onClose)
+            .buttonStyle(.ds(.cancel))
+            .padding(.horizontal, DSBox.footerHorizontal)
+            .padding(.top, DSBox.footerTop)
+            .padding(.bottom, DSBox.footerBottom)
+            .background(DS.Color.background.overlay(alignment: .top) {
+                Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.border)).frame(height: DS.Border.width)
+            })
     }
 }
 
-/// أرضية رأس المربّع الموحّد — كحلي متدرّج (مربّع الإشعار وكل مربّعات `DSComposer`)
+/// شريحة النوع/الحالة على السطح (الشكل الخفيف): نقطة بلون المعنى + نصّ، بتعبئة الحقول
+struct NotifLightChip: View {
+    let text: String
+    let tone: NotifBoxTone
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Circle().fill(tone.ink).frame(width: DSBox.statusDot, height: DSBox.statusDot)
+            Text(verbatim: text)
+                .dsFont(.caption)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .background(Capsule().fill(DS.Color.fieldFill))
+    }
+}
+
+/// أرضية رأس المربّع الموحّد — كحلي صلب `bandFill` (مربّع الإشعار وكل مربّعات `DSComposer`)
 struct DSRichBoxBand: View {
     /// المشاريع والمكتبة: الشريط بلون رأس صفحتها (فيروزي/أزرق) بدل الكحلي — ما بداخل المربّع بلونها
     /// فيتّسق الرأس والمحتوى (طلب المالك ٢٠٢٦-١١-٠١ «صلح لون المشاريع»)
@@ -161,8 +180,8 @@ struct DSRichBoxBand: View {
             if let section, AppSection.HomeTile.tile(for: section) != nil {
                 section.headerGradient
             } else {
-                LinearGradient(colors: [DS.Color.navyFill, DS.Color.navyDeep],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                // لون صلب بلا تدرّج (قرار المالك ٢٠٢٦-١١-١١)
+                DS.Color.bandFill
             }
         }
         .ignoresSafeArea(edges: .horizontal)
@@ -244,7 +263,7 @@ struct NotifJourneyView: View {
     }
 
     private func stepRow(_ step: NotifJourneyStep, last: Bool) -> some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm + DS.Spacing.xxs) {
+        HStack(alignment: .top, spacing: DS.Spacing.smd) {
             VStack(spacing: 0) {
                 Circle()
                     .fill(step.tone.ink)
@@ -280,7 +299,7 @@ struct NotifReplyCard: View {
     var icon: String = "bubble.left.fill"
 
     var body: some View {
-        HStack(alignment: .top, spacing: DS.Spacing.sm + DS.Spacing.xxs) {
+        HStack(alignment: .top, spacing: DS.Spacing.smd) {
             RoundedRectangle(cornerRadius: DS.Radius.sm + DS.Spacing.xxs, style: .continuous)
                 .fill(DS.Color.navyDeep)
                 .frame(width: DS.Icon.row, height: DS.Icon.row)
@@ -331,7 +350,7 @@ struct NotifInfoGrid: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+                .padding(.horizontal, DS.Spacing.smd)
                 .padding(.vertical, DS.Spacing.sm)
                 .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: DS.Radius.sm + DS.Spacing.xxs, style: .continuous)
@@ -350,7 +369,7 @@ struct NotifContextLine: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: DS.Spacing.sm + DS.Spacing.xxs) {
+        HStack(spacing: DS.Spacing.smd) {
             Image(dsSymbol: icon.dsLightSymbol).dsGlyph(DS.Glyph.lg, weight: .light).foregroundColor(DS.Color.accent)
                 .accessibilityHidden(true)
             Text(verbatim: text)
@@ -360,7 +379,7 @@ struct NotifContextLine: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm + DS.Spacing.xxs)
+        .padding(.vertical, DS.Spacing.smd)
         .dsWhiteTile(radius: DS.Radius.md)
     }
 }
@@ -375,7 +394,7 @@ struct NotifTagChip: View {
             .dsFont(.caption)
             .foregroundColor(tone.ink)
             .lineLimit(1)
-            .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
+            .padding(.horizontal, DS.Spacing.smd)
             .padding(.vertical, DS.Spacing.xs + DS.Border.width)
             .background(RoundedRectangle(cornerRadius: DS.Radius.sm + DS.Spacing.xxs, style: .continuous)
                 .fill(tone.ink.opacity(DS.Opacity.tintFill)))
@@ -400,42 +419,31 @@ struct NotifMetaLine: View {
 /// أزرار المربّع: أساسي كحلي · موافقة خضراء · رفض بإطار أحمر · ثانوي بإطار
 enum NotifBoxButtonKind { case primary, approve, reject, secondary }
 
+/// أزرار المربّع بأوجه الزرّ الموحّد الخفيف (طلب المالك ٢٠٢٦-١١-١١): الأساسي والموافقة = تعبئة القسم الكحلية،
+/// الثانوي = «إلغاء» الخفيف، والرفض = نصّ أحمر هادئ بلا تعبئة (مثل سطر «حذف» في المربّعات)
 struct NotifBoxButtonStyle: ButtonStyle {
     let kind: NotifBoxButtonKind
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: DSBox.buttonRadius, style: .continuous)
-        let fill: Color = {
+        Group {
             switch kind {
-            case .primary:   return DS.Color.primaryFill
-            case .approve:   return DS.Color.successFill
-            case .reject, .secondary: return DS.Color.background
+            case .primary, .approve:
+                configuration.label.modifier(DSButtonFace(enabled: isEnabled))
+            case .secondary:
+                configuration.label.modifier(DSButtonFace(role: .cancel, enabled: isEnabled))
+            case .reject:
+                configuration.label
+                    .dsFont(.button)
+                    .foregroundColor(DS.Color.error)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(maxWidth: .infinity, minHeight: DSBox.buttonHeight)
+                    .contentShape(Rectangle())
+                    .opacity(isEnabled ? 1 : DS.Opacity.disabled)
             }
-        }()
-        let ink: Color = {
-            switch kind {
-            case .primary, .approve: return DS.Color.textOnPrimary
-            case .reject:            return DS.Color.error
-            case .secondary:         return DS.Color.primary
-            }
-        }()
-        return configuration.label
-            .dsFont(.button)
-            .foregroundColor(ink)
-            .lineLimit(1)
-            .minimumScaleFactor(0.85)
-            .frame(maxWidth: .infinity, minHeight: DSBox.buttonHeight)
-            .padding(.horizontal, DS.Spacing.xs)
-            .background(shape.fill(fill))
-            .overlay {
-                if kind == .reject || kind == .secondary {
-                    shape.strokeBorder(kind == .reject ? DS.Color.error.opacity(DS.Opacity.tintStroke) : DS.Color.cardBorder,
-                                       lineWidth: DS.Border.width)
-                }
-            }
-            .opacity(configuration.isPressed ? 0.85 : (isEnabled ? 1 : DS.Opacity.disabled))
-            .contentShape(shape)
+        }
+        .opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
 
@@ -525,22 +533,11 @@ enum NotifBoxText {
         return iso.date(from: raw) ?? isoPlain.date(from: raw)
     }
 
-    private static func formatter(_ template: String) -> DateFormatter {
-        let f = DateFormatter()
-        f.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        f.setLocalizedDateFormatFromTemplate(template)
-        return f
-    }
+    /// «31/10/2026 · 9:10 م» — الصيغة الموحّدة (`DateHelper.displayDateTime`)
+    static func long(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 
-    /// «السبت ٣١ أكتوبر · ٩:١٠ م»
-    static func long(_ date: Date) -> String {
-        "\(formatter("EEEEdMMMM").string(from: date)) · \(formatter("jmm").string(from: date))"
-    }
-
-    /// «١ نوفمبر · ١٢:٢٤ ص»
-    static func short(_ date: Date) -> String {
-        "\(formatter("dMMMM").string(from: date)) · \(formatter("jmm").string(from: date))"
-    }
+    /// «01/11/2026 · 12:24 ص»
+    static func short(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()

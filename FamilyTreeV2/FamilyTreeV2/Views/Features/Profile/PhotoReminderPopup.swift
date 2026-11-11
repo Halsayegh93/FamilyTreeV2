@@ -187,21 +187,35 @@ struct PhotoReminderBox: View {
     /// أُرسلت للموافقة — يبقى «إغلاق» وحده
     @State private var finished = false
 
+    @State private var showPicker = false
+
     var body: some View {
-        ScrollView(showsIndicators: false) {
+        // هيكل المربّعات الموحّد (`DSComposer`، طلب المالك ٢٠٢٦-١١-١١): رأس كحلي، المحتوى، ثم «أضف صورة» و«لاحقاً» الخفيف
+        DSComposer(
+            title: L10n.t("الصورة الشخصية", "Profile photo"),
+            subtitle: L10n.t("أكمل ملفك بصورة", "Complete your profile with a photo"),
+            icon: "camera.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("أضف صورة", "Add a photo"),
+            actionIcon: "photo.on.rectangle",
+            showsAction: !finished,
+            cancelTitle: finished ? L10n.t("إغلاق", "Close") : L10n.t("لاحقاً", "Later"),
+            canSubmit: !isUploading,
+            isBusy: isUploading,
+            onSubmit: { showPicker = true },
+            onCancel: {
+                if !finished { PhotoReminder.snooze(userId: member.id) }
+                onClose()
+            }
+        ) {
             VStack(spacing: DS.Spacing.md) {
                 ring
-                VStack(spacing: DS.Spacing.xs) {
-                    Text(L10n.t("كمّل ملفك بصورة", "Complete your profile with a photo"))
-                        .dsFont(.title)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(L10n.t("صورتك تظهر في الشجرة وتساعد الأهل يتعرفون عليك",
-                                "Your photo appears in the tree and helps family recognize you"))
-                        .dsFont(.callout)
-                        .foregroundColor(DS.Color.textSecondary)
-                }
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(L10n.t("تظهر صورتك في الشجرة، وتساعد أفراد العائلة على التعرّف عليك.",
+                            "Your photo appears in the tree and helps family recognize you."))
+                    .dsFont(.callout)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let resultMessage {
                     Text(resultMessage)
@@ -210,14 +224,10 @@ struct PhotoReminderBox: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                buttons
             }
-            .padding(DS.Spacing.lg)
             .frame(maxWidth: .infinity)
-            .dsPanelContentHeight(extra: 0)
         }
-        .background(DS.Color.surface)
+        .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
         .onChange(of: pickerItem) { item in
             guard let item else { return }
             Task {
@@ -256,29 +266,6 @@ struct PhotoReminderBox: View {
         .frame(width: DS.Icon.profileAvatarRing, height: DS.Icon.profileAvatarRing)
         .clipShape(Circle())
         .overlay(Circle().strokeBorder(DS.Color.accent, style: DSAddChipLabel.dash))
-    }
-
-    @ViewBuilder
-    private var buttons: some View {
-        if finished {
-            DSButton(L10n.t("إغلاق", "Close"), role: .cancel, size: .large, action: onClose)
-        } else {
-            VStack(spacing: DS.Spacing.sm) {
-                PhotosPicker(selection: $pickerItem, matching: .images) {
-                    Text(L10n.t("أضف صورة", "Add a photo"))
-                        .modifier(DSButtonFace(size: .large, tint: DS.Color.actionNavy, enabled: !isUploading))
-                }
-                .buttonStyle(DSPressStyle())
-                .disabled(isUploading)
-
-                Button(L10n.t("لاحقاً", "Later")) {
-                    PhotoReminder.snooze(userId: member.id)
-                    onClose()
-                }
-                .buttonStyle(.ds(.cancel, size: .large))
-                .disabled(isUploading)
-            }
-        }
     }
 
     private func upload(_ image: UIImage) {

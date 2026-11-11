@@ -789,8 +789,23 @@ struct DSSoftDestructiveFace: ViewModifier {
             .dsButtonLabelFit()
             .frame(maxWidth: .infinity)
             .frame(minHeight: DSButtonSize.regular.height)
+            // حبّة «حذف» الحمراء: تعبئة حمراء خفيفة بلا إطار + نصّ ورمز أحمران (قرار المالك ٢٠٢٦-١١-١١ «بدون إطار»)
             .background(DSBox.buttonShape.fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
             .contentShape(DSBox.buttonShape)
+            .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
+    }
+}
+
+/// «حذف» في صفّ أزرار المربّع: دائرة حمراء ممتلئة بقطر الزرّ ورمز أبيض (قرار المالك ٢٠٢٦-١١-١١ «زر أحمر وحجمه دائري»)
+struct DSDeleteCircleFace: ViewModifier {
+    var enabled: Bool = true
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundColor(.white)
+            .frame(width: DSBox.buttonHeight, height: DSBox.buttonHeight)
+            .background(Circle().fill(DS.Color.errorFill))
+            .contentShape(Circle())
             .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
     }
 }

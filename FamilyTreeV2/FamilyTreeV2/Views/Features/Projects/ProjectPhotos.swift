@@ -143,8 +143,8 @@ struct ProjectPhotosCarousel: View {
         let photos = photos
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
-            DSSectionTitle(title: L10n.t("الصور", "Photos"), icon: "photo.on.rectangle.angled",
-                           tint: AppSection.projects.ink, trailing: "\(photos.count)", iconSize: DS.Icon.inline)
+            DSBoxSectionTitle(title: L10n.t("الصور", "Photos"), icon: "photo.on.rectangle.angled",
+                              tint: AppSection.projects.ink, trailing: "\(photos.count)")
 
             Group {
                 if photos.count == 1 {
@@ -244,9 +244,9 @@ struct ZoomHintBadge: View {
                 .accessibilityHidden(true)
         } else {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 15, weight: .semibold))
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
                 .foregroundColor(.white)
-                .frame(width: 36, height: 36)
+                .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
                 .background(Circle().fill(Color.black.opacity(0.4)))
                 .opacity(dismissed || expired ? 0 : 1)
                 .animation(.easeOut(duration: 0.4), value: dismissed || expired)

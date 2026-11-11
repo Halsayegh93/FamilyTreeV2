@@ -55,7 +55,7 @@ struct QRScannerView: View {
                 Text(scanErrorMessage ?? "")
             }
             // الرأس الملوّن الموحّد للصفحات الفرعية (بدل شريط النظام فوق الكاميرا) — × في الطرف لأنها غطاء
-            .dsSubPageHeader(L10n.t("رمز QR", "QR Code"), section: .profile, nav: .close)
+            .dsSubPageHeader(L10n.t("مسح رمز العضو", "Scan member code"), section: .profile, nav: .close)
             .onAppear {
                 checkCameraPermission()
             }
@@ -67,7 +67,7 @@ struct QRScannerView: View {
         VStack {
             Spacer()
 
-            Text(L10n.t("وجّه الكاميرا نحو رمز QR", "Point camera at QR code"))
+            Text(L10n.t("وجّه الكاميرا نحو رمز العضو", "Point the camera at the member code"))
                 .dsFont(.rowTitle)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)

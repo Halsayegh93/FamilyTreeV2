@@ -259,5 +259,6 @@ struct ApprovalHoursStepper: View {
         .buttonStyle(DSPressStyle())
         .disabled(!enabled)
         .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
+        .accessibilityLabel(symbol == "plus" ? L10n.t("زيادة", "Increase") : L10n.t("إنقاص", "Decrease"))
     }
 }

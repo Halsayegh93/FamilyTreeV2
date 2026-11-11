@@ -301,24 +301,7 @@ struct OverLimitDevicesSheet: View {
     }
 
     private func formattedDate(_ isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        return isoString
+        DateHelper.displayDateTime(isoString) ?? isoString
     }
 }
 
@@ -474,24 +457,7 @@ struct LinkedDevicesSheet: View {
     }
 
     private func formattedDate(_ isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        return isoString
+        DateHelper.displayDateTime(isoString) ?? isoString
     }
 }
 

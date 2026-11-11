@@ -478,12 +478,7 @@ struct AdminMemberSheetFacts {
         return account == nil ? L10n.t("لم يسجّل الدخول بعد", "Not signed in yet") : "—"
     }
 
-    static func dateText(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-        f.dateFormat = "d MMMM yyyy"
-        return f.string(from: date)
-    }
+    static func dateText(_ date: Date) -> String { DateHelper.displayDate(date) }
 
     static func dateText(iso: String) -> String {
         let f = ISO8601DateFormatter()
@@ -493,7 +488,7 @@ struct AdminMemberSheetFacts {
         return f.date(from: iso).map(dateText) ?? iso
     }
 
-    /// «yyyy-MM-dd» ← «٣ مارس ١٩٩٠»
+    /// «yyyy-MM-dd» ← «03/03/1990»
     static func dayText(_ raw: String?) -> String? {
         guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         let f = DateFormatter()
@@ -665,7 +660,7 @@ struct AdminMemberLineageSection: View {
                                   value: L10n.t("فرع خارج العائلة — في شجرة النساء فقط", "Outside branch — women's tree only"),
                                   action: nil)
                 } else if canEdit {
-                    AdminSheetRow(icon: member.isHiddenFromTree ? "eye.slash" : "eye", tint: DS.Color.slate,
+                    AdminSheetRow(icon: member.isHiddenFromTree ? "eye.slash.fill" : "eye.fill", tint: DS.Color.slate,
                                   title: L10n.t("الظهور في الشجرة", "Shown in the tree"),
                                   value: member.isHiddenFromTree ? AdminMemberProblem.hidden.title : L10n.t("ظاهر", "Shown"),
                                   action: (member.isHiddenFromTree ? L10n.t("إظهار", "Show") : L10n.t("إخفاء", "Hide"),
@@ -718,7 +713,7 @@ struct AdminSheetRow: View {
                 }
             }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(minHeight: DS.Icon.tapTarget)
     }
 }

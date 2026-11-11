@@ -212,8 +212,14 @@ struct EditBirthDateSheet: View {
 
             DSComposerSection(title: L10n.t("تاريخ الميلاد", "Birth Date"),
                               icon: "calendar", tint: DS.Color.palm, index: 1) {
-                StableWheelDatePicker(selection: $selectedDate, in: ...Date())
-                    .dsRowBox()
+                // صفّ التاريخ الموحّد + منتقي التاريخ الموحّد (بدل العجلة داخل المربّع)
+                DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                               hasDate: true, dateText: DSDateText.display(selectedDate)) {
+                    dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                        initial: selectedDate, allowClear: false) { picked in
+                        if let picked { selectedDate = picked }
+                    }
+                }
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -461,7 +467,7 @@ struct EditDeathDateSheet: View {
         DSComposer(
             title: L10n.t("تاريخ الوفاة", "Death Date"),
             subtitle: member.shortFullName,
-            icon: "calendar.badge.clock",
+            icon: "calendar.badge.minus",
             tint: DS.Color.textSecondary,
             actionTitle: L10n.t("حفظ", "Save"),
             canSubmit: true,
@@ -472,24 +478,22 @@ struct EditDeathDateSheet: View {
         ) {
             StationMemberCard(member: member).dsStaggerIn(0)
 
+            // صفّ التاريخ الموحّد: «بدون تاريخ» = «التاريخ غير معروف» (كان مفتاحاً)، والقلم يفتح المنتقي الموحّد
             DSComposerSection(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                              icon: "calendar.badge.clock", tint: DS.Color.textSecondary, index: 1) {
-                StableWheelDatePicker(selection: $selectedDate, in: ...Date())
-                    .opacity(isUnknown ? DS.Opacity.disabled : 1)
-                    .disabled(isUnknown)
-                    .dsRowBox()
-
-                Toggle(isOn: $isUnknown.animation(DS.Anim.snappy)) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSFieldIcon(name: "questionmark.circle.fill", tint: DS.Color.textSecondary)
-                            .accessibilityHidden(true)
-                        Text(L10n.t("التاريخ غير معروف", "Date unknown"))
-                            .dsFont(.rowTitle)
-                            .foregroundColor(DS.Color.textPrimary)
+                              icon: "calendar.badge.minus", tint: DS.Color.textSecondary, index: 1) {
+                DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                               hasDate: !isUnknown, dateText: DSDateText.display(selectedDate)) {
+                    // «بدون تاريخ» (= التاريخ غير معروف) داخل المنتقي
+                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                        initial: isUnknown ? nil : selectedDate, allowClear: !isUnknown) { picked in
+                        if let picked {
+                            selectedDate = picked
+                            withAnimation(DS.Anim.snappy) { isUnknown = false }
+                        } else {
+                            withAnimation(DS.Anim.snappy) { isUnknown = true }
+                        }
                     }
                 }
-                .tint(AppSection.admin.ink)
-                .dsRowBox()
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)

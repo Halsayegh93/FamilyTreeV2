@@ -158,7 +158,7 @@ struct DeviceRevokedView: View {
                 ZStack {
                     Circle()
                         .fill(DS.Color.warning.opacity(0.12))
-                        .frame(width: 100, height: 100)
+                        .frame(width: DS.Icon.appLogo, height: DS.Icon.appLogo)
                     Image(systemName: "iphone.slash")
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.warning)

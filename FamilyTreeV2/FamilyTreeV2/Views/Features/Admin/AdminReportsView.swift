@@ -315,13 +315,14 @@ struct AdminReportsView: View {
                 exportSection
             }
           }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxxl)
             // ⚠️ مهم: نعلّق sheet الفرع على VStack الداخلي عشان لا يتزاحم
             // مع sheet المشاركة المعلّق على الـScrollView. SwiftUI لا يدعم
             // sheet متعدد على نفس الـView — يتم تجاهل الـsheet الثاني.
-            .sheet(isPresented: $branchPickerOpen) {
+            // المربّع الطويل الموحّد (`dsTallBox`) بدل ورقة النظام
+            .dsTallBox(isPresented: $branchPickerOpen) {
                 BranchPickerSheet(
                     allMembers: sourceMembers,
                     onSelect: { id in
@@ -352,8 +353,8 @@ struct AdminReportsView: View {
                 cleanupShareState()
             }
         }
-        .alert("خطأ", isPresented: $showErrorAlert) {
-            Button("موافق", role: .cancel) {}
+        .dsAlert(L10n.t("خطأ", "Error"), isPresented: $showErrorAlert) {
+            Button(L10n.t("حسناً", "OK"), role: .cancel) {}
         } message: {
             Text(errorMessage)
         }
@@ -460,6 +461,7 @@ struct AdminReportsView: View {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundColor(DS.Color.textTertiary)
                             }
+                            .accessibilityLabel(L10n.t("مسح البحث", "Clear search"))
                         }
                     }
                     .modifier(ReportFieldBox())
@@ -564,14 +566,12 @@ struct AdminReportsView: View {
             .keyboardType(.numberPad)
             .multilineTextAlignment(.center)
             .dsFont(.fieldValue)
-            .frame(maxWidth: .infinity, minHeight: 40)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.fieldFill)
-            )
+            .frame(maxWidth: .infinity, minHeight: DSBox.fieldMinHeight)
+            .dsRowBox()
             .overlay(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .stroke(ageRangeInvalid ? DS.Color.error.opacity(0.6) : Color.clear, lineWidth: 1)
+                    .stroke(ageRangeInvalid ? DS.Color.error.opacity(DS.Opacity.selectedStroke) : Color.clear,
+                            lineWidth: DS.Border.width)
             )
             .onChange(of: text.wrappedValue) { _ in displayLimit = 20 }
     }
@@ -677,7 +677,7 @@ struct AdminReportsView: View {
 
                         Spacer()
                     }
-                    .padding(.horizontal, DS.Spacing.lg)
+                    .dsPageMargin()
 
                     ForEach(Array(visibleMembers.enumerated()), id: \.element.id) { _, member in
                         Button {
@@ -686,7 +686,7 @@ struct AdminReportsView: View {
                             memberRow(member: member)
                         }
                         .buttonStyle(.plain)
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                     }
 
                     if displayLimit < filteredMembers.count {
@@ -758,6 +758,7 @@ struct AdminReportsView: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(DS.Color.error)
                     }
+                    .accessibilityLabel(L10n.t("إلغاء تصفية الفرع", "Clear branch filter"))
                 }
                 .padding(.horizontal, DS.Spacing.md)
                 .padding(.vertical, DS.Spacing.sm)
@@ -1500,10 +1501,7 @@ private enum MembersPDFBuilder {
     }
 
     private static func formattedNow() -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ar_KW")
-        formatter.dateFormat = "yyyy/MM/dd - h:mm a"
-        return formatter.string(from: Date())
+        DateHelper.displayDateTime(Date())
     }
 
     private static func fillRoundedRect(_ rect: CGRect, color: UIColor) {
@@ -1587,12 +1585,9 @@ private struct ActivityView: UIViewControllerRepresentable {
 private struct ReportFieldBox: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(minHeight: 44)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(DS.Color.fieldFill)
-            )
+            // صفّ الحقل الموحّد: نفس الارتفاع والحشوة والتعبئة
+            .frame(minHeight: DSBox.fieldMinHeight)
+            .dsRowBox()
     }
 }
 
@@ -1621,7 +1616,7 @@ struct AdminReportPreview: View {
                 Label(L10n.t("مشاركة التقرير", "Share report"), systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.ds(size: .large))
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.vertical, DS.Spacing.md)
             .background(DS.Color.background)
         }

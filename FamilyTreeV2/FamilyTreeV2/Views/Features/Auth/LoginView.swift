@@ -308,6 +308,7 @@ struct LoginView: View {
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(DS.Color.textOnPrimary, DS.Color.shadowHeavy)
                             }
+                            .accessibilityLabel(L10n.t("إغلاق المعاينة", "Close preview"))
 
                             Text(L10n.t("شاشة معاينة", "Preview"))
                                 .dsFont(.badge)
@@ -451,6 +452,7 @@ struct LoginView: View {
                             .dsGlyph(DS.Glyph.lg, weight: .regular)
                             .foregroundColor(DS.Color.textSecondary)
                     }
+                    .accessibilityLabel(L10n.t("تعديل رقم الهاتف", "Edit phone number"))
                     .padding(.leading, DS.Spacing.xs)
                 }
 

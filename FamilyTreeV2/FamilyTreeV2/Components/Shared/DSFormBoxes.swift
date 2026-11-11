@@ -30,8 +30,8 @@ struct DSFormCard<Content: View, Trailing: View>: View {
     // نفس شكل أقسام مربّعات الإضافة (DSComposerSection) — تصميم موحّد (طلب المالك)
     var body: some View {
         let c = color.dsChrome(in: section).dsReadableGlyph
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm + DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.xsm + 1) {
+        return VStack(alignment: .leading, spacing: DS.Spacing.smd) {
+            HStack(spacing: DS.Spacing.sm) {
                 DSStateIcon(icon, tint: c, size: DS.Icon.section, mapsChrome: false)
                 Text(title)
                     .dsFont(.sectionTitle)
@@ -158,7 +158,7 @@ struct DSFieldBox<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs + 1) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             Text(label)
                 .dsFieldFont(DSBox.fieldLabelSize, weight: DS.TextRole.label.weight)
                 .foregroundColor(DS.Color.fieldLabel)
@@ -201,13 +201,8 @@ struct DSFieldLabel: View {
 // MARK: - التواريخ: صف للقراءة + مربّع اختيار بالمنتصف (طلب المالك)
 
 enum DSDateText {
-    /// «23 سبتمبر 2026» — نفس عرض تاريخ الميلاد في تعديل البيانات
-    static func display(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
-        f.dateFormat = "d MMMM yyyy"
-        return f.string(from: date)
-    }
+    /// «23/09/2026» — الصيغة الموحّدة (`DateHelper.displayDate`)
+    static func display(_ date: Date) -> String { DateHelper.displayDate(date) }
 }
 
 /// مربّع اختيار تاريخ بمنتصف الشاشة — «حفظ» يمين و«إلغاء» يسار (قاعدة التطبيق).
@@ -281,110 +276,42 @@ struct DSLifeDatesBox: View {
     @Environment(\.dsInCenterBox) private var inBox
     @Environment(\.dsSection) private var section
 
+    /// خيار «حيّ» في اختيار الحالة
+    var aliveTitle: String = L10n.t("على قيد الحياة", "Alive")
+
     var body: some View {
-        // كل حقل في مربّع منفصل (طلب المالك)
-        VStack(spacing: DS.Spacing.sm) {
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
-                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    has: $hasBirthDate, date: $birthDate)
-                .modifier(BoxChrome(fill: DS.Color.background, stroke: DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong)))
-
-            // «متوفّى» — لون مميّز
-            if showsDeceased {
-                Toggle(isOn: $isDeceased.animation(DS.Anim.snappy)) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        rowIcon("heart.text.square.fill", tint: deceasedTint)
-                        Text(deceasedTitle)
-                            .dsFieldFont(.headlineCompact)
-                            .foregroundColor(deceasedTint)
-                    }
-                }
-                .tint(deceasedTint)
-                .padding(.horizontal, DS.Spacing.md)
-                .frame(minHeight: inBox ? DSFieldMetrics.toggleRowHeight - DSFieldMetrics.boxHeightReduction
-                                        : DSFieldMetrics.toggleRowHeight)
-                .modifier(BoxChrome(fill: deceasedTint.opacity(isDeceased ? 0.14 : 0.07),
-                                    stroke: deceasedTint.opacity(0.35), solid: false))
-            }
-
-            if showsDeceased && isDeceased {
-                dateRow(icon: "calendar.badge.minus", tint: deceasedTint,
-                        title: L10n.t("تاريخ الوفاة", "Death Date"),
-                        has: $hasDeathDate, date: $deathDate)
-                    .modifier(BoxChrome(fill: DS.Color.background, stroke: DS.Color.textTertiary.opacity(DS.Opacity.tintFillStrong)))
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+        // خلايا البيانات الموحّدة (`DSTileGrid`، قرار المالك ٢٠٢٦-١١-١١ «مربّعات متجاورة»): الميلاد والحالة متجاوران،
+        // و«تاريخ الوفاة» يظهر بعد الحالة مباشرة حين تُختار الوفاة
+        var items: [DSTileItem] = [
+            .half(DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                 hasDate: hasBirthDate, dateText: DSDateText.display(birthDate),
+                                 onEdit: { pick(title: L10n.t("تاريخ الميلاد", "Birth Date"), has: $hasBirthDate, date: $birthDate) }))
+        ]
+        if showsDeceased {
+            items.append(.half(DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                DSChoiceOption(id: false, title: aliveTitle, icon: "heart.fill"),
+                DSChoiceOption(id: true, title: deceasedTitle, icon: "leaf.fill")
+            ], selection: $isDeceased.animation(DS.Anim.snappy))))
+            if isDeceased {
+                items.append(.half(DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                                  hasDate: hasDeathDate, dateText: DSDateText.display(deathDate),
+                                                  onEdit: { pick(title: L10n.t("تاريخ الوفاة", "Death Date"), has: $hasDeathDate, date: $deathDate) })))
             }
         }
+        return DSTileGrid(items)
     }
 
-    private struct BoxChrome: ViewModifier {
-        let fill: Color
-        let stroke: Color
-        /// السطح معتم (انظر `DSClaySkin.solid`)
-        var solid: Bool = true
-        func body(content: Content) -> some View {
-            content
-                .background(fill, in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                        .stroke(stroke, lineWidth: DS.Border.width)
-                )
-                .trialCardSkin(radius: DS.Radius.md, solid: solid)
-        }
-    }
-
-    // لون الصف كما هو (الرمادي = متوفى، الكهرماني = الميلاد) — رسم الاتجاه بنفس الحجم
-    private func rowIcon(_ name: String, tint: Color) -> some View {
-        DSStateIcon(name, tint: tint, size: DSBox.alertIcon, mapsChrome: false)
-    }
-
-    /// صف تاريخ: العنوان والقيمة، ثم زر «بدون تاريخ» وقلم التعديل داخل الصف
-    private func dateRow(icon: String, tint: Color, title: String,
-                         has: Binding<Bool>, date: Binding<Date>) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            rowIcon(icon, tint: tint)
-
-            Button { pick(title: title, has: has, date: date) } label: {
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title)
-                        .dsFieldFont(.sectionTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(has.wrappedValue ? DSDateText.display(date.wrappedValue)
-                                          : L10n.t("بدون تاريخ", "No date"))
-                        .dsFieldFont(has.wrappedValue ? .bodySemibold : .body)
-                        .foregroundColor(has.wrappedValue ? DS.Color.textPrimary : DS.Color.textTertiary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            // «بدون تاريخ» — الشريحة الواحدة داخل صف التاريخ (مختارة = كحلي القسم إذا لا تاريخ)
-            DSChipButton(L10n.t("بدون تاريخ", "No date"), isSelected: !has.wrappedValue, size: .small) {
-                withAnimation(DS.Anim.snappy) { has.wrappedValue = false }
-            }
-
-            Button { pick(title: title, has: has, date: date) } label: {
-                Image(systemName: has.wrappedValue ? "pencil" : "plus")
-                    .dsGlyph(DS.Glyph.mdCompact)
-                    .foregroundColor(DS.Color.primary.dsChrome(in: section))
-                    .frame(width: DS.Icon.discSmall, height: DS.Icon.discSmall)
-                    .background(Circle().fill(DS.Color.primary.dsChrome(in: section).opacity(DS.Opacity.tintFill)))
-            }
-            .buttonStyle(DSScaleButtonStyle())
-        }
-        .padding(.horizontal, DS.Spacing.md)
-        .frame(minHeight: inBox ? DSFieldMetrics.dateRowHeight - DSFieldMetrics.boxHeightReduction
-                                : DSFieldMetrics.dateRowHeight)
-    }
-
+    /// المنتقي الموحّد — «بدون تاريخ» زرّ داخله (لا في الخلية)، يظهر حين يوجد تاريخ
     private func pick(title: String, has: Binding<Bool>, date: Binding<Date>) {
         dsPresentDatePicker(title: title,
                             initial: has.wrappedValue ? date.wrappedValue : nil,
-                            allowClear: false) { picked in
-            guard let picked else { return }
-            date.wrappedValue = picked
-            has.wrappedValue = true
+                            allowClear: has.wrappedValue) { picked in
+            if let picked {
+                date.wrappedValue = picked
+                has.wrappedValue = true
+            } else {
+                has.wrappedValue = false
+            }
         }
     }
 }
@@ -397,54 +324,23 @@ struct DSGenderPicker: View {
     var required: Bool = false
     @Environment(\.dsInCenterBox) private var inBox
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-            HStack(spacing: DS.Spacing.xxs) {
-                DSFieldLabel(text: L10n.t("الجنس", "Gender"))
-                if required {
-                    Text(verbatim: "*")
-                        .dsFieldFont(.label)
-                        .foregroundColor(DS.Color.error)
-                        .accessibilityLabel(L10n.t("مطلوب", "Required"))
-                }
-            }
-            HStack(spacing: DS.Spacing.sm) {
-                option("male", title: L10n.t("ذكر", "Male"), icon: "figure.stand",
-                       fill: DS.Color.maleFill, ink: DS.Color.male)
-                option("female", title: L10n.t("أنثى", "Female"), icon: "figure.stand.dress",
-                       fill: DS.Color.femaleFill, ink: DS.Color.female)
-            }
-        }
+    /// زرّان «ذكر · أنثى» (شريط الاختيار) بدل الخلية بقائمة — مربّع «إضافة فرد» (قرار المالك ٢٠٢٦-١١-١١)
+    var buttons: Bool = false
+
+    private var options: [DSChoiceOption<String>] {
+        [DSChoiceOption(id: "male", title: L10n.t("ذكر", "Male"), icon: "figure.stand"),
+         DSChoiceOption(id: "female", title: L10n.t("أنثى", "Female"), icon: "figure.stand.dress")]
     }
 
-    /// زرّ اختيار أنيق: المختار ممتلئ بلون معناه ونصّ أبيض، والآخر أبيض بإطار رفيع وأيقونة بلونه
-    private func option(_ value: String, title: String, icon: String, fill: Color, ink: Color) -> some View {
-        let selected = selection == value
-        return Button {
-            withAnimation(DS.Anim.snappy) { selection = value }
-        } label: {
-            HStack(spacing: DS.Spacing.xsm) {
-                Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.md, weight: .medium)
-                    .foregroundColor(selected ? DS.Color.textOnPrimary : ink)
-                Text(title)
-                    .dsFieldFont(.rowTitle)
-                    .foregroundColor(selected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(minHeight: inBox ? DSFieldMetrics.genderHeightInBox : DSFieldMetrics.genderHeight)
-            .background(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .fill(selected ? fill : DS.Color.cardBackground)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                    .strokeBorder(selected ? Color.clear : DS.Color.cardBorder, lineWidth: DS.Border.width)
-            )
-            .contentShape(Rectangle())
+    var body: some View {
+        if buttons {
+            DSChoiceTile(icon: "figure.stand", label: L10n.t("الجنس", "Gender") + (required ? " *" : ""),
+                         options: options, selection: $selection)
+        } else {
+            // خلية بيانات بقائمة (قرار المالك ٢٠٢٦-١١-١١) — الاختيار الفارغ «» يعرض «اختر»
+            DSMenuTile(icon: "figure.stand", label: L10n.t("الجنس", "Gender") + (required ? " *" : ""),
+                       options: options, selection: $selection)
         }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -505,5 +401,541 @@ nonisolated private struct DSSectionActionStyle: ShapeStyle {
 
     func resolve(in environment: EnvironmentValues) -> some ShapeStyle {
         (environment.dsActionGradient ?? fallback).opacity(opacity)
+    }
+}
+
+// MARK: - العناصر الموحّدة لمربّعات البيانات (طلب المالك ٢٠٢٦-١١-١٠ «التصاميم مو موحدة»)
+//
+// القواعد: كل اختيار من خيارين/ثلاثة = `DSChoiceTiles` (المختار ممتلئ بكحلي القسم ونصّ أبيض، وغيره سطح
+// البطاقة بإطار رفيع — لون واحد لكل الاختيارات بلا أخضر)؛ كل صفّ حقل = صندوق الصفوف (`dsRowBox`) +
+// `DSFieldIcon` + العنوان (`label`) + القيمة (`fieldValue`)؛ صفّ التاريخ `DSDateFieldRow` بقلم واحد دائماً.
+// الرموز: الاسم person.fill · الهاتف phone.fill · الميلاد calendar · الوفاة calendar.badge.minus ·
+// الحالة (حيّ/متوفى) leaf.fill · الحالة الاجتماعية heart.fill · الخصوصية lock.fill.
+
+/// خيار واحد في `DSChoiceTiles`
+struct DSChoiceOption<ID: Hashable>: Identifiable {
+    let id: ID
+    let title: String
+    var icon: String? = nil
+}
+
+/// الاختيار الموحّد من خيارين أو ثلاثة — مبدّل مقاطع خفيف واحد (طلب المالك ٢٠٢٦-١١-١٠ «تبسيط الأزرار بشكل سلس
+/// وخفيف»): مسار رمادي فاتح واحد بارتفاع ~٣٦، والمختار حبّة بيضاء بظلّ ناعم جداً ونصّ كحلي، وغيره نصّ ثانوي؛
+/// الحبّة تنزلق بين الخيارات بنابض هادئ (بلا حركة مع «تقليل الحركة»). مساحة اللمس ٤٤ رغم الارتفاع المرئي الأصغر.
+/// السؤال الاختياري فوقه وسطر الشرح تحته بنصّ صغير ثانوي. بأحجام إمكانية الوصول: الخيارات فوق بعض بنفس الخفّة.
+struct DSChoiceTiles<ID: Hashable>: View {
+    var label: String? = nil
+    let options: [DSChoiceOption<ID>]
+    @Binding var selection: ID
+    var note: String? = nil
+    /// المقاس المضغوط في طرف صفّ: عرض ثابت (`DSBox.choiceCompactWidth`) ومسار أقصر — نفس الحبّة والإطار، واللمس ٤٤
+    var compact: Bool = false
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dsSection) private var section
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @Namespace private var pill
+
+    /// الارتفاع المرئي للمقطع (اللمس ٤٤ بالحشوة الشفافة)
+    static var segmentHeight: CGFloat { DSBox.choiceTrackHeight }
+    private var height: CGFloat { compact ? DSBox.choiceCompactHeight : Self.segmentHeight }
+    private var trackInset: CGFloat { DSBox.choiceTrackInset }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if let label {
+                Text(label)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            let stack = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 0))
+                : AnyLayout(HStackLayout(spacing: 0))
+            stack { ForEach(options) { segment($0) } }
+                .padding(trackInset)
+                // المضغوط داخل صفّ حقل رمادي: مساره بلون سطح البطاقة ليتميّز عن الصفّ
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(compact ? DS.Color.surface : DS.Color.fieldFill))
+                .frame(width: compact && !typeSize.isAccessibilitySize ? DSBox.choiceCompactWidth : nil)
+            if let note {
+                Text(note)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func segment(_ option: DSChoiceOption<ID>) -> some View {
+        let selected = selection == option.id
+        let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
+        let pillShape = RoundedRectangle(cornerRadius: DS.Radius.md - trackInset, style: .continuous)
+        return Button {
+            guard !selected else { return }
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.86)) { selection = option.id }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                if let icon = option.icon {
+                    Image(systemName: icon)
+                        .dsGlyph(DS.Glyph.sm)
+                        .foregroundColor(selected ? ink : DS.Color.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                Text(option.title)
+                    .dsFieldFont(.fieldValue)
+                    .fontWeight(selected ? .semibold : .regular)
+                    .foregroundColor(selected ? DS.Color.textPrimary : DS.Color.textSecondary)
+                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.horizontal, DS.Spacing.sm)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: height)
+            .background {
+                if selected {
+                    // علامة المختار (قرار المالك ٢٠٢٦-١١-١١): حبّة `choicePill` بإطار كحلي ١ نقطة (`selectionStroke`)
+                    pillShape
+                        .fill(DS.Color.choicePill)
+                        .overlay(pillShape.strokeBorder(DS.Color.selectionStroke, lineWidth: DS.Border.width))
+                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: DSBox.choiceShadowRadius, y: DSBox.choiceShadowY)
+                        .matchedGeometryEffect(id: "pill", in: pill)
+                }
+            }
+            // مساحة لمس ٤٤ رغم الارتفاع المرئي الأصغر
+            .padding(.vertical, max(0, (DS.Icon.tapTarget - height) / 2 - trackInset))
+            .contentShape(Rectangle())
+            .padding(.vertical, -max(0, (DS.Icon.tapTarget - height) / 2 - trackInset))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// صفّ التاريخ الموحّد (الميلاد، الوفاة) — بنفس صندوق صفوف الحقول، والقلم يفتح المنتقي؛
+/// «بدون تاريخ» شريحة غير مختارة تظهر حين يوجد تاريخ فقط (لمسحه)
+struct DSDateFieldRow: View {
+    let icon: String
+    let title: String
+    let hasDate: Bool
+    let dateText: String
+    /// (لم يعد يُعرض في الخلية — «بدون تاريخ» زرّ داخل منتقي التاريخ: `dsPresentDatePicker(allowClear:)`)
+    var onClear: (() -> Void)? = nil
+    let onEdit: () -> Void
+
+    var body: some View {
+        // خلية البيانات الواحدة: عنوان صغير + القيمة + قلم (يُكتب/يُختار تاريخه)
+        Button(action: onEdit) {
+            DSFieldTileFace(icon: icon, label: title,
+                            value: hasDate ? dateText : L10n.t("بدون تاريخ", "No date"),
+                            isPlaceholder: !hasDate, glyph: .edit)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
+    }
+}
+
+// MARK: - خلية البيانات الواحدة وشبكتها (قرار المالك ٢٠٢٦-١١-١١ «د — مربّعات متجاورة»)
+//
+// القاعدة الواحدة: كل معلومة في المربّع خلية من نوع واحد — (رمز صغير اختياري) + عنوان صغير رمادي + القيمة تحته + رمز واحد
+// في الطرف: قلم = تُكتب أو يُختار تاريخها، سهم = تفتح قائمة خيارات. نفس التعبئة (`fieldFill`) والزوايا والارتفاع والخطوط،
+// بلا إطارات ولا شرائح داخل الخلية. الشبكة `DSTileGrid`: القصيرة خليتان متجاورتان، والطويلة (`wide`) أو الفردية الباقية
+// بعرض السطر، ومن حجم الخط xxLarge كل شيء عمود واحد. الخلية المتجاورة بلا رمز البداية.
+
+/// الرمز الواحد في طرف الخلية
+enum DSTileGlyph { case edit, menu, none }
+
+private struct DSTileHalfKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// الخلية في نصف السطر (عمودان) — تُسقط رمز البداية
+    var dsTileHalf: Bool {
+        get { self[DSTileHalfKey.self] }
+        set { self[DSTileHalfKey.self] = newValue }
+    }
+}
+
+/// وجه خلية البيانات — يُلبس `Button` (قلم) أو `Menu` (سهم)
+struct DSFieldTileFace: View {
+    var icon: String? = nil
+    let label: String
+    let value: String
+    var isPlaceholder: Bool = false
+    var glyph: DSTileGlyph = .edit
+    /// القيمة أرقام لاتينية (هاتف) — من اليسار لليمين
+    var ltrValue: Bool = false
+    @Environment(\.dsTileHalf) private var half
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            if let icon, !half {
+                DSFieldIcon(name: icon).accessibilityHidden(true)
+            }
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(label)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.tileLabel)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text(value)
+                    .dsFieldFont(.fieldValue)
+                    .foregroundColor(isPlaceholder ? DS.Color.textTertiary : DS.Color.tileValue)
+                    .lineLimit(half ? 1 : 2)
+                    .minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.leading)
+                    .environment(\.layoutDirection, ltrValue ? .leftToRight : LanguageManager.shared.layoutDirection)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            switch glyph {
+            case .edit:
+                Image(systemName: "pencil")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(DS.Color.primary.dsChrome(in: section).dsReadableGlyph)
+                    .accessibilityHidden(true)
+            case .menu:
+                Image(systemName: "chevron.down")
+                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            case .none:
+                EmptyView()
+            }
+        }
+        .frame(minHeight: DSBox.tileMinHeight)
+        .dsRowBox()
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// خيار ظاهر (خياران أو ثلاثة) — «ج» اختيار المالك ٢٠٢٦-١١-١١: كل خيار خانة بنفس مقاس خانات البيانات
+/// (الميلاد والحالة) جنب بعض، المختار كحلي بنصّ أبيض والباقي رمادي الخانة بنصّ خافت. بلا إطار.
+struct DSChoiceTile<ID: Hashable>: View {
+    var icon: String? = nil
+    let label: String
+    let options: [DSChoiceOption<ID>]
+    @Binding var selection: ID
+    @Environment(\.dsInCenterBox) private var inBox
+    @Environment(\.dsSection) private var section
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        // من حجم الخط xxLarge عمود واحد — مثل شبكة الخانات (`DSTileGrid`)
+        let layout = typeSize >= .xxLarge
+            ? AnyLayout(VStackLayout(spacing: DSBox.tileGap))
+            : AnyLayout(HStackLayout(spacing: DSBox.tileGap))
+        layout {
+            ForEach(options) { option in
+                let on = option.id == selection
+                Button {
+                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { selection = option.id }
+                } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        if let icon = option.icon {
+                            Image(systemName: icon).dsGlyph(DS.Glyph.md).accessibilityHidden(true)
+                        }
+                        Text(option.title)
+                            .dsFieldFont(.fieldValue)
+                            .fontWeight(on ? .semibold : .regular)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundColor(on ? DS.Color.textOnPrimary : DS.Color.textTertiary)
+                    .frame(maxWidth: .infinity, minHeight: DSBox.tileMinHeight)
+                    .padding(.horizontal, inBox ? DSBox.fieldHorizontalPadding : DS.Spacing.smd)
+                    .padding(.vertical, inBox ? DSBox.fieldVerticalPadding : DS.Spacing.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                            .fill(on ? DS.Color.actionNavy.dsChromeFill(in: section) : DS.Color.fieldFill)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel("\(label): \(option.title)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+    }
+}
+
+/// خلية بقائمة خيارات (خياران أو أكثر): القيمة هي الحالة نفسها، والقائمة أصلية بعلامة ✓ على المختار
+struct DSMenuTile<ID: Hashable>: View {
+    var icon: String? = nil
+    let label: String
+    let options: [DSChoiceOption<ID>]
+    @Binding var selection: ID
+    /// ما يُعرض حين لا يطابق الاختيار أي خيار
+    var placeholder: String = L10n.t("اختر", "Choose")
+
+    var body: some View {
+        let current = options.first { $0.id == selection }
+        Menu {
+            Picker(label, selection: $selection) {
+                ForEach(options) { option in
+                    if let icon = option.icon {
+                        Label(option.title, systemImage: icon).tag(option.id)
+                    } else {
+                        Text(option.title).tag(option.id)
+                    }
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            DSFieldTileFace(icon: icon, label: label, value: current?.title ?? placeholder,
+                            isPlaceholder: current == nil, glyph: .menu)
+        }
+        // وجه القائمة كزرّ عادي — بلا تخفيف النظام للنصّ (قيمة الخلية بلون القيم نفسه)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityValue(current?.title ?? placeholder)
+    }
+}
+
+/// عنصر في `DSTileGrid`: `.half` قصيرة (تتجاور)، `.wide` بعرض السطر
+struct DSTileItem: Identifiable {
+    let id = UUID()
+    let wide: Bool
+    let view: AnyView
+    static func half<V: View>(_ view: V) -> DSTileItem { DSTileItem(wide: false, view: AnyView(view)) }
+    static func wide<V: View>(_ view: V) -> DSTileItem { DSTileItem(wide: true, view: AnyView(view)) }
+}
+
+/// شبكة خلايا البيانات: عمودان متساويان للقصيرة؛ `wide` والفردية الباقية بعرض السطر؛ عمود واحد من xxLarge
+struct DSTileGrid: View {
+    let items: [DSTileItem]
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    init(_ items: [DSTileItem]) { self.items = items }
+
+    /// الصفوف: كل صفّ خلية واحدة (بعرض السطر) أو خليتان
+    private var rows: [[DSTileItem]] {
+        let single = typeSize >= .xxLarge
+        var rows: [[DSTileItem]] = []
+        var pending: DSTileItem?
+        for item in items {
+            if single || item.wide {
+                if let p = pending { rows.append([p]); pending = nil }
+                rows.append([item])
+            } else if let p = pending {
+                rows.append([p, item]); pending = nil
+            } else {
+                pending = item
+            }
+        }
+        if let p = pending { rows.append([p]) }
+        return rows
+    }
+
+    var body: some View {
+        VStack(spacing: DSBox.tileGap) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                if row.count == 2 {
+                    HStack(alignment: .top, spacing: DSBox.tileGap) {
+                        row[0].view.frame(maxWidth: .infinity)
+                        row[1].view.frame(maxWidth: .infinity)
+                    }
+                    .environment(\.dsTileHalf, true)
+                } else {
+                    row[0].view.frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+}
+
+/// عنوان القسم الموحّد خارج بطاقة `DSComposerSection` (صفحات وكتل بلا بطاقة قسم) — نفس سطر عنوان أقسام
+/// المربّعات: رمز خفيف بلون القسم + العنوان بخط عناوين الأقسام
+struct DSBoxSectionTitle: View {
+    let title: String
+    let icon: String
+    var tint: Color = DS.Color.primary
+    var trailing: String? = nil
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        HStack(spacing: DSBox.sectionInnerSpacing) {
+            DSThreadTick()
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.lg, weight: .light)
+                .foregroundColor(tint.dsChrome(in: section).dsReadableGlyph)
+                .frame(width: DSBox.sectionIcon, height: DSBox.sectionIcon)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(DSBox.sectionTitleFont)
+                .foregroundColor(DS.Color.fieldLabel)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if let trailing {
+                Text(trailing)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// قلم صفوف الحقول الموحّد (التاريخ، الهاتف، الاسم…) — قرص صغير بلون القسم ومساحة ضغط ٤٤
+struct DSFieldEditGlyph: View {
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        // رمز صغير بلا قرص (طلب المالك ٢٠٢٦-١١-١٠ «خفيف») — مساحة اللمس ٤٤ كما هي
+        Image(systemName: "pencil")
+            .dsGlyph(DS.Glyph.sm)
+            .foregroundColor(DS.Color.primary.dsChrome(in: section).dsReadableGlyph)
+            .frame(width: DS.Icon.discSmall, height: DS.Icon.discSmall)
+            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+    }
+}
+
+/// صفّ أمر في مربّعات الأوامر (الأم، الزوجة، الزوجات، خيارات الصورة…) — صندوق صفوف الحقول + رمز + عنوان
+/// (+ سطر شرح). نفس صفوف مربّع «الزوجة» في الملف (طلب المالك ٢٠٢٦-١١-١٠ «التصاميم مو موحدة»)
+struct DSCommandRow: View {
+    let title: String
+    let icon: String
+    /// سطر صغير يشرح الخيار تحت عنوانه (اختياري)
+    var hint: String? = nil
+    /// لون العنوان والرمز — nil = كحلي القسم؛ `DS.Color.error` لأمر الحذف
+    var tint: Color? = nil
+    let action: () -> Void
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        Button(action: action) {
+            // صفّ أخفّ (طلب المالك ٢٠٢٦-١١-١٠): رمز صغير بلا قرص، تعبئة فاتحة، وسهم خفيف في الطرف
+            HStack(spacing: DS.Spacing.sm) {
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor((tint ?? DS.Color.primary.dsChrome(in: section)).dsReadableGlyph)
+                    .frame(width: DS.Icon.discSmall)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(title)
+                        .dsFont(.rowTitle)
+                        .foregroundColor(tint ?? DS.Color.textPrimary)
+                    if let hint {
+                        Text(hint)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .dsNameLines()
+                            .minimumScaleFactor(0.85)
+                    }
+                }
+                .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.backward")
+                    .dsGlyph(DS.Glyph.xs)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .flipsForRightToLeftLayoutDirection(true)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(minHeight: DSBox.commandRowHeight)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .fill(DS.Color.fieldFill.opacity(0.6)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(hint.map { "\(title)، \($0)" } ?? title)
+    }
+}
+
+// MARK: - الخيط الذهبي (قرار المالك ٢٠٢٦-١١-١١) — مجموعة واحدة `DS.Thread`
+
+/// علامة ذهبية صغيرة قبل عنوان القسم في المربّعات
+struct DSThreadTick: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: DS.Thread.tickWidth / 2, style: .continuous)
+            .fill(DS.Thread.color)
+            .frame(width: DS.Thread.tickWidth, height: DS.Thread.tickHeight)
+            .accessibilityHidden(true)
+    }
+}
+
+/// خطّ ذهبي رفيع يتلاشى عند الطرفين — أسفل رأس المربّع
+struct DSThreadHairline: View {
+    var body: some View {
+        LinearGradient(colors: [.clear, DS.Thread.color, DS.Thread.color, .clear],
+                       startPoint: .leading, endPoint: .trailing)
+            .frame(height: DS.Thread.hairline)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+/// صفّ الهاتف الموحّد — صندوق الصفوف + رمز الهاتف + العنوان + حقل الرقم (بدل `DSFieldBox`)
+struct DSPhoneFieldRow: View {
+    @Binding var country: KuwaitPhone.Country
+    @Binding var digits: String
+    var title: String = L10n.t("رقم الهاتف", "Phone number")
+    var placeholder: String = L10n.t("رقم الهاتف", "Phone number")
+    var autoFocus: Bool = false
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: "phone.fill").accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(title)
+                    .dsFieldFont(.label).foregroundColor(DS.Color.tileLabel)
+                DSPhoneField(country: $country, digits: $digits, placeholder: placeholder,
+                             compact: true, bordered: false, autoFocus: autoFocus)
+            }
+        }
+        .dsRowBox()
+    }
+}
+
+/// «الخصوصية» = صفّ واحد (قرار المالك ٢٠٢٦-١١-١١، العيّنة «أ — صف واحد»): صفّ حقل موحّد — اسم المعلومة عنواناً والحالة
+/// الحالية سطراً صغيراً تحته، وفي الطرف قائمة منسدلة: حبّة «ظاهر ▾ / مخفي ▾» تفتح الخيارين. بلا سطر سؤال ولا سطر شرح.
+/// بأحجام إمكانية الوصول ينزل الاختيار تحت العنوان. `hidden` = القيمة المخزّنة («مخفي») — نفس القيم والنداءات.
+struct DSVisibilityPicker: View {
+    @Binding var hidden: Bool
+    /// الشرح الكامل لكل حالة — يُقرأ للقارئ الصوتي (تلميحاً)، والظاهر على الشاشة `shownState` / `hiddenState`
+    let shownLine: String
+    let hiddenLine: String
+    /// (لم يعد يُعرض — العنوان `rowTitle`) باقٍ لتوافق أماكن الاستعمال
+    var question: String = ""
+    var shownTitle: String = ""
+    /// اسم المعلومة — عنوان الصفّ («رقم الهاتف»، «الظهور في الشجرة»…)
+    var rowTitle: String = L10n.t("الظهور", "Visibility")
+    var rowIcon: String = "eye.fill"
+    /// المؤنّث: «ظاهرة / مخفية»
+    var feminine: Bool = false
+    /// سطر الحالة القصير تحت العنوان (nil = «يظهر لأفراد العائلة» / «مخفي عن أفراد العائلة» بحسب التذكير والتأنيث)
+    var shownState: String? = nil
+    var hiddenState: String? = nil
+    /// عنوان «الخصوصية» بقفله هنا — فقط خارج أقسام `DSComposer`؛ داخلها العنوان من `DSComposerSection`
+    var showsTitle: Bool = false
+
+    /// القيمة هي الحالة نفسها («ظاهرة لأفراد العائلة» / «مخفية عن أفراد العائلة»)
+    private var shownText: String {
+        shownState ?? (feminine ? L10n.t("ظاهرة لأفراد العائلة", "Shown to family members")
+                                : L10n.t("ظاهر لأفراد العائلة", "Shown to family members"))
+    }
+    private var hiddenText: String {
+        hiddenState ?? (feminine ? L10n.t("مخفية عن أفراد العائلة", "Hidden from family members")
+                                 : L10n.t("مخفي عن أفراد العائلة", "Hidden from family members"))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if showsTitle {
+                DSBoxSectionTitle(title: L10n.t("الخصوصية", "Privacy"), icon: "lock.fill")
+            }
+            // خلية بيانات واحدة بقائمة (قرار المالك ٢٠٢٦-١١-١١): العنوان اسم المعلومة، والقيمة هي الحالة
+            DSMenuTile(icon: hidden ? "eye.slash.fill" : rowIcon, label: rowTitle, options: [
+                DSChoiceOption(id: false, title: shownText, icon: "eye.fill"),
+                DSChoiceOption(id: true, title: hiddenText, icon: "eye.slash.fill")
+            ], selection: $hidden)
+            .accessibilityHint(hidden ? hiddenLine : shownLine)
+        }
     }
 }

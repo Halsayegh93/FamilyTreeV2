@@ -210,87 +210,66 @@ struct EditChildSheet: View {
 
     /// البيانات — نفس أقسام وحقول مربّعات الإضافة («أسلوب واحد»): الاسم، الجنس، الهاتف، التواريخ
     private var basicInfoSection: some View {
-        DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+        DSComposerSection(title: L10n.t("البيانات الشخصية", "Personal Info"),
                           icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
             DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
                             placeholder: L10n.t("اسم الابن", "Child's name"),
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
+            // خلايا البيانات المتجاورة (`DSTileGrid`، قرار المالك ٢٠٢٦-١١-١١)
             // الجنس — تغييره ينقل الابن بين الشجرة العامة وشجرة النساء (`move_child_gender`)،
             // فهو لمن يعدّل الشجرة فقط (`canEditMembers`، مثل أندرويد)؛ لغيرهم للقراءة
-            if authVM.canEditMembers {
-                DSGenderPicker(selection: $selectedGender)
-            } else {
+            if !authVM.canEditMembers {
                 DSGenderReadOnlyRow(gender: originalGender)
+            } else {
+                // الجنس زرّان، ثم الميلاد والحالة متجاوران — نفس «إضافة فرد» (قرار المالك ٢٠٢٦-١١-١١)
+                DSGenderPicker(selection: $selectedGender, buttons: true)
             }
+            DSTileGrid(dataTiles)
 
             // الهاتف — للذكر فقط
             if selectedGender == "male" {
-                DSFieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
-                    DSPhoneField(
-                        country: $selectedPhoneCountry,
-                        digits: $phoneNumber,
-                        placeholder: L10n.t("اختياري", "Optional"),
-                        compact: true,
-                        bordered: false
-                    )
-                }
+                DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"))
             }
 
-            // تاريخ الميلاد (يُرسل فقط إذا كان معروفاً/حدّده المستخدم)
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
-                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    value: birthDateProvided ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
-                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                                    initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
-                    guard let picked else { return }
-                    birthDate = picked
-                    birthDateProvided = true
-                }
-            }
-
-            // متوفى — صفّ بإطار حقول المربّعات
-            DSRow(icon: "leaf.fill", tint: DS.Color.error, title: L10n.t("متوفى", "Deceased")) {
-                Toggle("", isOn: $isDeceased.animation(DS.Anim.snappy))
-                    .labelsHidden()
-                    .tint(DS.Color.error)
-                    // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
-                    .accessibilityLabel(L10n.t("متوفى", "Deceased"))
-            }
-
-            if isDeceased {
-                dateRow(icon: "calendar", tint: DS.Color.error,
-                        title: L10n.t("تاريخ الوفاة", "Death Date"),
-                        value: deathDateProvided ? DSDateText.display(deathDate) : L10n.t("بدون تاريخ", "No date")) {
-                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                                        initial: deathDateProvided ? deathDate : nil, allowClear: false) { picked in
-                        guard let picked else { return }
-                        deathDate = picked
-                        deathDateProvided = true
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-
-                // الوفاة من غير الإدارة تُرسل طلباً لتأكيدها
-                if !(member.isDeceased ?? false), !authVM.canEditMembers {
-                    DSNoteCard(L10n.t("تُرسل للإدارة لتأكيدها قبل ظهورها في الشجرة",
-                                      "Sent to the administration to confirm first"))
-                }
+            // الوفاة من غير الإدارة تُرسل طلباً لتأكيدها
+            if isDeceased, !(member.isDeceased ?? false), !authVM.canEditMembers {
+                DSNoteCard(L10n.t("تُرسل للإدارة لتأكيدها قبل ظهورها في الشجرة",
+                                  "Sent to the administration to confirm first"))
             }
         }
     }
 
-    /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف
-    private func dateRow(icon: String, tint: Color, title: String, value: String,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: value) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
+    private var dataTiles: [DSTileItem] {
+        var items: [DSTileItem] = []
+        // تاريخ الميلاد (يُرسل فقط إذا كان معروفاً/حدّده المستخدم)
+        items.append(.half(DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                          hasDate: birthDateProvided, dateText: DSDateText.display(birthDate)) {
+            dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
+                guard let picked else { return }
+                birthDate = picked
+                birthDateProvided = true
             }
-            .contentShape(Rectangle())
+        }))
+        items.append(.half(DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+            DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+            DSChoiceOption(id: true, title: selectedGender == "female" ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
+                           icon: "leaf.fill")
+        ], selection: $isDeceased.animation(DS.Anim.snappy))))
+        if isDeceased {
+            items.append(.half(DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                              hasDate: deathDateProvided, dateText: DSDateText.display(deathDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                    initial: deathDateProvided ? deathDate : nil, allowClear: false) { picked in
+                    guard let picked else { return }
+                    deathDate = picked
+                    deathDateProvided = true
+                }
+            }))
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
+        return items
     }
 
     /// الجنس كما فُتح عليه المربّع (بلا قيمة = ذكر)
@@ -485,28 +464,10 @@ struct ChildMotherPicker: View {
     }
 
     var body: some View {
-        Menu {
-            Button(L10n.t("غير محدّدة", "Not set")) { selection = nil }
-            ForEach(wives) { wife in
-                Button {
-                    selection = wife.member.id
-                } label: {
-                    if selection == wife.member.id {
-                        Label(wife.member.firstName, systemImage: "checkmark")
-                    } else {
-                        Text(wife.member.firstName)
-                    }
-                }
-            }
-        } label: {
-            // اسم الزوجة وحده (طلب المالك ٢٠٢٦-١١-٠٦ «شيل ام الابن… خل اسم الزوجة»)
-            DSRow(icon: "person.fill", tint: DS.Color.female, title: current) {
-                Image(systemName: "chevron.up.chevron.down")
-                    .dsGlyph(DS.Glyph.sm)
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .accessibilityLabel(L10n.t("الأم: \(current)", "Mother: \(current)"))
+        // خلية بيانات بقائمة (قرار المالك ٢٠٢٦-١١-١١) — لأي عدد من الزوجات
+        DSMenuTile(icon: "person.fill", label: L10n.t("الأم", "Mother"),
+                   options: [DSChoiceOption<UUID?>(id: nil, title: L10n.t("غير محدّدة", "Not set"))]
+                   + wives.map { DSChoiceOption<UUID?>(id: $0.member.id, title: $0.member.firstName, icon: "person.fill") },
+                   selection: $selection)
     }
 }

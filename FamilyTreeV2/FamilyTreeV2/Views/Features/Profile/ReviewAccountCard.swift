@@ -145,7 +145,7 @@ struct ReviewAccountPassCard: View {
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.top, DS.Spacing.lg)
     }
 

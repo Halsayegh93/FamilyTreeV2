@@ -305,23 +305,16 @@ struct RegistrationView: View {
     // MARK: - Birth Date — صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف (نفس «تسجيل عضو جديد»)
     private var birthDateSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-        Button {
-            dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                                initial: birthDate, allowClear: false) { picked in
-                guard let picked else { return }
-                birthDate = picked
-                birthDateChosen = true
+            // صفّ التاريخ الموحّد (`DSDateFieldRow`، طلب المالك ٢٠٢٦-١١-١٠) — مطلوب، فلا «بدون تاريخ»
+            DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date") + " *",
+                           hasDate: birthDateChosen, dateText: DSDateText.display(birthDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                    initial: birthDate, allowClear: false) { picked in
+                    guard let picked else { return }
+                    birthDate = picked
+                    birthDateChosen = true
+                }
             }
-        } label: {
-            DSRow(icon: "gift.fill", tint: DS.Color.warning,
-                  title: L10n.t("تاريخ الميلاد", "Birth Date") + " *",
-                  subtitle: birthDateChosen ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DS.Icon.row)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
 
             if hasAttemptedSubmit && !birthDateChosen {
                 validationError(L10n.t("تاريخ الميلاد مطلوب", "Birth date is required"))

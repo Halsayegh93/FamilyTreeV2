@@ -212,7 +212,7 @@ final class AdminNoticeStore: ObservableObject {
                 list.append(AdminNoticeItem(id: "derived.death.\(m.id.uuidString)", category: .action, date: now, pinned: true,
                                             icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.slate,
                                             title: L10n.t("وفاة لم يُعلن عنها", "Death not announced"),
-                                            subtitle: [m.shortFullName, m.deathDate.map { String($0.prefix(10)) }]
+                                            subtitle: [m.shortFullName, m.deathDate.flatMap { DateHelper.displayDate($0) }]
                                                 .compactMap { $0 }.joined(separator: " · "),
                                             needsAction: true, button: L10n.t("إعلان", "Announce"), target: .occasions,
                                             tone: .request))

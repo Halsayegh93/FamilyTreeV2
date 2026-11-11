@@ -312,8 +312,9 @@ struct AdminNoticeReportPanel: View {
             TextField(L10n.t("ملاحظة (اختيارية)", "Note (optional)"), text: $note, axis: .vertical)
                 .dsFieldFont(.fieldValue)
                 .lineLimit(2...5)
-                .padding(DS.Spacing.sm)
-                .dsWhiteTile(radius: DS.Radius.sm)
+                // صفّ الحقل الموحّد (تعبئة الحقول وحشوتها)
+                .frame(minHeight: DSBox.fieldMinHeight)
+                .dsRowBox()
                 .onChange(of: note) { value in
                     if value.count > Self.noteLimit { note = String(value.prefix(Self.noteLimit)) }
                 }

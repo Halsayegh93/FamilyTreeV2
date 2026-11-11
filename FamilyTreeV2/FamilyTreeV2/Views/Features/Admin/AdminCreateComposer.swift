@@ -218,58 +218,18 @@ struct AdminCreateRoot: View {
 struct AdminCreateTypePicker: View {
     let kinds: [AdminCreateKind]
     @Binding var selection: AdminCreateKind
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.dsSection) private var section
 
     var body: some View {
-        let cols = typeSize >= .accessibility1 ? 1 : 2
-        VStack(spacing: DS.Spacing.sm) {
-            ForEach(Array(stride(from: 0, to: kinds.count, by: cols)), id: \.self) { start in
-                let end = min(start + cols, kinds.count)
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(kinds[start..<end]) { tile($0) }
-                    ForEach(0..<(cols - (end - start)), id: \.self) { _ in
-                        Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
+        // ٢–٣ أنواع = الاختيار الموحّد، و٤ = مربّعات الاختيار الخفيفة (طلب المالك ٢٠٢٦-١١-١١)
+        if kinds.count <= 3 {
+            DSChoiceTiles(options: kinds.map { DSChoiceOption(id: $0, title: $0.title, icon: $0.icon) },
+                          selection: $selection)
+                .accessibilityLabel(L10n.t("ماذا تنشئ؟", "What to create?"))
+        } else {
+            DSOptionTiles(kinds.map { DSOptionTile($0, title: $0.title, icon: $0.icon, tint: $0.tint) },
+                          selection: $selection, columns: 2)
+                .accessibilityLabel(L10n.t("ماذا تنشئ؟", "What to create?"))
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(L10n.t("ماذا تنشئ؟", "What to create?"))
-    }
-
-    private func tile(_ kind: AdminCreateKind) -> some View {
-        let selected = kind == selection
-        let ink = kind.tint.dsChrome(in: section).dsReadableGlyph
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-        return Button {
-            guard !selected else { return }
-            UISelectionFeedbackGenerator().selectionChanged()
-            withAnimation(DS.Anim.snappy) { selection = kind }
-        } label: {
-            // صفّ مضغوط: رمز صغير + الاسم، بلا السطر الوصفي (المالك ٢٠٢٦-١٠-٢٣ «قلل حجم مربعات ماذا ننشئ»)
-            HStack(spacing: DS.Spacing.sm) {
-                AdminIconSquare(symbol: kind.icon, tint: kind.tint, side: DS.Icon.row,
-                                radius: DS.Hub.miniIconRadius, filled: true, glyph: DS.Glyph.sm)
-                Text(kind.title)
-                    .dsFont(.hubButton)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .background(shape.fill(selected ? ink.opacity(DS.Opacity.tintFillSoft) : DS.Color.surface))
-            .overlay(shape.strokeBorder(selected ? ink.opacity(DS.Opacity.selectedStroke)
-                                                 : DS.Color.textTertiary.opacity(DS.Opacity.border),
-                                        lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
-            .contentShape(shape)
-        }
-        .buttonStyle(DSPressStyle())
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

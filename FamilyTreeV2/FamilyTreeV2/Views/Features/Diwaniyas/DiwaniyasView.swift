@@ -49,13 +49,13 @@ struct DiwaniyasView: View {
                         ScrollView(showsIndicators: false) {
                             // عمودياً قائمة واحدة؛ أفقياً عمودان (`DS.Landscape.columnMinWidth`) — من المكان الواحد
                             // نفس الدخول المتتالي — ويحترم «تقليل الحركة» (تلاشٍ فقط)
-                            AdaptiveLazyStack(spacing: DS.Spacing.md) {
+                            AdaptiveLazyStack(spacing: DS.Page.cardGap) {
                                 ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
                                     diwaniyaCard(for: diwaniya)
                                         .dsCardCascade(index, appeared: appeared)
                                 }
                             }
-                            .padding(DS.Spacing.lg)
+                            .dsPagePadding()
                             .padding(.bottom, DS.Spacing.xxxl)
                             .dsTabBarClearance()   // أفقياً: آخر بطاقة لا تختفي تحت شريط التبويبات العائم
                             .onAppear {
@@ -85,27 +85,17 @@ struct DiwaniyasView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-            .fullScreenCover(isPresented: $showingAddRequest) {
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    AddDiwaniyaRequestView()
-                        .environmentObject(viewModel)
-                        .environmentObject(authVM)
-                }
-                .background(ClearPresentationBackground())
-            }
-            .transaction { t in
-                if showingAddRequest { t.disablesAnimations = true }
+            .dsCenterBox(isPresented: $showingAddRequest) {
+                AddDiwaniyaRequestView()
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
             }
             // التعديل بنفس مربّع الإضافة بمنتصف الشاشة (طلب المالك)
-            .fullScreenCover(item: $diwaniyaToEdit) { diwaniya in
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    EditDiwaniyaView(diwaniya: diwaniya)
-                        .environmentObject(viewModel)
-                        .environmentObject(authVM)
-                }
-                .background(ClearPresentationBackground())
+            .dsCenterBox(item: $diwaniyaToEdit) { diwaniya in
+                EditDiwaniyaView(diwaniya: diwaniya)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
             }
-            .transaction { t in if diwaniyaToEdit != nil { t.disablesAnimations = true } }
             .dsAlert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
                 get: { diwaniyaToReport != nil },
                 set: { if !$0 { diwaniyaToReport = nil } }
@@ -303,9 +293,10 @@ struct DiwaniyasView: View {
                                      bottom: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
                                      trailing: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2)
                     }
+                    .accessibilityLabel(L10n.t("خيارات الديوانية", "Diwaniya options"))
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.vertical, DS.Spacing.md)
 
             // ═══ شرائح المعلومات — كل شريحة بسطر تحت الأخرى: الأيام ثم العنوان (طلب المالك ٢٠٢٦-١٠-٢٥؛ كانت أفقية
@@ -333,7 +324,7 @@ struct DiwaniyasView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.bottom, DS.Spacing.md)
             }
 
@@ -356,7 +347,7 @@ struct DiwaniyasView: View {
 
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 // الشريحة تحمل مساحة ضغطها (٥ فوق وتحت) — الهامش الظاهر يبقى ≈ ١٢
                 .padding(.bottom, DS.Spacing.xsm)
             }
@@ -490,9 +481,9 @@ private struct DiwaniyaComposerForm: View {
         ) {
             // ── النوع ──
             DSComposerSection(title: L10n.t("النوع", "Type"), icon: "square.grid.2x2.fill", tint: kind.tint, index: 0) {
-                // مربّعات الاختيار الموحّدة (`DSOptionTiles`) برمز كل نوع: «مجلس» / «راية»
-                DSOptionTiles(DiwaniyaKind.allCases.map { DSOptionTile($0, title: $0.title, icon: $0.icon, tint: $0.tint) },
-                              selection: $kind, columns: 2)
+                // خياران = الاختيار الموحّد (`DSChoiceTiles`) برمز كل نوع
+                DSChoiceTiles(options: DiwaniyaKind.allCases.map { DSChoiceOption(id: $0, title: $0.title, icon: $0.icon) },
+                              selection: $kind)
             }
 
             // ── البيانات ──
@@ -538,31 +529,14 @@ private struct DiwaniyaComposerForm: View {
 
             // ── الحالة (التعديل فقط) ──
             if let isClosed {
+                // «مفتوحة / مغلقة» = الاختيار الموحّد (كان مفتاحاً أخضر بقفل — القفل للخصوصية)
                 DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "power", tint: kind.tint, index: 4) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        // قرص «مجسّمات» الموحّد بمقاس أيقونة الحقل داخل المربّع (لون المعنى: أحمر/أخضر)
-                        DSStateIcon(isClosed.wrappedValue ? "lock.fill" : "lock.open.fill",
-                                    tint: isClosed.wrappedValue ? DS.Color.error : DS.Color.success,
-                                    size: DSBox.fieldIcon)
-                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                            Text(isClosed.wrappedValue ? L10n.t("متوقفة حالياً", "Currently closed")
-                                                       : L10n.t("مفتوحة ونشطة", "Open and active"))
-                                .dsFont(.rowTitle)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(L10n.t("إيقافها يُظهرها «مغلقة» في القائمة", "Closing shows it as closed"))
-                                .dsFont(.footnoteCompact)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        Spacer(minLength: 0)
-                        Toggle("", isOn: Binding(get: { !isClosed.wrappedValue },
-                                                 set: { isClosed.wrappedValue = !$0 }))
-                            .labelsHidden()
-                            .tint(DS.Color.success)
-                            // المفتاح بلا نص ظاهر — القارئ الصوتي يسمّيه (القيمة: تشغيل/إيقاف)
-                            .accessibilityLabel(L10n.t("مفتوحة", "Open"))
-                    }
-                    // صفّ بإطار حقول المربّع الموحّد
-                    .dsRowBox()
+                    // خلية بيانات بقائمة (قرار المالك ٢٠٢٦-١١-١١)
+                    DSMenuTile(icon: "door.left.hand.open", label: L10n.t("حالة الديوانية", "Status"), options: [
+                        DSChoiceOption(id: false, title: L10n.t("مفتوحة", "Open"), icon: "door.left.hand.open"),
+                        DSChoiceOption(id: true, title: L10n.t("مغلقة — تظهر «مغلقة» في القائمة", "Closed — shown as closed in the list"),
+                                       icon: "door.left.hand.closed")
+                    ], selection: isClosed)
                 }
             }
         }
@@ -661,7 +635,7 @@ private struct DiwaniyaComposerForm: View {
                          placeholder: L10n.t("رقم الهاتف", "Phone number"), compact: true, bordered: true)
             if !phoneNumber.isEmpty {
                 // الشريحة الموحّدة (`DSChipButton`) — مثل «إزالة» في مربّع المكتبة، بمساحة ضغط ٤٤
-                DSChipButton(L10n.t("إزالة الرقم", "Remove"), icon: "trash", tint: DS.Color.error, size: .mini) {
+                DSChipButton(L10n.t("إزالة الرقم", "Remove"), icon: "trash", tint: DS.Color.error, size: .small) {
                     phoneNumber = ""
                 }
                 .frame(maxWidth: .infinity)

@@ -794,20 +794,24 @@ struct AdminChoiceChip: View {
     let isSelected: Bool
     /// ⌄ بعد النص: يفتح قائمة/منتقياً/حقلاً
     var expands: Bool = false
+    /// false = شريحة فلتر مستقلّة في الصفحة (الفرع) — الشكل السابق، خارج المسار
+    var inTrack: Bool = true
+    @Environment(\.dsSection) private var section
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        // الشكل الخفيف الموحّد (نفس `DSChoiceTiles`، طلب المالك ٢٠٢٦-١١-١١): داخل مسار `AdminChoiceRow` الرمادي،
+        // المختار حبّة بيضاء بظلّ ناعم ونصّ كحلي، وغيره نصّ ثانوي — والسلوك (قوائم ومنتقيات) كما هو
+        if inTrack { trackFace } else { filterFace }
+    }
+
+    /// شريحة الفلتر المستقلّة (كما كانت): المختارة ممتلئة بتعبئة القسم
+    private var filterFace: some View {
         HStack(spacing: DS.Spacing.xs) {
-            if let icon {
-                Image(dsSymbol: icon).dsGlyph(DS.Glyph.smCompact)
-            }
-            Text(title)
-                .dsFont(.sectionTitle)
-                .lineLimit(1)
+            if let icon { Image(dsSymbol: icon).dsGlyph(DS.Glyph.smCompact) }
+            Text(title).dsFont(.sectionTitle).lineLimit(1)
             if expands {
-                Image(systemName: "chevron.down")
-                    .dsGlyph(DS.Glyph.xs, weight: .bold)
-                    .opacity(0.8)
-                    .accessibilityHidden(true)
+                Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .bold).opacity(0.8).accessibilityHidden(true)
             }
         }
         .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
@@ -820,21 +824,60 @@ struct AdminChoiceChip: View {
                 Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
             }
         }
-        // مساحة ضغط ٤٤ (حدّ أبل) والشكل كما هو
         .padding(.vertical, (DS.Icon.tapTarget - DSBox.chipHeight) / 2)
         .contentShape(Rectangle())
     }
+
+    private var trackFace: some View {
+        let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md - DSBox.choiceTrackInset, style: .continuous)
+        let hitPad = max(0, (DS.Icon.tapTarget - DSBox.choiceTrackHeight) / 2 - DSBox.choiceTrackInset)
+        return HStack(spacing: DS.Spacing.xs) {
+            if let icon {
+                Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(isSelected ? ink : DS.Color.textTertiary)
+            }
+            Text(title)
+                .dsFieldFont(.fieldValue)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? ink : DS.Color.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            if expands {
+                Image(systemName: "chevron.down")
+                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: DSBox.choiceTrackHeight)
+        .background {
+            if isSelected {
+                shape.fill(colorScheme == .dark ? DS.Color.cardBackground : Color.white)
+                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08),
+                            radius: DSBox.choiceShadowRadius, y: DSBox.choiceShadowY)
+            }
+        }
+        // مساحة ضغط ٤٤ (حدّ أبل) والشكل كما هو
+        .padding(.vertical, hitPad)
+        .contentShape(Rectangle())
+        .padding(.vertical, -hitPad)
+    }
 }
 
-/// صفّ الشرائح: أفقي إن اتّسع، وإلا عمودي (الخط الكبير جداً) — بلا تمرير أفقي يخفي خياراً
+/// مسار الشرائح الرمادي الواحد (الشكل الخفيف): أفقي إن اتّسع، وإلا عمودي (الخط الكبير جداً) — بلا تمرير أفقي يخفي خياراً
 struct AdminChoiceRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: DS.Spacing.sm) { content() }
-            VStack(alignment: .leading, spacing: 0) { content() }
+            HStack(spacing: DSBox.choiceTrackInset) { content() }
+            VStack(alignment: .leading, spacing: DSBox.choiceTrackInset) { content() }
         }
+        .padding(DSBox.choiceTrackInset)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
     }
 }

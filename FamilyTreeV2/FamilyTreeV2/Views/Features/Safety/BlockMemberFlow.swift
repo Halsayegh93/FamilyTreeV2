@@ -217,10 +217,5 @@ struct BlockedMembersSection: View {
         .dsRowBox()
     }
 
-    private static func dateText(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
-        f.dateFormat = "d MMMM yyyy"
-        return f.string(from: date)
-    }
+    private static func dateText(_ date: Date) -> String { DateHelper.displayDate(date) }
 }

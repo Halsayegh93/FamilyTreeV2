@@ -107,7 +107,7 @@ struct AdminRegistrationBansView: View {
                             subtitle: t("أعضاء جدد يسجّلون بأنفسهم، ويصل طلبهم «الوارد» للمراجعة",
                                         "New members sign up themselves; their request reaches the Inbox for review"),
                             control: AnyView(
-                                Toggle("", isOn: Binding(
+                                Toggle(t("السماح بالتسجيل", "Allow sign-ups"), isOn: Binding(
                                     get: { s.allowNewRegistrations },
                                     set: { on in
                                         Task { await appSettingsVM.updateSetting("allow_new_registrations", value: on,
@@ -190,7 +190,7 @@ struct AdminRegistrationBansView: View {
                 .accessibilityLabel(t("رفع منع \(number)", "Unblock \(number)"))
             }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(minHeight: DS.Icon.tapTarget)
     }
 
@@ -211,11 +211,7 @@ struct AdminRegistrationBansView: View {
 
     private func formatDate(_ isoString: String) -> String {
         guard let date = Self.parseDate(isoString) else { return isoString }
-        let df = DateFormatter()
-        df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-        df.dateStyle = .medium
-        df.timeStyle = .short
-        return df.string(from: date)
+        return DateHelper.displayDateTime(date)
     }
 }
 

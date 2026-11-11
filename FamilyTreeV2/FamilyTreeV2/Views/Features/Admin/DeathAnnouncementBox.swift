@@ -231,7 +231,7 @@ struct DeathAnnouncementBox: View {
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 Spacer(minLength: 0)
-                Toggle("", isOn: $notifyAll)
+                Toggle(L10n.t("إرسال إشعار لكل الأعضاء", "Notify all members"), isOn: $notifyAll)
                     .labelsHidden()
                     .accessibilityLabel(L10n.t("إرسال إشعار لكل الأعضاء", "Notify all members"))
             }

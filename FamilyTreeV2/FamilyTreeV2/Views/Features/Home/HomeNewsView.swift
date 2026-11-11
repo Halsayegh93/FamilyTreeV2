@@ -291,14 +291,8 @@ struct HomeNewsView: View {
         // الأوراق والتنبيهات مربوطة بصفحة الأخبار نفسها — كانت على الرئيسية خلف
         // الصفحة المدفوعة فلا تظهر إلا بعد الخروج من القسم
         // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-        .fullScreenCover(isPresented: $showingAddNews) {
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                AddNewsView()
-            }
-            .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            if showingAddNews { t.disablesAnimations = true }
+        .dsCenterBox(isPresented: $showingAddNews) {
+            AddNewsView()
         }
         // التعليقات نصف الشاشة من الأسفل بزر إغلاق أعلاه (طلب المالك ٢٠٢٦-١٠-٠١)
         .dsHalfBox(item: $selectedNewsForComments) { news in
@@ -444,7 +438,7 @@ struct HomeNewsView: View {
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
         .frame(maxWidth: hSizeClass == .regular ? 700 : .infinity)
         .frame(maxWidth: .infinity)
@@ -644,7 +638,7 @@ struct HomeNewsView: View {
             .overlay(alignment: .topLeading) {
                 if isNew {
                     DSNewDot()
-                        .padding(DS.Spacing.sm + 2)
+                        .padding(DS.Spacing.smd)
                 }
             }
             .animation(DS.Anim.snappy, value: isNew)
@@ -714,6 +708,7 @@ struct HomeNewsView: View {
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(DS.Color.textOnPrimary, DS.Color.shadowHeavy)
                 }
+                .accessibilityLabel(L10n.t("إغلاق المعاينة", "Close preview"))
                 Text(L10n.t("شاشة معاينة", "Preview"))
                     .dsFont(.badge)
                     .foregroundColor(DS.Color.textSecondary)
@@ -813,7 +808,7 @@ struct HomeNewsView: View {
                 DSStateCard(icon: "exclamationmark.triangle.fill", title: error, tint: DS.Color.error,
                             actionTitle: L10n.t("إعادة المحاولة", "Try again"),
                             action: { Task { await newsVM.fetchNews(force: true) } })
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.vertical, DS.Spacing.sm)
                 .dsCardCascade(0, appeared: newsAppeared)
             }
@@ -847,7 +842,7 @@ struct HomeNewsView: View {
                     Task { await newsVM.loadMoreNews() }
                 }
                 .disabled(newsVM.isLoadingMoreNews || newsVM.isLoadingNews)
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 // يترك مكان زرّ الإضافة العائم في طرفه — كان الزرّ العائم فوق «تحميل أخبار أقدم» (فحص ٢٠٢٦-١٠-٠٨)
                 .padding(.trailing, authVM.currentUser?.role != .pending
                          ? DS.Icon.floatingButton + DS.Spacing.xl - DS.Spacing.sm : 0)
@@ -911,7 +906,7 @@ struct HomeNewsView: View {
                 }
             } else {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
-                LazyVStack(spacing: DS.Spacing.md) {
+                LazyVStack(spacing: DS.Page.cardGap) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
                         newsCard(for: news, index: index)
                             .newsSwipeActions(
@@ -929,7 +924,8 @@ struct HomeNewsView: View {
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
+        // هامش الصفحة الموحّد (كان ١٢ — بقية الصفحات ١٦)
+        .dsPageMargin()
         .padding(.top, DS.Spacing.sm)
     }
 

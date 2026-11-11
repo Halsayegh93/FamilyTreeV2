@@ -47,13 +47,7 @@ enum AppVersionText {
         return f.localizedString(for: date, relativeTo: Date())
     }
 
-    static func stamp(_ date: Date) -> String {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: L10n.isArabic ? "ar" : "en")
-        df.dateStyle = .medium
-        df.timeStyle = .short
-        return df.string(from: date)
-    }
+    static func stamp(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 }
 
 /// المجموعات الخمس — نوع مستقل خلف `AnyView` (حارس المكدس)، وكل مجموعة بطاقة صفوف تحت عنوان صغير
@@ -109,7 +103,7 @@ private struct AdminAppSettingsGroups: View {
     private var sectionsRows: some View {
         let s = appSettingsVM.settings
         return AdminRowsCardBody {
-            AdminControlRow(icon: "character.bubble.fill", tint: DS.Color.primary,
+            AdminSettingChoiceRow(icon: "character.bubble.fill", tint: DS.Color.primary,
                             title: L10n.t("لغة التطبيق", "App language"),
                             subtitle: L10n.t("لكل الأعضاء — من يختار لغته من «الإعدادات» تبقى لغته",
                                              "For everyone — anyone who picks a language in Settings keeps theirs"),
@@ -134,7 +128,7 @@ private struct AdminAppSettingsGroups: View {
                    title: L10n.t("اعتماد الأخبار قبل نشرها", "Approve news before publishing"),
                    subtitle: L10n.t("أخبار الأعضاء تنتظر اعتماد الإدارة", "Members' posts wait for approval"),
                    isOn: s.newsRequiresApproval)
-            AdminControlRow(icon: "eye.slash.fill", tint: AppSection.library.ink,
+            AdminSettingChoiceRow(icon: "eye.slash.fill", tint: AppSection.library.ink,
                             title: L10n.t("منع لقطة الشاشة في المكتبة", "Block screenshots in the library"),
                             subtitle: L10n.t("ملفات المكتبة تظهر فارغة في لقطة الشاشة وتسجيلها",
                                              "Library files show blank in screenshots and recordings"),
@@ -149,25 +143,14 @@ private struct AdminAppSettingsGroups: View {
         let current = appSettingsVM.settings.defaultLanguage ?? "ar"
         let label = current == "ar" ? "العربية" : "English"
         if canEdit {
-            Menu {
-                Picker(selection: Binding(get: { current }, set: { value in
-                    guard value != current else { return }
-                    Task { await appSettingsVM.updateSetting("default_language", value: value, updatedBy: authVM.currentUser?.id) }
-                })) {
-                    Text(verbatim: "العربية").tag("ar")
-                    Text(verbatim: "English").tag("en")
-                } label: { EmptyView() }
-                .pickerStyle(.inline)
-            } label: {
-                HStack(spacing: DS.Spacing.xxs) {
-                    Text(verbatim: label).dsFont(.chip)
-                    Image(systemName: "chevron.up.chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
-                }
-                .foregroundColor(DS.Color.accent)
-                .frame(minHeight: DS.Icon.tapTarget)
-                .contentShape(Rectangle())
-            }
-            .accessibilityLabel(L10n.t("لغة التطبيق: \(label)", "App language: \(label)"))
+            // خياران = الاختيار الموحّد؛ الحفظ بالنداء نفسه
+            DSChoiceTiles(options: [
+                DSChoiceOption(id: "ar", title: "العربية"),
+                DSChoiceOption(id: "en", title: "English")
+            ], selection: Binding(get: { current }, set: { value in
+                guard value != current else { return }
+                Task { await appSettingsVM.updateSetting("default_language", value: value, updatedBy: authVM.currentUser?.id) }
+            }))
         } else {
             AdminValueChip(text: label, tint: DS.Color.primary)
         }
@@ -215,7 +198,7 @@ private struct AdminAppSettingsGroups: View {
                             title: L10n.t("حدّ التعديلات الذاتية", "Self-edit limit"),
                             subtitle: L10n.t("3 تعديلات ثم بموافقة الإدارة", "3 edits, then admin approval"),
                             control: AnyView(
-                                Toggle("", isOn: Binding(get: { !cooldownDisabled }, set: { on in
+                                Toggle(L10n.t("حدّ التعديلات الذاتية", "Self-edit limit"), isOn: Binding(get: { !cooldownDisabled }, set: { on in
                                     cooldownDisabled = !on
                                     ProfileEditCooldown.shared.isDisabled = !on
                                 }))
@@ -281,7 +264,7 @@ private struct AdminAppSettingsGroups: View {
     /// نفس الحفظ السابق (`updateSetting`) — المفتاح يتبع قيمة السيرفر بعد الحفظ
     private func toggle(_ key: String, icon: String, tint: Color, title: String, subtitle: String, isOn: Bool) -> some View {
         AdminControlRow(icon: icon, tint: tint, title: title, subtitle: subtitle, control: AnyView(
-            Toggle("", isOn: Binding(get: { isOn }, set: { value in
+            Toggle(title, isOn: Binding(get: { isOn }, set: { value in
                 Task { await appSettingsVM.updateSetting(key, value: value, updatedBy: authVM.currentUser?.id) }
             }))
             .labelsHidden()
@@ -321,26 +304,13 @@ private struct LibraryPolicyControl: View {
     var body: some View {
         Group {
             if canEdit {
-                Menu {
-                    Picker(selection: Binding(get: { current }, set: { value in
-                        guard value != current else { return }
-                        Task { await save(value) }
-                    })) {
-                        ForEach(options, id: \.value) { Text(verbatim: $0.title).tag($0.value) }
-                    } label: { EmptyView() }
-                    .pickerStyle(.inline)
-                } label: {
-                    HStack(spacing: DS.Spacing.xxs) {
-                        if saving { ProgressView().controlSize(.mini) }
-                        Text(verbatim: label).dsFont(.chip)
-                        Image(systemName: "chevron.up.chevron.down").dsGlyph(DS.Glyph.xs, weight: .semibold)
-                    }
-                    .foregroundColor(DS.Color.accent)
-                    .frame(minHeight: DS.Icon.tapTarget)
-                    .contentShape(Rectangle())
-                }
+                // ثلاثة خيارات = الاختيار الموحّد؛ الحفظ بالنداء نفسه
+                DSChoiceTiles(options: options.map { DSChoiceOption(id: $0.value, title: $0.title) },
+                              selection: Binding(get: { current }, set: { value in
+                                  guard value != current else { return }
+                                  Task { await save(value) }
+                              }))
                 .disabled(saving)
-                .accessibilityLabel(Text(verbatim: label))
             } else {
                 AdminValueChip(text: label, tint: DS.Color.primary)
             }

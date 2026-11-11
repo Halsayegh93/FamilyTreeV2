@@ -362,7 +362,7 @@ private struct DeathDatesToolsBox: View {
                    onCancel: { dismiss() }) {
             DSComposerSection(title: L10n.t("في «اليوم»", "On Today"), icon: "star.fill", tint: DS.Color.actionNavy, index: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    AdminInfoRow(icon: active ? "megaphone.fill" : "moon.stars.fill",
+                    AdminInfoRow(icon: active ? "megaphone.fill" : "leaf.fill",
                                  tint: active ? DS.Color.sadu : DS.Color.textTertiary,
                                  title: statusTitle, subtitle: statusDetail)
                     if store.serverReady {
@@ -413,7 +413,7 @@ private struct DeathDatesOwnerControls: View {
             AdminControlRow(icon: "star.fill", tint: DS.Color.accent,
                             title: L10n.t("إبرازها في «اليوم»", "Feature on Today"),
                             subtitle: L10n.t("يمكن إيقافها في أي وقت، وتعود مكانها «ذكرى الراحلين»", "Stop it any time — Memorials return"),
-                            control: AnyView(Toggle("", isOn: Binding(
+                            control: AnyView(Toggle(L10n.t("إبرازها في «اليوم»", "Feature on Today"), isOn: Binding(
                                 get: { store.enabled ?? true },
                                 set: { on in Task { failure = await store.save(enabled: on) } }))
                                 .labelsHidden()

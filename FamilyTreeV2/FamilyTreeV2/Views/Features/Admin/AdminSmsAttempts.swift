@@ -446,7 +446,7 @@ private struct SmsAttemptRowMain: View {
             Spacer(minLength: 0)
             if navigates { DSChevron().padding(.top, DS.Spacing.sm) }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

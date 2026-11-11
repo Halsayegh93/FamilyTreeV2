@@ -182,13 +182,13 @@ struct DeceasedMemorialSpotCard: View {
                 AdminCardLinkLabel(title: L10n.t("القادم", "Upcoming"))
             }
             if board.upcoming.isEmpty {
-                AdminListRow(icon: "moon.stars", tint: DS.Color.sadu,
+                AdminListRow(icon: "leaf", tint: DS.Color.sadu,
                              title: L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days"),
                              showsChevron: false)
             } else {
                 ForEach(Array(board.upcoming.prefix(Self.shown).enumerated()), id: \.element.id) { index, u in
                     if index > 0 { AdminRowDivider() }
-                    AdminListRow(icon: "moon.stars.fill", tint: DS.Color.sadu,
+                    AdminListRow(icon: "leaf.fill", tint: DS.Color.sadu,
                                  title: L10n.t("\(AdminOccasionsText.late(u.member)) \(u.member.shortFullName)",
                                                u.member.shortFullName),
                                  subtitle: DeceasedMemorial.anniversaryLine(u.anniversary, arabic: L10n.isArabic),

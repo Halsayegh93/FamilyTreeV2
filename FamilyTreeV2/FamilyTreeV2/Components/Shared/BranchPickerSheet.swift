@@ -305,7 +305,7 @@ struct BranchPickerSheet: View {
             if canExpand {
                 expandButton(for: node)
                     // الدائرة في مكانها السابق (هامش الصف ١٠ + نصف ٣٠) ومنطقة الضغط ٤٤ حولها
-                    .padding(.trailing, DS.Spacing.sm + 2 - (Self.expandHitSize - Self.expandButtonSize) / 2)
+                    .padding(.trailing, DS.Spacing.smd - (Self.expandHitSize - Self.expandButtonSize) / 2)
             }
         }
     }

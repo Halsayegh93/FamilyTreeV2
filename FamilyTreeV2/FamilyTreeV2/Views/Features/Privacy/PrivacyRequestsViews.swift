@@ -278,12 +278,9 @@ struct GuardianRequestsCard: View {
         // VStack لا Group: يبقى موجوداً وهو فارغ فيعمل `.task`
         VStack(spacing: 0) {
             if !requests.isEmpty {
-                DSFormCard(L10n.t("موافقة ولي الأمر", "Guardian consent"), icon: "person.2.fill",
-                           color: DS.Color.info) {
-                    Text("\(requests.count)")
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                } content: {
+                // قسم بعنوانه الموحّد (طلب المالك ٢٠٢٦-١١-١٠ «التصاميم مو موحدة»)
+                DSComposerSection(title: L10n.t("موافقة ولي الأمر", "Guardian consent"), icon: "person.2.fill",
+                                  tint: DS.Color.primary, trailing: "\(requests.count)", index: 0) {
                     VStack(spacing: DS.Spacing.sm) {
                         ForEach(requests) { request in
                             row(request)
@@ -293,7 +290,7 @@ struct GuardianRequestsCard: View {
                         }
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.top, DS.Spacing.md)
             }
         }
@@ -304,7 +301,7 @@ struct GuardianRequestsCard: View {
         .dsAlert(L10n.t("رفض الطلب؟", "Reject the request?"),
                  isPresented: Binding(get: { rejectTarget != nil }, set: { if !$0 { rejectTarget = nil } })) {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { rejectTarget = nil }
-            Button(L10n.t("أرفض", "Reject"), role: .destructive) {
+            Button(L10n.t("رفض", "Reject"), role: .destructive) {
                 if let r = rejectTarget { decide(r, approve: false) }
                 rejectTarget = nil
             }
@@ -321,14 +318,22 @@ struct GuardianRequestsCard: View {
                 .dsFont(.rowTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: DS.Spacing.sm) {
-                DSButton(L10n.t("أوافق", "Approve"), icon: "checkmark", tint: DS.Color.success,
-                         isLoading: busyId == request.id) {
+            // تذييل المربّعات الموحّد: «موافقة» بتعبئة القسم، و«رفض» سطراً أحمر هادئاً تحته (بتأكيده كما كان)
+            VStack(spacing: DS.Spacing.xs) {
+                DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark", isLoading: busyId == request.id) {
                     decide(request, approve: true)
                 }
-                DSButton(L10n.t("أرفض", "Reject"), icon: "xmark", role: .destructive, tint: DS.Color.reject) {
-                    rejectTarget = request
+                Button { rejectTarget = request } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "xmark").dsGlyph(DS.Glyph.sm)
+                        Text(L10n.t("رفض", "Reject")).dsFont(.chip)
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(L10n.t("رفض", "Reject"))
             }
             .disabled(busyId != nil)
         }

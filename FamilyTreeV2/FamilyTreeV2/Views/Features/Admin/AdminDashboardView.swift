@@ -453,7 +453,7 @@ struct AdminDashboardView: View {
                 AnyView(AdminScopeLink(guide: guide).dsCardCascade(3, appeared: appeared))
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.top, AdminTodayMetrics.bandGap)
         .padding(.bottom, DS.Spacing.xxxl)
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
@@ -711,7 +711,7 @@ struct AdminTodayDoneRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .opacity(DS.Opacity.disabled + 0.1)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(L10n.t("منجزة: \(record.title)", "Done: \(record.title)"))
@@ -1066,7 +1066,7 @@ struct AdminSystemStatusPanel: View {
                 row(pill)
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

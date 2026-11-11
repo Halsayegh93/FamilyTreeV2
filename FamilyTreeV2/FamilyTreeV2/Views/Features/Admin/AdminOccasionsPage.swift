@@ -170,9 +170,10 @@ struct AdminOccasionsSectionTitle: View {
 
     var body: some View {
         HStack {
+            // خط عناوين الأقسام الموحّد ولونها (`DSBox.sectionTitleFont` / `fieldLabel`)
             Text(title)
-                .dsFont(.sectionTitle)
-                .foregroundColor(DS.Color.textTertiary)
+                .font(DSBox.sectionTitleFont)
+                .foregroundColor(DS.Color.fieldLabel)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: DS.Spacing.sm)
             if let actionTitle {
@@ -316,7 +317,7 @@ struct AdminOccasionsGriefCard: View {
             if loading {
                 AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
             } else if isEmpty {
-                AdminOccasionsQuietLine(icon: "moon.stars",
+                AdminOccasionsQuietLine(icon: "leaf",
                                         text: L10n.t("لا ذكرى خلال ٣٠ يوماً", "No memorial in the next 30 days"))
             } else {
                 VStack(alignment: .leading, spacing: 0) {
@@ -350,7 +351,7 @@ struct AdminOccasionsGriefCard: View {
     }
 
     private func memorialRow(_ u: DeceasedMemorialBoard.Upcoming) -> some View {
-        AdminListRow(icon: "moon.stars.fill", tint: DS.Color.sadu,
+        AdminListRow(icon: "leaf.fill", tint: DS.Color.sadu,
                      title: L10n.t("ذكرى \(AdminOccasionsText.late(u.member)) \(u.member.fullName)",
                                    "\(u.member.fullName)'s anniversary"),
                      subtitle: DeceasedMemorial.anniversaryLine(u.anniversary, arabic: L10n.isArabic),
@@ -687,7 +688,7 @@ struct AdminScheduledPushRow: View {
                 }
             }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(spoken)

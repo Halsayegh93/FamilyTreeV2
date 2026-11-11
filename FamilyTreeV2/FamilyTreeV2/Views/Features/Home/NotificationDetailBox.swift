@@ -50,7 +50,7 @@ struct NotificationDetailBox: View {
 
     var body: some View {
         NotificationRichBox(chips: chips, tile: tile, title: notification.title, subtitle: subtitle,
-                            onClose: onClose, content: content)
+                            onClose: onClose, content: content, showsCloseFooter: true)
             .task(id: notification.id) {
                 guard let rid = requestId else { return }
                 request = await adminRequestVM.fetchRequest(id: rid)

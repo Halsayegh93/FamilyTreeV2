@@ -396,8 +396,9 @@ struct EditNewsView: View {
             onCancel: { dsCloseExtra { activeExtra = nil } }
         ) {
             VStack(spacing: DS.Spacing.sm) {
-                TextField(L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $draftQuestion)
-                    .dsAlertField()
+                // حقول المربّعات الموحّدة (بدل حقول التنبيه)
+                DSComposerField(icon: "questionmark.bubble.fill", label: L10n.t("سؤال التصويت", "Poll question"),
+                                placeholder: L10n.t("اختياري", "Optional"), text: $draftQuestion, tint: DS.Color.newsVote)
                 ForEach(Array(draftOptions.enumerated()), id: \.element.id) { idx, option in
                     pollDraftRow(idx: idx, option: option)
                         .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
@@ -425,7 +426,9 @@ struct EditNewsView: View {
                                 draftOptions[i].text = v
                             }
                         }))
-                .dsAlertField()
+                .dsFieldFont(.fieldValue)
+                .frame(minHeight: DSBox.fieldMinHeight)
+                .dsRowBox()
             if draftOptions.count > 2 {
                 NewsPollRemoveOptionButton(label: L10n.t("حذف الخيار \(idx + 1)", "Remove option \(idx + 1)")) {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {

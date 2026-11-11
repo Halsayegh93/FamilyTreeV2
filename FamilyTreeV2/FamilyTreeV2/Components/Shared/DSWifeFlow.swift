@@ -584,16 +584,15 @@ struct DSWifeFlowBox: View {
                                 placeholder: L10n.t("اكتب اسمها الأول فقط — يُكمَل باسم أبيها", "Her first name only — her father's name is added"),
                                 text: $newName)
                 if onAddDeceasedUnderFather != nil {
-                    // «متوفّاة» بلون المتوفى بوضوح حين تُختار، وسطر يؤكّدها
-                    DSEntryOptionCard(title: newDeceased ? L10n.t("متوفّاة ✓", "Deceased ✓") : L10n.t("متوفّاة", "Deceased"),
-                                      icon: newDeceased ? "checkmark.circle.fill" : "heart.slash",
-                                      tint: DS.Color.deceasedStrip, isOn: newDeceased) {
-                        withAnimation(DS.Anim.snappy) { newDeceased.toggle() }
-                    }
+                    // الحالة — الاختيار الموحّد (طلب المالك ٢٠٢٦-١١-١٠)، وسطر يؤكّد «متوفّاة»
+                    DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                        DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                        DSChoiceOption(id: true, title: L10n.t("متوفّاة", "Deceased"), icon: "leaf.fill")
+                    ], selection: $newDeceased.animation(DS.Anim.snappy))
                     if newDeceased {
                         Text(L10n.t("تُضاف متوفّاة — تظهر تحت صورتها «متوفية» في الشجرة", "Added as deceased — marked in the tree"))
                             .dsFont(.footnote)
-                            .foregroundColor(DS.Color.deceasedStrip.dsReadableGlyph)
+                            .foregroundColor(DS.Color.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

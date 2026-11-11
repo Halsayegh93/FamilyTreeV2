@@ -65,7 +65,7 @@ struct NewsContentEditor: View {
     var focused: FocusState<Bool>.Binding
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
         ZStack(alignment: .topLeading) {
             TextEditor(text: $text)
                 .focused(focused)
@@ -84,11 +84,10 @@ struct NewsContentEditor: View {
                     .allowsHitTesting(false)
             }
         }
-        .background(shape.fill(DS.Color.background))
-        .overlay(shape.strokeBorder(focused.wrappedValue ? tint.opacity(DS.Opacity.selectedStroke)
-                                                         : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
-                                    lineWidth: focused.wrappedValue ? DS.Border.widthBold : DS.Border.width))
-        .trialCardSkin(radius: DS.Card.radius)
+        // صندوق صفوف الحقول الموحّد (تعبئة الحقل نفسها)، وإطار خفيف بلون النوع أثناء الكتابة فقط
+        .background(shape.fill(DS.Color.fieldFill))
+        .overlay(shape.strokeBorder(tint.opacity(focused.wrappedValue ? DS.Opacity.tintStroke : 0),
+                                    lineWidth: DS.Border.width))
         .animation(DSMotion.fade, value: focused.wrappedValue)
     }
 }
