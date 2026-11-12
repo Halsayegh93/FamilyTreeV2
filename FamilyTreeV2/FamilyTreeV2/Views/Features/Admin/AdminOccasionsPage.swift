@@ -96,6 +96,10 @@ struct AdminOccasionsPage: View {
                 AnyView(AdminOccasionsJoysCard())
             }
             AnyView(AdminOccasionsGriefCard(feed: feed, loading: loading))
+            // «الإعلانات عند الفتح» — المالك والمدير (طلب المالك ٢٠٢٦-١١-١٢)
+            if authVM.isAdmin {
+                AnyView(AdminLaunchAnnouncementsCard())
+            }
             if authVM.isAdmin && authVM.adminSees(.occasionsPublished) {
                 AnyView(AdminOccasionsAnnouncementsCard(feed: feed, loading: loading))
             }

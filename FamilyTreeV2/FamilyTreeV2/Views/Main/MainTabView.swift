@@ -15,6 +15,8 @@ struct MainTabView: View {
     @State private var notificationFlowDone = false
     /// «ما الجديد» معروض — «كمّل ملفك بصورة» ينتظره
     @ObservedObject private var whatsNew = WhatsNewStore.shared
+    /// «إعلانات عند فتح التطبيق» قيد الفحص أو معروضة — كل ما بعدها ينتظرها
+    @ObservedObject private var launchAnnouncements = LaunchAnnouncementsStore.shared
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -175,6 +177,14 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             DSScreenCrossfade.run { selectedTab = 0 }
         }
+        // «افتح الأخبار» من إعلان الفتح: الرئيسية ← صفحة الأخبار (من تبويب آخر: حتى تُبنى الرئيسية)
+        .onReceive(NotificationCenter.default.publisher(for: .openNewsList)) { _ in
+            let alreadyHome = selectedTab == 0
+            if !alreadyHome { DSScreenCrossfade.run { selectedTab = 0 } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (alreadyHome ? 0 : 0.4)) {
+                NotificationCenter.default.post(name: .showNewsList, object: nil)
+            }
+        }
         // «شجرة النساء» من «العائلة» في لوحة الإدارة — تبويب الشجرة يفتح على النساء
         .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
             DSScreenCrossfade.run { selectedTab = 1 }
@@ -229,6 +239,12 @@ struct MainTabView: View {
             // ننتظر 3 ثواني عشان المستخدم يرد على طلب النظام أول
             try? await Task.sleep(nanoseconds: 3_000_000_000)
 
+            // إعلانات الفتح أولاً — مربّع الإشعارات بعدها
+            while LaunchAnnouncementsStore.shared.busy {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if Task.isCancelled { return }
+            }
+
             // تحقق إذا رفض — أقصى مرتين بعد طلب النظام
             guard dismissCount < 2 else { return }
             let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -255,10 +271,13 @@ struct MainTabView: View {
                 "Enable notifications to receive family news and important updates"
             ))
         }
-        // «ما الجديد» بعد التحديث (القرار ٨) — مرة لكل نسخة، بعد فحص الإشعارات ومربّعه
-        .modifier(WhatsNewGate(blocked: !notificationFlowDone || showNotificationAlert))
+        // «إعلانات عند فتح التطبيق» — أول ما يظهر عند الفتح (وعند الرجوع من الخلفية بعد ٣٠ دقيقة)
+        .modifier(LaunchAnnouncementsGate())
+        // «ما الجديد» بعد التحديث (القرار ٨) — مرة لكل نسخة، بعد الإعلانات وفحص الإشعارات ومربّعه
+        .modifier(WhatsNewGate(blocked: !notificationFlowDone || showNotificationAlert || launchAnnouncements.busy))
         // «كمّل ملفك بصورة» — بعد فحص الإشعارات ومربّعه و«ما الجديد» (نوع مستقل: حارس المكدس)
-        .modifier(PhotoReminderGate(blocked: !notificationFlowDone || showNotificationAlert || whatsNew.showing))
+        .modifier(PhotoReminderGate(blocked: !notificationFlowDone || showNotificationAlert || whatsNew.showing
+                                    || launchAnnouncements.busy))
     }
 
     /// يربط قائمة المحظورين بالحساب الحالي

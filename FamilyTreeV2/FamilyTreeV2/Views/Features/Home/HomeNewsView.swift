@@ -187,6 +187,13 @@ struct HomeNewsView: View {
             focusNewsId = id
             openNewsPage()
         }
+        // زرّ «افتح الأخبار» في إعلان الفتح: الرئيسية ← صفحة الأخبار
+        .onReceive(NotificationCenter.default.publisher(for: .showNewsList)) { _ in
+            showingNotifications = false
+            showingContactForm = false
+            selectedTab = 0
+            openNewsPage()
+        }
         // إشعار «موافقة ولي الأمر» يفتح «حسابي» حيث بطاقة الموافقة
         .onReceive(NotificationCenter.default.publisher(for: .openProfileTab)) { _ in
             showingNotifications = false

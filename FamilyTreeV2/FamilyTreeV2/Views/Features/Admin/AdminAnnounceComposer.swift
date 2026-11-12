@@ -208,6 +208,12 @@ struct AdminAnnounceComposer: View {
     @State private var failure: String? = nil
     /// ملخّص ما تمّ — ثم يُغلق المربّع
     @State private var done: String? = nil
+    /// السؤال الرابع «يظهر عند فتح التطبيق؟» (طلب المالك ٢٠٢٦-١١-١٢) — مطفأ افتراضياً، وليس في تعديل المجدول
+    @State private var launchOn = false
+    @State private var launchImage: UIImage? = nil
+    @State private var launch = AdminLaunchChoice(duration: .twoDays,
+                                                  untilDay: Date().addingTimeInterval(7 * 24 * 3600),
+                                                  button: .update, link: "")
 
     init(chooser: AnyView? = nil, draft: AdminAnnounceDraft = AdminAnnounceDraft(), onClose: @escaping () -> Void) {
         self.chooser = chooser
@@ -278,9 +284,14 @@ struct AdminAnnounceComposer: View {
     /// موعد الإرسال — nil = الآن
     private var sendDate: Date? { when == .now ? nil : customDate }
 
+    /// إعلان الفتح مطلوب (المفتاح، وليس تعديل إشعار مجدول)
+    private var wantsLaunch: Bool { launchOn && !isEditing }
+    /// فيه نصّ ← الإشعار كما اليوم؛ بلا نصّ مع إعلان الفتح ← إعلان الفتح وحده
+    private var wantsPush: Bool { !trimmed(text).isEmpty || !wantsLaunch }
+
     /// ما يمنع الإرسال (سطر فوق الزرّ) — nil = جاهز
     private func blocker(_ active: [FamilyMember]) -> String? {
-        if trimmed(text).isEmpty { return L10n.t("اكتب نص الإشعار", "Write the message") }
+        if trimmed(text).isEmpty && !wantsLaunch { return L10n.t("اكتب نص الإشعار", "Write the message") }
         switch audience {
         case .all: break
         case .country:
@@ -292,6 +303,9 @@ struct AdminAnnounceComposer: View {
         if when == .scheduled && customDate <= Date().addingTimeInterval(30) {
             return L10n.t("اختر وقتاً بعد الآن", "Pick a time after now")
         }
+        if wantsLaunch, let launchBlocker = launch.blocker(hasImage: launchImage != nil, start: sendDate ?? Date()) {
+            return launchBlocker
+        }
         return nil
     }
 
@@ -299,7 +313,8 @@ struct AdminAnnounceComposer: View {
     /// فعل فقط — «لمن» و«متى» ظاهرتان في بطاقتيهما (المالك ٢٠٢٦-١٠-٢٣ «في تكرر بالوقت بمتى و بالارسال»)
     private func actionTitle(_ active: [FamilyMember]) -> String {
         if isEditing { return L10n.t("احفظ", "Save") }
-        return sendDate == nil ? L10n.t("أرسل الآن", "Send now") : L10n.t("جدولة", "Schedule")
+        let base = sendDate == nil ? L10n.t("أرسل الآن", "Send now") : L10n.t("جدولة", "Schedule")
+        return wantsLaunch ? base + launch.sendSuffix : base
     }
 
     // MARK: المربّع
@@ -356,14 +371,17 @@ struct AdminAnnounceComposer: View {
             canSubmit: blocker == nil && !isSending,
             isBusy: isSending,
             note: blocker,
-            hasUnsavedChanges: !isEditing && !trimmed(text).isEmpty,
-            // «إرسال» و«إلغاء» جنب بعض (المالك ٢٠٢٦-١٠-٢٣)
-            actionFullRow: false,
+            hasUnsavedChanges: !isEditing && (!trimmed(text).isEmpty || launchImage != nil),
+            // «إرسال» و«إلغاء» جنب بعض (المالك ٢٠٢٦-١٠-٢٣) — ومع إعلان الفتح الزرّ بعرض الشريط (نصّه أطول)
+            actionFullRow: wantsLaunch,
             onSubmit: submit,
             onCancel: { onClose() }
         ) {
             if let chooser { chooser }
             AnyView(formSection(active))
+            if !isEditing {
+                AnyView(AdminLaunchComposerSection(isOn: $launchOn, image: $launchImage, choice: $launch, tint: tint))
+            }
         }
     }
 
@@ -388,6 +406,17 @@ struct AdminAnnounceComposer: View {
     }
 
     private var confirmText: String {
+        guard wantsLaunch else { return pushConfirmText }
+        let launchLine = L10n.t("ويظهر الإعلان عند فتح التطبيق \(launch.durationWords).",
+                                "The image shows when the app opens for \(launch.durationWords).")
+        guard wantsPush else {
+            return L10n.t("يظهر الإعلان لجميع الأعضاء عند فتح التطبيق \(launch.durationWords)، بلا إشعار.",
+                          "The image shows to every member when the app opens for \(launch.durationWords), no push.")
+        }
+        return pushConfirmText + "\n" + launchLine
+    }
+
+    private var pushConfirmText: String {
         if let date = sendDate {
             return L10n.t("يُرسل الإشعار إلى جميع الأعضاء \(AdminAnnounceKit.when(date)).",
                           "The push reaches every member \(AdminAnnounceKit.when(date)).")
@@ -764,6 +793,31 @@ struct AdminAnnounceComposer: View {
             return
         }
 
+        // إعلان الفتح أولاً (الرفع أكثر ما يفشل) — إن تعذّر لا يُرسل شيء فتُعاد المحاولة نظيفة
+        var launchDone: String? = nil
+        let pushToo = wantsPush
+        if wantsLaunch, let image = launchImage {
+            let start = sendDate ?? Date()
+            guard let path = await LaunchAnnouncementsService.uploadImage(image) else {
+                failure = L10n.t("تعذّر رفع صورة الإعلان. حاول مرة أخرى.", "Couldn't upload the image. Try again.")
+                return
+            }
+            let saved = await LaunchAnnouncementsService.create(
+                imagePath: path, kind: launch.button, url: launch.button == .link ? trimmed(launch.link) : nil,
+                memberIds: ids, startsAt: start, endsAt: launch.endsAt(start: start))
+            guard saved else {
+                failure = L10n.t("تعذّر حفظ الإعلان عند الفتح. حاول مرة أخرى.", "Couldn't save the announcement. Try again.")
+                return
+            }
+            launchDone = L10n.t("يظهر عند فتح التطبيق ← \(to) · \(launch.durationWords).",
+                                "Shows when the app opens → \(to) · \(launch.durationWords).")
+        }
+        guard pushToo else {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            done = launchDone
+            return
+        }
+
         let ok: Bool
         if let date = sendDate {
             ok = await notificationVM.scheduleNotification(title: noticeTitle, body: noticeBody, targetMemberIds: ids,
@@ -774,13 +828,16 @@ struct AdminAnnounceComposer: View {
                                                        kind: "admin_broadcast")
         }
         guard ok else {
-            failure = L10n.t("تعذّر إرسال الإشعار. حاول مرة أخرى.", "Couldn't send the push. Try again.")
+            failure = launchDone == nil
+                ? L10n.t("تعذّر إرسال الإشعار. حاول مرة أخرى.", "Couldn't send the push. Try again.")
+                : L10n.t("حُفظ الإعلان عند الفتح، وتعذّر إرسال الإشعار.", "The announcement was saved, but the push failed.")
             return
         }
         // لحظة النجاح الموجودة (`dsAlert(…, moment: .success)`) + اهتزاز نجاح خفيف (الدفعة ١٠)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        done = sendDate.map { L10n.t("يُرسل الإشعار \(AdminAnnounceKit.when($0)) إلى \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
+        let pushDone = sendDate.map { L10n.t("يُرسل الإشعار \(AdminAnnounceKit.when($0)) إلى \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
             ?? L10n.t("وصل الإشعار ← \(to).", "Push sent → \(to).")
+        done = launchDone.map { pushDone + "\n" + $0 } ?? pushDone
     }
 }
 
