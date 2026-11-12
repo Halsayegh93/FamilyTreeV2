@@ -588,7 +588,9 @@ class AuthViewModel: ObservableObject {
     /// طلب ربط واحد معلّق فقط لكل حساب (ب-٤: كان كل إرسال للنموذج — ومنه «تعديل البيانات» —
     /// يضيف صفاً جديداً). الطلب عن الملف نفسه: `member_id = requester_id` كما يشترط حارس السيرفر.
     /// - Returns: `nil` = فشل (لا طلب).
-    private func ensurePendingLinkRequest(profileId: UUID, details: String) async -> LinkRequestOutcome? {
+    /// - source: مسار الإرسال (افتراضياً «التسجيل ← طلب الانضمام»)
+    private func ensurePendingLinkRequest(profileId: UUID, details: String,
+                                          source: RequestSource? = nil) async -> LinkRequestOutcome? {
         struct RequestRow: Decodable { let id: UUID }
         do {
             let existing: [RequestRow] = try await supabase
@@ -611,10 +613,13 @@ class AuthViewModel: ObservableObject {
                 "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable(details)
             ]
-            try await supabase
-                .from("admin_requests")
-                .insert(joinRequestData)
-                .execute()
+            let path = source ?? RequestSource(.registration, RequestSourceStep("person.crop.circle.badge.checkmark", "طلب الانضمام"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(joinRequestData, path))
+                    .execute()
+            }
             Log.info("[REGISTER] ✅ تم إنشاء طلب الانضمام في admin_requests")
             return .created
         } catch {
@@ -1904,7 +1909,8 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Contact
 
-    func sendContactMessage(category: String, message: String, preferredContact: String?) async -> Bool {
+    func sendContactMessage(category: String, message: String, preferredContact: String?,
+                            source: RequestSource? = nil) async -> Bool {
         guard let user = currentUser else {
             Log.error("[Contact] ❌ لا يوجد مستخدم حالي — تم إلغاء الإرسال")
             return false
@@ -1941,25 +1947,28 @@ class AuthViewModel: ObservableObject {
                 "details": AnyEncodable(details)
             ]
             
-            do {
-                var payload = basePayload
-                payload["new_value"] = AnyEncodable(category)
-                
-                try await supabase
-                    .from("admin_requests")
-                    .insert(payload)
-                    .execute()
-                Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
+            let path = source ?? RequestSource(.contact, RequestSourceStep("paperplane.fill", "رسالة للإدارة"))
+            try await AdminRequestSource.send(path) { path in
+                do {
+                    var payload = AdminRequestSource.payload(basePayload, path)
+                    payload["new_value"] = AnyEncodable(category)
+
                     try await supabase
                         .from("admin_requests")
-                        .insert(basePayload)
+                        .insert(payload)
                         .execute()
-                    Log.info("[Contact] ✅ تم الحفظ في admin_requests (بدون new_value)")
-                } else {
-                    throw error
+                    Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
+                        try await supabase
+                            .from("admin_requests")
+                            .insert(AdminRequestSource.payload(basePayload, path))
+                            .execute()
+                        Log.info("[Contact] ✅ تم الحفظ في admin_requests (بدون new_value)")
+                    } else {
+                        throw error
+                    }
                 }
             }
 

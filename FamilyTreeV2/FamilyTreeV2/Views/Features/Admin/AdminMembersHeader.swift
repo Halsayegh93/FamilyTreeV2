@@ -62,6 +62,8 @@ struct AdminFamilyCensusBand: View {
     let census: AdminFamilyCensus
     /// «الرجال» ← شريحة «الكل» في صفحة الأعضاء نفسها
     let openMen: () -> Void
+    /// «النساء» ← «شجرة النساء» في الصفحة نفسها (nil = تبويب الشجرة كما كان، لمن لا يرى قائمة النساء)
+    var openWomen: (() -> Void)? = nil
     /// «خارج العائلة» ← «شجرة النساء ← فرع خارج العائلة» في الصفحة نفسها
     var openOutside: (() -> Void)? = nil
     @EnvironmentObject private var authVM: AuthViewModel
@@ -253,13 +255,13 @@ struct AdminFamilyCensusBand: View {
                 .buttonStyle(DSPressStyle())
                 .accessibilityHint(L10n.t("يعرض كل الأعضاء", "Shows all members"))
         case .women:
-            // شجرة النساء تُدار من تبويب الشجرة (كحلقة «النساء» في «إحصاء الأفراد»)
-            Button {
-                TreeTabContainer.openWomenOnAppear = true
-                NotificationCenter.default.post(name: .openWomenTree, object: nil)
-            } label: { face }
-            .buttonStyle(DSPressStyle())
-            .accessibilityHint(L10n.t("يفتح شجرة النساء", "Opens the women's tree"))
+            if let openWomen {
+                Button(action: openWomen) { face }
+                    .buttonStyle(DSPressStyle())
+                    .accessibilityHint(L10n.t("يعرض قائمة النساء", "Shows the women's list"))
+            } else {
+                womenTreeLink(face)
+            }
         case .outside:
             if let openOutside {
                 Button(action: openOutside) { face }
@@ -269,6 +271,16 @@ struct AdminFamilyCensusBand: View {
                 face
             }
         }
+    }
+
+    /// شجرة النساء في تبويب الشجرة (كحلقة «النساء» في «إحصاء الأفراد») — لمن لا يرى قائمة النساء هنا
+    private func womenTreeLink(_ face: AnyView) -> some View {
+        Button {
+            TreeTabContainer.openWomenOnAppear = true
+            NotificationCenter.default.post(name: .openWomenTree, object: nil)
+        } label: { face }
+        .buttonStyle(DSPressStyle())
+        .accessibilityHint(L10n.t("يفتح شجرة النساء", "Opens the women's tree"))
     }
 
     // MARK: النصوص

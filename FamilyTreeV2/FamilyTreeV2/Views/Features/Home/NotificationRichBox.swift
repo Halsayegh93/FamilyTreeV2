@@ -67,22 +67,34 @@ struct NotifBoxTileView: View {
     let tile: NotifBoxTile
     /// مقاس المربّع — ٤٠ في الرأس (طلب المالك ٢٠٢٦-١١-٠١ «هيدر المربع شوي نقلله»)، ٣٠ في الرأس المضغوط
     var side: CGFloat = DSBox.composerIcon
+    @State private var showPhoto = false
 
     var body: some View {
-        Group {
-            switch tile {
-            case .glyph(let symbol):
-                RoundedRectangle(cornerRadius: side * 0.3, style: .continuous)
-                    .fill(DS.Color.accentLight)
-                    .frame(width: side, height: side)
-                    // أيقونة خفيفة (طلب المالك ٢٠٢٦-١١-٠١ «ايقونات الخفيفة») — رمز رفيع بلا مجسّم
-                    .overlay(Image(dsSymbol: symbol.dsLightSymbol).dsGlyph(side * 0.48, weight: .light)
-                        .foregroundColor(DS.Color.navyDeep))
-            case .member(let name, let url):
+        switch tile {
+        case .glyph(let symbol):
+            RoundedRectangle(cornerRadius: side * 0.3, style: .continuous)
+                .fill(DS.Color.accentLight)
+                .frame(width: side, height: side)
+                // أيقونة خفيفة (طلب المالك ٢٠٢٦-١١-٠١ «ايقونات الخفيفة») — رمز رفيع بلا مجسّم
+                .overlay(Image(dsSymbol: symbol.dsLightSymbol).dsGlyph(side * 0.48, weight: .light)
+                    .foregroundColor(DS.Color.navyDeep))
+                .accessibilityHidden(true)
+        case .member(let name, let url):
+            if let url, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // صورة العضو في رأس المربّع تُكبَّر بالضغط (طلب المالك ٢٠٢٦-١١-١١ «الصورة عندما أضغط عليها تبين»)
+                Button { showPhoto = true } label: {
+                    DSMemberAvatar(name: name, avatarUrl: url, size: side)
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(L10n.t("عرض صورة \(name)", "View \(name)'s photo"))
+                .fullScreenCover(isPresented: $showPhoto) {
+                    ProjectPhotoViewer(urls: [url], startIndex: 0, section: .admin)
+                }
+            } else {
                 DSMemberAvatar(name: name, avatarUrl: url, size: side)
+                    .accessibilityHidden(true)
             }
         }
-        .accessibilityHidden(true)
     }
 }
 

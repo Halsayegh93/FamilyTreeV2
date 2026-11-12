@@ -13,6 +13,8 @@ struct MainTabView: View {
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
     /// انتهى فحص إذن الإشعارات بعد الفتح — تذكير الصورة ينتظره ولا يسبقه
     @State private var notificationFlowDone = false
+    /// «ما الجديد» معروض — «كمّل ملفك بصورة» ينتظره
+    @ObservedObject private var whatsNew = WhatsNewStore.shared
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -253,8 +255,10 @@ struct MainTabView: View {
                 "Enable notifications to receive family news and important updates"
             ))
         }
-        // «كمّل ملفك بصورة» — بعد فحص الإشعارات ومربّعه (نوع مستقل: حارس المكدس)
-        .modifier(PhotoReminderGate(blocked: !notificationFlowDone || showNotificationAlert))
+        // «ما الجديد» بعد التحديث (القرار ٨) — مرة لكل نسخة، بعد فحص الإشعارات ومربّعه
+        .modifier(WhatsNewGate(blocked: !notificationFlowDone || showNotificationAlert))
+        // «كمّل ملفك بصورة» — بعد فحص الإشعارات ومربّعه و«ما الجديد» (نوع مستقل: حارس المكدس)
+        .modifier(PhotoReminderGate(blocked: !notificationFlowDone || showNotificationAlert || whatsNew.showing))
     }
 
     /// يربط قائمة المحظورين بالحساب الحالي

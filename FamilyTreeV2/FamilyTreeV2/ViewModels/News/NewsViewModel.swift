@@ -262,6 +262,11 @@ class NewsViewModel: ObservableObject {
             var aggregated: [UUID: [NewsCommentRecord]] = [:]
             var counts: [UUID: Int] = [:]
 
+            // خبر صار بلا تعليقات لا يرجع في النتيجة — نصفّره صراحة حتى لا يبقى القديم
+            for id in postIds {
+                aggregated[id] = []
+                counts[id] = 0
+            }
             for comment in commentsData {
                 aggregated[comment.news_id, default: []].append(comment)
                 counts[comment.news_id, default: 0] += 1
@@ -897,7 +902,7 @@ class NewsViewModel: ObservableObject {
 
     /// يرجع true عند وصول البلاغ — لتأكيد «تم الإبلاغ» في الواجهة
     @discardableResult
-    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async -> Bool {
+    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر", source: RequestSource? = nil) async -> Bool {
         // الإبلاغ متاح لجميع المستخدمين (أعضاء وإدارة) — سياسة Apple
         guard let userId = currentUser?.id else { return false }
         self.isLoading = true
@@ -914,13 +919,16 @@ class NewsViewModel: ObservableObject {
             ]
 
             // إدراج + جلب id الصف لإرفاقه بإشعار الـ push (يفعّل أزرار قبول/رفض)
-            let inserted: AdminRequest = try await supabase
-                .from("admin_requests")
-                .insert(payload)
-                .select()
-                .single()
-                .execute()
-                .value
+            let path = source ?? RequestSource(.home, RequestSourceStep("flag.fill", "بلاغ عن منشور"))
+            let inserted: AdminRequest = try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(payload, path))
+                    .select()
+                    .single()
+                    .execute()
+                    .value
+            }
 
             delivered = true
             let reporterName = currentUser?.displayFullName ?? ""

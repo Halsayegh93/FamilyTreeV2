@@ -163,7 +163,10 @@ struct FamilyProjectsView: View {
                             contentKind: L10n.t("مشروع", "project"),
                             contentLabel: target.title,
                             contentId: target.id,
-                            reason: reason
+                            reason: reason,
+                            source: RequestSource(RequestSourceStep("briefcase.fill", "مشاريع العائلة"),
+                                                  RequestSourceStep("briefcase", target.title),
+                                                  RequestSourceStep("flag.fill", "بلاغ عن مشروع"))
                         )
                         if ok { await MainActor.run { reportSent = true } }
                     }

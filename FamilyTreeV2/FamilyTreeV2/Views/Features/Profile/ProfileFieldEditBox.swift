@@ -216,7 +216,7 @@ struct ProfileFieldEditBox: View {
                             saved.append(L10n.t("تاريخ الميلاد", "Birth date"))
                         } else { ok = false }
                     } else {
-                        let done = await adminRequestVM.submitTreeEditRequest(payload: .make(
+                        let done = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                             action: .editBirth,
                             targetMemberId: member.id.uuidString,
                             targetMemberName: member.fullName,
@@ -243,7 +243,7 @@ struct ProfileFieldEditBox: View {
                         saved.append(L10n.t("الحالة الاجتماعية", "Marital status"))
                     } else { ok = false }
                 } else {
-                    let done = await adminRequestVM.submitTreeEditRequest(payload: .make(
+                    let done = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                         action: .other,
                         targetMemberId: member.id.uuidString,
                         targetMemberName: member.fullName,

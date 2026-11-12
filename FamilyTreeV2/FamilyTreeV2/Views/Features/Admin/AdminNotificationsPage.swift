@@ -789,7 +789,9 @@ struct AdminNotificationsPage: View {
                     afterBox { selfChildFlow.deleting = notice }
                 })
                 .environmentObject(memberVM)
-                .environmentObject(notificationVM))
+                .environmentObject(notificationVM)
+                // «طلب تغيير الصورة» تحت بطاقة الصورة يقرأ الصلاحية
+                .environmentObject(authVM))
         }
         return AnyView(requestDetailBox(n, category: category, style: style, cat: cat))
     }

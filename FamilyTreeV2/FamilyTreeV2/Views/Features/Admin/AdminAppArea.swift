@@ -169,20 +169,21 @@ private struct AdminAppSettingsGroups: View {
     /// تصنيفات الأخبار والمكتبة · أسماء العوائل والفروع (وعدد الفروع المسمّاة تحت الاسم) — نفس الصفحتين ونفس الدفع.
     /// سطر الرقم محجوز في المربّعين معاً حين يوجد (طول واحد)، ولا فراغ له حين لا يوجد
     private var listsTiles: some View {
+        // صفوف بطاقة واحدة مثل باقي الصفحة (التصميم الموحّد ٢٠٢٦-١١-١١) بدل مربّعين بقرص ملوّن ممتلئ
         let named = branchNamesCount > 0
-        return AdminTileGrid(count: 2) {
-            AdminTapWrap(tap: .page { AnyView(CategoriesManagerView()) }, feel: .tile, label: AnyView(
-                AdminHubTile(icon: "tag.fill", fill: DS.Color.goldFill,
-                             title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
-                             reservesCaption: named, index: 0,
-                             hint: L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order"))))
-            AdminTapWrap(tap: .page { AnyView(AdminFamilyNamesView()) }, feel: .tile, label: AnyView(
-                AdminHubTile(icon: "person.2.crop.square.stack.fill", fill: DS.Color.palmFill,
-                             title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
-                             caption: named ? L10n.t("\(branchNamesCount) فرع باسم", "\(branchNamesCount) named") : nil,
-                             reservesCaption: named, index: 1,
-                             hint: L10n.t("يختار منها العضو عائلته، وأسماء قائمة الفروع", "Members pick their family; branch list names"))))
+        return AdminRowsCardBody {
+            AdminTapRow(icon: "tag.fill", tint: DS.Color.accent,
+                        title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
+                        subtitle: L10n.t("الاسم والأيقونة واللون، والإخفاء والترتيب", "Name, icon, colour, hide and order"),
+                        tap: .page { AnyView(CategoriesManagerView()) })
+            AdminTapRow(icon: "person.2.crop.square.stack.fill", tint: DS.Color.palm,
+                        title: L10n.t("أسماء العوائل والفروع", "Family and branch names"),
+                        subtitle: named ? L10n.t("\(branchNamesCount) فرع باسم", "\(branchNamesCount) named")
+                                        : L10n.t("يختار منها العضو عائلته، وأسماء قائمة الفروع", "Members pick their family; branch list names"),
+                        tap: .page { AnyView(AdminFamilyNamesView()) })
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
     }
 
     private var branchNamesCount: Int {
@@ -203,7 +204,7 @@ private struct AdminAppSettingsGroups: View {
                                     ProfileEditCooldown.shared.isDisabled = !on
                                 }))
                                 .labelsHidden()
-                                .tint(AppSection.admin.ink)
+                                .tint(DS.Color.toggleOn)
                                 .accessibilityLabel(L10n.t("حدّ التعديلات الذاتية", "Self-edit limit"))
                                 .disabled(!canEdit)))
             AdminTapRow(icon: "arrow.counterclockwise.circle.fill", tint: DS.Color.warning,
@@ -252,10 +253,14 @@ private struct AdminAppSettingsGroups: View {
                              trailing: AnyView(AdminValueChip(text: updated.map { AppVersionText.stamp($0) } ?? L10n.t("غير محدد", "N/A"),
                                                               tint: DS.Color.primary)))
             }
-            DSButton(L10n.t("استعادة الإعدادات الافتراضية", "Restore default settings"), icon: "arrow.counterclockwise",
-                     role: .destructive) { showReset = true }
-                .disabled(!canEdit)
-                .padding(.bottom, DS.Spacing.xs)
+            // حذف/استعادة خفيف: حبّة حمراء فاتحة بنصّ أحمر (نفس «حذف» الخفيف في المربّعات) بدل الزرّ الأحمر الممتلئ
+            Button { showReset = true } label: {
+                Label(L10n.t("استعادة الإعدادات الافتراضية", "Restore default settings"), systemImage: "arrow.counterclockwise")
+                    .modifier(DSSoftDestructiveFace(enabled: canEdit))
+            }
+            .buttonStyle(DSPressStyle())
+            .disabled(!canEdit)
+            .padding(.bottom, DS.Spacing.xs)
         }
     }
 
@@ -268,7 +273,7 @@ private struct AdminAppSettingsGroups: View {
                 Task { await appSettingsVM.updateSetting(key, value: value, updatedBy: authVM.currentUser?.id) }
             }))
             .labelsHidden()
-            .tint(AppSection.admin.ink)
+            .tint(DS.Color.toggleOn)
             .accessibilityLabel(title)
             .disabled(!canEdit)))
     }

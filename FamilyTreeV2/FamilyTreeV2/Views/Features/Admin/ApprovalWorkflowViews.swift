@@ -644,12 +644,59 @@ struct ApprovalRequestBox<Details: View>: View {
                 }
             }
 
-            NotifButtonRow(items: buttonItems)
-
-            if !otherActions.isEmpty {
-                otherActionsRow
+            // أزرار الطلبات على التصميم الجديد (طلب المالك ٢٠٢٦-١١-١١): الثانوية حبّات رمادية متساوية،
+            // ثم صفّ القرار: الإجراء كحلي · «إغلاق» رمادي · «رفض» و«حذف» دوائر حمراء — نفس الإجراءات والصلاحيات
+            if !secondaryItems.isEmpty {
+                DSDecisionRow(items: secondaryItems, size: .regular)
             }
+            DSDecisionRow(items: decisionItems, size: .regular)
         }
+    }
+
+    /// «اسأل العضو» (المختص) · «إرجاع للمختص» (المدير) · الإجراءات الأخرى غير الهدّامة (تعديل الرقم…)
+    private var secondaryItems: [DSDecisionItem] {
+        var items: [DSDecisionItem] = []
+        if isSpecialistReview && ApprovalWorkflow.canAskRequester(flow.requestType) {
+            items.append(DSDecisionItem(id: "ask",
+                                        title: askOpen ? L10n.t("رجوع للتوصية", "Back to recommendation")
+                                                       : L10n.t("اسأل العضو عن ناقص", "Ask the member for missing info"),
+                                        icon: askOpen ? "chevron.backward" : "questionmark.bubble.fill",
+                                        isEnabled: !busy) {
+                withAnimation(DS.Anim.snappy) { askOpen.toggle() }
+                noteError = nil
+            })
+        }
+        if showsReturnChip {
+            items.append(DSDecisionItem(id: "return", title: L10n.t("إرجاع للمختص", "Return to specialist"),
+                                        icon: "arrow.uturn.backward", isEnabled: !busy) { runReturn() })
+        }
+        for item in otherActions where item.role != .destructive {
+            items.append(DSDecisionItem(id: item.id, title: item.title, icon: item.icon,
+                                        isEnabled: item.isEnabled && !busy, action: item.action))
+        }
+        return items
+    }
+
+    /// صفّ القرار (طلب المالك ٢٠٢٦-١١-١١): الإجراء (اعتماد/تنفيذ/توصية/إرسال) · «رفض» برتقالي · ✕ رمادية للإغلاق
+    private var decisionItems: [DSDecisionItem] {
+        var items: [DSDecisionItem] = []
+        if primary != nil {
+            items.append(DSDecisionItem(id: "primary", title: busy ? L10n.t("جارٍ…", "Working…") : primaryTitle,
+                                        kind: .primary, isEnabled: !(busy || adminRequestVM.isLoading), action: runPrimary))
+        }
+        if showsRejectChip {
+            items.append(DSDecisionItem(id: "reject", title: L10n.t("رفض", "Reject"),
+                                        kind: .reject, isEnabled: !busy) { runReject() })
+        }
+        for item in otherActions where item.role == .destructive {
+            items.append(DSDecisionItem(id: item.id, title: item.title, icon: item.icon ?? "trash",
+                                        kind: .destructive, tint: item.tint, isEnabled: item.isEnabled && !busy, action: item.action))
+        }
+        // وحده (لا قرار): حبّة «إغلاق» كاملة؛ مع القرار: دائرة ✕ رمادية آخر الصفّ
+        let lone = items.isEmpty
+        items.append(DSDecisionItem(id: "close", title: L10n.t("إغلاق", "Close"), icon: lone ? nil : "xmark",
+                                    kind: lone ? .secondary : .dismiss, action: onClose))
+        return items
     }
 
     /// المختص والمسار السريع ومدة المرحلة — شرائح صغيرة على الأبيض
@@ -726,17 +773,6 @@ struct ApprovalRequestBox<Details: View>: View {
         }
     }
 
-    private var buttonItems: [NotifButtonRow.Item] {
-        var items: [NotifButtonRow.Item] = []
-        if primary != nil {
-            let kind: NotifBoxButtonKind = (primary == .approve || primary == .execute) ? .approve : .primary
-            items.append(.init(title: busy ? L10n.t("جارٍ…", "Working…") : primaryTitle, kind: kind,
-                               disabled: busy || adminRequestVM.isLoading, action: runPrimary))
-        }
-        items.append(.init(title: L10n.t("إغلاق", "Close"), kind: .secondary, action: onClose))
-        return items
-    }
-
     private func nonEmpty(_ s: String?) -> String? {
         let t = s?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return t.isEmpty ? nil : t
@@ -764,36 +800,7 @@ struct ApprovalRequestBox<Details: View>: View {
             errorText(noteError)
         }
         if askOpen { askPanel }
-        // شرائح القرار الصغيرة تحت الملاحظة: سؤال العضو (المختص)، إرجاع ورفض (المدير)
-        let askChip = isSpecialistReview && ApprovalWorkflow.canAskRequester(flow.requestType)
-        if askChip || showsReturnChip || showsRejectChip {
-            ChangedWordsFlow(spacing: DS.Spacing.xs) {
-                if askChip {
-                    DSChipButton(askOpen ? L10n.t("رجوع للتوصية", "Back to recommendation")
-                                         : L10n.t("اسأل العضو عن ناقص", "Ask the member for missing info"),
-                                 icon: askOpen ? "chevron.backward" : "questionmark.bubble.fill",
-                                 tint: DS.Color.composerDiwaniya, isSelected: askOpen, size: .small) {
-                        withAnimation(DS.Anim.snappy) { askOpen.toggle() }
-                        noteError = nil
-                    }
-                }
-                if showsReturnChip {
-                    DSChipButton(L10n.t("إرجاع للمختص", "Return to specialist"), icon: "arrow.uturn.backward",
-                                 tint: DS.Color.composerDiwaniya, size: .small,
-                                 isLoading: busy && pendingChip == .returnBack) {
-                        runReturn()
-                    }
-                }
-                if showsRejectChip {
-                    // الرفض برتقالي — نفس لون رفض تفاصيل الطلب القديمة (طلب المالك)
-                    DSChipButton(L10n.t("رفض", "Reject"), icon: "xmark", tint: DS.Color.reject, size: .small) {
-                        runReject()
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .disabled(busy)
-        }
+        // «اسأل العضو» و«إرجاع للمختص» و«رفض» انتقلت إلى أزرار المربّع (`secondaryItems` / `decisionItems`)
         if primary == .approve {
             // المبدّل الصغير فوق «اعتماد» مباشرة (طلب المالك ٢٠٢٦-١٠-١٦)
             DSChoiceTiles(options: [
@@ -892,26 +899,6 @@ struct ApprovalRequestBox<Details: View>: View {
 
     // MARK: إجراءات أخرى
 
-    /// غير القرار (تعديل الرقم، حذف نهائي) — شرائح صغيرة أسفل المربّع بنفس الصلاحيات
-    private var otherActionsRow: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.xs) {
-            Text(L10n.t("إجراءات أخرى", "Other actions"))
-                .dsFont(.caption)
-                .foregroundColor(DS.Color.textTertiary)
-            ChangedWordsFlow(spacing: DS.Spacing.xs) {
-                ForEach(otherActions) { item in
-                    DSChipButton(item.title, icon: item.icon,
-                                 tint: item.role == .destructive ? (item.tint ?? DS.Color.error) : (item.tint ?? DS.Color.primary),
-                                 size: .small) {
-                        item.action()
-                    }
-                    .disabled(!item.isEnabled || busy)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     // MARK: سؤال العضو عن ناقص
 

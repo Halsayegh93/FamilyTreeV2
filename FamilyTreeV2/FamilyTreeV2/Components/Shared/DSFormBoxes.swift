@@ -174,8 +174,7 @@ struct DSFieldBox<Content: View>: View {
 struct DSToggleBox: View {
     let title: String
     @Binding var isOn: Bool
-    var tint: Color = DS.Color.primary
-    @Environment(\.dsSection) private var section
+    var tint: Color = DS.Color.toggleOn
 
     var body: some View {
         Toggle(isOn: $isOn.animation(DS.Anim.snappy)) {
@@ -183,7 +182,7 @@ struct DSToggleBox: View {
                 .dsFieldFont(.bodyMedium)
                 .foregroundColor(DS.Color.textPrimary)
         }
-        .tint(tint.dsChrome(in: section))
+        .tint(tint)
         .dsFieldChrome()
     }
 }
@@ -217,7 +216,7 @@ struct DSDateCard: View {
     @State private var date: Date = Date()
 
     var body: some View {
-        DSCenterCard(onBackgroundTap: onCancel, title: title, icon: "calendar") {
+        DSCenterCard(onBackgroundTap: onCancel, title: title, icon: "calendar", maxWidth: DSBox.dateCardMaxWidth) {
 
             DatePicker("", selection: $date, in: ...Date(), displayedComponents: .date)
                 .datePickerStyle(.wheel)
@@ -435,10 +434,13 @@ struct DSChoiceTiles<ID: Hashable>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Namespace private var pill
+    @Environment(\.dsInCenterBox) private var inBox
 
-    /// الارتفاع المرئي للمقطع (اللمس ٤٤ بالحشوة الشفافة)
+    /// الارتفاع المرئي للمقطع (اللمس ٤٤ بالحشوة الشفافة) — في الصفحات أقصر (`choicePageHeight`)
     static var segmentHeight: CGFloat { DSBox.choiceTrackHeight }
-    private var height: CGFloat { compact ? DSBox.choiceCompactHeight : Self.segmentHeight }
+    private var height: CGFloat {
+        compact ? DSBox.choiceCompactHeight : (inBox ? Self.segmentHeight : DSBox.choicePageHeight)
+    }
     private var trackInset: CGFloat { DSBox.choiceTrackInset }
 
     var body: some View {
@@ -484,7 +486,7 @@ struct DSChoiceTiles<ID: Hashable>: View {
                         .accessibilityHidden(true)
                 }
                 Text(option.title)
-                    .dsFieldFont(.fieldValue)
+                    .dsFieldFont(inBox ? .fieldValue : DSBox.choicePageText)
                     .fontWeight(selected ? .semibold : .regular)
                     .foregroundColor(selected ? DS.Color.textPrimary : DS.Color.textSecondary)
                     .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
@@ -545,7 +547,8 @@ struct DSDateFieldRow: View {
 // بعرض السطر، ومن حجم الخط xxLarge كل شيء عمود واحد. الخلية المتجاورة بلا رمز البداية.
 
 /// الرمز الواحد في طرف الخلية
-enum DSTileGlyph { case edit, menu, none }
+/// `open`: سهم باتجاه القراءة — الخلية تفتح تفاصيل (العضو…)
+enum DSTileGlyph { case edit, menu, open, none }
 
 private struct DSTileHalfKey: EnvironmentKey { static let defaultValue = false }
 extension EnvironmentValues {
@@ -597,6 +600,11 @@ struct DSFieldTileFace: View {
             case .menu:
                 Image(systemName: "chevron.down")
                     .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            case .open:
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
                     .foregroundColor(DS.Color.textTertiary)
                     .accessibilityHidden(true)
             case .none:
@@ -830,10 +838,10 @@ struct DSCommandRow: View {
                 }
                 .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.backward")
+                // سهم «فتح» باتجاه القراءة (قاعدة المشروع: `chevron.left` بالعربية) — كان يشير لليمين كأنه «رجوع»
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
                     .dsGlyph(DS.Glyph.xs)
                     .foregroundColor(DS.Color.textTertiary)
-                    .flipsForRightToLeftLayoutDirection(true)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, DS.Spacing.md)
@@ -931,11 +939,110 @@ struct DSVisibilityPicker: View {
                 DSBoxSectionTitle(title: L10n.t("الخصوصية", "Privacy"), icon: "lock.fill")
             }
             // خلية بيانات واحدة بقائمة (قرار المالك ٢٠٢٦-١١-١١): العنوان اسم المعلومة، والقيمة هي الحالة
-            DSMenuTile(icon: hidden ? "eye.slash.fill" : rowIcon, label: rowTitle, options: [
+            // رمز الصفّ ثابت = المعلومة نفسها، والحالة في القيمة — لا يتبدّل الرمز مع الاختيار فتختلف الصفوف
+            // عن بعضها (طلب المالك ٢٠٢٦-١١-١١ «ترتيب الخصوصية»)
+            DSMenuTile(icon: rowIcon, label: rowTitle, options: [
                 DSChoiceOption(id: false, title: shownText, icon: "eye.fill"),
                 DSChoiceOption(id: true, title: hiddenText, icon: "eye.slash.fill")
             ], selection: $hidden)
             .accessibilityHint(hidden ? hiddenLine : shownLine)
         }
+    }
+}
+
+// MARK: - خطوات مرقّمة (طلب المالك ٢٠٢٦-١١-١١ «من أين أُرسل الطلب»)
+//
+// خطوات ١ ٢ ٣ بقرص كحلي صغير وخطّ رفيع يصل بينها، وكل خطوة شريحة بيضاء برمز صغير وعنوان — بلا عناوين
+// «القسم/الصفحة/الزر». الشريحة تحمل أسطراً ثانوية اختيارية (من فعل، متى، الملاحظة) فتصير بطاقة صغيرة —
+// نفس المكوّن لمسار الإرسال ولسجلّ «ما تم في الطلب». داخل صندوق الحقول الرمادي (`fieldFill`).
+
+/// خطوة واحدة: رمز SF + عنوان (+ أسطر ثانوية)
+struct DSPathStep: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    var lines: [String] = []
+    /// لون رمز الخطوة (قرار: أخضر/أحمر…) — nil = كحلي القسم
+    var tint: Color? = nil
+}
+
+struct DSPathSteps: View {
+    let steps: [DSPathStep]
+    @Environment(\.dsSection) private var section
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                row(step, index: index, last: index == steps.count - 1)
+            }
+        }
+        .padding(DSBox.fieldHorizontalPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func row(_ step: DSPathStep, index: Int, last: Bool) -> some View {
+        HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            // القرص المرقّم والخطّ الواصل إلى التالي (يمتدّ بارتفاع الصفّ)
+            VStack(spacing: 0) {
+                Text(verbatim: Self.number(index + 1))
+                    .dsFont(.badge)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .frame(width: DS.Icon.section, height: DS.Icon.section)
+                    .background(Circle().fill(DS.Color.primaryFill.dsChromeFill(in: section)))
+                    .padding(.top, (DSBox.chipHeight - DS.Icon.section) / 2)
+                if !last {
+                    Rectangle()
+                        .fill(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke))
+                        .frame(width: DS.Border.width)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: DS.Icon.section)
+            .accessibilityHidden(true)
+            chip(step)
+                .padding(.bottom, last ? 0 : DS.Spacing.sm)
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func chip(_ step: DSPathStep) -> some View {
+        let ink = (step.tint ?? DS.Color.primary).dsChrome(in: section).dsReadableGlyph
+        let shape = RoundedRectangle(cornerRadius: step.lines.isEmpty ? DSBox.chipHeight / 2 : DS.Radius.md, style: .continuous)
+        return VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            HStack(spacing: DS.Spacing.xs) {
+                if !step.icon.isEmpty {
+                    Image(dsSymbol: step.icon)
+                        .dsGlyph(DS.Glyph.sm)
+                        .foregroundColor(ink)
+                        .accessibilityHidden(true)
+                }
+                Text(step.title)
+                    .dsFieldFont(.fieldValue)
+                    .foregroundColor(DS.Color.tileValue)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(Array(step.lines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, DSBox.chipPadding)
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(minHeight: DSBox.chipHeight)
+        .background(shape.fill(DS.Color.surface))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// رقم الخطوة بأرقام عربية في الواجهة العربية (١ ٢ ٣) — كالتصميم المعتمد
+    static func number(_ n: Int) -> String {
+        guard L10n.isArabic else { return "\(n)" }
+        let digits: [Character] = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"]
+        return String(String(n).compactMap { $0.wholeNumberValue.map { digits[$0] } })
     }
 }

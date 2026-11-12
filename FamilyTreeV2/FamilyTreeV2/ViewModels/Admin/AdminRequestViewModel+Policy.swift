@@ -39,6 +39,21 @@ nonisolated struct RelativeAddDetails: Decodable, Sendable {
         return try? JSONDecoder().decode(RelativeAddDetails.self, from: data)
     }
 
+    /// صلة القرابة: «زوجة» / «أم» / «أخت» — nil = غير معروفة
+    var relationTitle: String? {
+        switch kind {
+        case "wife": return L10n.t("زوجة", "Wife")
+        case "mother": return L10n.t("أم", "Mother")
+        case "sister": return L10n.t("أخت", "Sister")
+        default: return nil
+        }
+    }
+
+    /// «طلب إضافة زوجة» … — عنوان النوع بصلة القرابة (بدل «إضافة قريبة»)
+    var requestTitle: String {
+        relationTitle.map { L10n.t("طلب إضافة ", "Add ") + $0 } ?? L10n.t("طلب إضافة قريبة", "Add relative")
+    }
+
     /// «إضافة زوجة: …» من السيرفر، وإلا من النوع والاسم
     var summaryText: String {
         if let s = summary?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }

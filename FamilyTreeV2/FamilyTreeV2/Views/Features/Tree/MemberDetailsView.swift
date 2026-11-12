@@ -364,7 +364,9 @@ struct MemberDetailsView: View {
                         contentKind: L10n.t("ملف عضو", "member profile"),
                         contentLabel: target.fullName,
                         contentId: target.id,
-                        reason: reason
+                        reason: reason,
+                        source: RequestSource(.tree, .member(target.fullName),
+                                              RequestSourceStep("flag.fill", "بلاغ عن ملف عضو"))
                     )
                     if ok { await MainActor.run { reportSent = true } }
                 }

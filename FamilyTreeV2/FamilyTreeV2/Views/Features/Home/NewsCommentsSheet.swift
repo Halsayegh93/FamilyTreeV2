@@ -121,7 +121,9 @@ struct NewsCommentsSheet: View {
                         contentKind: L10n.t("تعليق", "comment"),
                         contentLabel: label,
                         contentId: id,
-                        reason: reason
+                        reason: reason,
+                        source: RequestSource(.home, RequestSourceStep("bubble.left.fill", "التعليقات"),
+                                              RequestSourceStep("flag.fill", "بلاغ عن تعليق"))
                     )
                     if ok { await MainActor.run { reportSent = true } }
                 }

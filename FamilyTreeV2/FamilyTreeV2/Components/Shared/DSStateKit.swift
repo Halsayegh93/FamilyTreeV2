@@ -378,16 +378,20 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
     let options: [DSOptionTile<ID>]
     @Binding var selection: ID
     var columns: Int = 4
+    /// كل خيار بلونه (رمزه ملوّن دائماً، والمختار بتعبئة لونه الخفيفة وإطاره) — «نوع الرسالة» في «تواصل مع الإدارة»
+    /// (طلب المالك ٢٠٢٦-١١-١١ «خل نوع الرسالة ملوّنة»). false = الشكل الخفيف الموحّد
+    var colored: Bool = false
     @ViewBuilder var icon: (DSOptionTile<ID>, Bool) -> Icon
     @Environment(\.dsSection) private var section
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
-    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4,
+    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4, colored: Bool = false,
          @ViewBuilder icon: @escaping (DSOptionTile<ID>, Bool) -> Icon) {
         self.options = options
         self._selection = selection
         self.columns = columns
+        self.colored = colored
         self.icon = icon
     }
 
@@ -415,6 +419,7 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
     private func tile(_ option: DSOptionTile<ID>) -> some View {
         let selected = selection == option.id
         let shape = RoundedRectangle(cornerRadius: DS.Radius.md - DSBox.choiceTrackInset, style: .continuous)
+        let ink = (option.tint ?? DS.Color.primary).dsChrome(in: section)
         return Button {
             guard selection != option.id else { return }
             withAnimation(DS.Anim.snappy) { selection = option.id }
@@ -428,7 +433,8 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
                 Text(option.title)
                     .dsFont(.chip)
                     .fontWeight(selected ? .semibold : .regular)
-                    .foregroundColor(selected ? DS.Color.textPrimary : DS.Color.textSecondary)
+                    .foregroundColor(colored ? (selected ? .white : ink.dsReadableGlyph)
+                                     : (selected ? DS.Color.textPrimary : DS.Color.textSecondary))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
@@ -436,7 +442,10 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
             .frame(minHeight: DS.Icon.tapTarget)
             .padding(.vertical, DSBox.optionTilePadding)
             .background {
-                if selected {
+                if colored {
+                    // كل نوع بتعبئة لونه الخفيفة، والمختار ممتلئ بلونه ونصّه أبيض
+                    shape.fill(selected ? ink.dsSolidFill : ink.opacity(DS.Opacity.tintFill))
+                } else if selected {
                     shape.fill(DS.Color.choicePill)
                         .overlay(shape.strokeBorder(DS.Color.selectionStroke, lineWidth: DS.Border.width))
                         .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: DSBox.choiceShadowRadius, y: DSBox.choiceShadowY)
@@ -452,9 +461,9 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
 
 extension DSOptionTiles where Icon == DSOptionTileIcon {
     /// القرص الافتراضي: المختار مجسّم ممتلئ بلونه، وغيره قرص خفيف برمزه
-    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4) {
-        self.init(options, selection: selection, columns: columns) { option, selected in
-            DSOptionTileIcon(icon: option.icon, tint: option.tint, selected: selected)
+    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4, colored: Bool = false) {
+        self.init(options, selection: selection, columns: columns, colored: colored) { option, selected in
+            DSOptionTileIcon(icon: option.icon, tint: option.tint, selected: selected, colored: colored)
         }
     }
 }
@@ -464,6 +473,8 @@ struct DSOptionTileIcon: View {
     let icon: String
     var tint: Color? = nil
     let selected: Bool
+    /// الرمز بلونه حتى لغير المختار
+    var colored: Bool = false
     @Environment(\.dsSection) private var section
 
     var body: some View {
@@ -472,7 +483,7 @@ struct DSOptionTileIcon: View {
         // رمز صغير بلا قرص (الشكل الخفيف ٢٠٢٦-١١-١١): كحلي للمختار، وثانوي لغيره
         Image(dsSymbol: icon.dsLightSymbol)
             .dsGlyph(DS.Glyph.lg, weight: selected ? .regular : .light)
-            .foregroundColor(selected ? ink : DS.Color.textTertiary)
+            .foregroundColor(colored ? (selected ? .white : ink) : (selected ? ink : DS.Color.textTertiary))
             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
             .accessibilityHidden(true)
     }

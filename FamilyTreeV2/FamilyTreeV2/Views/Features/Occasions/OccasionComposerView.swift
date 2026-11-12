@@ -25,6 +25,14 @@ struct OccasionComposerView: View {
     @ObservedObject private var kit = OccasionKit.shared
     @State private var pickerItem: PhotosPickerItem?
     @State private var showMemberPicker = false
+    /// نص البحث في مربّع اختيار العضو
+    @State private var memberSearch = ""
+    /// المرشّحون: في الوفاة والتعزية المتوفون أولاً (كما كان البحث القديم)
+    private var memberPickerCandidates: [FamilyMember] {
+        let all = vm.family.members
+        guard vm.isDeath || vm.template.kind == .solace else { return all }
+        return all.filter { $0.isDeceased == true } + all.filter { $0.isDeceased != true }
+    }
     /// «إعلان عزاء»: قسم «بيانات العزاء» (التشييع، بداية العزاء، العزاءان، الدعاء) مطوي افتراضياً
     @State private var condolenceExpanded = false
     /// المعاينة مكبّرة لفحص التصميم (طلب المالك ٢٠٢٦-١٠-١٧ «لمن انزل تحت يكبر القالب»)
@@ -87,10 +95,27 @@ struct OccasionComposerView: View {
         .sheet(item: $vm.shareItem) { item in
             OccasionShareSheet(items: [item.url])
         }
-        .sheet(isPresented: $showMemberPicker) {
-            OccasionMemberPickerSheet(family: vm.family, preferDeceased: vm.isDeath || vm.template.kind == .solace) { m in
-                withAnimation(DS.Anim.quick) { vm.pickMember(m) }
-            }
+        // مربّع اختيار العضو الموحّد (`DSMemberPickerBox`) بدل صفحة النظام السفلية (طلب المالك ٢٠٢٦-١١-١١)
+        .dsCenterBox(isPresented: $showMemberPicker) {
+            DSMemberPickerBox(
+                title: L10n.t("اختيار من الشجرة", "Pick from the tree"),
+                subtitle: L10n.t("صاحب المناسبة", "The person of the occasion"),
+                icon: "magnifyingglass",
+                candidates: memberPickerCandidates,
+                search: $memberSearch,
+                listsAllWhenEmpty: false,
+                hintTitle: L10n.t("اكتب الاسم للبحث في شجرة العائلة", "Type a name to search the family tree"),
+                noMatchTitle: L10n.t("لم يُعثر على أحد بهذا الاسم", "No one with this name"),
+                emptyMessage: L10n.t("يمكن كتابة الاسم يدوياً.", "You can type the name yourself."),
+                onPick: { m in
+                    withAnimation(DS.Anim.quick) { vm.pickMember(m) }
+                    showMemberPicker = false
+                    memberSearch = ""
+                },
+                onCancel: {
+                    showMemberPicker = false
+                    memberSearch = ""
+                })
         }
         // التنبيه الموحّد (`dsAlert`) بدل تنبيه النظام
         .dsAlert(vm.message ?? "", isPresented: Binding(

@@ -211,18 +211,21 @@ struct CategoriesManagerView: View {
     // MARK: - التصنيفات
 
     private func categoriesRows(_ items: [ContentCategory]) -> some View {
+        // صفوف بطاقة واحدة متّصلة (التصميم الموحّد ٢٠٢٦-١١-١١) بدل بطاقة لكل تصنيف
         ForEach(Array(items.enumerated()), id: \.element.id) { index, category in
             Button {
                 if canEdit { editing = category }
             } label: {
                 row(category)
+                    .dsGroupedRow(DSGroupPosition(index: index, count: items.count),
+                                  dividerInset: DS.Hub.cardPadding + DS.Icon.row + DS.Spacing.md)
             }
             .buttonStyle(.plain)
             .accessibilityHint(canEdit ? L10n.t("يفتح تعديل التصنيف", "Opens category editing") : "")
             .moveDisabled(!canEdit)
             // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
             .dsCardCascade(index, appeared: appeared)
-            .adminPageRow()
+            .adminPageRow(top: 0, bottom: 0)
         }
         .onMove { source, destination in
             if canEdit { move(from: source, to: destination) }
@@ -281,27 +284,22 @@ struct CategoriesManagerView: View {
             }
             // حذف من برّا — للتصنيف الفارغ غير الأساسي فقط
             if canEdit && count == 0 && !store.isProtected(category) {
+                // دائرة الحذف الحمراء الموحّدة (`DSDeleteCircleFace`) — نفس «مشكلات في الشجرة»
                 Button {
                     pendingDelete = category
                 } label: {
-                    Image(systemName: "trash")
-                        .dsGlyph(DS.Glyph.mdCompact)
-                        .foregroundColor(DS.Color.error)
-                        .frame(width: DS.Icon.discSmall, height: DS.Icon.discSmall)
-                        .background(Circle().fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
-                        // مساحة ضغط ٤٤ نقطة والشكل كما هو
-                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
-                        .contentShape(Rectangle())
-                        .padding(.vertical, -DS.Spacing.xsm)
+                    Image(systemName: "trash.fill")
+                        .dsGlyph(DSButtonSize.compact.glyph)
+                        .modifier(DSDeleteCircleFace(size: .compact))
+                        .padding(.vertical, -DSButtonSize.compact.hitInset)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSPressStyle())
                 .accessibilityLabel(L10n.t("حذف التصنيف", "Delete category"))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Hub.cardPadding)
         .padding(.vertical, DS.Spacing.md)
-        .adminCard(padding: nil)
         .contentShape(Rectangle())
     }
 

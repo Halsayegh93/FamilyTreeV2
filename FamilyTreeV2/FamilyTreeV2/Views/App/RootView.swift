@@ -91,39 +91,28 @@ struct MaintenanceModeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
 
+    /// شاشة حالة موحّدة (`DSEmptyView` بنمط الصفحة: المجسّم + العنوان + سطر + الإجراء) بدل التصميم الخاص القديم
+    /// (طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
     var body: some View {
-        VStack(spacing: DS.Spacing.xxl) {
+        VStack(spacing: DS.Spacing.lg) {
             Spacer()
 
-            Image(systemName: "wrench.and.screwdriver")
-                .font(DS.Font.scaled(80, weight: .regular))
-                .foregroundStyle(DS.Color.primary)
-
-            Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))
-                .font(DS.Font.title1)
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.center)
-
-            Text(L10n.t(
-                "نقوم حالياً بتحديث التطبيق. يرجى المحاولة لاحقاً.",
-                "We're currently updating the app. Please try again later."
-            ))
-            .font(DS.Font.body)
-            .foregroundColor(DS.Color.textSecondary)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, DS.Spacing.xxxl)
-
-            Spacer()
-
-            DSSecondaryButton(
-                L10n.t("تحديث", "Refresh"),
-                icon: "arrow.clockwise"
+            DSEmptyView(
+                L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"),
+                message: L10n.t("نقوم حالياً بتحديث التطبيق. يرجى المحاولة لاحقاً.",
+                                "We're currently updating the app. Please try again later."),
+                icon: "wrench.and.screwdriver.fill",
+                actionTitle: L10n.t("تحديث", "Refresh"),
+                actionIcon: "arrow.clockwise",
+                style: .page
             ) {
                 Task {
                     await appSettingsVM.fetchSettings()
                     await CategoryStore.shared.fetch()
                 }
             }
+
+            Spacer()
 
             DSSecondaryButton(
                 L10n.t("تسجيل الخروج", "Sign Out"),

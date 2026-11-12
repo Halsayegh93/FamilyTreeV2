@@ -108,14 +108,21 @@ enum WifeCandidateRules {
         (m.gender ?? "").lowercased() == "male" && m.husbandId == nil
     }
 
+    /// أعضاء شجرة العائلة (`profiles`) — يكتبها `MemberViewModel.allMembers`. رجال شجرة النساء من خارج العائلة
+    /// (أزواج البنات من خارجها وأبناؤهم: «القلاف»، «بوشهري») ليسوا فيها، فلا يظهرون آباءً في «من العائلة»
+    /// (طلب المالك ٢٠٢٦-١١-١٢). فارغة قبل التحميل = بلا هذا الشرط
+    @MainActor static var familyMemberIds: Set<UUID> = []
+
     /// قائمتا الآباء محسوبتان مرة لكل (الشخص، العلاقة، عدد السجلات، الحد) — كانت تُحسب لآلاف الرجال مع كل حرف بحث
     @MainActor private static var fathersMemo: [String: [FamilyMember]] = [:]
     @MainActor static func cachedFathers(_ relation: DSWifeFlowBox.Relation, for personId: UUID, in people: [FamilyMember],
                                          showsHidden: Bool) -> [FamilyMember] {
-        let key = "\(relation == .mother ? "m" : "w")-\(personId)-\(people.count)-\(showsHidden)-\(fatherMinimumAge)"
+        let family = familyMemberIds
+        let key = "\(relation == .mother ? "m" : "w")-\(personId)-\(people.count)-\(showsHidden)-\(fatherMinimumAge)-\(family.count)"
         if let hit = fathersMemo[key] { return hit }
-        let list = relation == .mother ? motherFathers(for: personId, in: people, showsHidden: showsHidden)
+        var list = relation == .mother ? motherFathers(for: personId, in: people, showsHidden: showsHidden)
                                        : fathers(for: personId, in: people, showsHidden: showsHidden)
+        if !family.isEmpty { list = list.filter { family.contains($0.id) } }
         if fathersMemo.count > 8 { fathersMemo.removeAll() }
         fathersMemo[key] = list
         return list
@@ -247,7 +254,9 @@ struct DSWifeFlowBox: View {
     enum Mode { case direct, selfFamily, request }
     /// زوجة لهذا الرجل، أو أمّ لهذا الشخص (طلب المالك ٢٠٢٦-١٠-٢٥ «الأم نفس طريقة الزوجة»)
     enum Relation { case wife, mother }
-    private enum Step: Equatable { case choice, father, daughters(UUID), missingFather }
+    /// «ج» (اختيار المالك ٢٠٢٦-١١-١٢): مربّع واحد — «من العائلة | من خارج العائلة»، بحث الأب وبناته تنفتح تحته،
+    /// وسطر «سيُرسل: …» بالاسم كاملاً. «الأب غير موجود؟» خطوة ثانية كما كانت
+    private enum Step: Equatable { case pick, missingFather }
 
     let mode: Mode
     var relation: Relation = .wife
@@ -275,6 +284,12 @@ struct DSWifeFlowBox: View {
 
     @State private var step: Step
     @State private var search = ""
+    /// البحث المؤجَّل قليلاً — الكتابة سلسة مع ٢٥٠٠ رجل
+    @State private var settledSearch = ""
+    /// الأب المفتوحة بناته تحته
+    @State private var openFatherId: UUID? = nil
+    /// المضيف سأل «من أين؟» قبل المربّع (حسابي) — بلا شريحتي المصدر
+    private let asksSourceBefore: Bool
     @State private var selectedId: UUID? = nil
     @State private var addingNew = false
     @State private var newName = ""
@@ -309,19 +324,23 @@ struct DSWifeFlowBox: View {
         self.onLink = onLink
         self.onAddUnderFather = onAddUnderFather
         self.onCancel = onCancel
-        // المضيف الذي سأل «من أين؟» قبل المربّع (حسابي) يبدأ بالأب
-        _step = State(initialValue: startsAtFather || onOutside == nil ? .father : .choice)
+        // المضيف الذي سأل «من أين؟» قبل المربّع (حسابي) — بلا شريحتي المصدر
+        asksSourceBefore = startsAtFather || onOutside == nil
+        _step = State(initialValue: .pick)
     }
 
     var body: some View {
         Group {
             // كل خطوة مربّع كامل بحدود `AnyView` — لا يتراكم عمق الأنواع فوق التفاصيل (مكدس الآيفون)
             switch step {
-            case .choice: AnyView(choiceStep)
-            case .father: AnyView(fatherStep)
-            case .daughters(let id): AnyView(daughtersStep(fatherId: id))
+            case .pick: AnyView(pickStep)
             case .missingFather: AnyView(missingFatherStep)
             }
+        }
+        .task(id: search) {
+            if !search.isEmpty { try? await Task.sleep(nanoseconds: 150_000_000) }
+            guard !Task.isCancelled else { return }
+            settledSearch = search
         }
         // رقما القواعد من السيرفر (أقل عمر، «المضافة حديثاً») — جلب مرة كل ٥ دقائق على الأكثر
         .task { await config.refresh() }
@@ -354,77 +373,167 @@ struct DSWifeFlowBox: View {
     }
 
     private func go(_ next: Step) {
-        selectedId = nil; addingNew = false; newName = ""; newDeceased = false; search = ""
+        selectedId = nil; addingNew = false; newName = ""; newDeceased = false; search = ""; openFatherId = nil
         step = next
     }
 
     private func shownName(_ m: FamilyMember) -> String { m.fullName.isEmpty ? m.firstName : m.displayFullName }
     private func firstName(_ m: FamilyMember) -> String { m.firstName.isEmpty ? m.fullName : m.firstName }
 
-    // MARK: ١) من أين هي؟
+    // MARK: المربّع الواحد («ج»)
 
-    private var choiceStep: some View {
-        DSComposer(
+    private var pickStep: some View {
+        let father = openFatherId.flatMap { id in people.first { $0.id == id } }
+        let list = father.map { daughterList(of: $0.id) } ?? (eligible: [], hidden: 0)
+        let request = mode == .request
+        let actionTitle = request ? L10n.t("إرسال الطلب", "Send request")
+            : (addingNew ? L10n.t("إضافة وربط", "Add & link") : L10n.t("ربطها ", "Link ") + asWord)
+        return DSComposer(
             title: title,
             subtitle: forLine,
             icon: headerIcon,
             tint: DS.Color.actionNavy,
-            actionTitle: "",
-            showsAction: false,
-            canSubmit: false,
+            actionTitle: actionTitle,
+            actionIcon: request ? "paperplane.fill" : (addingNew ? "plus" : "link"),
+            canSubmit: father != nil && (addingNew ? !trimmedName.isEmpty : selectedId != nil),
+            isBusy: isBusy,
             note: requestNote,
-            onSubmit: {},
+            hasUnsavedChanges: !trimmedName.isEmpty,
+            onSubmit: { submit(father: father, eligible: list.eligible) },
             onCancel: onCancel
         ) {
-            DSComposerSection(title: isMother ? L10n.t("من أين الأم؟", "Where is she from?")
-                                              : L10n.t("من أين الزوجة؟", "Where is she from?"), icon: "person.fill.questionmark",
-                              tint: DS.Color.female, index: 0) {
+            if !asksSourceBefore {
+                // «من خارج العائلة» = مربّع الاسم الموجود عند المضيف
+                DSSegmentedSwitch(options: [
+                    DSSegmentOption(id: 0, title: L10n.t("من العائلة", "From the family"), icon: "tree.fill"),
+                    DSSegmentOption(id: 1, title: L10n.t("من خارج العائلة", "From outside"), icon: "person.crop.circle.badge.plus")
+                ], selection: Binding(get: { 0 }, set: { v in if v == 1 { onOutside?() } }), size: .regular)
+            }
+            DSComposerSection(title: L10n.t("أبوها في الشجرة", "Her father in the tree"), icon: "tree.fill",
+                              tint: DS.Color.male, index: 0) {
                 VStack(spacing: DS.Spacing.sm) {
-                    // من العائلة = أخضر العائلة ورمز الشجرة، ومن خارجها = كحلي القسم (اسم يُكتب)
-                    WifeFlowOption(title: L10n.t("من العائلة", "From the family"),
-                                   hint: L10n.t("تختار أباها من الشجرة، ثم تختارها من بناته أو تضيفها تحته",
-                                                "Pick her father in the tree, then pick her from his daughters or add her"),
-                                   icon: "tree.fill", tint: DSMemberKit.addTint) { go(.father) }
-                        .dsEntrance(delay: DSMotion.staggerDelay(1, base: DSMotion.sectionsAfterHeader),
-                                    y: DSMotion.rise, scale: DSMotion.riseScale)
-                    WifeFlowOption(title: L10n.t("من خارج العائلة", "From outside the family"),
-                                   hint: L10n.t("تكتب اسمها فقط", "Just type her name"),
-                                   icon: "person.crop.circle.badge.plus", tint: DS.Color.primary) { onOutside?() }
-                        .dsEntrance(delay: DSMotion.staggerDelay(2, base: DSMotion.sectionsAfterHeader),
-                                    y: DSMotion.rise, scale: DSMotion.riseScale)
+                    DSComposerField(icon: "magnifyingglass",
+                                    label: L10n.t("اسم الأب", "Father's name"),
+                                    placeholder: L10n.t("اكتب اسم أبيها", "Type her father's name"),
+                                    text: $search)
+                    fatherResults
+                    if onFatherMissing != nil && !isLoading {
+                        Button {
+                            let typed = search.trimmingCharacters(in: .whitespaces)
+                            go(.missingFather); newName = typed
+                        } label: {
+                            Text(L10n.t("الأب غير موجود؟", "Father not listed?"))
+                                .dsFont(.footnote)
+                                .underline()
+                                .foregroundColor(DS.Color.textSecondary)
+                                .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+            }
+            if let father, let line = summaryLine(father: father, eligible: list.eligible) {
+                DSNoteCard(line, icon: request ? "paperplane.fill" : "link", tint: DS.Color.female)
+            }
+            if let error {
+                DSNoteCard(error, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
     }
 
-    // MARK: ٢) الأب من الشجرة
+    /// نتائج الأب: لا أسماء قبل الكتابة، وأول ٨ مطابقات — كل أب ينفتح تحته بناته
+    @ViewBuilder
+    private var fatherResults: some View {
+        let query = settledSearch.trimmingCharacters(in: .whitespaces)
+        if isLoading {
+            DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
+        } else if query.isEmpty {
+            Text(L10n.t("ابدأ باسمه الأول ثم اسم أبيه — مثل «علي حسين».",
+                        "Start with his first name, then his father's — e.g. «Ali Hussain»."))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            let candidates = WifeCandidateRules.cachedFathers(relation, for: husbandId, in: people, showsHidden: showsHidden)
+            // من له بنات في الشجرة أولاً (بترتيب المطابقة)، ثم الباقي — أول ٨
+            let fathersOfDaughters = Set(people.lazy.filter { $0.isFemale }.compactMap(\.fatherId))
+            let all = NameSearch.filter(candidates, query: query, fromFirstName: true) {
+                $0.fullName.isEmpty ? $0.firstName : $0.fullName
+            }
+            let matches = Array((all.filter { fathersOfDaughters.contains($0.id) }
+                                 + all.filter { !fathersOfDaughters.contains($0.id) }).prefix(8))
+            if matches.isEmpty {
+                DSEmptyView(L10n.t("لم يُعثر على اسم مطابق", "No matching name"),
+                            icon: "person.fill.questionmark", style: .inline)
+            } else {
+                ForEach(matches) { f in fatherCard(f) }
+            }
+        }
+    }
 
-    private var fatherStep: some View {
-        DSMemberPickerBox(
-            title: L10n.t("أبوها في الشجرة", "Her father in the tree"),
-            subtitle: L10n.t("اختر أباها، ثم اخترها من بناته", "Pick her father, then pick her from his daughters"),
-            icon: "tree.fill",
-            candidates: WifeCandidateRules.cachedFathers(relation, for: husbandId, in: people, showsHidden: showsHidden),
-            search: $search,
-            isLoading: isLoading,
-            // لا أسماء قبل الكتابة (طلب المالك ٢٠٢٦-١٠-٢٥) — والمطابقة دقيقة (`NameSearch`)
-            listsAllWhenEmpty: false,
-            searchLabel: L10n.t("اسم الأب", "Father's name"),
-            searchPlaceholder: L10n.t("اكتب اسم أبيها", "Type her father's name"),
-            hintTitle: L10n.t("اكتب اسم أبيها", "Type her father's name"),
-            hintMessage: L10n.t("ابدأ باسمه الأول ثم اسم أبيه — مثل «علي حسين».",
-                                "Start with his first name, then his father's — e.g. «Ali Hussain»."),
-            emptyTitle: L10n.t("لا رجال في الشجرة بعد", "No men in the tree yet"),
-            noMatchTitle: L10n.t("لم يُعثر على اسم مطابق", "No matching name"),
-            rowHint: L10n.t("عرض بناته", "Show his daughters"),
-            missingTitle: onFatherMissing == nil ? nil : L10n.t("الأب غير موجود؟", "Father not listed?"),
-            // البحث من الاسم الأول: «علي» = من اسمه علي، «علي حسين» = علي بن حسين (طلب المالك «الأسماء راح تقل»)
-            matchesFromFirstName: true,
-            // «الأب غير موجود؟» ← خطوة الاسم الرباعي (طلب المالك ٢٠٢٦-١٠-٢٥) والمكتوب يبدأ به الحقل
-            onMissing: onFatherMissing == nil ? nil : { typed in go(.missingFather); newName = typed },
-            onPick: { go(.daughters($0.id)) },
-            onCancel: onCancel
-        )
+    /// الأب: اسمه كاملاً و«بناته المتاحات · N» — الضغط يفتح بناته تحته (واحد مفتوح فقط)
+    private func fatherCard(_ f: FamilyMember) -> some View {
+        let isOpen = openFatherId == f.id
+        let list = daughterList(of: f.id)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Button {
+                UISelectionFeedbackGenerator().selectionChanged()
+                withAnimation(DS.Anim.snappy) {
+                    openFatherId = isOpen ? nil : f.id
+                    selectedId = nil; addingNew = false; newName = ""; newDeceased = false
+                }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    DSFieldIcon(name: "person.fill", tint: DS.Color.male)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(shownName(f))
+                            .dsFieldFont(.memberName)
+                            .foregroundColor(DS.Color.fieldValue)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(L10n.t("بناته المتاحات · \(list.eligible.count)", "Available daughters · \(list.eligible.count)"))
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                        .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .frame(minHeight: DSBox.fieldMinHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityAddTraits(isOpen ? [.isButton, .isSelected] : .isButton)
+            if isOpen {
+                daughtersSection(list, father: f)
+                if addingNew { nameSection(f) }
+            }
+        }
+        .dsRowBox()
+    }
+
+    /// «سيُرسل: فاطمة علي حسين … زوجةً لجعفر …» — الاسم المختار كاملاً بنسب أبيها
+    private func summaryLine(father: FamilyMember, eligible: [FamilyMember]) -> String? {
+        let first: String
+        if addingNew {
+            guard !trimmedName.isEmpty else { return nil }
+            first = trimmedName
+        } else if let d = eligible.first(where: { $0.id == selectedId }) {
+            first = shownName(d)
+        } else {
+            return nil
+        }
+        let fatherFull = shownName(father)
+        let words = first.split(separator: " ")
+        let full = words.count <= fatherFull.split(separator: " ").count ? "\(words.first ?? "") \(fatherFull)" : first
+        let lead = mode == .request ? L10n.t("سيُرسل: ", "Will send: ") : L10n.t("سيُربط: ", "Will link: ")
+        // «لك» في «حسابي»، وإلا اسم صاحب العقدة (لا سطر العنوان الفرعي)
+        let target = mode == .selfFamily ? L10n.t("لك", "for you") : L10n.t("لـ", "of ") + husbandName
+        return lead + full + " " + asWord + " " + target
     }
 
     // MARK: «الأب غير موجود؟» — اسمه الرباعي للإدارة
@@ -447,7 +556,7 @@ struct DSWifeFlowBox: View {
                          "The admins add the father or fix his details, then complete the link."),
             hasUnsavedChanges: !trimmedName.isEmpty,
             onSubmit: { if fatherNameIsFull { onFatherMissing?(trimmedName) } },
-            onCancel: { go(.father) }
+            onCancel: { go(.pick) }
         ) {
             DSComposerSection(title: L10n.t("اسم الأب", "Father's name"), icon: "person.fill", tint: DS.Color.primary, index: 0) {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -466,59 +575,14 @@ struct DSWifeFlowBox: View {
         }
     }
 
-    // MARK: ٣) بناته — أو «أضفها تحت أبيها»
+    // MARK: البنات
 
-    private func daughtersStep(fatherId: UUID) -> some View {
-        let father = people.first { $0.id == fatherId }
-        let list = isMother
+    /// بنات الأب المتاحات زوجةً (أو أمّاً) ومن لا تظهر — القواعد الواحدة `WifeCandidateRules`
+    private func daughterList(of fatherId: UUID) -> (eligible: [FamilyMember], hidden: Int) {
+        isMother
             ? WifeCandidateRules.motherDaughters(of: fatherId, personId: husbandId, personFatherId: personFatherId,
                                                  in: people, showsHidden: showsHidden)
             : WifeCandidateRules.daughters(of: fatherId, husbandId: husbandId, in: people, showsHidden: showsHidden)
-        let request = mode == .request
-        let actionTitle = request ? L10n.t("إرسال الطلب", "Send request")
-            : (addingNew ? L10n.t("إضافة وربط", "Add & link") : L10n.t("ربطها ", "Link ") + asWord)
-        return DSComposer(
-            title: title,
-            subtitle: forLine,
-            icon: headerIcon,
-            tint: DS.Color.actionNavy,
-            actionTitle: actionTitle,
-            actionIcon: request ? "paperplane.fill" : (addingNew ? "plus" : "link"),
-            canSubmit: father != nil && (addingNew ? !trimmedName.isEmpty : selectedId != nil),
-            isBusy: isBusy,
-            note: requestNote,
-            hasUnsavedChanges: !trimmedName.isEmpty,
-            onSubmit: { submit(father: father, eligible: list.eligible) },
-            onCancel: onCancel
-        ) {
-            fatherSection(father)
-            daughtersSection(list, father: father)
-            if addingNew { nameSection(father) }
-            if let error {
-                DSNoteCard(error, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
-            }
-        }
-    }
-
-    /// الأب المختار + «تغيير» يرجع لقائمة الآباء
-    private func fatherSection(_ father: FamilyMember?) -> some View {
-        DSComposerSection(title: L10n.t("أبوها", "Her father"), icon: "person.fill", tint: DS.Color.male, index: 0) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: "person.fill", tint: DS.Color.male)
-                    .accessibilityHidden(true)
-                // الاسم كاملاً على سطرين — هو ما يميّز الأب
-                Text(father.map(shownName) ?? "")
-                    .dsFieldFont(.memberName)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                DSChipButton(L10n.t("تغيير", "Change"), icon: "arrow.uturn.backward",
-                             tint: DS.Color.male, size: .small) { go(.father) }
-            }
-            .dsRowBox()
-        }
     }
 
     /// البنات المتاحات (اختيار واحد)، وسطر يوضّح من لا تظهر، ثم «أضفها تحت أبيها»
@@ -627,7 +691,7 @@ struct DSWifeFlowBox: View {
 // MARK: - أجزاء المربّع
 
 /// خيار بحجم بطاقة الإجراء (`DSActionTile`): قرص بلون النوع ورمز أبيض، العنوان وسطر يشرحه، وسهم
-private struct WifeFlowOption: View {
+struct WifeFlowOption: View {
     let title: String
     let hint: String
     let icon: String

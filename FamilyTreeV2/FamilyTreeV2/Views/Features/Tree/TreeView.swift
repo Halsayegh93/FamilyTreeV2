@@ -28,6 +28,10 @@ enum TreeGroupFit {
     /// موضع العضو عند «موقعك» والانتقال لعضو: نسبة من ارتفاع المساحة الظاهرة — فوق المنتصف قليلاً
     /// فيظهر أبوه فوقه وأبناؤه تحته
     static let memberAnchorY: CGFloat = 0.42
+    /// موضع مجموعة «البداية» (الجذر وأبناؤه) عمودياً: نسبة من ارتفاع المساحة الظاهرة لمركزها — ٠٫٥ = بالمنتصف
+    /// بين بطاقة الأدوات والشريط السفلي (طلب المالك ٢٠٢٦-١١-١١ «ننزل الشجرة في البداية»). الأطول من المساحة:
+    /// الجذر أعلاها كما كان
+    static let homeAnchorY: CGFloat = 0.5
     /// أدنى تكبير في الشجرتين — للملاءمة والقرص والأزرار معاً (كان ٠٫٢ في العائلة و٠٫٣ في النساء، فالمجموعة
     /// الكبيرة تُقصّ على الشاشات الصغيرة — ملاحظة المالك ٢٠٢٦-١١-١٠). القرص بالحدّ نفسه فلا يرتدّ بعد الملاءمة.
     static let minScale: CGFloat = 0.1
@@ -68,16 +72,26 @@ enum TreeGroupFit {
     }
 
     /// المقياس والإزاحة لمجموعة `rect` (إحداثيات الكانفس) بحدود `lo`…`hi`:
-    /// - تتّسع بالافتراضي: تبقى عليه، والأب قرب أعلى المساحة وأبناؤه تحته (تحريك فقط)
+    /// - تتّسع بالافتراضي: تبقى عليه، والأب قرب أعلى المساحة وأبناؤه تحته (تحريك فقط) — وفي «البداية» (`home`)
+    ///   مركزها على `homeAnchorY` من المساحة
     /// - لا تتّسع: تصغير خفيف حتى `lo` وبالمنتصف؛ وما زالت أطول: الأب أعلى المساحة والباقي بالسحب
     /// - أفقياً بمنتصف الشاشة دائماً؛ إن لامست عقدةٌ (`nodes`) عمود الأزرار تُزاح عنه بقدر ما يلزم فقط،
     ///   والأعرض من الشاشة وسطها بالمنتصف
-    static func camera(rect: CGRect, nodes: [CGRect], area: Area, lo: CGFloat, hi: CGFloat) -> (scale: CGFloat, offset: CGSize) {
+    static func camera(rect: CGRect, nodes: [CGRect], area: Area, lo: CGFloat, hi: CGFloat,
+                       home: Bool = false) -> (scale: CGFloat, offset: CGSize) {
         let avail = area.avail
         let fit = min(avail.width / rect.width, avail.height / rect.height)
         let s = min(hi, max(lo, fit))
         let w = rect.width * s, h = rect.height * s
-        let y = (fit < hi && h <= avail.height) ? avail.midY - rect.midY * s : avail.minY - rect.minY * s
+        let top = avail.minY - rect.minY * s
+        let y: CGFloat
+        if h > avail.height {
+            y = top
+        } else if home {
+            y = max(top, avail.minY + avail.height * homeAnchorY - rect.midY * s)
+        } else {
+            y = fit < hi ? avail.midY - rect.midY * s : top
+        }
         var x = area.band.midX - rect.midX * s
         if w <= avail.width, !area.tools.isNull {
             // العقد نفسها لا إطار المجموعة — فالصف القصير بجانب الأزرار لا يُزيح المجموعة كلها
@@ -1555,7 +1569,7 @@ struct TreeView: View {
         let area = cameraArea(viewport)
         // السقف = التكبير الافتراضي دائماً (ولو كبّر المستخدم بيده قبلها): تتّسع → الافتراضي، لا تتّسع → تصغير خفيف
         let r = TreeGroupFit.autoRange(k: L.m.k)
-        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: area, lo: r.lo, hi: r.hi)
+        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: area, lo: r.lo, hi: r.hi, home: home)
         scale = cam.scale; baseScale = cam.scale
         if home { fittedScale = cam.scale } else { userInteracted = true }
         // بلا الحدود العادية: كانت تُزيح المجموعة القريبة من طرف الكانفس خارج المساحة الظاهرة

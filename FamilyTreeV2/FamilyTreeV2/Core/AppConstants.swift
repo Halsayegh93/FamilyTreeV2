@@ -116,6 +116,8 @@ enum NotificationKind: String {
     case contentReport = "content_report"
     /// طلب موافقة ولي أمر على حساب قاصر (١٣–١٧) — يصل لولي الأمر ويفتح «حسابي»
     case guardianConsent = "guardian_consent"
+    /// «طلب تغيير الصورة الشخصية» من الإدارة للعضو (`request_photo_change`، ٢٠٢٦-١١-١١) — يفتح مربّع تغيير الصورة
+    case photoChangeRequest = "photo_change_request"
     case test = "test"
 }
 

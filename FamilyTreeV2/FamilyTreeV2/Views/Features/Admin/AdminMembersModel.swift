@@ -207,9 +207,72 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
 /// «يحتاج مراجعتك» — أربع قوائم أعلى صفحة «العائلة» (اختيار المالك ٢٠٢٦-١١-٠٦ «ب — المراجعة أولاً»)، كل قائمة تُراجَع
 /// عضواً عضواً بالسابق والتالي في ورقة العضو
 enum AdminMemberReview: String, CaseIterable, Identifiable {
-    case living, death, gaps, problems
+    /// `notOpened`: لهم رقم هاتف ولم يفتحوا التطبيق بعد (طلب المالك ٢٠٢٦-١١-١١ «حط هذا الخيار بقسم العائلة للاطلاع عليه»)
+    /// `inactive`: لديهم التطبيق ولم يفتحوه ٢١ يوماً أو أكثر (`app_usage_members` = idle) — طلب المالك ٢٠٢٦-١١-١١
+    case living, death, gaps, problems, notOpened, inactive
 
     var id: String { rawValue }
+
+    /// قوائم «استخدام التطبيق» (للاطلاع) — لا تدخل في عدد «يحتاج مراجعتك»، وتنتظر وصول الحسابات
+    var isUsage: Bool { self == .notOpened || self == .inactive }
+
+    /// «الأحياء والوفيات» (القرار ٦ «أ»): «هل ما زالوا أحياء؟» و«تاريخ وفاة غير مكتمل» صفّ واحد وصفحة واحدة بقسمين
+    static let lifeDeathTitle = L10n.t("الأحياء والوفيات", "Living & deaths")
+    static let lifeDeathSubtitle = L10n.t("تأكّد من الأحياء، وأكمل تواريخ الوفاة", "Confirm the living, complete death dates")
+    /// صفوف بطاقة «يحتاج مراجعتك»: «الوفاة» داخل صفّ «الأحياء والوفيات»
+    static var cardCases: [AdminMemberReview] { allCases.filter { $0 != .death } }
+    var cardTitle: String { self == .living ? Self.lifeDeathTitle : title }
+    var cardSubtitle: String {
+        self == .living ? L10n.t("تحقق من الأحياء · تواريخ الوفاة", "Check the living · death dates") : subtitle
+    }
+
+    /// أعضاء القائمة (مواضع الفهرس) — المكان الواحد لصفحة «العائلة» وصفحة القائمة نفسها
+    func rows(in index: AdminMembersIndex, verified: Set<UUID>) -> [Int] {
+        switch self {
+        case .living:    return index.rows(.verifyLiving, .all).filter { !verified.contains(index.entries[$0].id) }
+        case .death:     return index.rows(.deceased, .deathIncomplete)
+        case .gaps:      return index.rows(.gaps, .all)
+        case .problems:  return index.rows(.problems, .all)
+        case .notOpened: return index.rows(.treeOnly, .notSignedIn)
+        case .inactive:  return index.rows(.registered, .inactive)
+        }
+    }
+
+    /// سطر الشرح تحت العنوان في صفحة القائمة
+    var explanation: String {
+        switch self {
+        case .living:    return L10n.t("كبار سن بلا وفاة مسجّلة",
+                                       "Elderly with no recorded death. Confirm «alive» or record the death.")
+        case .death:     return L10n.t("تاريخ الوفاة السنة فقط أو بلا تاريخ",
+                                       "Deceased with only a year or no date of death.")
+        case .gaps:      return L10n.t("أحياء ينقصهم الميلاد أو الجنس أو الصورة",
+                                       "Living members missing a birth date, gender or photo.")
+        case .problems:  return L10n.t("غير مربوطين بأب، أو رقم مكرر",
+                                       "Members without a father link, or a number shared by several members.")
+        case .notOpened: return L10n.t("لهم رقم ولم يسجّلوا الدخول أبداً",
+                                       "They have a number in the tree and never signed in.")
+        case .inactive:  return L10n.t("لم يفتحوا التطبيق ٢١ يوماً أو أكثر",
+                                       "They have the app and haven't opened it for 21+ days.")
+        }
+    }
+
+    /// سطر الإرشاد آخر صفحة القائمة
+    var hint: String {
+        switch self {
+        case .living:    return L10n.t("«حي ✓» يخفيه من القائمة عندك أنت فقط. «متوفى» يفتح مربّع الوفاة، والتاريخ اختياري.",
+                                       "«Alive ✓» hides him from your list only. «Deceased» opens the death box; the date is optional.")
+        case .death:     return L10n.t("«أدخل التاريخ» يفتح مربّع التاريخ، ومنه «التاريخ غير معروف» فلا يُطلب مرة ثانية.",
+                                       "«Enter date» opens the date box, including «date unknown» so it isn't asked again.")
+        case .gaps:      return L10n.t("«أكمل» يفتح ورقة العضو على الناقص، و«التالي» ينقلك للعضو بعده في القائمة.",
+                                       "«Complete» opens the member sheet; «Next» moves to the next member in the list.")
+        case .problems:  return L10n.t("«قارن» يعرض أصحاب الرقم المكرر واحداً بعد واحد لتصحّح رقم أحدهم.",
+                                       "«Compare» shows the members sharing a number one by one, to fix one of them.")
+        case .notOpened: return L10n.t("الواتساب يفتح برسالة جاهزة فيها رابط التطبيق — ترسلها أنت من جوالك.",
+                                       "WhatsApp opens with a ready message and the app link — you send it from your phone.")
+        case .inactive:  return L10n.t("اتصل أو أرسل واتساب لتذكيره بالتطبيق.",
+                                       "Call or WhatsApp to remind them about the app.")
+        }
+    }
 
     var title: String {
         switch self {
@@ -217,6 +280,8 @@ enum AdminMemberReview: String, CaseIterable, Identifiable {
         case .death:    return L10n.t("تاريخ وفاة غير مكتمل", "Death date incomplete")
         case .gaps:     return L10n.t("بيانات ناقصة", "Missing data")
         case .problems: return L10n.t("مشكلات في الشجرة", "Tree problems")
+        case .notOpened: return L10n.t("لم يفتحوا التطبيق بعد", "Haven't opened the app yet")
+        case .inactive:  return L10n.t("لم يدخلوا التطبيق منذ ٢١ يوماً", "Away for 21+ days")
         }
     }
 
@@ -226,6 +291,8 @@ enum AdminMemberReview: String, CaseIterable, Identifiable {
         case .death:    return L10n.t("السنة فقط أو بلا تاريخ", "Year only or no date")
         case .gaps:     return L10n.t("الميلاد · الجنس · الصورة", "Birth · gender · photo")
         case .problems: return L10n.t("غير مرتبط بأب · رقم مكرر", "No father link · duplicate number")
+        case .notOpened: return L10n.t("لهم رقم هاتف ولم يسجّلوا الدخول", "Have a phone number, never signed in")
+        case .inactive:  return L10n.t("لديهم التطبيق ولم يفتحوه ٢١ يوماً أو أكثر", "Have the app, not opened for 21+ days")
         }
     }
 
@@ -235,6 +302,8 @@ enum AdminMemberReview: String, CaseIterable, Identifiable {
         case .death:    return "calendar"
         case .gaps:     return "exclamationmark.triangle.fill"
         case .problems: return "point.3.connected.trianglepath.dotted"
+        case .notOpened: return AppUsageCategory.neverLogged.icon
+        case .inactive:  return AppUsageCategory.idle.icon
         }
     }
 
@@ -245,6 +314,8 @@ enum AdminMemberReview: String, CaseIterable, Identifiable {
         case .death:    return DS.Color.deceased
         case .gaps:     return DS.Color.warning
         case .problems: return DS.Color.error
+        case .notOpened: return DS.Color.info
+        case .inactive:  return DS.Color.warning
         }
     }
 }

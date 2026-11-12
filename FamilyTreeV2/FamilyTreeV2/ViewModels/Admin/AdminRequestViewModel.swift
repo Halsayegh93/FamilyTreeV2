@@ -402,6 +402,19 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Tree Edit Requests
 
+    /// المسار الافتراضي لطلب الشجرة (حين لا تمرّره الشاشة): الملف الشخصي لتعديل العضو ملفّه بعد الحد،
+    /// وإلا «الشجرة ← العضو ← طلب …»
+    static func treeEditSource(_ payload: TreeEditPayload) -> RequestSource {
+        let action = payload.resolvedAction
+        if let reason = payload.reason, reason.hasPrefix("profile_") {
+            return RequestSource(.profile, RequestSourceStep("pencil", "تعديل البيانات"))
+        }
+        let label = action.map { "طلب " + $0.arabicLabel } ?? "طلب تعديل"
+        return RequestSource(.tree,
+                             .member(payload.targetMemberName ?? payload.parentMemberName),
+                             RequestSourceStep(action?.iconName ?? "square.and.pencil", label))
+    }
+
     /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف) — v2 structured payload
     /// رفع صورة مقترحة لطلب «إضافة صورة» — تُخزَّن باسم
     /// photo_suggestion_<callerUid>_<uuid>.jpg في bucket الأفاتار (عام). الاسم
@@ -429,7 +442,12 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
-    func submitTreeEditRequest(payload: TreeEditPayload) async -> Bool {
+    /// - source: مسار الإرسال (الشاشة التي أرسلته — طلب المالك ٢٠٢٦-١١-١١)؛ nil = مسار «الشجرة» المستنتج من الحمولة
+    func submitTreeEditRequest(from source: RequestSource, payload: TreeEditPayload) async -> Bool {
+        await submitTreeEditRequest(payload: payload, source: source)
+    }
+
+    func submitTreeEditRequest(payload: TreeEditPayload, source: RequestSource? = nil) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else { return false }
         self.isLoading = true
@@ -457,15 +475,18 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable(jsonString)
             ]
 
-            do {
-                var dbPayload = basePayload
-                dbPayload["new_value"] = AnyEncodable(payload.action)
-                try await supabase.from("admin_requests").insert(dbPayload).execute()
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    try await supabase.from("admin_requests").insert(basePayload).execute()
-                } else {
-                    throw error
+            let path = source ?? Self.treeEditSource(payload)
+            try await AdminRequestSource.send(path) { path in
+                do {
+                    var dbPayload = AdminRequestSource.payload(basePayload, path)
+                    dbPayload["new_value"] = AnyEncodable(payload.action)
+                    try await supabase.from("admin_requests").insert(dbPayload).execute()
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        try await supabase.from("admin_requests").insert(AdminRequestSource.payload(basePayload, path)).execute()
+                    } else {
+                        throw error
+                    }
                 }
             }
 
@@ -789,7 +810,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// تسجيل تعديل أدمن مباشر في admin_requests كسجل audit (status='approved' فوراً).
     /// لا يطلق إشعارات للمستخدمين — فقط للسجل.
-    func logAdminDirectEdit(payload: TreeEditPayload) async {
+    func logAdminDirectEdit(payload: TreeEditPayload, source: RequestSource? = nil) async {
         guard let user = currentUser else { return }
         do {
             var directPayload = payload
@@ -830,15 +851,23 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable(jsonString)
             ]
 
-            do {
-                try await supabase.from("admin_requests").insert(logEntry).execute()
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    var fallback = logEntry
-                    fallback.removeValue(forKey: "new_value")
-                    try await supabase.from("admin_requests").insert(fallback).execute()
-                } else {
-                    throw error
+            let action = directPayload.resolvedAction
+            let path = source ?? RequestSource(.tree,
+                                               .member(directPayload.targetMemberName ?? directPayload.parentMemberName),
+                                               RequestSourceStep(action?.iconName ?? "square.and.pencil",
+                                                                 "تعديل مباشر: " + (action?.arabicLabel ?? directPayload.action)))
+            try await AdminRequestSource.send(path) { path in
+                let entry = AdminRequestSource.payload(logEntry, path)
+                do {
+                    try await supabase.from("admin_requests").insert(entry).execute()
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        var fallback = entry
+                        fallback.removeValue(forKey: "new_value")
+                        try await supabase.from("admin_requests").insert(fallback).execute()
+                    } else {
+                        throw error
+                    }
                 }
             }
 
@@ -865,7 +894,7 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Deceased Status Requests
 
-    func requestDeceasedStatus(memberId: UUID, deathDate: Date?) async {
+    func requestDeceasedStatus(memberId: UUID, deathDate: Date?, source: RequestSource? = nil) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         do {
@@ -881,10 +910,14 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("طلب تأكيد وفاة بتاريخ: \(dateString)")
             ]
 
-            try await supabase
-                .from("admin_requests")
-                .insert(requestData)
-                .execute()
+            let path = source ?? RequestSource(.tree, .member(memberById(memberId)?.displayFullName),
+                                               RequestSourceStep("leaf.fill", "تسجيل وفاة"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(requestData, path))
+                    .execute()
+            }
 
             let deceasedMemberName = memberById(memberId)?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
@@ -1275,7 +1308,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
     @discardableResult
-    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async -> Bool {
+    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String, source: RequestSource? = nil) async -> Bool {
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(newPhoneNumber) else {
             Log.error("رقم طلب التغيير غير صالح.")
@@ -1294,10 +1327,13 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("طلب تغيير رقم الجوال")
             ]
 
-            try await supabase
-                .from("admin_requests")
-                .insert(requestData)
-                .execute()
+            let path = source ?? RequestSource(.profile, RequestSourceStep("phone.fill", "تغيير الرقم"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(requestData, path))
+                    .execute()
+            }
 
             let phoneRequesterName = currentUser?.firstName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
@@ -1324,7 +1360,7 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Family Change Requests (العائلة بطلب فقط — طلب المالك)
 
     @discardableResult
-    func requestFamilyChange(memberId: UUID, newFamily: String) async -> Bool {
+    func requestFamilyChange(memberId: UUID, newFamily: String, source: RequestSource? = nil) async -> Bool {
         let requestId = UUID()
         do {
             let requestData: [String: AnyEncodable] = [
@@ -1336,7 +1372,11 @@ class AdminRequestViewModel: ObservableObject {
                 "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable("طلب تغيير العائلة إلى: \(newFamily)")
             ]
-            try await supabase.from("admin_requests").insert(requestData).execute()
+            let path = source ?? RequestSource(.profile, RequestSourceStep("pencil", "تعديل البيانات"),
+                                               RequestSourceStep("person.3.fill", "تغيير العائلة"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase.from("admin_requests").insert(AdminRequestSource.payload(requestData, path)).execute()
+            }
 
             let requesterFullName = currentUser?.displayFullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
@@ -1358,7 +1398,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
     @discardableResult
-    func requestNameChange(memberId: UUID, newName: String) async -> Bool {
+    func requestNameChange(memberId: UUID, newName: String, source: RequestSource? = nil) async -> Bool {
         self.isLoading = true
         do {
             let nameRequestId = UUID()
@@ -1372,10 +1412,14 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("طلب تغيير الاسم إلى: \(newName)")
             ]
 
-            try await supabase
-                .from("admin_requests")
-                .insert(requestData)
-                .execute()
+            let path = source ?? RequestSource(.profile, RequestSourceStep("pencil", "تعديل البيانات"),
+                                               RequestSourceStep("character.cursor.ibeam", "تغيير الاسم"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(requestData, path))
+                    .execute()
+            }
 
             let requesterFullName = currentUser?.fullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
@@ -2270,7 +2314,7 @@ class AdminRequestViewModel: ObservableObject {
     @Published var photoSuggestionRequests: [AdminRequest] = []
 
     /// إرسال اقتراح صورة لعضو — يرفع الصورة كملف مؤقت ويسجل طلب إداري
-    func submitPhotoSuggestion(image: UIImage, for memberId: UUID) async -> Bool {
+    func submitPhotoSuggestion(image: UIImage, for memberId: UUID, source: RequestSource? = nil) async -> Bool {
         guard let user = currentUser else { return false }
         self.isLoading = true
         defer { self.isLoading = false }
@@ -2308,16 +2352,20 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("اقتراح صورة لـ \(memberName)")
             ]
 
-            // محاولة إرسال مع new_value
-            do {
-                var payload = basePayload
-                payload["new_value"] = AnyEncodable(urlString)
-                try await supabase.from("admin_requests").insert(payload).execute()
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    try await supabase.from("admin_requests").insert(basePayload).execute()
-                } else {
-                    throw error
+            // محاولة إرسال مع new_value (ومسار الإرسال إن قبله السيرفر)
+            let path = source ?? RequestSource(.tree, .member(memberById(memberId)?.displayFullName),
+                                               RequestSourceStep("photo.badge.plus", "اقتراح صورة"))
+            try await AdminRequestSource.send(path) { path in
+                do {
+                    var payload = AdminRequestSource.payload(basePayload, path)
+                    payload["new_value"] = AnyEncodable(urlString)
+                    try await supabase.from("admin_requests").insert(payload).execute()
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        try await supabase.from("admin_requests").insert(AdminRequestSource.payload(basePayload, path)).execute()
+                    } else {
+                        throw error
+                    }
                 }
             }
 

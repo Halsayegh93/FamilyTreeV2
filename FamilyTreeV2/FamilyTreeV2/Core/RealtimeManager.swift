@@ -24,6 +24,10 @@ final class RealtimeManager {
     private var channelsByTable: [String: RealtimeChannelV2] = [:]
     private var isSubscribed = false
 
+    /// أعضاء تغيّروا منذ آخر دفعة (من رسالة التغيير نفسها) — يُجلبون وحدهم بدل القائمة كلها
+    private var changedMemberIds: Set<UUID> = []
+    private var deletedMemberIds: Set<UUID> = []
+
     /// عدد محاولات إعادة الاتصال لكل قناة
     private var retryCounts: [String: Int] = [:]
     private static let maxRetries = 5
@@ -39,9 +43,18 @@ final class RealtimeManager {
         isSubscribed = true
         Log.info("[Realtime] 🔌 بدء الاشتراكات الحية...")
 
-        // الأعضاء: debounce 5 ثوانٍ + force: false يخلي الـ FetchThrottler يتحكم
-        subscribeToTable("profiles", debounceKey: "members", debounceDelay: 5.0) { [weak self] in
-            await self?.memberVM?.fetchAllMembers(force: false)
+        // الأعضاء (طلب المالك ٢٠٢٦-١١-١٢ «سرّع السيرفر»): كل تنقّل لأي عضو بين الشاشات يحدّث «آخر نشاط» في سجلّه،
+        // فكانت كل الأجهزة تعيد جلب كل الأعضاء (~٣٠٠٠) بعد ٥ ثوانٍ — آلاف المرات يومياً. الآن تُجمع معرّفات من تغيّروا
+        // خلال ٥ ثوانٍ ويُجلبون وحدهم، ويُدمج ما تغيّر فعلاً فقط («آخر نشاط» وحده لا يحرّك الشجرة)
+        subscribeToTable("profiles", debounceKey: "members", debounceDelay: 5.0, collect: { [weak self] change in
+            self?.collectMemberChange(change)
+        }) { [weak self] in
+            guard let self else { return }
+            let updated = self.changedMemberIds
+            let deleted = self.deletedMemberIds
+            self.changedMemberIds.removeAll()
+            self.deletedMemberIds.removeAll()
+            await self.memberVM?.applyLiveMemberChanges(updated: updated, deleted: deleted)
         }
 
         // الأخبار: debounce 5 ثوانٍ
@@ -96,10 +109,23 @@ final class RealtimeManager {
 
     // MARK: - Private Helpers
 
+    /// معرّف العضو من رسالة التغيير (إضافة/تعديل/حذف)
+    private func collectMemberChange(_ change: AnyAction) {
+        switch change {
+        case let .insert(a):
+            if let id = a.record["id"]?.stringValue.flatMap(UUID.init) { changedMemberIds.insert(id) }
+        case let .update(a):
+            if let id = a.record["id"]?.stringValue.flatMap(UUID.init) { changedMemberIds.insert(id) }
+        case let .delete(a):
+            if let id = a.oldRecord["id"]?.stringValue.flatMap(UUID.init) { deletedMemberIds.insert(id) }
+        }
+    }
+
     private func subscribeToTable(
         _ table: String,
         debounceKey: String,
         debounceDelay: TimeInterval = 2.0,
+        collect: (@MainActor (AnyAction) -> Void)? = nil,
         action: @escaping @MainActor () async -> Void
     ) {
         // إلغاء أي task سابق لنفس الجدول (يحدث عند إعادة المحاولة بعد فشل)
@@ -128,8 +154,9 @@ final class RealtimeManager {
                 Log.info("[Realtime] ✅ مشترك في \(table)")
                 self.retryCounts[table] = 0
 
-                for await _ in changes {
+                for await change in changes {
                     guard !Task.isCancelled else { break }
+                    collect?(change)
                     self.debounce(key: debounceKey, delay: debounceDelay) {
                         await action()
                     }
@@ -138,12 +165,12 @@ final class RealtimeManager {
                 // الـ stream انتهى — نحاول نعيد الاتصال إذا ما تم الإلغاء
                 if !Task.isCancelled && self.isSubscribed {
                     Log.warning("[Realtime] ⚠️ انقطع الاتصال بـ \(table) — محاولة إعادة الاتصال...")
-                    await self.retrySubscription(table: table, debounceKey: debounceKey, debounceDelay: debounceDelay, action: action)
+                    await self.retrySubscription(table: table, debounceKey: debounceKey, debounceDelay: debounceDelay, collect: collect, action: action)
                 }
             } catch {
                 Log.error("[Realtime] ❌ خطأ بالاشتراك في \(table): \(error.localizedDescription)")
                 if !Task.isCancelled && self.isSubscribed {
-                    await self.retrySubscription(table: table, debounceKey: debounceKey, debounceDelay: debounceDelay, action: action)
+                    await self.retrySubscription(table: table, debounceKey: debounceKey, debounceDelay: debounceDelay, collect: collect, action: action)
                 }
             }
         }
@@ -156,6 +183,7 @@ final class RealtimeManager {
         table: String,
         debounceKey: String,
         debounceDelay: TimeInterval,
+        collect: (@MainActor (AnyAction) -> Void)? = nil,
         action: @escaping @MainActor () async -> Void
     ) async {
         let currentRetry = (retryCounts[table] ?? 0) + 1
@@ -175,7 +203,7 @@ final class RealtimeManager {
         guard !Task.isCancelled && isSubscribed else { return }
 
         // إعادة الاشتراك
-        subscribeToTable(table, debounceKey: debounceKey, debounceDelay: debounceDelay, action: action)
+        subscribeToTable(table, debounceKey: debounceKey, debounceDelay: debounceDelay, collect: collect, action: action)
     }
 
     private func debounce(

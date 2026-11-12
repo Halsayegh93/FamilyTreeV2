@@ -217,7 +217,10 @@ class DiwaniyasViewModel: ObservableObject {
     
     func deleteDiwaniya(id: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard authVM?.canDeleteDiwaniyas == true else {
+        // صاحب الديوانية يحذفها مثل الإدارة (سياسة السيرفر diwaniyas_delete: صاحبها أو المالك/المدير)
+        let myId = authVM?.currentUser?.id
+        let isMine = myId != nil && diwaniyas.first(where: { $0.id == id })?.ownerId == myId
+        guard authVM?.canDeleteDiwaniyas == true || isMine else {
             self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الديوانية.", "You don't have permission to delete diwaniyas.")
             Log.warning("[AUTH] Unauthorized deleteDiwaniya attempt")
             return

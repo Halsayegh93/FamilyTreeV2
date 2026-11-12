@@ -528,11 +528,34 @@ struct AdminInboxView: View {
             if !preview.isEmpty {
                 DSNoticeText(text: preview, unread: isUnread, role: .subtitle)
             }
-            kindLabel(info)
+            // النوع، ثم رقم المرسل وزرّ «واتساب» في الصفّ نفسه (طلب المالك ٢٠٢٦-١١-١١ «حط رقمه وزر رسالة للواتساب»)
+            HStack(spacing: DS.Spacing.sm) {
+                kindLabel(info)
+                Spacer(minLength: DS.Spacing.xs)
+                if let phone = Self.replyPhone(msg), let wa = KuwaitPhone.whatsappURL(phone), !isSelectMode {
+                    Text(verbatim: "\u{2066}" + KuwaitPhone.display(phone) + "\u{2069}")
+                        .dsFont(.caption)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textSecondary)
+                        .lineLimit(1)
+                    DSChipButton(L10n.t("واتساب", "WhatsApp"), icon: "message.fill", tint: DS.Color.success,
+                                 size: .small) { UIApplication.shared.open(wa) }
+                        .fixedSize()
+                        .accessibilityLabel(L10n.t("مراسلة عبر واتساب", "Message on WhatsApp"))
+                }
+            }
         }
         .dsGroupedRow(position, radius: DS.Hub.cardRadius,
                       dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Hub.iconSquare, selecting: isSelectMode),
                       highlight: isSelectMode && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
+    }
+
+    /// رقم الرد: ما كتبه العضو للتواصل (إن لم يكن بريداً) وإلا رقمه المسجّل — نفس «الرد على العضو» في التفاصيل
+    static func replyPhone(_ msg: AdminRequest) -> String? {
+        let preferred = ContactParser.preferredContact(from: msg)
+        if let preferred, !preferred.contains("@"), !preferred.trimmingCharacters(in: .whitespaces).isEmpty { return preferred }
+        let phone = msg.member?.phoneNumber?.trimmingCharacters(in: .whitespaces) ?? ""
+        return phone.isEmpty ? nil : phone
     }
 
     /// نوع الرسالة بلونه تحت المقتطف (أيقونة صغيرة + الاسم)

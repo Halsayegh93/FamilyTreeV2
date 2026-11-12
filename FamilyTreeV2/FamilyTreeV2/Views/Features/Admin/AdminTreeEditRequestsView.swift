@@ -385,24 +385,26 @@ struct AdminTreeEditRequestsView: View {
             }
 
             // القرار — نفس الصلاحيات تماماً، بالزرّ الواحد (الموافقة بتعبئة القسم، الرفض أحمر)
+            // أزرار الطلبات على التصميم الجديد (٢٠٢٦-١١-١١): الموافقة حبّة كحلية، والرفض دائرة حمراء (المقاس المدمج)
             if showApprove || showReject {
-                HStack(spacing: DSBox.buttonSpacing) {
+                DSDecisionRow(items: {
+                    var items: [DSDecisionItem] = []
                     if showApprove {
-                        DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark.circle.fill") {
+                        items.append(DSDecisionItem(id: "approve", title: L10n.t("موافقة", "Approve"),
+                                                    icon: "checkmark.circle.fill", kind: .primary) {
                             Task { await adminRequestVM.approveTreeEditRequest(request: request) }
-                        }
-                        .accessibilityLabel(L10n.t("موافقة — \(targetName)", "Approve — \(targetName)"))
+                        })
                     }
-
                     if showReject {
-                        DSButton(L10n.t("رفض", "Reject"), icon: "xmark.circle.fill", role: .destructive, tint: DS.Color.reject) {
+                        items.append(DSDecisionItem(id: "reject", title: L10n.t("رفض — \(targetName)", "Reject — \(targetName)"),
+                                                    icon: "xmark", kind: .destructive, tint: DS.Color.reject) {
                             rejectingRequest = request
                             rejectReasonText = ""
                             showRejectAlert = true
-                        }
-                        .accessibilityLabel(L10n.t("رفض — \(targetName)", "Reject — \(targetName)"))
+                        })
                     }
-                }
+                    return items
+                }(), size: .compact)
                 .padding(.top, DS.Spacing.xxs)
             }
         }

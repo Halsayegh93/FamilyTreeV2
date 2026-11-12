@@ -279,13 +279,10 @@ struct ProfileView: View {
             }
             .fullScreenCover(isPresented: $showQRScanner) { QRScannerView(selectedTab: $selectedTab) }
             // إضافة/تعديل الأبناء مربّعات بمنتصف الشاشة بنفس تصميم الإضافة (طلب المالك)
-            .fullScreenCover(isPresented: $showAddChild) {
-                if let c = user {
-                    DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { AddChildSheet(member: c) }
-                        .background(ClearPresentationBackground())
-                }
+            // المدخل الموحّد للمربّعات (`dsCenterBox`): نفس حركة الفتح والإغلاق ولون القسم (طلب المالك ٢٠٢٦-١١-١١)
+            .dsCenterBox(isPresented: $showAddChild) {
+                if let c = user { AddChildSheet(member: c) }
             }
-            .transaction { t in if showAddChild { t.disablesAnimations = true } }
             // مربّع تسجيل الخروج بتصميم التطبيق الموحّد (طلب المالك ٢٠٢٦-١٠-٠٧ «نطوّره») بدل قائمة النظام —
             // مختصر: جملة واحدة، و«تسجيل الخروج» أحمر و«إلغاء»
             .dsAlert(L10n.t("تسجيل الخروج", "Sign Out"), isPresented: $showSignOutConfirm,
@@ -340,11 +337,9 @@ struct ProfileView: View {
                 Text(L10n.t("وصل الرد إلى الإدارة، ويُستكمل الطلب بعد المراجعة.",
                             "Your reply reached the administration, and your request continues its review."))
             }
-            .fullScreenCover(item: $editingChild) { child in
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) { EditChildSheet(member: child) }
-                    .background(ClearPresentationBackground())
+            .dsCenterBox(item: $editingChild) { child in
+                EditChildSheet(member: child)
             }
-            .transaction { t in if editingChild != nil { t.disablesAnimations = true } }
             // حساب امرأة: الأب/الزوج/الابن من شجرة الرجال — نفس تفاصيل العضو
             .fullScreenCover(item: $relativeDetails) { m in
                 MemberDetailsView(member: m, centered: true)
@@ -1869,13 +1864,24 @@ struct WomanMemberEditSheet: View {
             // الجنس — للأبناء فقط (الأم/الزوجة أنثى دائمًا). تغييره ينقل بين الشجرتين
             // (`move_child_gender`) فهو لمن يعدّل الشجرة؛ لغيرهم للقراءة (مثل أندرويد)
             if entry.role == .child {
+                // نفس «إضافة فرد» و«تعديل ابن» (طلب المالك ٢٠٢٦-١١-١١): الجنس زرّان، ثم الميلاد والحالة متجاوران
                 if canEditGender {
-                    DSGenderPicker(selection: $selectedGender)
+                    DSGenderPicker(selection: $selectedGender, buttons: true)
                 } else {
                     DSGenderReadOnlyRow(gender: entry.member.gender)
                 }
+                lifeDates
             }
         }
+    }
+
+    private var lifeDates: some View {
+        DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
+                       isDeceased: $isDeceased,
+                       hasDeathDate: $hasDeathDate, deathDate: $deathDate,
+                       // بصيغة الجنس: الأم والزوجة والابنة «متوفاة»
+                       deceasedTitle: (entry.role != .child || selectedGender == "female")
+                           ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"))
     }
 
     /// «الخصوصية» — للزوجة فقط (إعداد ذاتي عبر RPC مقيّد)، آخر الأقسام فوق الأزرار وبعنوان الأقسام نفسه
@@ -1895,18 +1901,16 @@ struct WomanMemberEditSheet: View {
         }
     }
 
-    /// الميلاد ← متوفى ← الوفاة — نفس مربّع التواريخ في «إضافة ابن»
+    /// الميلاد ← متوفى ← الوفاة — للأم والزوجة قسم وحده؛ للابن/الابنة داخل «البيانات الشخصية» مثل «إضافة فرد»
+    @ViewBuilder
     private var datesSection: some View {
-        DSComposerSection(title: L10n.t("التواريخ والحالة", "Dates & Status"),
-                          icon: "calendar",
-                          tint: DS.Color.warning,
-                          index: 2) {
-            DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
-                           isDeceased: $isDeceased,
-                           hasDeathDate: $hasDeathDate, deathDate: $deathDate,
-                           // بصيغة الجنس: الأم والزوجة والابنة «متوفاة»
-                           deceasedTitle: (entry.role != .child || selectedGender == "female")
-                               ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"))
+        if entry.role != .child {
+            DSComposerSection(title: L10n.t("التواريخ والحالة", "Dates & Status"),
+                              icon: "calendar",
+                              tint: DS.Color.warning,
+                              index: 2) {
+                lifeDates
+            }
         }
     }
 

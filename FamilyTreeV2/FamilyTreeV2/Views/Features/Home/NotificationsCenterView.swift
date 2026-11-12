@@ -33,6 +33,7 @@ private struct NotificationKindStyle {
         "member_add":        .init(icon: "person.fill.badge.plus",                   gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة عضو",       labelEn: "Member Added"),
         "member_change":     .init(icon: "person.text.rectangle",                    gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تغيير بيانات عضو", labelEn: "Member Change"),
         "my_profile_change": .init(icon: "person.crop.circle.badge.checkmark",       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل بياناتك",   labelEn: "Your Data Edited"),
+        "photo_change_request": .init(icon: "camera.badge.ellipsis",                 gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,        labelAr: "طلب تغيير الصورة", labelEn: "Photo Change Request"),
         "admin_edit":        .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل بيانات",    labelEn: "Edit"),
         "admin_edit_name":   .init(icon: "pencil",                                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل اسم",       labelEn: "Name Edit"),
         "admin_edit_dates":  .init(icon: "calendar",                                 gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل تواريخ",    labelEn: "Dates Edit"),
@@ -130,6 +131,8 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    /// «طلب تغيير الصورة» المفتوح من تفاصيل إشعاره — مربّع العضو فوق المركز (`PhotoChangeRequestPresenter`)
+    @State private var photoChangeRequestOpen: PhotoChangeRequest? = nil
     /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
     @State private var selectedMember: FamilyMember? = nil
     /// طلب admin_requests المرتبط بالإشعار الحالي — يُحمَّل عند فتح الشيت (للمرحلة ٣)
@@ -275,6 +278,7 @@ struct NotificationsCenterView: View {
                      onBackgroundTap: { selectedNotification = nil }) { notification in
             notificationDetailSheet(notification)
         }
+        .modifier(PhotoChangeRequestPresenter(request: $photoChangeRequestOpen))
         .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
@@ -985,13 +989,13 @@ struct NotificationsCenterView: View {
             Text(L10n.t("وصل الرد إلى الإدارة، ويُستكمل الطلب بعد المراجعة.",
                         "Your reply reached the administration, and your request continues its review."))
         }
-        .confirmationDialog(
+        // مربّع التطبيق الموحّد (`dsAlert`) بدل قائمة النظام (طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
+        .dsAlert(
             L10n.t("اختر طريقة الموافقة", "Choose approval method"),
             isPresented: Binding(
                 get: { joinApproveDialog != nil },
                 set: { if !$0 { joinApproveDialog = nil } }
             ),
-            titleVisibility: .visible,
             presenting: joinApproveDialog
         ) { activeNotification in
             ForEach(joinMatchCandidates.prefix(8)) { candidate in
@@ -1129,6 +1133,17 @@ struct NotificationsCenterView: View {
                 selectedNotification = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     NotificationCenter.default.post(name: .openProfileTab, object: nil)
+                }
+            }
+            .dsStaggerIn(kindIndex)
+        }
+
+        // «طلب تغيير الصورة الشخصية» ← مربّع تغيير الصورة نفسه (ما دام الطلب مفتوحاً) بعد إغلاق التفاصيل
+        if notification.kind == NotificationKind.photoChangeRequest.rawValue {
+            PhotoChangeRequestNoticeButton { pending in
+                selectedNotification = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
+                    photoChangeRequestOpen = pending
                 }
             }
             .dsStaggerIn(kindIndex)

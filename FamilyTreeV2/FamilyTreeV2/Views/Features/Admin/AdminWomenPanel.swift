@@ -15,8 +15,9 @@ enum AdminWomenChip: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all:       return L10n.t("الكل", "All")
-        case .accounts:  return L10n.t("المسجّلات", "Registered")
-        case .married:   return L10n.t("المتزوجات", "Married")
+        // بلا «ال» كشرائح «شجرة العائلة» («مسجّلون · متوفون») — طلب المالك ٢٠٢٦-١١-١١ «الفلاتر مو مضبوطة»
+        case .accounts:  return L10n.t("مسجّلات", "Registered")
+        case .married:   return L10n.t("متزوجات", "Married")
         case .deceased:  return L10n.t("متوفيات", "Deceased")
         case .outside:   return L10n.t("فرع خارج العائلة", "Outside branch")
         }
@@ -24,6 +25,13 @@ enum AdminWomenChip: String, CaseIterable, Identifiable {
 }
 
 /// صفّ في القائمة: امرأة (أو زوج من خارج العائلة) من شجرة النساء، أو حساب ابن بنت
+/// طلب شريحة من الصفحة — بمعرّف جديد في كل طلب، فيُطبَّق حتى لو كانت الشريحة نفسها مطلوبة قبل
+/// (كان الضغط على «خارج العائلة» مرة ثانية بعد تغيير الشريحة لا يرجعها)
+struct AdminWomenChipRequest: Equatable {
+    let chip: AdminWomenChip
+    let id = UUID()
+}
+
 struct AdminWomenEntry: Identifiable {
     enum Kind { case woman(FamilyMember), outsideHusband(FamilyMember), son(FamilyMember) }
     let kind: Kind
@@ -54,7 +62,7 @@ struct AdminWomenPanel: View {
     let women: [FamilyMember]
     /// طلب شريحة من الصفحة (حلقة «خارج العائلة» ← «فرع خارج العائلة») — الشريحة نفسها حالة هنا، فتبديلها لا يعيد رسم
     /// الصفحة كلها (كان «تهنيق» عند تغيير الفلتر — بلاغ المالك ٢٠٢٦-١١-٠٨)
-    var requestedChip: AdminWomenChip? = nil
+    var requestedChip: AdminWomenChipRequest? = nil
     /// إعادة جلب شجرة النساء بعد تعديل من مربّع التفاصيل
     let reload: () async -> Void
     /// يفتح ورقة حساب العضو (ابن البنت)
@@ -74,12 +82,13 @@ struct AdminWomenPanel: View {
 
     // MARK: البيانات
 
-    private var byId: [UUID: FamilyMember] { Dictionary(women.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) }
+    /// آخر نسخة وصلت من البيانات — إغلاقات `onChange` ترى قيمة `women` القديمة (خاصية لا حالة)، فنبني من الجديدة
+    @State private var latest: [FamilyMember] = []
 
     private func name(_ m: FamilyMember) -> String { m.fullName.isEmpty ? m.firstName : m.fullName }
 
-    private func buildLists() -> [AdminWomenChip: [AdminWomenEntry]] {
-        let map = byId
+    private func buildLists(_ women: [FamilyMember]) -> [AdminWomenChip: [AdminWomenEntry]] {
+        let map = Dictionary(women.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let linked = WomenStore.linkedUserByWoman
         let outside = WomenStore.outsideFamilyIds
         var out: [AdminWomenChip: [AdminWomenEntry]] = [:]
@@ -178,11 +187,12 @@ struct AdminWomenPanel: View {
             .frame(minHeight: DS.Hub.filterListMinHeight, alignment: .top)
         }
         .onAppear {
-            if let requestedChip { chip = requestedChip }
+            if let requestedChip { chip = requestedChip.chip }
             rebuild()
         }
-        .onChange(of: requestedChip) { r in if let r { chip = r } }
-        .onChange(of: women.count) { _ in rebuild() }
+        .onChange(of: requestedChip) { r in if let r { chip = r.chip; query = ""; limit = 40 } }
+        // أي تبدّل في بيانات النساء (تعديل بنفس العدد: وفاة، زوج، حالة) — لا العدد وحده
+        .onChange(of: women) { rebuild($0) }
         .onChange(of: sons.ids) { _ in rebuild() }
         .onChange(of: memberVM.membersVersion) { _ in rebuild() }
         .onChange(of: chip) { _ in limit = 40 }
@@ -207,9 +217,12 @@ struct AdminWomenPanel: View {
         .transaction { t in if selectedWoman != nil { t.disablesAnimations = true } }
     }
 
-    private func rebuild() {
-        guard !women.isEmpty else { return }
-        lists = buildLists()
+    /// `fresh`: القيمة الجديدة من `onChange(of: women)`؛ غيرها يبني من آخر ما وصل
+    private func rebuild(_ fresh: [FamilyMember]? = nil) {
+        if let fresh { latest = fresh }
+        let source = latest.isEmpty ? women : latest
+        guard !source.isEmpty else { return }
+        lists = buildLists(source)
         built = true
     }
 

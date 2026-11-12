@@ -44,7 +44,7 @@ struct DeathDatesCampaignCard: View {
     var body: some View {
         NavigationLink {
             AdminLazyPage {
-                AnyView(AdminAreaGate(area: .family) { AnyView(DeathDatesCampaignPage()) }
+                AnyView(AdminAreaGate(area: .family) { AnyView(AdminReviewListPage(review: .death, branchSet: nil)) }
                     .adminBackTitle(L10n.t("اليوم", "Today")).adminArea(.family))
             }
         } label: {
@@ -59,7 +59,8 @@ struct DeathDatesCampaignCard: View {
             HStack(alignment: .center, spacing: DS.Spacing.md) {
                 AdminIconSquare(symbol: "calendar.badge.clock", tint: DS.Color.saduFill, filled: true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(L10n.t("استكمال تواريخ الوفاة", "Complete the death dates"))
+                    // القرار ٦ «أ»: البطاقة تفتح «الأحياء والوفيات» نفسها (كانت صفحة استكمال منفصلة)
+                    Text(verbatim: AdminMemberReview.lifeDeathTitle)
                         .dsFont(.hubRow)
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -213,7 +214,7 @@ struct DeceasedMemorialSpotCard: View {
         if authVM.canEditMembers {
             NavigationLink {
                 AdminLazyPage {
-                    AnyView(AdminAreaGate(area: .family) { AnyView(DeathDatesCampaignPage()) }
+                    AnyView(AdminAreaGate(area: .family) { AnyView(AdminReviewListPage(review: .death, branchSet: nil)) }
                         .adminBackTitle(L10n.t("اليوم", "Today")).adminArea(.family))
                 }
             } label: {

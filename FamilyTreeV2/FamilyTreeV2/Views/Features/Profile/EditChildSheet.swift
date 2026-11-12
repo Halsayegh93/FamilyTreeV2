@@ -401,7 +401,7 @@ struct EditChildSheet: View {
 
             var requestFailed = false
             if success, deathNeedsApproval {
-                let sent = await adminRequestVM.submitTreeEditRequest(payload: TreeEditPayload.make(
+                let sent = await adminRequestVM.submitTreeEditRequest(from: .profileChildEdit, payload: TreeEditPayload.make(
                     action: .deceased,
                     targetMemberId: member.id.uuidString,
                     targetMemberName: finalFullName,

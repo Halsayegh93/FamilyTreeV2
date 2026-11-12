@@ -12,6 +12,12 @@ struct WomenTreeView: View {
     // تبدأ من الكاش (إن وُجد) — انتقال فوري بلا شاشة تحميل في المرات التالية.
     @State private var allMembers: [FamilyMember] = WomenStore.cache
     @State private var isLoading = WomenStore.cache.isEmpty
+    @EnvironmentObject private var memberVM: MemberViewModel
+    /// عدد الرأس = «الإجمالي» في «إحصائيات العائلة» بالدالة نفسها (`AdminFamilyCensus`) — طلب المالك ٢٠٢٦-١١-١١
+    /// «عدد شجرة النساء مو نفس الإجمالي» (كان عدد صفوف الجدول كلها مع المرايا وخارج العائلة)
+    @State private var headcount: Int?
+    /// «ابن البنت» يُطرح من الرجال في «الإجمالي» — يتحدّث العدد حين تصل قائمته
+    @ObservedObject private var sons = DaughterSonsIndex.shared
     @State private var selectedWoman: FamilyMember? = nil
     @State private var showingNotifications = false
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -81,7 +87,7 @@ struct WomenTreeView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("النساء", "Women"),
-                            subtitle: "\(allMembers.count) " + L10n.t("فرد", "members"),
+                            subtitle: "\(headcount ?? allMembers.count) " + L10n.t("فرد", "members"),
                             icon: AppSection.tree.symbol,
                             section: .tree,
                             subtitleChip: true
@@ -101,6 +107,11 @@ struct WomenTreeView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task { await load() }
+        .onAppear { refreshHeadcount() }
+        .onChange(of: allMembers.count) { _ in refreshHeadcount() }
+        .onChange(of: memberVM.membersVersion) { _ in refreshHeadcount() }
+        .onChange(of: sons.ids) { _ in refreshHeadcount() }
+        .task { if authVM.canModerateTree { await DaughterSonsIndex.shared.refresh() } }
         // انفكّ القفل (وافقت الإدارة على «أكمل حسابك») ← الجلب الآن
         .onChange(of: lineage.isLocked(.womenTree)) { locked in
             if !locked { Task { await load() } }
@@ -163,6 +174,12 @@ struct WomenTreeView: View {
     /// إعادة الجلب عند وصول تغيير حيّ من جهاز آخر.
     private var womenChangePublisher: NotificationCenter.Publisher {
         NotificationCenter.default.publisher(for: .womenMembersChanged)
+    }
+
+    /// الرجال (شجرة العائلة) + نساء شجرة النساء — نفس «الإجمالي»؛ قبل وصول الشجرتين يبقى عدد الصفوف
+    private func refreshHeadcount() {
+        guard !allMembers.isEmpty, !memberVM.allMembers.isEmpty else { return }
+        headcount = AdminFamilyCensus.make(members: memberVM.allMembers, women: allMembers).counts.total
     }
 
     private func load() async {
@@ -281,6 +298,11 @@ struct WomanDetailSheet: View {
     @State private var wifeSearch = ""
     /// «زوج من خارج العائلة» (أبناء البنات، ٢٠٢٦-١١-٠٧) — مربّع الاسم والوفاة فوق مربّع الإجراءات
     @State private var showOutsideHusband = false
+    /// «الزوج»: من العائلة أو من خارجها (طلب المالك ٢٠٢٦-١١-١٢ «يحدد الزوج من العائلة او خارجها»)
+    @State private var showHusbandSource = false
+    /// طلب «زوج من خارج العائلة» (لغير الإدارة) — مربّع الاسم
+    @State private var showOutsideHusbandRequest = false
+    @State private var outsideHusbandName = ""
 
     enum AddKind: Int, Identifiable {
         /// «ابن» — إجراء واحد وكل اسم داخله ذكر أو أنثى (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن وداخل المربع
@@ -293,6 +315,15 @@ struct WomanDetailSheet: View {
             case .wife: return L10n.t("إضافة زوجة", "Add wife")
             case .mother: return L10n.t("إضافة أم", "Add mother")
             case .sister: return L10n.t("إضافة أخت", "Add sister")
+            }
+        }
+        /// عنوان الطلب في مسار «من أين أُرسل» — بالعربية دائماً (بيانات تقرؤها الإدارة)
+        var sourceTitle: String {
+            switch self {
+            case .child: return "طلب إضافة أبناء"
+            case .wife: return "طلب إضافة زوجة"
+            case .mother: return "طلب إضافة أم"
+            case .sister: return "طلب إضافة أخت"
             }
         }
         /// عنوان مربّع «طلب إضافة» (لمن لا يضيف مباشرة)
@@ -518,6 +549,24 @@ struct WomanDetailSheet: View {
                                       await onChanged?()
                                   },
                                   onCancel: { showOutsideHusband = false })
+            }
+            // «الزوج»: من أين؟ — من العائلة (المنتقي) أو من خارجها (مربّع الاسم للإدارة، أو طلب بالاسم لغيرها)
+            .dsCenterBox(isPresented: $showHusbandSource) {
+                HusbandSourceBox(womanName: displayName(woman), isRequest: mode == .request,
+                                 onFamily: { handOff(from: { showHusbandSource = false }) { openHusbandPicker() } },
+                                 onOutside: {
+                                     handOff(from: { showHusbandSource = false }) {
+                                         if mode == .direct { showOutsideHusband = true }
+                                         else { outsideHusbandName = ""; showOutsideHusbandRequest = true }
+                                     }
+                                 },
+                                 onCancel: { showHusbandSource = false })
+            }
+            .dsCenterBox(isPresented: $showOutsideHusbandRequest) {
+                OutsideHusbandRequestBox(womanName: displayName(woman), name: $outsideHusbandName,
+                                         isBusy: draft.busy,
+                                         onSend: { sendOutsideHusbandRequest() },
+                                         onCancel: { showOutsideHusbandRequest = false })
             }
             // اختيار زوج من العائلة (لعقدة أنثى) — فوق مربّع الإجراءات نفسه: كان مربوطاً بالتفاصيل
             // ولا شيء يفتحه، وفتحه من التفاصيل والإجراءات مفتوحة لا يظهر أصلاً
@@ -1108,17 +1157,15 @@ struct WomanDetailSheet: View {
             list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
                                     icon: "heart.fill") { openWifeFlow() })
         } else {
+            // «الزوج» مدخل واحد يسأل: من العائلة أو من خارجها (كانا «ربط زوج» و«زوج من خارج العائلة»).
+            // «من خارج العائلة» للبنت بلا زوج والترحيل مطبّق والمفتاح مفعّل (السيرفر يفرضهما أيضاً)
+            let outsideOK = woman.husbandId == nil && WomenStore.outsideFamilySupported && DaughterSons.isEnabled
             list.append(AdminAction(id: "husband",
-                                    title: woman.husbandId == nil ? L10n.t("ربط زوج", "Link husband")
+                                    title: woman.husbandId == nil ? L10n.t("الزوج", "Husband")
                                                                   : L10n.t("تغيير الزوج", "Change husband"),
-                                    icon: "link") { openHusbandPicker() })
-            // «زوج من خارج العائلة» — بنت بلا زوج، والترحيل مطبّق والمفتاح مفعّل (السيرفر يفرضهما أيضاً)
-            if woman.husbandId == nil && WomenStore.outsideFamilySupported && DaughterSons.isEnabled {
-                list.append(AdminAction(id: "outsideHusband",
-                                        title: DaughterSons.text("outside_husband_title", "زوج من خارج العائلة",
-                                                                 "Husband from outside the family"),
-                                        icon: "person.badge.plus") { showOutsideHusband = true })
-            }
+                                    icon: "heart.fill") {
+                if outsideOK { openHusbandSource() } else { openHusbandPicker() }
+            })
         }
         // «الأم» مدخل واحد (طلب المالك ٢٠٢٦-١١-٠٧ — كانا «أم» و«اختيار الأم»): يعرض الأم الحالية،
         // ويفتح الاختيار من زوجات الأب وفيه «إضافة أم جديدة»، أو الإضافة مباشرة إن لم يكن للأب زوجات
@@ -1188,8 +1235,8 @@ struct WomanDetailSheet: View {
             list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
                                     icon: "heart.fill") { openWifeFlow() })
         } else if woman.husbandId == nil {
-            list.append(AdminAction(id: "husband", title: L10n.t("ربط زوج", "Link husband"),
-                                    icon: "link") { openHusbandPicker() })
+            list.append(AdminAction(id: "husband", title: L10n.t("الزوج", "Husband"),
+                                    icon: "heart.fill") { openHusbandSource() })
         }
         if mother == nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
@@ -1210,6 +1257,31 @@ struct WomanDetailSheet: View {
         draft.flowRelation = .mother
         draft.showWifeFlow = true
     }
+    /// «الزوج»: من العائلة أو من خارجها
+    private func openHusbandSource() {
+        draft.addNotes = ""
+        showHusbandSource = true
+    }
+
+    /// من مربّع إلى مربّع: يُغلق الأول ثم يفتح الثاني بعد انتقال المربّع
+    private func handOff(from close: () -> Void, _ open: @escaping () -> Void) {
+        close()
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { open() }
+    }
+
+    /// طلب «زوج من خارج العائلة» للإدارة — بالاسم الكامل، تنفيذ يدوي من «الإدارة» في تفاصيلها
+    private func sendOutsideHusbandRequest() {
+        let name = outsideHusbandName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let anchor = requestAnchor(preferHusband: false) else { return }
+        showOutsideHusbandRequest = false
+        sendRequest(requestPayload(title: L10n.t("طلب إضافة زوج من خارج العائلة", "Request a husband from outside the family"),
+                                   name: name,
+                                   details: [L10n.t("الزوج من خارج العائلة — تضيفه الإدارة من «الإدارة ← الزوج ← من خارج العائلة» في تفاصيلها.",
+                                                    "Husband from outside the family — the admins add him from her details.")],
+                                   createsSon: false, anchor: anchor),
+                    sourceTitle: "طلب إضافة زوج من خارج العائلة", icon: "plus")
+    }
+
     private func openHusbandPicker() {
         wifeSearch = ""; draft.addNotes = ""; draft.addFatherPicked = nil
         draft.showHusbandPicker = true
@@ -2036,8 +2108,10 @@ struct WomanDetailSheet: View {
 
     /// مرشّحات «زوج من العائلة»: ذكور الشجرة (عدا العضو نفسه).
     private var husbandCandidates: [FamilyMember] {
-        allWomen
-            .filter { !$0.isFemale && $0.id != woman.id }
+        let family = WifeCandidateRules.familyMemberIds
+        return allWomen
+            // رجال شجرة العائلة فقط — لا أزواج البنات من خارجها ولا أبناؤهم (طلب المالك ٢٠٢٦-١١-١٢)
+            .filter { !$0.isFemale && $0.id != woman.id && (family.isEmpty || family.contains($0.id)) }
             // مقارنة نصّية بسيطة بدل localizedCompare على ~٢٥٠٠ اسم مع كل رسم — كانت تبطّئ فتح منتقي الزوج
             .sorted { $0.fullName < $1.fullName }
     }
@@ -2072,7 +2146,8 @@ struct WomanDetailSheet: View {
                 guard let anchor = requestAnchor(preferHusband: false) else { return }
                 sendRequest(WifeCandidateRules.missingFatherPayload(typed: typed, memberId: anchor,
                                                                     memberName: displayName(woman),
-                                                                    relation: draft.flowRelation))
+                                                                    relation: draft.flowRelation),
+                            sourceTitle: draft.flowRelation == .mother ? "طلب إضافة أم" : "طلب إضافة زوجة", icon: "plus")
             },
             onCancel: { draft.showWifeFlow = false }
         )
@@ -2103,7 +2178,8 @@ struct WomanDetailSheet: View {
                 catch { throw WomenWriteFailure(message: WifeCandidateRules.failureMessage(error)) }
             }
         case .request:
-            submitLinkRequest(title: L10n.t("طلب ربط أم", "Mother link request"), picked: daughter,
+            submitLinkRequest(title: L10n.t("طلب ربط أم", "Mother link request"), sourceTitle: "طلب ربط أم", picked: daughter,
+                              name: lineageName(displayName(daughter), father: father),
                               details: [L10n.t("أبوها: ", "Her father: ") + displayName(father)])
         case .viewOnly:
             break
@@ -2133,11 +2209,12 @@ struct WomanDetailSheet: View {
         case .request:
             guard let anchor = requestAnchor(preferHusband: false) else { return }
             sendRequest(requestPayload(title: L10n.t("طلب إضافة أم من العائلة", "Request a mother from the family"),
-                                       name: name,
+                                       name: lineageName(name, father: father),
                                        details: [L10n.t("أبوها في الشجرة: ", "Her father in the tree: ") + displayName(father),
                                                  L10n.t("تُضاف بنتاً لأبيها ثم تُربط أمّاً (وزوجةً للأب).",
                                                         "Add her as his daughter, then link her as the mother (and the father's wife).")],
-                                       createsSon: false, anchor: anchor))
+                                       createsSon: false, anchor: anchor),
+                        sourceTitle: "طلب إضافة أم من العائلة", icon: "plus")
         case .viewOnly:
             break
         }
@@ -2160,7 +2237,8 @@ struct WomanDetailSheet: View {
                 if let open { open(womanId) } else { dismiss() }
             })
         case .request:
-            submitLinkRequest(title: L10n.t("طلب ربط زوجة", "Wife link request"), picked: daughter,
+            submitLinkRequest(title: L10n.t("طلب ربط زوجة", "Wife link request"), sourceTitle: "طلب ربط زوجة", picked: daughter,
+                              name: lineageName(displayName(daughter), father: father),
                               details: [L10n.t("أبوها: ", "Her father: ") + displayName(father)])
         case .viewOnly:
             break
@@ -2188,11 +2266,12 @@ struct WomanDetailSheet: View {
         case .request:
             guard let anchor = requestAnchor(preferHusband: false) else { return }
             sendRequest(requestPayload(title: L10n.t("طلب إضافة زوجة من العائلة", "Request a wife from the family"),
-                                       name: name,
+                                       name: lineageName(name, father: father),
                                        details: [L10n.t("أبوها في الشجرة: ", "Her father in the tree: ") + displayName(father),
                                                  L10n.t("تُضاف بنتاً لأبيها ثم تُربط زوجةً.",
                                                         "Add her as his daughter, then link her as the wife.")],
-                                       createsSon: false, anchor: anchor))
+                                       createsSon: false, anchor: anchor),
+                        sourceTitle: "طلب إضافة زوجة من العائلة", icon: "plus")
         case .viewOnly:
             break
         }
@@ -2215,7 +2294,7 @@ struct WomanDetailSheet: View {
                 try await WomenStore.setHusbandId(womanId: womanId, husbandId: picked.id)
             }
         case .request:
-            submitLinkRequest(title: L10n.t("طلب ربط زوج", "Husband link request"), picked: picked)
+            submitLinkRequest(title: L10n.t("طلب ربط زوج", "Husband link request"), sourceTitle: "طلب ربط زوج", picked: picked)
         case .selfFamily, .viewOnly:
             break
         }
@@ -2359,6 +2438,7 @@ struct WomanDetailSheet: View {
         let tally = WomanAddTally()
         // طلبات المتوفّيات تُبنى هنا (تقرأ العقدة) — والإرسال داخل الكتابة
         var deceasedRequests: [UUID: TreeEditPayload] = [:]
+        let source = womenSource(kind.sourceTitle)
         if kind == .wife || kind == .mother {
             for e in list where e.deceased { deceasedRequests[e.id] = addRequestPayload(kind, e) }
         }
@@ -2374,7 +2454,8 @@ struct WomanDetailSheet: View {
                 case .child:
                     // نفس مسار «إضافة ابن» في «عائلتي»: مباشر للعضو (إشعار للإدارة)، والطلب عند حدّ اليوم فقط
                     let newId = await vm.addChild(firstNameOnly: e.trimmedName, phoneNumber: "", birthDate: birth,
-                                                  fatherId: meId, isDeceased: e.deceased, deathDate: nil, gender: "male")
+                                                  fatherId: meId, isDeceased: e.deceased, deathDate: nil, gender: "male",
+                                                  requestSource: source)
                     if newId == nil {
                         let msg = await MainActor.run { vm.errorMessage }
                         throw WomenWriteFailure(message: msg ?? L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.",
@@ -2384,7 +2465,7 @@ struct WomanDetailSheet: View {
                     if staff || direct { tally.added += 1 } else { tally.pending += 1 }
                 case .wife, .mother:
                     if let payload = deceasedRequests[e.id] {
-                        try await Self.submit(payload, via: requests)
+                        try await Self.submit(payload, via: requests, source: source)
                         tally.requested += 1
                     } else if kind == .wife {
                         // nil = أُرسلت طلباً للإدارة (`relative_add`)
@@ -2413,6 +2494,7 @@ struct WomanDetailSheet: View {
         let draft = self.draft
         let tally = WomanAddTally()
         var deceasedRequests: [UUID: TreeEditPayload] = [:]
+        let sisterSource = womenSource(AddKind.sister.sourceTitle)
         if !direct {
             for e in list where e.deceased { deceasedRequests[e.id] = addRequestPayload(.sister, e) }
         }
@@ -2425,7 +2507,7 @@ struct WomanDetailSheet: View {
                                                   isDeceased: e.deceased, isMarried: e.married)
                     tally.added += 1
                 } else if let payload = deceasedRequests[e.id] {
-                    try await Self.submit(payload, via: requests)
+                    try await Self.submit(payload, via: requests, source: sisterSource)
                     tally.requested += 1
                 } else {
                     if try await WomenStore.addSelfSister(fatherId: fatherId, name: e.trimmedName) != nil { tally.added += 1 }
@@ -2556,34 +2638,52 @@ struct WomanDetailSheet: View {
         let requests = adminRequestVM
         let draft = self.draft
         let tally = WomanAddTally()
+        let source = womenSource(kind.sourceTitle)
         runWrite(failTitle: L10n.t("تعذّر إرسال الطلب", "Couldn't send the request"), {
             for (e, payload) in items {
-                try await Self.submit(payload, via: requests)
+                try await Self.submit(payload, via: requests, source: source)
                 tally.requested += 1
                 await Self.written(e, in: draft)
             }
         }, onSuccess: { finishAdds(tally) })
     }
 
-    private func submitLinkRequest(title: String, picked: FamilyMember, details: [String] = []) {
+    private func submitLinkRequest(title: String, sourceTitle: String, picked: FamilyMember, name: String? = nil,
+                                   details: [String] = []) {
         guard let anchor = requestAnchor(preferHusband: false) else { return }
-        sendRequest(requestPayload(title: title, name: displayName(picked), details: details,
-                                   createsSon: false, anchor: anchor))
+        sendRequest(requestPayload(title: title, name: name ?? displayName(picked), details: details,
+                                   createsSon: false, anchor: anchor), sourceTitle: sourceTitle)
+    }
+
+    /// الاسم المختار كاملاً بنسب أبيها (طلب المالك ٢٠٢٦-١١-١٢): «فاطمة» + «علي حسين … المحمدعلي» —
+    /// الاسم الأطول من نسب أبيها يبقى كما هو (نفس قاعدة `WomenTreeRequestLines.fullName` في «الوارد»)
+    private func lineageName(_ name: String, father: FamilyMember) -> String {
+        let fatherFull = displayName(father)
+        let words = name.split(separator: " ")
+        guard let first = words.first, words.count <= fatherFull.split(separator: " ").count else { return name }
+        return "\(first) \(fatherFull)"
+    }
+
+    /// مسار «من أين أُرسل» لطلبات هذه العقدة (طلب المالك ٢٠٢٦-١١-١١): شجرة النساء ← صاحبة العقدة ← الطلب
+    private func womenSource(_ title: String, icon: String = "plus") -> RequestSource {
+        RequestSource(.womenTree, .member(displayName(woman)), RequestSourceStep(icon, title))
     }
 
     /// طلب واحد (ربط زوج/زوجة، زوجة من العائلة) بنفس الكتابة والرسالة
-    private func sendRequest(_ payload: TreeEditPayload) {
+    private func sendRequest(_ payload: TreeEditPayload, sourceTitle: String, icon: String = "link") {
         let vm = adminRequestVM
         let tally = WomanAddTally()
+        let source = womenSource(sourceTitle, icon: icon)
         runWrite(failTitle: L10n.t("تعذّر إرسال الطلب", "Couldn't send the request"), {
-            try await Self.submit(payload, via: vm)
+            try await Self.submit(payload, via: vm, source: source)
             tally.requested += 1
         }, onSuccess: { finishAdds(tally) })
     }
 
     /// إرسال طلب واحد بمسار الطلبات الموجود — عدم الوصول خطأ يُعرض
-    private static func submit(_ payload: TreeEditPayload, via vm: AdminRequestViewModel) async throws {
-        let sent = await vm.submitTreeEditRequest(payload: payload)
+    private static func submit(_ payload: TreeEditPayload, via vm: AdminRequestViewModel,
+                               source: RequestSource? = nil) async throws {
+        let sent = await vm.submitTreeEditRequest(payload: payload, source: source)
         if !sent {
             throw WomenWriteFailure(message: L10n.t("لم يُرسل الطلب. تحقّق من الاتصال وحاول مرة أخرى.",
                                                     "The request wasn't sent. Check your connection and try again."))
@@ -2866,3 +2966,76 @@ private struct WomanPanelCloseButton: View {
     }
 }
 
+
+
+// MARK: - «الزوج»: من أين؟ (طلب المالك ٢٠٢٦-١١-١٢)
+
+/// «من العائلة» (يختاره من رجال الشجرة) أو «من خارج العائلة» (يكتب اسمه) — نفس خيارات مربّع الزوجة
+struct HusbandSourceBox: View {
+    let womanName: String
+    let isRequest: Bool
+    let onFamily: () -> Void
+    let onOutside: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        DSComposer(
+            title: isRequest ? L10n.t("طلب إضافة زوج", "Request a husband") : L10n.t("الزوج", "Husband"),
+            subtitle: womanName,
+            icon: "heart.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            canSubmit: false,
+            note: isRequest ? L10n.t("يُرسل للإدارة للمراجعة", "Sent to the administration for review") : nil,
+            onSubmit: {},
+            onCancel: onCancel
+        ) {
+            DSComposerSection(title: L10n.t("من أين الزوج؟", "Where is he from?"), icon: "person.fill.questionmark",
+                              tint: DS.Color.male, index: 0) {
+                VStack(spacing: DS.Spacing.sm) {
+                    WifeFlowOption(title: L10n.t("من العائلة", "From the family"),
+                                   hint: L10n.t("تختاره من رجال الشجرة", "Pick him from the family tree"),
+                                   icon: "tree.fill", tint: DSMemberKit.addTint, action: onFamily)
+                    WifeFlowOption(title: L10n.t("من خارج العائلة", "From outside the family"),
+                                   hint: L10n.t("تكتب اسمه الكامل", "Type his full name"),
+                                   icon: "person.crop.circle.badge.plus", tint: DS.Color.primary, action: onOutside)
+                }
+            }
+        }
+    }
+}
+
+/// طلب «زوج من خارج العائلة» لغير الإدارة: الاسم الكامل فقط، والإدارة تضيفه
+struct OutsideHusbandRequestBox: View {
+    let womanName: String
+    @Binding var name: String
+    let isBusy: Bool
+    let onSend: () -> Void
+    let onCancel: () -> Void
+
+    private var trimmed: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        DSComposer(
+            title: L10n.t("زوج من خارج العائلة", "Husband from outside the family"),
+            subtitle: womanName,
+            icon: "person.crop.circle.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("إرسال الطلب", "Send request"),
+            actionIcon: "paperplane.fill",
+            canSubmit: !trimmed.isEmpty,
+            isBusy: isBusy,
+            note: L10n.t("يُرسل للإدارة للمراجعة", "Sent to the administration for review"),
+            hasUnsavedChanges: !trimmed.isEmpty,
+            onSubmit: { if !trimmed.isEmpty { onSend() } },
+            onCancel: onCancel
+        ) {
+            DSComposerSection(title: L10n.t("الزوج", "Husband"), icon: "person.fill", tint: DS.Color.male, index: 0) {
+                DSComposerField(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full name"),
+                                placeholder: L10n.t("اسمه الكامل مع العائلة", "His full name with the family name"),
+                                text: $name)
+            }
+        }
+    }
+}

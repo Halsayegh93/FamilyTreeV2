@@ -113,7 +113,10 @@ struct DiwaniyasView: View {
                                 contentKind: L10n.t("ديوانية", "diwaniya"),
                                 contentLabel: target.title,
                                 contentId: target.id,
-                                reason: reason
+                                reason: reason,
+                                source: RequestSource(RequestSourceStep("cup.and.saucer.fill", "الديوانيات"),
+                                                      RequestSourceStep("house.fill", target.title),
+                                                      RequestSourceStep("flag.fill", "بلاغ عن ديوانية"))
                             )
                             if ok { await MainActor.run { reportSent = true } }
                         }
@@ -161,7 +164,8 @@ struct DiwaniyasView: View {
                 viewModel.notificationVM = notificationVM
                 rebuildFilteredDiwaniyas()
             }
-            .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
+            // كل تبدّل في القائمة (تعديل، اعتماد، تحديث بنفس العدد) — لا العدد وحده
+            .onReceive(viewModel.$diwaniyas) { rebuildFilteredDiwaniyas($0) }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
@@ -183,10 +187,11 @@ struct DiwaniyasView: View {
     // MARK: - Filtered Diwaniyas
     private var filteredDiwaniyas: [Diwaniya] { cachedVisibleDiwaniyas }
 
-    private func rebuildFilteredDiwaniyas() {
+    /// `list`: القيمة الجديدة من الناشر (يصل قبل أن تتغيّر `viewModel.diwaniyas`)
+    private func rebuildFilteredDiwaniyas(_ list: [Diwaniya]? = nil) {
         let userId = authVM.currentUser?.id
         let canModerate = authVM.canModerate
-        cachedVisibleDiwaniyas = viewModel.diwaniyas.filter { diwaniya in
+        cachedVisibleDiwaniyas = (list ?? viewModel.diwaniyas).filter { diwaniya in
             if diwaniya.approvalStatus == "approved" { return true }
             if diwaniya.approvalStatus == "pending" {
                 return canModerate || diwaniya.ownerId == userId

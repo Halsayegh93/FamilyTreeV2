@@ -321,6 +321,10 @@ struct DSComposer<Content: View>: View {
     /// الإجراء بعرض الشريط في صفّ وحده و«إلغاء» تحته — لنصّ إجراء يقول بالضبط ما سيحدث
     /// («أرسل الحين ← 32 عضو»، منشئ الإعلان، الدفعة ١١). false = الزرّان جنباً إلى جنب كما كانا
     var actionFullRow: Bool = false
+    /// أزرار الطلبات (طلب المالك ٢٠٢٦-١١-١١): الإجراءات الأخرى غير الهدّامة حبّات رمادية متساوية في صفّ فوق صفّ
+    /// القرار، والهدّامة («رفض»، «حذف نهائي») دوائر حمراء في صفّ «الإجراء · إغلاق» نفسه — وإن لم تتّسع دائرتان
+    /// (خط كبير) يذهب ما بعد الأولى إلى «⋯». بأحجام إمكانية الوصول: الكل فوق بعض بأسمائه
+    var decisionFooter: Bool = false
     /// مربّع الرأس بدل الرمز الذهبي — دائرة العضو في «بيانات العضو» (nil = الرمز الذهبي `icon`)
     var headerTile: NotifBoxTile? = nil
     /// دائرة العضو بالرمادي (المتوفى) — كما كانت في رأس «بيانات العضو»
@@ -413,8 +417,11 @@ struct DSComposer<Content: View>: View {
                 }
                 .foregroundColor(DS.Color.textTertiary)
             }
+            if decisionFooter {
+                decisionRows
+            }
             // الإجراءات الأخرى — بنفس الزرّ الواحد، زرّان بالصفّ، فوق صفّ «الإجراء / إلغاء»
-            if !extraActions.isEmpty && inlineExtra == nil && !extraInline {
+            else if !extraActions.isEmpty && inlineExtra == nil && !extraInline {
                 VStack(spacing: DSBox.buttonSpacing) {
                     ForEach(extraRows.indices, id: \.self) { row in
                         HStack(spacing: DSBox.buttonSpacing) {
@@ -425,7 +432,9 @@ struct DSComposer<Content: View>: View {
                 .buttonStyle(DSPressStyle())
             }
             // صفّ الأزرار بمواصفة `DSBox` الواحدة (نفس أزرار التنبيه والبطاقات)
-            if actionFullRow && showsAction {
+            if decisionFooter {
+                EmptyView()
+            } else if actionFullRow && showsAction {
                 VStack(spacing: DSBox.buttonSpacing) {
                     actionButton
                     if showsCancel { cancelButton }
@@ -497,6 +506,83 @@ struct DSComposer<Content: View>: View {
             .modifier(DSReadyGlow(isReady: canSubmit, armed: entranceSettled, cornerRadius: DSBox.buttonRadius))
         }
         .disabled(!canSubmit || isBusy)
+    }
+
+    // MARK: أزرار الطلبات (`decisionFooter`)
+
+    private var decisionSecondary: [DSComposerAction] { extraActions.filter { $0.role != .destructive } }
+    private var decisionDestructive: [DSComposerAction] { extraActions.filter { $0.role == .destructive } }
+
+    /// صفّ الحبّات الثانوية ثم صفّ القرار: «الإجراء» كحلي · «رفض» برتقالي · ✕ رمادية للإغلاق (والزائد في «⋯»)
+    @ViewBuilder
+    private var decisionRows: some View {
+        let stacked = typeSize.isAccessibilitySize
+        let line = stacked ? AnyLayout(VStackLayout(spacing: DSBox.buttonSpacing))
+                           : AnyLayout(HStackLayout(spacing: DSBox.buttonSpacing))
+        VStack(spacing: DSBox.buttonSpacing) {
+            if !decisionSecondary.isEmpty {
+                line {
+                    ForEach(decisionSecondary) { item in
+                        Button(action: item.action) {
+                            HStack(spacing: DSBox.buttonSpacing) {
+                                if let icon = item.icon { Image(dsSymbol: icon).dsGlyph(DSButtonSize.regular.glyph) }
+                                Text(item.title)
+                            }
+                            .modifier(DSButtonFace(role: .cancel, enabled: item.isEnabled && !isBusy))
+                        }
+                        .disabled(!item.isEnabled || isBusy)
+                        .accessibilityLabel(item.title)
+                    }
+                }
+            }
+            // صفّ القرار (طلب المالك ٢٠٢٦-١١-١١ «الرفض مكان الإغلاق، والإغلاق علامة»):
+            // الإجراء كحلي · «رفض» حبّة برتقالية · ✕ دائرة رمادية للإغلاق (وحدها حين لا قرار: حبّة «إغلاق» كاملة)
+            let closeAsCircle = !stacked && (showsAction || !decisionDestructive.isEmpty)
+            line {
+                if showsAction { actionButton }
+                ForEach(stacked ? decisionDestructive : Array(decisionDestructive.prefix(1))) { item in
+                    Button(action: item.action) {
+                        Text(item.title)
+                            .modifier(DSButtonFace(role: .destructive, tint: item.tint ?? DS.Color.reject,
+                                                   enabled: item.isEnabled && !isBusy))
+                    }
+                    .disabled(!item.isEnabled || isBusy)
+                    .accessibilityLabel(item.title)
+                }
+                if showsCancel && !closeAsCircle { cancelButton }
+                if !stacked {
+                    // إجراء هدّام زائد (نادر): في «⋯» بدل حبّة ثالثة
+                    let overflow = Array(decisionDestructive.dropFirst(1))
+                    if !overflow.isEmpty {
+                        Menu {
+                            ForEach(overflow) { item in
+                                Button(role: .destructive, action: item.action) {
+                                    Label(item.title, systemImage: item.icon ?? "trash")
+                                }
+                                .disabled(!item.isEnabled || isBusy)
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .dsGlyph(DSButtonSize.regular.glyph, weight: .bold)
+                                .modifier(DSDeleteCircleFace(enabled: !isBusy, muted: true))
+                        }
+                        .accessibilityLabel(L10n.t("إجراءات أخرى", "More actions"))
+                    }
+                    if showsCancel && closeAsCircle {
+                        Button {
+                            if hasUnsavedChanges { confirmDiscard = true } else { onCancel() }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .dsGlyph(DSButtonSize.regular.glyph, weight: .bold)
+                                .modifier(DSDeleteCircleFace(muted: true))
+                        }
+                        .disabled(isBusy)
+                        .accessibilityLabel(cancelTitle)
+                    }
+                }
+            }
+        }
+        .buttonStyle(DSPressStyle())
     }
 
     /// إجراء آخر وحيد في صفّ «إلغاء» — حين لا إجراء رئيسي (والإجراء ليس بعرض كامل)

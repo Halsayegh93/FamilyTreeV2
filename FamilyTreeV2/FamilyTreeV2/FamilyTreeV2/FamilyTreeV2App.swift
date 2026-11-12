@@ -49,6 +49,13 @@ struct FamilyTreeV2App: App {
             }
             return
         }
+        // «طلب تغيير الصورة الشخصية» ← مربّع تغيير الصورة (`PhotoReminderGate`، ما دام الطلب مفتوحاً)
+        if kind == NotificationKind.photoChangeRequest.rawValue {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NotificationCenter.default.post(name: .openPhotoChangeRequest, object: nil)
+            }
+            return
+        }
         guard AdminNotices.smsKinds.contains(kind) else { return }
         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {

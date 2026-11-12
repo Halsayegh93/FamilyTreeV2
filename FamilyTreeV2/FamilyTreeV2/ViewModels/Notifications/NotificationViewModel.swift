@@ -1153,7 +1153,8 @@ class NotificationViewModel: ObservableObject {
         contentKind: String,
         contentLabel: String,
         contentId: UUID?,
-        reason: String = ""
+        reason: String = "",
+        source: RequestSource? = nil
     ) async -> Bool {
         guard let userId = currentUser?.id else { return false }
         let reporterName = currentUser?.fullName ?? ""
@@ -1172,13 +1173,16 @@ class NotificationViewModel: ObservableObject {
             ]
             if let contentId { payload["new_value"] = AnyEncodable(contentId.uuidString) }
 
-            let inserted: AdminRequest = try await supabase
-                .from("admin_requests")
-                .insert(payload)
-                .select()
-                .single()
-                .execute()
-                .value
+            let path = source ?? RequestSource(RequestSourceStep("flag.fill", "بلاغ عن \(contentKind)"))
+            let inserted: AdminRequest = try await AdminRequestSource.send(path) { [payload] path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(payload, path))
+                    .select()
+                    .single()
+                    .execute()
+                    .value
+            }
 
             let reasonSuffix = trimmedReason.isEmpty ? "" : " — \(trimmedReason)"
             await notifyAdminsWithPush(

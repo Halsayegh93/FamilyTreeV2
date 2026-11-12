@@ -112,6 +112,7 @@ struct AdminNoticeDetailBox: View {
     let onDelete: (AdminNoticeSelfChild) -> Void
 
     @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var authVM: AuthViewModel
 
     @State private var reporting = false
 
@@ -119,6 +120,17 @@ struct AdminNoticeDetailBox: View {
         NotificationDetailParts.subjectMember(notification, member: { memberVM.member(byId: $0) })
     }
     private var title: String { AdminNoticeText.eventTitle(notification) }
+
+    /// «طلب تغيير الصورة» تحت بطاقة الصورة (طلب المالك ٢٠٢٦-١١-١١): من يعدّل الأعضاء، لعضو في الشجرة العامة حيّ،
+    /// ليس أنت، والمالك لا يُطلب منه إلا من مالك؛ «له حساب» حين وصلت قائمة الحسابات (وإلا يحكم السيرفر: no_account)
+    private var photoRequestMember: FamilyMember? {
+        guard authVM.canEditMembers, notification.details?.tree != "women", let m = subject,
+              m.isDeceased != true, m.id != authVM.currentUser?.id,
+              m.role != .owner || authVM.currentUser?.role == .owner else { return nil }
+        let accounts = AdminAccountsStore.shared
+        if accounts.loaded && accounts.info(m.id) == nil { return nil }
+        return m
+    }
     private var person: String { AdminNoticeText.subjectName(notification, member: { memberVM.member(byId: $0) }) }
 
     private var subtitle: String {
@@ -145,7 +157,8 @@ struct AdminNoticeDetailBox: View {
             }
             if !changes.isEmpty {
                 NotifBoxLabel(text: AdminNoticeText.changesTitle(notification))
-                NotificationChangeCards(changes: changes, isStaff: true, subjectName: person)
+                NotificationChangeCards(changes: changes, isStaff: true, subjectName: person,
+                                        photoRequestMember: photoRequestMember)
             }
             if reporting, let notice {
                 AdminNoticeReportPanel(notice: notice, onBack: { withAnimation(DS.Anim.quick) { reporting = false } })

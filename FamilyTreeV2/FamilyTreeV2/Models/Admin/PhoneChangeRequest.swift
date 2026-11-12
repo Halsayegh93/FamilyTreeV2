@@ -31,6 +31,10 @@ nonisolated struct PhoneChangeRequest: Identifiable, Codable, Sendable {
     var remindedAt: String? = nil
     var escalatedAt: String? = nil
     var fastTrack: Bool? = nil
+    /// «من أين أُرسل» (٢٠٢٦-١١-١١، 20261111150000): مسار الإرسال من التطبيق والجهاز من السيرفر — اختياريان
+    /// (الطلبات القديمة والسيرفر قبل الترحيل بلا قيمة)، ويُقرآن بتسامح فلا يكسران فكّ الطلب
+    var sentFrom: RequestSource? = nil
+    var sentVia: RequestSentVia? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, status, details, member, stage, recommendation
@@ -55,5 +59,7 @@ nonisolated struct PhoneChangeRequest: Identifiable, Codable, Sendable {
         case remindedAt = "reminded_at"
         case escalatedAt = "escalated_at"
         case fastTrack = "fast_track"
+        case sentFrom = "sent_from"
+        case sentVia = "sent_via"
     }
 }

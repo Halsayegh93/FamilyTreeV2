@@ -864,7 +864,7 @@ struct WomenClassicTreeView: View {
         let rect = nodes.reduce(CGRect.null) { $0.union($1) }
         // السقف = التكبير الافتراضي دائماً: تتّسع → الافتراضي (تحريك فقط)، لا تتّسع → تصغير خفيف (`gentleFloor`)
         let r = TreeGroupFit.autoRange(k: M.k)
-        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: cameraArea(viewport), lo: r.lo, hi: r.hi)
+        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: cameraArea(viewport), lo: r.lo, hi: r.hi, home: home)
         scale = cam.scale; baseScale = cam.scale
         if !home { userInteracted = true }
         // بلا الحدود العادية: كانت تُزيح المجموعة القريبة من طرف الكانفس خارج المساحة الظاهرة

@@ -749,7 +749,7 @@ struct EditProfileView: View {
                 // تجاوز حد الـ٣ تعديلات: تُرفع كاقتراح وتُرسل للإدارة
                 localPreviewImage = nil
                 if let url = await adminRequestVM.uploadPhotoSuggestion(newImage) {
-                    let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
+                    let ok = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                         action: .addPhoto,
                         targetMemberId: member.id.uuidString,
                         targetMemberName: member.fullName,
@@ -915,7 +915,7 @@ struct EditProfileView: View {
 
     private func submitAdminRequests(changes: ChangedFields, normalizedPhone: String) async {
         if changes.marriedNeedsApproval {
-            _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
+            _ = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                 action: .other,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
@@ -929,7 +929,7 @@ struct EditProfileView: View {
             let stations = bioStations.filter { !$0.title.isEmpty || !$0.details.isEmpty }
             let json = (try? String(data: JSONEncoder().encode(stations), encoding: .utf8)) ?? "[]"
             let lines = stations.map { "• \($0.year.map { "\($0) — " } ?? "")\($0.title)" }.joined(separator: "\n")
-            _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
+            _ = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                 action: .other,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
@@ -939,7 +939,7 @@ struct EditProfileView: View {
             ))
         }
         if changes.phoneHiddenNeedsApproval {
-            _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
+            _ = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                 action: .other,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,
@@ -950,7 +950,7 @@ struct EditProfileView: View {
             ))
         }
         if changes.birthNeedsApproval {
-            _ = await adminRequestVM.submitTreeEditRequest(payload: .make(
+            _ = await adminRequestVM.submitTreeEditRequest(from: .profileEdit, payload: .make(
                 action: .editBirth,
                 targetMemberId: member.id.uuidString,
                 targetMemberName: member.fullName,

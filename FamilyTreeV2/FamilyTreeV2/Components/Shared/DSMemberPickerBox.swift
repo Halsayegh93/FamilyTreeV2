@@ -125,7 +125,8 @@ struct DSMemberPickerBox: View {
                     DSEmptyView(hintTitle, message: hintMessage, icon: "magnifyingglass", style: .inline)
                 } else if list.isEmpty {
                     // الحالة الفاضية الواحدة (مضغوطة) + زرّها بالمواصفة الواحدة
-                    let addAction: (() -> Void)? = onAddByName.map { add in { add(query) } }
+                    // النص المكتوب نفسه (لا المؤجّل) — الضغط السريع بعد الكتابة لا يضيّع آخر الحروف
+                    let addAction: (() -> Void)? = onAddByName.map { add in { add(search.trimmingCharacters(in: .whitespaces)) } }
                     DSEmptyView(candidates.isEmpty && !requiresSpecificQuery ? emptyTitle : noMatchTitle,
                                 message: emptyMessage,
                                 icon: "person.fill.questionmark",
@@ -156,7 +157,7 @@ struct DSMemberPickerBox: View {
             }
             if let missingTitle, let onMissing, !isLoading {   // ظاهر من البداية (طلب المالك) — قبل الكتابة وبعدها
                 // رابط نصّي بسيط بلا إطار (طلب المالك ٢٠٢٦-١٠-٢٥ «خل الزر أبسط») — مساحة لمس ٤٤
-                Button { onMissing(query) } label: {
+                Button { onMissing(search.trimmingCharacters(in: .whitespaces)) } label: {
                     Text(missingTitle)
                         .dsFont(.footnote)
                         .underline()

@@ -93,11 +93,9 @@ struct MemberContactFormView: View {
                           icon: "square.grid.2x2.fill",
                           tint: categoryTint(selectedCategory),
                           index: 0) {
-            // مربّعات الاختيار الموحّدة (`DSOptionTiles`) — كل نوع بلون معناه
-            DSOptionTiles(ContactCategory.allCases.map {
-                              DSOptionTile($0, title: $0.title, icon: $0.icon, tint: categoryTint($0))
-                          },
-                          selection: $selectedCategory, columns: ContactCategory.allCases.count)
+            // القرار ٧ «ب» (اختيار المالك ٢٠٢٦-١١-١٢): أربعة مربّعات بصفّ — قرص ممتلئ بلون النوع فوق اسمه،
+            // والمختار بتعبئة لونه الخفيفة وإطاره
+            ContactTypeDiscRow(selection: $selectedCategory, tint: categoryTint)
         }
     }
 
@@ -353,6 +351,49 @@ enum ContactCategory: CaseIterable {
         case .suggestion: return "اقتراح"
         case .inquiry: return "استفسار"
         case .other: return "أخرى"
+        }
+    }
+}
+
+
+/// «نوع الرسالة»: أربعة مربّعات بصفّ، قرص ملوّن فوق الاسم (القرار ٧ «ب»)
+struct ContactTypeDiscRow: View {
+    @Binding var selection: ContactCategory
+    let tint: (ContactCategory) -> Color
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(ContactCategory.allCases, id: \.self) { cat in
+                let on = selection == cat
+                let color = tint(cat)
+                let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(DS.Anim.snappy) { selection = cat }
+                } label: {
+                    VStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: cat.icon)
+                            .dsGlyph(DS.Glyph.lg, weight: .semibold)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .frame(width: DS.Icon.avatar, height: DS.Icon.avatar)
+                            .background(Circle().fill(color.dsSolidFill))
+                        Text(cat.title)
+                            .dsFont(.chip)
+                            .fontWeight(on ? .semibold : .regular)
+                            .foregroundColor(on ? color.dsReadableGlyph : DS.Color.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.smd)
+                    .background(shape.fill(on ? color.opacity(DS.Opacity.tintFill) : DS.Color.fieldFill))
+                    .overlay(shape.strokeBorder(on ? color.dsReadableGlyph : .clear, lineWidth: DS.Border.widthBold))
+                    .contentShape(shape)
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(cat.title)
+                .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+            }
         }
     }
 }

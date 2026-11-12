@@ -23,6 +23,8 @@ class MemberViewModel: ObservableObject {
             _memberByIdDirty = true
             // سلسلة الشجرة لتقسيم الأسماء المركّبة (PersonName القاعدة ٢) — تسجيل بلا كلفة، البناء عند القراءة
             PersonNameTree.update(allMembers)
+            // آباء «من العائلة» في مربّع الزوجة/الأم = رجال شجرة العائلة فقط (طلب المالك ٢٠٢٦-١١-١٢)
+            WifeCandidateRules.familyMemberIds = Set(allMembers.lazy.map(\.id))
         }
     }
 
@@ -223,6 +225,64 @@ class MemberViewModel: ObservableObject {
         } catch {
             Log.fetchError("[Members] خطأ جلب عضو واحد (\(id.uuidString.prefix(8)))", error)
         }
+    }
+
+    // MARK: - Live Changes
+
+    /// تحديث حيّ (طلب المالك ٢٠٢٦-١١-١٢ «سرّع السيرفر»): يجلب من تغيّروا فقط من `members_masked` (لا القائمة كلها)،
+    /// ويدمج ما تغيّر فعلاً (`FamilyMember ==` لا يشمل «آخر نشاط» — فتنقّل الأعضاء بين الشاشات لا يحرّك شيئاً)
+    func applyLiveMemberChanges(updated: Set<UUID>, deleted: Set<UUID>) async {
+        // القائمة لم تُحمَّل بعد، أو دفعة كبيرة جداً (تعديل جماعي) — جلب القائمة كلها أبسط
+        guard !allMembers.isEmpty, updated.count <= 200 else {
+            await fetchAllMembers(force: false)
+            return
+        }
+        var list = allMembers
+        var changed = false
+        if !deleted.isEmpty {
+            let before = list.count
+            list.removeAll { deleted.contains($0.id) }
+            changed = list.count != before
+        }
+        let ids = updated.subtracting(deleted)
+        if !ids.isEmpty, NetworkMonitor.shared.isConnected {
+            do {
+                let response = try await supabase
+                    .from("members_masked")   // الإخفاء من السيرفر كما في جلب القائمة
+                    .select()
+                    .in("id", values: ids.map(\.uuidString))
+                    .execute()
+                let rows = try JSONDecoder().decode([FamilyMember].self, from: response.data)
+                guard CacheManager.shared.isCurrent(cacheSession), !Task.isCancelled else { return }
+                // القائمة قد تتغيّر أثناء الجلب (جلب كامل مثلاً) — الدمج على آخر نسخة
+                list = allMembers.filter { !deleted.contains($0.id) }
+                changed = list.count != allMembers.count
+                var position = Dictionary(list.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+                for member in rows {
+                    if let i = position[member.id] {
+                        if list[i] != member { list[i] = member; changed = true }
+                    } else {
+                        list.append(member)
+                        position[member.id] = list.count - 1
+                        changed = true
+                    }
+                }
+                if let userId = currentUser?.id, let me = rows.first(where: { $0.id == userId }), me != currentUser {
+                    authVM?.currentUser = me
+                }
+            } catch {
+                if ErrorHelper.isCancellation(error) { return }
+                Log.fetchError("[Members] خطأ جلب الأعضاء المتغيّرين (\(ids.count))", error)
+                // الحذف يُطبَّق ولو فشل الجلب؛ المتغيّرون يصلون مع الجلب الكامل التالي
+                list = allMembers.filter { !deleted.contains($0.id) }
+                changed = list.count != allMembers.count
+            }
+        }
+        Log.info("[Members] تحديث حيّ: \(ids.count) متغيّر · \(deleted.count) محذوف · تغيّر في القائمة: \(changed)")
+        guard changed else { return }
+        allMembers = list
+        membersVersion += 1
+        scheduleMembersCacheSave()
     }
 
     // MARK: - Fetch Members
@@ -951,7 +1011,8 @@ class MemberViewModel: ObservableObject {
         isDeceased: Bool,
         deathDate: String?,
         gender: String?,
-        silent: Bool = false
+        silent: Bool = false,
+        requestSource: RequestSource? = nil
     ) async -> UUID? {
         guard NetworkMonitor.shared.requireOnline() else { return nil }
         self.isLoading = true
@@ -1105,10 +1166,14 @@ class MemberViewModel: ObservableObject {
                 ]
                 var requestSent = false
                 do {
-                    try await supabase
-                        .from("admin_requests")
-                        .insert(requestData)
-                        .execute()
+                    let path = requestSource ?? RequestSource(.profile, .profileFamily,
+                                                              RequestSourceStep("plus", "إضافة الأبناء"))
+                    try await AdminRequestSource.send(path) { path in
+                        try await supabase
+                            .from("admin_requests")
+                            .insert(AdminRequestSource.payload(requestData, path))
+                            .execute()
+                    }
                     requestSent = true
                 } catch {
                     Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")

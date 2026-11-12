@@ -344,7 +344,7 @@ struct AddNewsView: View {
         var uploadedURLs: [String] = []
         let finalContent: String
         if isPoll {
-            finalContent = L10n.t("تصويت", "Poll")
+            finalContent = L10n.stored("تصويت", "Poll")
         } else {
             finalContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
             for image in selectedImages {

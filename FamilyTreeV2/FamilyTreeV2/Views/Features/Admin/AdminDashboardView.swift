@@ -475,7 +475,18 @@ struct AdminDashboardView: View {
     /// «يحتاج انتباهك» بصفحتين تُسحبان: الأرقام الأربعة وسطر «حالة النظام» (المالك والمدير)، ثم «إحصائيات العائلة» لمن يرى
     /// «المؤشرات» (المالك والمدير — طلب المالك ٢٠٢٦-١٠-٢٥ «وابى صفحة الثانية بالتنبيهات تكون احصائيات العائلة»). المراقب
     /// والمشرف: الصفحة الأولى وحدها بلا نقاط ولا سحب
+    /// طلب المالك ٢٠٢٦-١١-١١: «يحتاج انتباهك شيله، ما نبيه… خلّ بس إحصائيات العائلة» — المربّع الأول إحصائيات العائلة
+    /// وحدها (بلا سحب ولا نقاط)، ومن لا يرى الإحصاء لا مربّع له. الطلبات بشارة «الوارد» في «الأقسام»
+    @ViewBuilder
     private var attentionCard: some View {
+        if authVM.adminSees(.todayCensus) {
+            AdminTodayPager(pages: [AnyView(AdminFamilyStatsPage(stats: familyStats))],
+                            titles: [L10n.t("إحصائيات العائلة", "Family statistics")])
+        }
+    }
+
+    /// المربّع السابق بصفحتيه — باقٍ للرجوع إليه إن طلبه المالك
+    private var legacyAttentionCard: some View {
         let pills = statusPills
         let attention = AnyView(AdminAttentionPanel(counts: counts(decisionItems),
                                                     fourth: AdminRoleMatrix.attentionFourth(for: authVM.currentUser?.role),

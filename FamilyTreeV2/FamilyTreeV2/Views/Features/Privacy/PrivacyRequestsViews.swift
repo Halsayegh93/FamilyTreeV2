@@ -433,7 +433,7 @@ struct AdminPolicyRequestsSection: View {
         let details = isDeletion || isRelative ? nil : PrivacyRequestDetails.parse(request.details)
         let tint = isDeletion ? DS.Color.error : DS.Color.palm
         let title = isDeletion ? L10n.t("طلب حذف حساب", "Account deletion request")
-                  : isRelative ? L10n.t("إضافة قريبة", "Add a relative")
+                  : isRelative ? (RelativeAddDetails.parse(request.details)?.requestTitle ?? L10n.t("إضافة قريبة", "Add a relative"))
                   : L10n.t("طلب خصوصية: \(details?.kindTitle ?? "")", "Privacy request: \(details?.kindTitle ?? "")")
         // «إضافة قريبة»: ملخّص السيرفر («إضافة زوجة: …») مكان الملاحظة
         let note = isRelative ? RelativeAddDetails.parse(request.details)?.summaryText

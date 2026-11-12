@@ -748,8 +748,12 @@ struct AdminScheduledPushRow: View {
                 if isBusy {
                     ProgressView()
                 } else {
-                    AdminPillButton(title: L10n.t("تعديل", "Edit"), icon: "pencil", style: .soft, action: onEdit)
-                    AdminPillButton(title: L10n.t("إلغاء", "Cancel"), icon: "xmark", style: .reject, action: onCancel)
+                    // نفس صفّ القرار المدمج (٢٠٢٦-١١-١١): «تعديل» حبّة رمادية، و«إلغاء» الموعد دائرة حمراء
+                    DSDecisionRow(items: [
+                        DSDecisionItem(id: "edit", title: L10n.t("تعديل", "Edit"), icon: "pencil", action: onEdit),
+                        DSDecisionItem(id: "cancel", title: L10n.t("إلغاء الموعد", "Cancel the schedule"), icon: "xmark",
+                                       kind: .destructive, tint: DS.Color.reject, action: onCancel)
+                    ], size: .compact)
                 }
             }
             .padding(.top, DS.Spacing.xxs)

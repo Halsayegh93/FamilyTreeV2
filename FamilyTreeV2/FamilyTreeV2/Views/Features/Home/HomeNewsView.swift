@@ -323,7 +323,9 @@ struct HomeNewsView: View {
                     Task {
                         let ok = await newsVM.reportNewsPost(
                             postId: post.id,
-                            reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
+                            reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason,
+                            source: RequestSource(.home, RequestSourceStep("newspaper.fill", "الأخبار"),
+                                                  RequestSourceStep("flag.fill", "بلاغ عن منشور"))
                         )
                         if ok { await MainActor.run { newsReportSent = true } }
                     }
@@ -973,7 +975,7 @@ struct HomeNewsView: View {
             canDelete: canDelete(news),
             // الإبلاغ متاح للجميع (أعضاء وإدارة) لغير منشوراتهم — سياسة Apple
             canReport: authVM.currentUser?.id != news.author_id,
-            canEdit: authVM.canDeleteNews || authVM.currentUser?.id == news.author_id,
+            canEdit: authVM.canDeleteNews || (news.ownerId != nil && authVM.currentUser?.id == news.ownerId),
             onDeleteTap: { postToDelete = news },
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },

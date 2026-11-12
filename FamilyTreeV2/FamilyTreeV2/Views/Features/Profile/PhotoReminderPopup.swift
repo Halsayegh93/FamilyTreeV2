@@ -30,7 +30,7 @@ enum ProfileAvatarChange {
             return Result(outcome: .changed, message: L10n.t("تم تغيير الصورة", "Photo changed"))
         }
         guard let url = await adminRequestVM.uploadPhotoSuggestion(image) else { return failed }
-        let ok = await adminRequestVM.submitTreeEditRequest(payload: .make(
+        let ok = await adminRequestVM.submitTreeEditRequest(from: .photoReminder, payload: .make(
             action: .addPhoto,
             targetMemberId: member.id.uuidString,
             targetMemberName: member.fullName,
@@ -88,7 +88,9 @@ enum PhotoReminder {
     }
 }
 
-/// يقرّر متى يظهر المربّع — على `MainTabView`، بعد انتهاء فحص إذن الإشعارات (`blocked`)
+/// يقرّر متى يظهر المربّع — على `MainTabView`، بعد انتهاء فحص إذن الإشعارات (`blocked`).
+/// «طلب تغيير الصورة» من الإدارة (طلب المالك ٢٠٢٦-١١-١١) يسبق «كمّل ملفك بصورة» بنفس قواعد الظهور، ويرجع كل فتح
+/// ما دام الطلب مفتوحاً؛ الضغط على إشعاره من خارج التطبيق يفتحه أيضاً (`.openPhotoChangeRequest`)
 struct PhotoReminderGate: ViewModifier {
     /// فحص الإشعارات لم ينتهِ أو مربّعه ظاهر
     let blocked: Bool
@@ -96,11 +98,20 @@ struct PhotoReminderGate: ViewModifier {
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
-    /// يبقى بعد الإغلاق حتى تنتهي حركة خروج المربّع
-    @State private var member: FamilyMember?
-    @State private var isPresented = false
+    /// المربّع المعروض — عنصر واحد يحمل العضو والطلب (`dsCenterBox(item:)` يمرّره لمحتوى الغطاء ويُبقيه أثناء حركة
+    /// الخروج). كان العضو حالةً منفصلة يقرؤها محتوى الغطاء فيصله nil (تعتيم بلا مربّع) — فحص ٢٠٢٦-١١-١١
+    @State private var shown: Shown?
 
-    private enum Readiness { case show(FamilyMember), wait, never }
+    private struct Shown: Identifiable {
+        let id = UUID()
+        let member: FamilyMember
+        /// طلب الإدارة — nil = «كمّل ملفك بصورة»
+        let request: PhotoChangeRequest?
+    }
+
+    private var isPresented: Bool { shown != nil }
+
+    private enum Readiness { case show(FamilyMember), showRequest(FamilyMember, PhotoChangeRequest), wait, never }
 
     func body(content: Content) -> some View {
         content
@@ -108,39 +119,72 @@ struct PhotoReminderGate: ViewModifier {
                 guard !blocked else { return }
                 await attempt()
             }
-            .dsCenterBox(isPresented: $isPresented) {
-                if let member {
-                    AnyView(PhotoReminderBox(member: member, onClose: { isPresented = false })
-                        .environmentObject(memberVM)
-                        .environmentObject(adminRequestVM))
-                }
+            // إشعار «طلب تغيير الصورة الشخصية» من خارج التطبيق
+            .onReceive(NotificationCenter.default.publisher(for: .openPhotoChangeRequest)) { _ in
+                Task { await attempt(fromTap: true) }
+            }
+            .dsCenterBox(item: $shown) { box in
+                PhotoReminderBox(member: box.member, request: box.request, onClose: { shown = nil })
+                    .environmentObject(memberVM)
+                    .environmentObject(adminRequestVM)
             }
     }
 
-    private func attempt() async {
-        guard !PhotoReminder.shownThisLaunch else { return }
+    /// `fromTap`: من الإشعار — طلب الإدارة وحده، ولو ظهر مربّع في هذا الفتح
+    private func attempt(fromTap: Bool = false) async {
+        guard fromTap || !PhotoReminder.shownThisLaunch else { return }
+        // طلب الإدارة يُجلب مرة لكل محاولة (لا كل ثانية) — nil = لم يُجلب بعد
+        var fetched: PhotoChangeRequest?? = nil
         for _ in 0..<PhotoReminder.maxChecks {
             try? await Task.sleep(nanoseconds: PhotoReminder.checkIntervalNanos)
-            if Task.isCancelled { return }
-            switch await readiness() {
+            if Task.isCancelled || isPresented { return }
+            switch await readiness(requestOnly: fromTap, fetched: &fetched) {
             case .never:
                 return
             case .wait:
                 continue
             case .show(let found):
-                if Task.isCancelled { return }
+                if Task.isCancelled || isPresented { return }
                 PhotoReminder.shownThisLaunch = true
-                member = found
-                isPresented = true
+                shown = Shown(member: found, request: nil)
+                return
+            case .showRequest(let found, let pending):
+                if Task.isCancelled || isPresented { return }
+                PhotoReminder.shownThisLaunch = true
+                shown = Shown(member: found, request: pending)
                 return
             }
         }
     }
 
-    private func readiness() async -> Readiness {
+    /// طلب الإدارة المفتوح لم يُرسَل عنه اقتراح من هذا الجهاز بعد — الفشل/السيرفر القديم = لا طلب
+    private func pendingRequest(for user: FamilyMember, fetched: inout PhotoChangeRequest??) async -> PhotoChangeRequest? {
+        if fetched == nil { fetched = .some(await PhotoChangeRequestStore.shared.refreshMine(userId: user.id)) }
+        guard let found = fetched ?? nil, !PhotoChangeRequestStore.isSentForApproval(found.id) else { return nil }
+        return found
+    }
+
+    private func readiness(requestOnly: Bool, fetched: inout PhotoChangeRequest??) async -> Readiness {
         guard authVM.status == .fullyAuthenticated, let user = authVM.currentUser else { return .wait }
+        #if DEBUG
+        // `-tmpPhotoChangePreview 1`: مربّع الطلب بسبب تجريبي بلا سيرفر (لقطات الشاشة)
+        if PhotoChangeRequestStore.isDebugPreview {
+            guard !PhotoReminder.isSomethingPresented else { return .wait }
+            guard let preview = await pendingRequest(for: user, fetched: &fetched) else { return .never }
+            return .showRequest(user, preview)
+        }
+        #endif
         if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0) && user.role != .owner { return .never }
         if appSettingsVM.settings.maintenanceMode && !authVM.canModerate { return .never }
+
+        // «طلب تغيير الصورة» من الإدارة — قبل «كمّل ملفك بصورة»، بنفس قواعد الظهور أدناه
+        if user.status == .active && user.role != .pending && user.isDeceased != true,
+           let pending = await pendingRequest(for: user, fetched: &fetched) {
+            if let blocked = await displayBlocked(user) { return blocked }
+            return .showRequest(user, pending)
+        }
+        if requestOnly { return .never }
+
         guard PhotoReminder.isEligible(user) else { return .never }
         // نسخة الشجرة قد تكون أحدث من الجلسة (صورة أُضيفت من جهاز آخر)
         if let tree = memberVM.member(byId: user.id), !PhotoReminder.hasNoPhoto(tree) { return .never }
@@ -151,6 +195,12 @@ struct PhotoReminderGate: ViewModifier {
         guard !config.values.isEmpty else { return .wait }
         guard PhotoReminder.isDue(userId: user.id, days: config.int(PhotoReminder.daysKey, default: 0)) else { return .never }
 
+        if let blocked = await displayBlocked(user) { return blocked }
+        return .show(user)
+    }
+
+    /// قواعد الظهور المشتركة — nil = يُعرض الآن
+    private func displayBlocked(_ user: FamilyMember) async -> Readiness? {
         // حساب مراجعة Apple: لا يُعرض إلا بعد قراءة مؤكدة أنه ليس منها
         let review = ReviewCardStore.shared
         await review.load(for: user.id)
@@ -163,13 +213,16 @@ struct PhotoReminderGate: ViewModifier {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         guard settings.authorizationStatus != .notDetermined else { return .wait }
         guard !PhotoReminder.isSomethingPresented else { return .wait }
-        return .show(user)
+        return nil
     }
 }
 
-/// المربّع نفسه — نوع مستقل (حارس المكدس). الصورة بمسار «حسابي»: المعرض ← القصّ الدائري ← الرفع
+/// المربّع نفسه — نوع مستقل (حارس المكدس). الصورة بمسار «حسابي»: المعرض ← القصّ الدائري ← الرفع.
+/// `request` = «يرجى تغيير صورتك الشخصية» بطلب الإدارة: السبب، الصورة الحالية في الدائرة، و«لاحقاً» لا يؤجّل
+/// (يرجع في الفتح القادم ما دام الطلب مفتوحاً)
 struct PhotoReminderBox: View {
     let member: FamilyMember
+    var request: PhotoChangeRequest? = nil
     let onClose: () -> Void
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var adminRequestVM: AdminRequestViewModel
@@ -192,11 +245,13 @@ struct PhotoReminderBox: View {
     var body: some View {
         // هيكل المربّعات الموحّد (`DSComposer`، طلب المالك ٢٠٢٦-١١-١١): رأس كحلي، المحتوى، ثم «أضف صورة» و«لاحقاً» الخفيف
         DSComposer(
-            title: L10n.t("الصورة الشخصية", "Profile photo"),
-            subtitle: L10n.t("أكمل ملفك بصورة", "Complete your profile with a photo"),
-            icon: "camera.fill",
+            title: request != nil ? L10n.t("يرجى تغيير صورتك الشخصية", "Please change your profile photo")
+                                  : L10n.t("الصورة الشخصية", "Profile photo"),
+            subtitle: request != nil ? L10n.t("طلب من الإدارة", "A request from the admins")
+                                     : L10n.t("أكمل ملفك بصورة", "Complete your profile with a photo"),
+            icon: request != nil ? "camera.badge.ellipsis" : "camera.fill",
             tint: DS.Color.actionNavy,
-            actionTitle: L10n.t("أضف صورة", "Add a photo"),
+            actionTitle: request != nil ? L10n.t("تغيير الصورة", "Change photo") : L10n.t("أضف صورة", "Add a photo"),
             actionIcon: "photo.on.rectangle",
             showsAction: !finished,
             cancelTitle: finished ? L10n.t("إغلاق", "Close") : L10n.t("لاحقاً", "Later"),
@@ -204,14 +259,21 @@ struct PhotoReminderBox: View {
             isBusy: isUploading,
             onSubmit: { showPicker = true },
             onCancel: {
-                if !finished { PhotoReminder.snooze(userId: member.id) }
+                // طلب الإدارة: بلا تأجيل — يرجع في الفتح القادم ما دام مفتوحاً
+                if !finished && request == nil { PhotoReminder.snooze(userId: member.id) }
                 onClose()
             }
         ) {
             VStack(spacing: DS.Spacing.md) {
                 ring
-                Text(L10n.t("تظهر صورتك في الشجرة، وتساعد أفراد العائلة على التعرّف عليك.",
-                            "Your photo appears in the tree and helps family recognize you."))
+                if let request {
+                    Text(L10n.t("السبب: \(request.reason)", "Reason: \(request.reason)"))
+                        .dsFont(.rowTitle)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(introText)
                     .dsFont(.callout)
                     .foregroundColor(DS.Color.textSecondary)
                     .multilineTextAlignment(.center)
@@ -247,10 +309,25 @@ struct PhotoReminderBox: View {
         }
     }
 
+    private var introText: String {
+        guard let request else {
+            return L10n.t("تظهر صورتك في الشجرة، وتساعد أفراد العائلة على التعرّف عليك.",
+                          "Your photo appears in the tree and helps family recognize you.")
+        }
+        return request.hidePhoto
+            ? L10n.t("صورتك الحالية مخفية عن الأعضاء حتى تغيّرها. يرجى اختيار صورة شخصية واضحة لك.",
+                     "Your current photo is hidden from members until you change it. Please choose a clear photo of yourself.")
+            : L10n.t("يرجى اختيار صورة شخصية واضحة لك.", "Please choose a clear photo of yourself.")
+    }
+
     private var ring: some View {
         ZStack {
             if let newImage {
                 Image(uiImage: newImage).resizable().scaledToFill()
+            } else if request != nil, !PhotoReminder.hasNoPhoto(member) {
+                // الصورة الحالية المطلوب تغييرها
+                DSMemberAvatar(name: member.fullName, avatarUrl: member.avatarUrl, size: DS.Icon.profileAvatarRing)
+                    .accessibilityLabel(L10n.t("صورتك الحالية", "Your current photo"))
             } else {
                 Circle().fill(DS.Color.accent.opacity(DS.Opacity.tintFill))
                 Image(systemName: "camera.fill")
@@ -277,10 +354,17 @@ struct PhotoReminderBox: View {
             isUploading = false
             switch result.outcome {
             case .changed:
+                // طلب الإدارة: السيرفر أغلقه مع الصورة الجديدة (`trg_zzzz_photo_change_resolve`)
+                if request != nil { PhotoChangeRequestStore.shared.clearMine() }
                 onClose()
             case .sentForApproval:
-                // لا صورة بعد حتى توافق الإدارة — لا يرجع التذكير قبل مدته
-                PhotoReminder.snooze(userId: member.id)
+                // لا صورة بعد حتى توافق الإدارة — لا يرجع التذكير قبل مدته، ولا طلب الإدارة من هذا الجهاز
+                // (يُغلق على السيرفر حين تُعتمد الصورة)
+                if let request {
+                    PhotoChangeRequestStore.markSentForApproval(request.id)
+                } else {
+                    PhotoReminder.snooze(userId: member.id)
+                }
                 resultMessage = result.message
                 finished = true
             case .failed:

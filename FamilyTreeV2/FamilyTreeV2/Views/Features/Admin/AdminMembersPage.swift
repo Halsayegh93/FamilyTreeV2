@@ -71,13 +71,22 @@ struct AdminMembersPage: View {
     @State private var sheet: AdminMemberSheetContext?
     /// «شجرة العائلة | شجرة النساء» تحت أرقام العائلة (طلب المالك ٢٠٢٦-١١-٠٨)
     @State private var scope: AdminFamilyScope = .family
-    /// شريحة تُطلب في «شجرة النساء» من حلقة «خارج العائلة»
-    @State private var womenChipRequest: AdminWomenChip?
+    /// شريحة تُطلب في «شجرة النساء» من حلقتي «النساء» و«خارج العائلة»
+    @State private var womenChipRequest: AdminWomenChipRequest?
     @State private var showExport = false
     /// «زر التقارير» بالفلتر الحالي: الشريحة والفرع والبحث — nil = كل العائلة
     @State private var exportScope: AdminReportScope?
     /// «متوفى» من مرشّح «تحقق من الأحياء» — مربّع تسجيل الوفاة الموجود (`AdminMemberDetailSheet(deathOnly:)`)
     @State private var deathTarget: FamilyMember?
+    /// «حذف» من قائمة «مشكلات في الشجرة» — تأكيد ثم `deleteMember` (طلب المالك ٢٠٢٦-١١-١١)
+    @State private var deleteTarget: FamilyMember?
+    @State private var deleting = false
+    @State private var deleteError: String?
+    /// صورة العضو مكبّرة بالضغط عليها في صفّ القائمة (طلب المالك ٢٠٢٦-١١-١١)
+    @State private var photoURL: AdminPhotoURL?
+    /// صفحة قائمة «يحتاج مراجعتك» المفتوحة
+    @State private var reviewPage: AdminMemberReview?
+    @State private var showReviewPage = false
 
     static let pageSize = 40
     private static let searchAnchor = "adminMembersSearch"
@@ -87,7 +96,7 @@ struct AdminMembersPage: View {
     init(chip: AdminMemberChip = .all, sub: AdminMemberSub = .all, womenOutside: Bool = false) {
         if womenOutside {
             _scope = State(initialValue: .women)
-            _womenChipRequest = State(initialValue: .outside)
+            _womenChipRequest = State(initialValue: AdminWomenChipRequest(chip: .outside))
         }
         _chip = State(initialValue: chip.shownChip)
         _review = State(initialValue: chip.review ?? (chip == .deceased && sub == .deathIncomplete ? .death : nil))
@@ -116,14 +125,45 @@ struct AdminMembersPage: View {
             AdminMemberSheet(ids: context.ids, start: context.start)
         }
         .modifier(AdminLivingDeathBox(member: $deathTarget))
+        .fullScreenCover(item: $photoURL) { p in
+            ProjectPhotoViewer(urls: [p.url], startIndex: 0, section: .admin)
+        }
+        .dsAlert(L10n.t("حذف العضو نهائياً؟", "Delete the member permanently?"),
+                 isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })) {
+            Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) {
+                if let m = deleteTarget { delete(m) }
+                deleteTarget = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteTarget = nil }
+        } message: {
+            Text(L10n.t("سيُحذف «\(deleteTarget?.fourPartName ?? "")» من الشجرة ولا يمكن التراجع.",
+                        "“\(deleteTarget?.fourPartName ?? "")” will be removed from the tree. This can't be undone."))
+        }
+        .dsAlert(L10n.t("تعذّر الحذف", "Couldn't delete"),
+                 isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button(L10n.t("حسناً", "OK")) { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
+        }
         .modifier(AdminBranchPickerBox(isPresented: $showBranchPicker, members: memberVM.allMembers,
                                        selected: branchFilter, onSelect: { pickBranch($0) }))
+        .navigationDestination(isPresented: $showReviewPage) {
+            AdminLazyPage { [reviewPage, branchSet] in
+                AnyView(AdminReviewListPage(review: reviewPage ?? .living, branchSet: branchSet)
+                    .adminBackTitle(AdminArea.family.title).adminArea(.family))
+            }
+        }
         .navigationDestination(isPresented: $showExport) {
             AdminLazyPage { [exportScope] in
                 AnyView(AdminReportsView(scope: exportScope).adminBackTitle(AdminArea.family.title).adminArea(.family))
             }
         }
         .task {
+            // فُتحت الصفحة على قائمة مراجعة (رابط من «اليوم» أو إشعار) — تُفتح صفحة القائمة نفسها فوقها
+            if let r = review {
+                review = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { openReview(r) }
+            }
             verified.activate(user: authVM.currentUser?.id)
             if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
             rebuild()
@@ -177,12 +217,9 @@ struct AdminMembersPage: View {
     /// القوائم الأربع: «هل ما زالوا أحياء؟» بلا من راجعه المستخدم («حي ✓») · تاريخ وفاة غير مكتمل · بيانات ناقصة
     /// (الأحياء) · مشكلات الشجرة
     private func refreshReviews() {
-        reviewRows = [
-            .living: index.rows(.verifyLiving, .all).filter { !verified.ids.contains(index.entries[$0].id) },
-            .death: index.rows(.deceased, .deathIncomplete),
-            .gaps: index.rows(.gaps, .all),
-            .problems: index.rows(.problems, .all)
-        ]
+        var map: [AdminMemberReview: [Int]] = [:]
+        for r in AdminMemberReview.allCases { map[r] = r.rows(in: index, verified: verified.ids) }
+        reviewRows = map
     }
 
     /// قائمة مراجعة داخل الفرع المختار
@@ -283,6 +320,12 @@ struct AdminMembersPage: View {
         }
     }
 
+    /// «شجرة النساء» بشريحة محددة (من حلقات الرأس)
+    private func openWomenList(_ chip: AdminWomenChip) {
+        womenChipRequest = AdminWomenChipRequest(chip: chip)
+        scope = .women
+    }
+
     /// زر «التقارير» المباشر للمالك والمدير — يفتح التقارير بالشريحة والفرع والبحث الحاليين
     private var reportsButton: some View {
         Button {
@@ -297,8 +340,10 @@ struct AdminMembersPage: View {
 
     /// تحت العنوان: الحلقات فقط — البحث والشرائح نزلت تحت «يحتاج مراجعتك»
     private var headerAccessory: some View {
+        // «النساء» تعرض قائمة النساء هنا (كانت تقفز لتبويب الشجرة) و«خارج العائلة» فرعها — للمالك والمدير
         AnyView(AdminFamilyCensusBand(census: census, openMen: { scope = .family; select(.all) },
-                                      openOutside: authVM.isAdmin ? { womenChipRequest = .outside; scope = .women } : nil))
+                                      openWomen: authVM.isAdmin ? { openWomenList(.all) } : nil,
+                                      openOutside: authVM.isAdmin ? { openWomenList(.outside) } : nil))
             // أنزل قليلاً عن العنوان (طلب المالك ٢٠٢٦-١١-٠٨ «نزل شوي الحلقات ما نخليهم لازقين»)
             .padding(.top, DS.Spacing.lg)
             .padding(.bottom, DS.Spacing.xs)
@@ -362,13 +407,9 @@ struct AdminMembersPage: View {
     /// قائمة بزرّي «متوفى» و«حي ✓» (لا مكان لهما في الورقة)
     private func openReview(_ r: AdminMemberReview) {
         UISelectionFeedbackGenerator().selectionChanged()
-        withAnimation(DS.Anim.snappy) {
-            review = r
-            limit = Self.pageSize
-        }
-        let list = currentRows
-        guard r != .living, !list.isEmpty else { return }
-        sheet = AdminMemberSheetContext(ids: list.map { index.entries[$0].id }, start: 0)
+        // كل قائمة صفحتها (القرار ٣، موافقة المالك ٢٠٢٦-١١-١٢): `AdminReviewListPage` بالفرع المختار
+        reviewPage = r
+        showReviewPage = true
     }
 
     /// الفلتر الحالي للتصدير: الشريحة (أو قائمة المراجعة) · الفرع · «البحث» — بلا فلتر = كل العائلة
@@ -430,8 +471,9 @@ struct AdminMembersPage: View {
 
     private var reviewCard: some View {
         let counts = Dictionary(uniqueKeysWithValues: AdminMemberReview.allCases.map { ($0, rows(of: $0)) })
+        // العدد = من يحتاج تصحيح بيانات فقط؛ قائمتا الاستخدام للاطلاع
         var union = Set<Int>()
-        for list in counts.values { union.formUnion(list) }
+        for (r, list) in counts where !r.isUsage { union.formUnion(list) }
         return AdminMembersReviewCard(counts: counts.mapValues(\.count), total: union.count,
                                       accountsReady: index.accountsReady, selected: review,
                                       open: { openReview($0) })
@@ -595,6 +637,10 @@ struct AdminMembersPage: View {
         case .death:    return AdminMemberGap.deathIncomplete.title
         case .gaps:     reasons = entry.gaps.filter { $0 != .deathIncomplete }.map(\.tag)
         case .problems: reasons = entry.problems.map(\.title)
+        case .notOpened: return AdminMemberSub.notSignedIn.title
+        case .inactive:
+            guard let seen = accounts.info(entry.id)?.lastSeen else { return AdminMemberSub.inactive.title }
+            return L10n.t("آخر دخول: ", "Last seen: ") + DSDateText.display(seen)
         }
         guard let first = reasons.first else { return branchTitle(entry) ?? "" }
         return reasons.count > 1 ? "\(first) · +\(reasons.count - 1)" : first
@@ -606,15 +652,51 @@ struct AdminMembersPage: View {
         if review == .living {
             // «متوفى» و«حي ✓» في الصفّ نفسه (لا مكان لهما في ورقة العضو)
             AnyView(livingRow(entry, ids: ids, position: position))
+        } else if review == .problems && authVM.canDeleteMembers {
+            // «مشكلات في الشجرة»: الصفّ يفتح ورقة العضو، وبجانبه زرّ حذف أحمر
+            HStack(spacing: DS.Spacing.sm) {
+                Button {
+                    sheet = AdminMemberSheetContext(ids: ids, start: position)
+                } label: {
+                    AdminMemberListRow(entry: entry, subline: reason(entry, .problems), warns: true,
+                                       onPhotoTap: { photoURL = AdminPhotoURL(url: $0) })
+                }
+                .buttonStyle(.plain)
+                Button {
+                    deleteTarget = entry.member
+                } label: {
+                    Image(systemName: "trash.fill")
+                        .dsGlyph(DSButtonSize.compact.glyph)
+                        .modifier(DSDeleteCircleFace(enabled: !deleting, size: .compact))
+                }
+                .buttonStyle(DSPressStyle())
+                .disabled(deleting)
+                .accessibilityLabel(L10n.t("حذف \(entry.member.fourPartName)", "Delete \(entry.member.fourPartName)"))
+            }
         } else {
             Button {
                 sheet = AdminMemberSheetContext(ids: ids, start: position)
             } label: {
                 // بلا اسم الفرع تحت كل اسم (طلب المالك ٢٠٢٦-١١-٠٨) — الفرع يُختار ويظهر باسمه أعلى القائمة «الفرع: …»
                 AdminMemberListRow(entry: entry, subline: review.map { reason(entry, $0) } ?? "",
-                                   warns: review != nil)
+                                   warns: review != nil, onPhotoTap: { photoURL = AdminPhotoURL(url: $0) })
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private func delete(_ m: FamilyMember) {
+        deleting = true
+        Task {
+            let ok = await memberVM.deleteMember(memberId: m.id)
+            deleting = false
+            if ok {
+                NotificationCenter.default.post(name: .memberDeleted, object: m.id)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } else {
+                deleteError = memberVM.errorMessage
+                    ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again.")
+            }
         }
     }
 
@@ -656,7 +738,7 @@ struct AdminMembersReviewCard: View {
                     .foregroundColor(DS.Color.textTertiary)
             }
             VStack(spacing: 0) {
-                ForEach(Array(AdminMemberReview.allCases.enumerated()), id: \.element) { i, r in
+                ForEach(Array(AdminMemberReview.cardCases.enumerated()), id: \.element) { i, r in
                     if i > 0 { AdminRowDivider() }
                     row(r)
                 }
@@ -666,7 +748,7 @@ struct AdminMembersReviewCard: View {
                         .dsGlyph(DS.Glyph.xs, weight: .semibold)
                         .foregroundColor(DS.Color.success)
                         .accessibilityHidden(true)
-                    Text(L10n.t("كل قائمة تُراجَع عضواً عضواً بالسابق والتالي", "Each list is reviewed member by member"))
+                    Text(L10n.t("اضغط أي قائمة لعرض أعضائها", "Tap a list to see its members"))
                         .dsFont(.caption)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -679,7 +761,10 @@ struct AdminMembersReviewCard: View {
     }
 
     private func row(_ r: AdminMemberReview) -> some View {
-        let n = counts[r] ?? 0
+        // «الأحياء والوفيات» = القائمتان معاً
+        let n = r == .living ? (counts[.living] ?? 0) + (counts[.death] ?? 0) : (counts[r] ?? 0)
+        // قائمتا الاستخدام قبل وصول الحسابات: «—» لا صفر
+        let pending = r.isUsage && !accountsReady
         return Button { open(r) } label: {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: r.icon)
@@ -690,20 +775,20 @@ struct AdminMembersReviewCard: View {
                         .fill(r.tint.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(verbatim: r.title)
+                    Text(verbatim: r.cardTitle)
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(verbatim: r.subtitle)
+                    Text(verbatim: r.cardSubtitle)
                         .dsFont(.caption)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: DS.Spacing.sm)
-                Text(verbatim: AdminMembersFilterBar.grouped(n))
+                Text(verbatim: pending ? "—" : AdminMembersFilterBar.grouped(n))
                     .dsFont(.rowTitle)
                     .monospacedDigit()
-                    .foregroundColor(n > 0 ? DS.Color.textPrimary : DS.Color.textTertiary)
+                    .foregroundColor(n > 0 && !pending ? DS.Color.textPrimary : DS.Color.textTertiary)
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
                     .dsGlyph(DS.Glyph.sm, weight: .semibold)
                     .foregroundColor(DS.Color.textTertiary)
@@ -715,8 +800,8 @@ struct AdminMembersReviewCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(r.title)، \(n)")
-        .accessibilityHint(L10n.t("يفتح القائمة عضواً عضواً", "Opens the list member by member"))
+        .accessibilityLabel(pending ? r.cardTitle : "\(r.cardTitle)، \(n)")
+        .accessibilityHint(L10n.t("يعرض أعضاء القائمة", "Shows the list's members"))
         .accessibilityAddTraits(selected == r ? .isSelected : [])
     }
 }
@@ -865,7 +950,12 @@ struct AdminMemberListRow: View {
     let subline: String
     /// السطر سبب نقص («ناقصة») — بلون التنبيه
     var warns: Bool = false
+    /// الضغط على الصورة يكبّرها (بدل فتح ورقة العضو) — nil = الصورة جزء من الصفّ
+    var onPhotoTap: ((String) -> Void)? = nil
+    /// الحالة في الطرف — صفحات «يحتاج مراجعتك» تخفيها (زرّ الإصلاح مكانها، والقائمة كلها حالة واحدة)
+    var showsStatus: Bool = true
     @Environment(\.dynamicTypeSize) private var typeSize
+    private var hasPhotoTap: Bool { onPhotoTap != nil && !AdminMemberFacts.isBlank(entry.member.avatarUrl) }
 
     private var member: FamilyMember { entry.member }
 
@@ -892,6 +982,10 @@ struct AdminMemberListRow: View {
                     DSMemberAvatar(name: member.fullName, avatarUrl: member.avatarUrl, size: DS.Icon.avatar, roleColor: avatarTint)
                 }
             }
+            .contentShape(Circle())
+            .highPriorityGesture(TapGesture().onEnded {
+                if let url = member.avatarUrl, !AdminMemberFacts.isBlank(url) { onPhotoTap?(url) }
+            }, including: hasPhotoTap ? .all : .none)
             .accessibilityHidden(true)
             layout {
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
@@ -911,7 +1005,9 @@ struct AdminMemberListRow: View {
                     }
                 }
                 if !stacked { Spacer(minLength: DS.Spacing.xs) }
-                if entry.status == .treeOnly {
+                if !showsStatus {
+                    EmptyView()
+                } else if entry.status == .treeOnly {
                     // «بدون حساب» علامة فقط (طلب المالك ٢٠٢٦-١١-٠٨ «خل علامة بس») — يبقى المكان للاسم الكامل
                     Image(systemName: "person.crop.circle.badge.xmark")
                         .dsGlyph(DS.Glyph.lg, weight: .regular)
@@ -1011,7 +1107,7 @@ struct AdminLivingCheckRow: View {
 
 /// مربّع «تسجيل الوفاة» — نفس `AdminMemberDetailSheet` (حفظه ونداءاته وإعلان الوفاة) مفتوحاً على التواريخ فقط
 /// (في نوعه المستقل — حارس المكدس)
-private struct AdminLivingDeathBox: ViewModifier {
+struct AdminLivingDeathBox: ViewModifier {
     @Binding var member: FamilyMember?
 
     func body(content: Content) -> some View {
@@ -1065,4 +1161,10 @@ struct AdminBandSearchField: View {
             .strokeBorder(focused ? DS.Color.accentLight : DS.Hub.glassLine, lineWidth: DS.Border.width))
         .onChange(of: focusToken) { _ in focused = true }
     }
+}
+
+/// رابط صورة للعارض المكبّر (`fullScreenCover(item:)`)
+struct AdminPhotoURL: Identifiable {
+    let url: String
+    var id: String { url }
 }

@@ -1543,6 +1543,10 @@ enum DSBox {
     static var tileMinHeight: CGFloat { fieldMinHeight - 2 * fieldVerticalPadding }
     static var tileGap: CGFloat { sectionInnerSpacing }
     static let choiceTrackHeight: CGFloat = 40
+    /// الاختيار في الصفحات (خارج المربّعات — إعدادات «التطبيق» وغيرها): مسار أقصر ونصّ بحجم عنوان الصفّ
+    /// (طلب المالك ٢٠٢٦-١١-١١ «مربّع الاختيار كبير صاير»)
+    static let choicePageHeight: CGFloat = 34
+    static var choicePageText: DS.TextRole { .hubRow }
     /// الاختيار المضغوط في طرف صفّ (صفّ «الخصوصية» الواحد): عرض ثابت وارتفاع مسار أصغر، واللمس ٤٤
     static let choiceCompactWidth: CGFloat = 150
     static let choiceCompactHeight: CGFloat = 36
@@ -1575,6 +1579,8 @@ enum DSBox {
     static let alertPadding: CGFloat = DS.Spacing.md
     static let alertSpacing: CGFloat = DS.Spacing.sm
     static let alertMaxWidth: CGFloat = 320
+    /// مربّع اختيار التاريخ: أعرض من التنبيه لتتّسع عجلة التاريخ بحشوتها (عرضها الطبيعي ≈ ٣٢٠)
+    static let dateCardMaxWidth: CGFloat = 360
     static var alertTitleFont: Font { DS.Font.role(.headline) }
     static var alertBodyFont: Font { DS.Font.role(.callout) }
 
@@ -2060,10 +2066,14 @@ extension DS.Opacity {
     static let dimmed: Double = 0.8
 }
 
-// MARK: - لون «رفض» (طلب المالك ٢٠٢٦-١٠-٠٧ «غيّر بين لون الرفض والحذف النهائي»)
+// MARK: - لون «رفض»
+// ٢٠٢٦-١٠-٠٧ صار برتقالياً ليتميّز عن «حذف نهائي»؛ ٢٠٢٦-١١-١١ خرج الحذف من التفاصيل (بالسحب في القائمة فقط)
+// وطلب المالك «رفض خلّه لون أحمر» — فالرفض أحمر الخطأ نفسه، ويبقى الاسم مكاناً واحداً لتغييره
 extension DS.Color {
-    /// الرفض برتقالي محروق — يتميّز عن «حذف نهائي» الأحمر؛ النص الأبيض فوقه ≥ ٤٫٥:١ في الوضعين
-    static let reject = SwiftUI.Color.adaptive(light: "#B94E0C", dark: "#B85A1A") // الداكن ٤٫٦٥:١ مع الأبيض (حكم التصميم ١١-٠٦)
+    static var reject: SwiftUI.Color { error }
+    /// لون المفتاح (تشغيل/إيقاف) المشغَّل في كل التطبيق — أخضر خفيف بدل الكحلي الثقيل (طلب المالك ٢٠٢٦-١١-١١
+    /// «قسم التطبيق ما حدثت على التصميم الجديد»). المكان الوحيد لتغييره
+    static var toggleOn: SwiftUI.Color { success }
 }
 
 // MARK: - دفعة 3-B «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شارة العدد ونقطة الفئة في صفحات الإدارة
@@ -2554,10 +2564,11 @@ extension DS {
         static let ringHaloWidth: CGFloat = 28
         static let ringOffsetX: CGFloat = 60
         static let ringOffsetY: CGFloat = 90
-        /// أزرار الكبسولة في الصفوف والبطاقات (اشحن، أعلن، رفض…)
-        static let pillHeight: CGFloat = 32
-        static let pillHeightCard: CGFloat = 36
-        static let pillPadding: CGFloat = 13
+        /// أزرار الكبسولة في الصفوف والبطاقات (اشحن، أعلن، رفض…) — بمقاس حبّة التطبيق الموحّدة (`DSBox.chipHeight`)
+        /// لا مقاسين خاصّين بالإدارة (كانا ٣٢ و٣٦ — طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
+        static let pillHeight: CGFloat = DSBox.chipHeight
+        static let pillHeightCard: CGFloat = DSBox.chipHeight
+        static let pillPadding: CGFloat = DSBox.chipPadding
         /// الإجراءات السريعة: الدائرة وعرض العمود
         static let quickCircle: CGFloat = 54
         static let quickWidth: CGFloat = 66

@@ -212,7 +212,10 @@ struct FamilyArchiveView: View {
                             contentKind: L10n.t("عنصر أرشيف", "archive item"),
                             contentLabel: target.title,
                             contentId: target.id,
-                            reason: reason
+                            reason: reason,
+                            source: RequestSource(RequestSourceStep("books.vertical.fill", "مكتبة العائلة"),
+                                                  RequestSourceStep("doc.fill", target.title),
+                                                  RequestSourceStep("flag.fill", "بلاغ عن محتوى"))
                         )
                         if ok { await MainActor.run { reportSent = true } }
                     }

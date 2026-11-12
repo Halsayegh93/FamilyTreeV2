@@ -269,17 +269,28 @@ struct ProjectPhotoViewer: View {
     var section: AppSection = .projects
     /// تُحجب الصور عن لقطة الشاشة (المكتبة — `LibraryProtection`)
     var shielded: Bool = false
+    /// عنوان صغير لكل صورة مكان العدّاد («قبل»/«بعد» في تغيّر الصورة الشخصية) — nil = «2 من 5»
+    var captions: [String]? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var index: Int
     @State private var loaded: Set<Int> = []
 
-    init(urls: [String], startIndex: Int, section: AppSection = .projects, shielded: Bool = false) {
+    init(urls: [String], startIndex: Int, section: AppSection = .projects, shielded: Bool = false,
+         captions: [String]? = nil) {
         self.urls = urls
         self.startIndex = startIndex
         self.section = section
         self.shielded = shielded
+        self.captions = captions
         _index = State(initialValue: startIndex)
+    }
+
+    /// نصّ الكبسولة أعلى العارض: عنوان الصورة الحالية إن وُجد، وإلا «2 من 5» (صورة واحدة بلا عدّاد)
+    private var counterText: String? {
+        if let captions, captions.indices.contains(index), !captions[index].isEmpty { return captions[index] }
+        guard urls.count > 1 else { return nil }
+        return L10n.t("\(index + 1) من \(urls.count)", "\(index + 1) of \(urls.count)")
     }
 
     var body: some View {
@@ -305,9 +316,9 @@ struct ProjectPhotoViewer: View {
             }
 
             HStack {
-                // «2 من 5» — صورة واحدة بلا عدّاد
-                if urls.count > 1 {
-                    Text(verbatim: L10n.t("\(index + 1) من \(urls.count)", "\(index + 1) of \(urls.count)"))
+                // «2 من 5» أو عنوان الصورة («قبل»/«بعد») — صورة واحدة بلا عنوان بلا عدّاد
+                if let counterText {
+                    Text(verbatim: counterText)
                         .dsFont(.rowTitleCompact)
                         .foregroundColor(DS.Color.overlayText)
                         .padding(.horizontal, DS.Spacing.md)

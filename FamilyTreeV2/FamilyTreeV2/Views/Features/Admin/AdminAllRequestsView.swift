@@ -26,7 +26,6 @@ struct AdminAllRequestsView: View {
     @State private var forwardJoinNote: String = ""
     @State private var forwardJoinDone = false
     // حذف نهائي لأي طلب — للمالك/المدير فقط
-    @State private var deleteConfirmDetail: RequestDetail? = nil
     // تعديل/إضافة رقم فعلي لعضو معلّق (طلب انضمام)
     @State private var phoneEditPendingMember: FamilyMember? = nil
     // سحب (الكل): رفض مع سبب — وحذف مع تأكيد
@@ -210,9 +209,13 @@ struct AdminAllRequestsView: View {
     // «تقرير الموافقات» بيته «المؤشرات»، و«مشكلات الشجرة» شريحة في «العائلة» (الوارد = ما طلبه أحد فقط).
     // نفس الاستدعاءات والصلاحيات تماماً (`canApprove(_:)` / `canReject(_:)`، `decideOnServer`، مسار الموافقات).
 
-    /// قسما «الوارد»
-    enum InboxSegment: Hashable { case requests, messages }
+    /// أقسام «الوارد» الثلاثة (التصميم المعتمد ٢٠٢٦-١١-١١): الطلبات · تمت معالجتها · الرسائل
+    enum InboxSegment: Hashable { case requests, handled, messages }
     @State private var segment: InboxSegment = .requests
+    /// «تمت معالجتها»: الطلبات المغلقة وسجلّ ما تم في كل طلب (`AdminRequestTrail.swift`)
+    @StateObject private var handledStore = AdminHandledStore()
+    /// طلب معالَج مفتوح للعرض فقط
+    @State private var handledOpen: AdminRequest? = nil
     /// حقل البحث الواحد — يبحث في كل طلبات المجموعة المختارة، وفي الرسائل (`AdminInboxView(sharedSearch:)`)
     @State private var searchText: String = ""
     /// طلب يُفتح مربّعه بعد التحميل («يحتاج قرارك»، المهام، الإشعار) — مرة واحدة
@@ -283,6 +286,9 @@ struct AdminAllRequestsView: View {
             if showsMessages {
                 // «الرسائل» — صفحة الرسائل نفسها بلا رأسها (رأس «الوارد» فوقها) وبحث «الوارد» الواحد
                 AnyView(AdminInboxView(embedded: true, sharedSearch: $searchText))
+            } else if segment == .handled {
+                // «تمت معالجتها» — الطلبات المغلقة بالأيام، وكلّ صفّ يفتح المربّع نفسه للعرض فقط
+                AnyView(handledList)
             } else {
                 // وضع التحديد: شريط ملخّص التحديد مثبّت أعلى القائمة (إلغاء · العدد · تحديد الكل)
                 // — يحلّ محل الفلاتر كما كان، ويبقى ظاهراً مهما نزلت القائمة.
@@ -312,10 +318,14 @@ struct AdminAllRequestsView: View {
         .adminStatusBarCover()
         // الرأس الكحلي هو شريط الصفحة (سحب الرجوع من الحافة يبقى)
         .toolbar(.hidden, for: .navigationBar)
-        .onChange(of: segment) { _ in
+        .onChange(of: segment) { newValue in
             withAnimation(DS.Anim.snappy) {
                 isSelectMode = false
                 selectedIds.removeAll()
+            }
+            // «تمت معالجتها» يُحدَّث عند كل فتح (قرار اتُّخذ للتو في «الطلبات» يظهر فيه)
+            if newValue == .handled && handledStore.loadedOnce {
+                Task { await handledStore.reload() }
             }
         }
         .onChange(of: selectedSection) { _ in
@@ -350,6 +360,8 @@ struct AdminAllRequestsView: View {
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
+            // فُتح على «الرسائل» (إشعار/رابط) لدور لا يراها — يرجع لـ«الطلبات» فتظهر شريحته و«تحديد»
+            if segment == .messages && !canSeeMessages { segment = .requests }
             // رسالة قديمة من إجراء خارج هذه الشاشة (قبول من الإشعار مثلاً) لا تظهر عند الفتح
             adminRequestVM.errorMessage = nil
             diwaniyaVM.notificationVM = notificationVM
@@ -505,6 +517,10 @@ struct AdminAllRequestsView: View {
     /// مربّع تفاصيل الطلب، والسحب (رفض/حذف)، وربط طلب الانضمام ودمجه
     private func modalsLayer(_ content: AnyView) -> some View {
         content
+        // «تمت معالجتها»: المربّع نفسه للعرض فقط (بلا أزرار قرار) + «ما تم في الطلب» و«النتيجة»
+        .dsCenterBox(item: $handledOpen) { request in
+            handledBox(request)
+        }
         // تفاصيل الطلب — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
         .dsCenterBox(item: $selectedDetail) { detail in
             requestDetailSheet(detail)
@@ -667,7 +683,7 @@ struct AdminAllRequestsView: View {
                     .buttonStyle(DSScaleButtonStyle())
                     .accessibilityLabel(L10n.t("إعدادات مسار الموافقات", "Approval path settings"))
                 }
-                if !showsMessages && !isSelectMode && itemCount(for: selectedTab) > 0 {
+                if segment == .requests && !isSelectMode && itemCount(for: selectedTab) > 0 {
                     AdminGlassButton(symbol: "checkmark.circle", label: L10n.t("تحديد", "Select")) {
                         withAnimation(DS.Anim.snappy) {
                             isSelectMode = true
@@ -676,27 +692,79 @@ struct AdminAllRequestsView: View {
                     }
                 }
             } accessory: {
-                if !showsMessages && !isSelectMode {
-                    headerFilterChips
+                // الأقسام الثلاثة في مسار واحد على الرأس (التصميم المعتمد ٢٠٢٦-١١-١١) — «الرسائل» لمن يراها في جدول
+                // السيرفر (`inbox.messages`: المالك والمدير افتراضاً)، و«تمت معالجتها» لكل من يرى الطلبات
+                if !isSelectMode {
+                    AdminInboxSegmentTrack(options: segmentOptions, selection: $segment)
+                        .accessibilityLabel(L10n.t("أقسام الوارد", "Inbox sections"))
                         .padding(.top, DS.Spacing.md)
                 }
             }
+        }
+    }
 
-            // «الطلبات · الرسائل» شريحتا فلتر (لا مبدّل — طلب المالك «مابي تويب علوي») — «الرسائل» رسائل خاصة
-            // لمن يراها في جدول السيرفر (`inbox.messages`: المالك والمدير افتراضاً)، وغيره بلا شرائح
-            if canSeeMessages {
-                DSFilterChips(options: [
-                    DSFilterOption(id: InboxSegment.requests, title: L10n.t("الطلبات", "Requests"),
-                                   icon: "tray.full.fill", count: isInitialLoading ? nil : cachedTotalCount),
-                    DSFilterOption(id: InboxSegment.messages, title: L10n.t("الرسائل", "Messages"),
-                                   icon: "bubble.left.and.bubble.right.fill",
-                                   count: adminRequestVM.pendingContactMessagesCount)
-                ], selection: $segment)
-                .accessibilityLabel(L10n.t("الطلبات أو الرسائل", "Requests or messages"))
-                .dsPageMargin()
-                .padding(.top, DS.Spacing.sm)
+    /// خيارات مسار الأقسام: الطلبات (عددها) · تمت معالجتها · الرسائل (غير المقروء أحمر)
+    private var segmentOptions: [AdminInboxSegmentOption<InboxSegment>] {
+        var options = [
+            AdminInboxSegmentOption(id: InboxSegment.requests, title: L10n.t("الطلبات", "Requests"),
+                                    count: isInitialLoading ? nil : cachedTotalCount),
+            AdminInboxSegmentOption(id: InboxSegment.handled, title: L10n.t("المنجزة", "Done")),  // القرار ٤ «أ» (٢٠٢٦-١١-١٢)
+        ]
+        if canSeeMessages {
+            options.append(AdminInboxSegmentOption(id: InboxSegment.messages, title: L10n.t("الرسائل", "Messages"),
+                                                   count: adminRequestVM.pendingContactMessagesCount, alert: true))
+        }
+        return options
+    }
+
+    /// صفّ الفلاتر الواحد (`AdminInboxFilterRow`): «كل الطلبات» ← فلاتر المسار حين تنطبق ← المجموعات.
+    /// المسار والمجموعة يجتمعان كما كانا (شريحتان مستقلّتان)، والضغط على المختارة يلغيها
+    private var inboxFilterItems: [AdminInboxFilterItem] {
+        let showFlow = tabSupportsApprovalFilter(selectedTab) && !isInitialLoading
+        let visible = showFlow ? unfilteredTabIds.compactMap(adminRequestVM.approvalSnapshot(forRowId:)) : []
+        func count(_ f: ApprovalListFilter) -> Int { adminRequestVM.approvalFilterCount(f, in: visible) }
+        var items = [AdminInboxFilterItem(
+            id: "all", title: L10n.t("كل الطلبات", "All requests"), count: isInitialLoading ? nil : cachedTotalCount,
+            selected: approvalFilter == .all && selectedSection == nil) {
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
+                    approvalFilter = .all
+                    selectedSection = nil
+                    selectedTab = .all
+                }
+            }]
+        if showFlow {
+            if count(.waiting) > 0 || approvalFilter == .waiting {
+                items.append(AdminInboxFilterItem(id: "waiting", title: L10n.t("بانتظار قرارك", "Awaiting you"),
+                                                  count: count(.waiting), tone: .amber,
+                                                  selected: approvalFilter == .waiting) { toggleApprovalFilter(.waiting) })
+            }
+            if adminRequestVM.approvalsV2Seen && (count(.urgent) > 0 || approvalFilter == .urgent) {
+                items.append(AdminInboxFilterItem(id: "urgent", title: L10n.t("عاجل", "Urgent"), count: count(.urgent),
+                                                  icon: "flame", tone: .red,
+                                                  selected: approvalFilter == .urgent) { toggleApprovalFilter(.urgent) })
+            }
+            if count(.late) > 0 || approvalFilter == .late {
+                items.append(AdminInboxFilterItem(id: "late", title: L10n.t("متأخر", "Late"), count: count(.late),
+                                                  icon: "clock", tone: .red,
+                                                  selected: approvalFilter == .late) { toggleApprovalFilter(.late) })
             }
         }
+        for section in RequestSection.allCases where sectionCount(section) > 0 || section == selectedSection {
+            items.append(AdminInboxFilterItem(id: "group-\(section.title)", title: section.title,
+                                              count: sectionCount(section), icon: section.icon,
+                                              selected: selectedSection == section) {
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) {
+                    selectedSection = selectedSection == section ? nil : section
+                    selectedTab = .all
+                }
+            })
+        }
+        return items
+    }
+
+    /// شريحة مسار: اختيارها، أو إلغاؤها إن كانت المختارة
+    private func toggleApprovalFilter(_ f: ApprovalListFilter) {
+        setApprovalFilter(approvalFilter == f ? .all : f)
     }
 
     /// «الرسائل» (رسائل الأعضاء الخاصة) لمن يراها في جدول «مين يشوف وش» — السيرفر يحرسها أيضاً
@@ -705,41 +773,6 @@ struct AdminAllRequestsView: View {
 
     /// الرسائل معروضة الحين — رابط قديم/إشعار بـ`startsWithMessages` لمن لا يراها يبقى على «الطلبات»
     private var showsMessages: Bool { segment == .messages && canSeeMessages }
-
-    /// شرائح المسار فوق الرأس: بانتظارك · مستعجل · متأخر · الكل (المختارة ذهبية) — بأعداد التبويب الحالي
-    private var headerFilterChips: some View {
-        let showFlow = tabSupportsApprovalFilter(selectedTab) && !isInitialLoading
-        let visible = showFlow ? unfilteredTabIds.compactMap(adminRequestVM.approvalSnapshot(forRowId:)) : []
-        func count(_ f: ApprovalListFilter) -> Int { adminRequestVM.approvalFilterCount(f, in: visible) }
-        let allCount = selectedTab == .all ? displayedAllItems.count : itemCount(for: selectedTab)
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xsm + 1) {
-                if showFlow {
-                    // شريحة صفرية تختفي (إلا المختارة حتى لا تضيع)
-                    if count(.waiting) > 0 || approvalFilter == .waiting {
-                        AdminBandFilterChip(title: L10n.t("بانتظار قرارك", "Awaiting you"), count: count(.waiting),
-                                            selected: approvalFilter == .waiting) { setApprovalFilter(.waiting) }
-                    }
-                    if adminRequestVM.approvalsV2Seen && (count(.urgent) > 0 || approvalFilter == .urgent) {
-                        AdminBandFilterChip(title: L10n.t("عاجل", "Urgent"), count: count(.urgent), icon: "flame",
-                                            iconTint: DS.Hub.kpiHot, selected: approvalFilter == .urgent) {
-                            setApprovalFilter(.urgent)
-                        }
-                    }
-                    if count(.late) > 0 || approvalFilter == .late {
-                        AdminBandFilterChip(title: L10n.t("متأخر", "Late"), count: count(.late), icon: "clock",
-                                            iconTint: DS.Hub.kpiLate, selected: approvalFilter == .late) {
-                            setApprovalFilter(.late)
-                        }
-                    }
-                }
-                AdminBandFilterChip(title: L10n.t("الكل", "All"), count: isInitialLoading ? nil : allCount,
-                                    selected: approvalFilter == .all || !showFlow) { setApprovalFilter(.all) }
-            }
-            .padding(.vertical, DS.Spacing.xxs)
-        }
-        .accessibilityLabel(L10n.t("فلتر الطلبات", "Request filter"))
-    }
 
     private func setApprovalFilter(_ f: ApprovalListFilter) {
         guard approvalFilter != f else { return }
@@ -750,21 +783,6 @@ struct AdminAllRequestsView: View {
     /// عدد مجموعة (الأعضاء · الشجرة · المحتوى · صحة الشجرة) في مجال الدور
     private func sectionCount(_ section: RequestSection) -> Int {
         availableTabs.filter { $0.section == section }.reduce(0) { $0 + itemCount(for: $1) }
-    }
-
-    /// شرائح المجموعات (الاتجاه «أ»): الكل ثم كل مجموعة فيها طلبات
-    private var groupChips: some View {
-        let sections = RequestSection.allCases.filter { sectionCount($0) > 0 || $0 == selectedSection }
-        var options: [DSFilterOption<RequestSection?>] = [DSFilterOption(id: nil, title: L10n.t("الكل", "All"))]
-        options += sections.map { DSFilterOption(id: $0, title: $0.title, icon: $0.icon, count: sectionCount($0)) }
-        let binding = Binding<RequestSection?>(
-            get: { selectedSection },
-            set: { newValue in
-                selectedSection = newValue
-                selectedTab = .all
-            })
-        return DSFilterChips(options: options, selection: binding)
-            .accessibilityLabel(L10n.t("مجموعات الطلبات", "Request groups"))
     }
 
     /// أنواع المجموعة المختارة: «كل المجموعة» ثم كل نوع فيه طلبات
@@ -1186,7 +1204,7 @@ struct AdminAllRequestsView: View {
                 if totalCount > 0 && !isSelectMode {
                     DSSearchField(text: $searchText, placeholder: AdminInboxView.searchPlaceholder)
                         .reviewListRow(top: DS.Spacing.md, bottom: DS.Spacing.xs)
-                    groupChips
+                    AdminInboxFilterRow(items: inboxFilterItems)
                         .reviewListRow(top: 0, bottom: 0)
                     if selectedSection != nil {
                         subTypeChips
@@ -1218,11 +1236,7 @@ struct AdminAllRequestsView: View {
                 } else {
                     tabRows
                 }
-                // «المنجز اليوم (N) ›» — آخر القائمة (كان «عرض المنجز» في صفحة «عرض الكل» المحذوفة)
-                if !isSearching && !isSelectMode {
-                    AdminInboxDoneToday()
-                        .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.lg)
-                }
+                // «المنجز اليوم» أُزيل من آخر القائمة (٢٠٢٦-١١-١١) — مكانه قسم «تمت معالجتها» في الرأس
             }
         }
         .listStyle(.plain)
@@ -1621,23 +1635,25 @@ struct AdminAllRequestsView: View {
         let canApprove = allowsApprove && onApprove != nil
         let opensFlow = flow != nil && !canApprove && waitingForMe
         if canReject || canApprove || opensFlow {
-            HStack(spacing: DS.Spacing.xsm + 1) {
-                if canReject, let onReject {
-                    AdminPillButton(title: L10n.t("رفض", "Reject"), style: .reject,
-                                    height: DS.Hub.pillHeightCard, fullWidth: true, action: onReject)
-                }
+            // أزرار الطلبات على التصميم الجديد (طلب المالك ٢٠٢٦-١١-١١) بالمقاس المدمج: الموافقة كحلية ·
+            // «التفاصيل» رمادية فاتحة · «رفض» دائرة حمراء (`DSDecisionRow`) — نفس الإجراءات والصلاحيات
+            DSDecisionRow(items: {
+                var items: [DSDecisionItem] = []
                 if opensFlow, let flow {
-                    AdminPillButton(title: flowActionTitle(flow), style: .navy,
-                                    height: DS.Hub.pillHeightCard, fullWidth: true, action: onTap)
+                    items.append(DSDecisionItem(id: "flow", title: flowActionTitle(flow), kind: .primary, action: onTap))
                 } else {
-                    AdminPillButton(title: L10n.t("التفاصيل", "Details"), style: .soft,
-                                    height: DS.Hub.pillHeightCard, fullWidth: true, action: onTap)
                     if canApprove, let onApprove {
-                        AdminPillButton(title: approveLabel ?? L10n.t("موافقة", "Approve"), style: .navy,
-                                        height: DS.Hub.pillHeightCard, fullWidth: true, action: onApprove)
+                        items.append(DSDecisionItem(id: "approve", title: approveLabel ?? L10n.t("موافقة", "Approve"),
+                                                    kind: .primary, action: onApprove))
                     }
+                    items.append(DSDecisionItem(id: "details", title: L10n.t("التفاصيل", "Details"), action: onTap))
                 }
-            }
+                if canReject, let onReject {
+                    items.append(DSDecisionItem(id: "reject", title: L10n.t("رفض", "Reject"), icon: "xmark",
+                                                kind: .destructive, tint: DS.Color.reject, action: onReject))
+                }
+                return items
+            }(), size: .compact)
         }
     }
 
@@ -3354,6 +3370,16 @@ struct AdminAllRequestsView: View {
 
     // MARK: - Request Detail Box
 
+    /// «24 سنة · غير متزوجة» / «متوفاة · متزوجة» — المختارة كما في شجرة النساء الآن
+    static func womanFacts(_ w: FamilyMember) -> String {
+        var parts: [String] = []
+        if w.isDeceased == true { parts.append(L10n.t("متوفاة", "Deceased")) }
+        if let age = WifeCandidateRules.age(w) { parts.append(L10n.t("\(age) سنة", "\(age) years")) }
+        else { parts.append(L10n.t("بلا تاريخ ميلاد", "No birth date")) }
+        parts.append(WifeCandidateRules.isMarried(w) ? L10n.t("متزوجة", "Married") : L10n.t("غير متزوجة", "Not married"))
+        return parts.joined(separator: " · ")
+    }
+
     /// أسباب «طلب آخر» الداخلية التي يرسلها تعديل الملف الشخصي (EditProfileView) ← عنوان عربي مفهوم.
     /// كانت تظهر للإدارة كما هي («profile_marital») تحت «السبب» وبعنوان «طلب آخر».
     static func profileReasonTitle(_ reason: String?) -> String? {
@@ -3389,6 +3415,7 @@ struct AdminAllRequestsView: View {
                     cancelTitle: L10n.t("إغلاق", "Close"),
                     canSubmit: !adminRequestVM.isLoading,
                     extraActions: detailExtraActions(for: detail),
+                    decisionFooter: true,
                     onSubmit: { approveDetail(detail) },
                     onCancel: { selectedDetail = nil }
                 ) {
@@ -3397,26 +3424,6 @@ struct AdminAllRequestsView: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .dsAlert(
-            L10n.t("حذف الطلب نهائياً؟", "Delete request permanently?"),
-            isPresented: Binding(
-                get: { deleteConfirmDetail != nil },
-                set: { if !$0 { deleteConfirmDetail = nil } }
-            )
-        ) {
-            Button(L10n.t("حذف نهائي", "Delete Permanently"), role: .destructive) {
-                if let d = deleteConfirmDetail {
-                    hardDeleteDetail(d)
-                }
-                deleteConfirmDetail = nil
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteConfirmDetail = nil }
-        } message: {
-            Text(L10n.t(
-                "سيُحذف هذا الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
-                "This request will be permanently removed and cannot be undone."
-            ))
-        }
         .dsCenterBox(item: $phoneEditPendingMember) { member in
             PendingMemberPhoneSheet(member: member)
                 .environmentObject(adminRequestVM)
@@ -3625,38 +3632,71 @@ struct AdminAllRequestsView: View {
             detailContent(for: detail)
         }
 
-        // «المرسل»: من أرسل الطلب ومن أين أُرسل (طلب المالك ٢٠٢٦-١١-١١)
-        DSComposerSection(title: L10n.t("المرسل", "Sender"),
-                          icon: "paperplane.fill",
-                          tint: AppSection.admin.ink,
-                          index: 2) {
-            if let sender = senderName(for: detail) {
-                infoCard(icon: "person.crop.circle", label: L10n.t("أرسله", "Sent by"),
-                         value: sender, color: DS.Color.info)
-            }
-            infoCard(icon: "arrow.turn.down.left", label: L10n.t("من أين", "Sent from"),
-                     value: requestSource(for: detail), color: DS.Color.info)
+        // «المرسل»: مسار الإرسال خطواتٍ مرقّمة، ومن أرسله، والجهاز والوقت (طلب المالك ٢٠٢٦-١١-١١، التصميم المعتمد)
+        AdminSenderSection(info: senderInfo(for: detail), index: 2)
+    }
+
+    /// صفّ `admin_requests` وراء التفصيل (المسار والجهاز والوقت) — المحتوى (أخبار، ديوانيات…) بلا صفّ
+    private func requestRecord(for detail: RequestDetail) -> (from: RequestSource?, via: RequestSentVia?, created: String?, subject: UUID?)? {
+        switch detail {
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r):
+            return (r.sentFrom, r.sentVia, r.createdAt, r.memberId)
+        case .treeEdit(let r, _):
+            let target = r.treeEditPayload?.targetMemberId.flatMap(UUID.init(uuidString:)) ?? r.memberId
+            return (r.sentFrom, r.sentVia, r.createdAt, target)
+        case .phone(let r): return (r.sentFrom, r.sentVia, r.createdAt, r.memberId)
+        case .join(let m):
+            let row = adminRequestVM.joinApprovalRequests.first { $0.memberId == m.id || $0.requesterId == m.id }
+                ?? handledStore.items.first { $0.memberId == m.id && ($0.requestType == RequestType.linkRequest.rawValue
+                                                                     || $0.requestType == RequestType.joinRequest.rawValue) }
+            return (row?.sentFrom, row?.sentVia, row?.createdAt ?? m.createdAt, m.id)
+        case .news(let p): return (nil, nil, p.created_at, nil)
+        case .diwaniya, .project, .archive: return nil
         }
     }
 
-    /// اسم مرسل الطلب كاملاً من الأعضاء المحمّلين
-    private func senderName(for detail: RequestDetail) -> String? {
-        let id: UUID? = {
-            switch detail {
-            case .join(let m): return m.id
-            case .news(let p): return p.ownerId
-            case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r):
-                return r.requesterId
-            case .treeEdit(let r, _): return r.requesterId
-            case .phone(let r): return r.requesterId ?? r.memberId
-            case .diwaniya(let d): return d.ownerId
-            case .project(let p): return p.ownerId
-            case .archive(let a): return a.uploadedBy
-            }
-        }()
-        guard let id else { return nil }
-        // الاسم الرباعي (الأول + الثاني + الثالث + العائلة) — طلب المالك ٢٠٢٦-١١-١١
-        return memberVM.allMembers.first { $0.id == id }?.fourPartName
+    /// «المرسل»: الخطوات (المسجّلة وإلا المستنتجة)، «الاسم الرباعي · الدور · الصلة»، الجهاز، الوقت
+    private func senderInfo(for detail: RequestDetail) -> AdminSenderInfo {
+        let record = requestRecord(for: detail)
+        let steps = AdminTrailText.pathSteps(recorded: record?.from, inferred: requestSource(for: detail))
+        var sender: String? = nil
+        var senderMemberId: UUID? = nil
+        if let id = senderId(for: detail), let member = memberVM.member(byId: id) {
+            senderMemberId = member.id
+            // صلته بالمعني — لا تُحسب لطلبات شجرة النساء (مرساتها ملفّ رجل لا المرأة نفسها)
+            let women = (record?.from?.steps.first == .womenTree)
+                || { if case .treeEdit(let r, _) = detail { return WomenTreeRequestLines(r.treeEditPayload?.notes ?? "") != nil }; return false }()
+            let subject = women ? nil : record?.subject.flatMap { memberVM.member(byId: $0) }
+            sender = [member.fourPartName, AdminTrailText.roleName(member.role), AdminTrailText.relation(sender: member, subject: subject)]
+                .compactMap { $0 }.joined(separator: " · ")
+        }
+        let via = record?.via
+        let time = DateHelper.displayDateTime(via?.at) ?? DateHelper.displayDateTime(record?.created) ?? AdminTrailText.notRecorded
+        // طلب زوجة أو أم من شجرة النساء: الاسم المختار كاملاً في «المرسل» (طلب المالك ٢٠٢٦-١١-١٢)
+        var chosen: WomenTreeRequestLines? = nil
+        if case .treeEdit(let r, _) = detail, let lines = WomenTreeRequestLines(r.treeEditPayload?.notes ?? ""),
+           lines.relation != nil {
+            chosen = lines
+        }
+        return AdminSenderInfo(steps: steps, sender: sender, device: AdminTrailText.device(via),
+                               deviceRecorded: via != nil, time: time,
+                               chosenLabel: chosen?.chosenLabel, chosenName: chosen?.fullName,
+                               senderId: senderMemberId)
+    }
+
+    /// معرّف مرسل الطلب
+    private func senderId(for detail: RequestDetail) -> UUID? {
+        switch detail {
+        case .join(let m): return m.id
+        case .news(let p): return p.ownerId
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r):
+            return r.requesterId
+        case .treeEdit(let r, _): return r.requesterId
+        case .phone(let r): return r.requesterId ?? r.memberId
+        case .diwaniya(let d): return d.ownerId
+        case .project(let p): return p.ownerId
+        case .archive(let a): return a.uploadedBy
+        }
     }
 
     /// من أين أُرسل الطلب — من نوعه وحمولته (يعمل للطلبات القديمة أيضاً، بلا تغيير في السيرفر)
@@ -3676,9 +3716,20 @@ struct AdminAllRequestsView: View {
         case .deceased: return L10n.t("الشجرة", "Tree") + arrow + L10n.t("تفاصيل العضو", "Member details") + arrow + L10n.t("تسجيل وفاة", "Report death")
         case .photo: return L10n.t("الشجرة", "Tree") + arrow + L10n.t("تفاصيل العضو", "Member details") + arrow + L10n.t("اقتراح صورة", "Suggest photo")
         case .report(let r):
-            return r.requestType == "news_report" || r.requestType == "content_report"
-                ? L10n.t("الرئيسية", "Home") + arrow + L10n.t("بلاغ عن منشور", "Report a post")
-                : L10n.t("التواصل", "Contact") + arrow + L10n.t("رسالة للإدارة", "Message to admins")
+            switch r.requestType {
+            case "news_report", "content_report":
+                return L10n.t("الرئيسية", "Home") + arrow + L10n.t("بلاغ عن منشور", "Report a post")
+            case RequestType.relativeAdd.rawValue:
+                // «إضافة قريبة» من «الأسرة» (حسابي) أو «عائلتي» — بصلة القرابة
+                let what = RelativeAddDetails.parse(r.details)?.requestTitle ?? L10n.t("طلب إضافة قريبة", "Add relative")
+                return L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("الأسرة", "Family") + arrow + what
+            case RequestType.accountDelete.rawValue:
+                return L10n.t("الإعدادات", "Settings") + arrow + L10n.t("حذف الحساب", "Delete account")
+            case RequestType.privacyRequest.rawValue:
+                return L10n.t("الإعدادات", "Settings") + arrow + L10n.t("الخصوصية", "Privacy")
+            default:
+                return L10n.t("التواصل", "Contact") + arrow + L10n.t("رسالة للإدارة", "Message to admins")
+            }
         case .treeEdit(let r, let action):
             let p = r.treeEditPayload
             if let notes = p?.notes, let women = WomenTreeRequestLines(notes) {
@@ -3754,14 +3805,7 @@ struct AdminAllRequestsView: View {
                 forwardJoinMember = member
             })
         }
-        // حذف نهائي — يمسح الطلب كلياً (للمالك/المدير فقط)
-        if decision && authVM.canDeleteMembers {
-            items.append(DSComposerAction(id: "delete", title: L10n.t("حذف نهائي", "Delete Permanently"),
-                                          icon: "trash", role: .destructive,
-                                          isEnabled: !adminRequestVM.isLoading) {
-                deleteConfirmDetail = detail
-            })
-        }
+        // «حذف نهائي» خارج التفاصيل (طلب المالك ٢٠٢٦-١١-١١): بسحب بطاقة الطلب في القائمة فقط (`RequestSwipeActions`)
         return items
     }
 
@@ -3851,7 +3895,7 @@ struct AdminAllRequestsView: View {
                      value: member.fullName, color: AppSection.admin.ink)
             if let phone = member.phoneNumber, !phone.isEmpty {
                 infoCard(icon: "phone.fill", label: L10n.t("رقم الهاتف", "Phone"),
-                         value: KuwaitPhone.display(phone), color: DS.Color.sea)
+                         value: KuwaitPhone.display(phone), color: DS.Color.sea, whatsapp: phone)
             }
             if let birth = member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines), !birth.isEmpty {
                 infoCard(icon: "calendar", label: L10n.t("تاريخ الميلاد", "Birth Date"),
@@ -3909,7 +3953,8 @@ struct AdminAllRequestsView: View {
                 oldValue: KuwaitPhone.display(request.member?.phoneNumber),
                 newLabel: L10n.t("الرقم الجديد", "New"),
                 newValue: KuwaitPhone.display(request.newValue),
-                icon: "phone.fill"
+                icon: "phone.fill",
+                whatsapp: request.newValue
             )
 
         case .nameChange(let request):
@@ -4063,7 +4108,8 @@ struct AdminAllRequestsView: View {
                     oldValue: KuwaitPhone.display(request.member?.phoneNumber),
                     newLabel: L10n.t("الرقم الجديد", "New"),
                     newValue: KuwaitPhone.display(payload?.newPhone),
-                    icon: "phone.fill"
+                    icon: "phone.fill",
+                    whatsapp: payload?.newPhone
                 )
             case .deceased:
                 infoCard(icon: "person.fill", label: memberLabel,
@@ -4090,11 +4136,32 @@ struct AdminAllRequestsView: View {
                 // الاسم الجديد ولا الأب — الاسم ولمن من سطري «الاسم:» و«لـ:» في الملاحظات (كان يعرض «الاسم الجديد:
                 // فيصل… · الأب: فيصل…» فقُبل طلبا ليلى وريم بلا إضافة، ٢٠٢٦-١١-١١)
                 if let women = payload?.notes.flatMap(WomenTreeRequestLines.init) {
-                    infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
-                             value: women.name, color: DS.Color.female)
+                    // التفاصيل كاملة (طلب المالك ٢٠٢٦-١١-١٢ «ابى في الوارد تفاصيل كاملة»): نوع الطلب · المختارة بنسبها ·
+                    // عمرها وحالتها من شجرة النساء · أبوها · لمن · ما تفعله الإدارة
+                    if let kind = women.kindText {
+                        infoCard(icon: "list.bullet.rectangle", label: L10n.t("نوع الطلب", "Request type"),
+                                 value: kind, color: AppSection.admin.ink)
+                    }
+                    infoCard(icon: "person.fill", label: women.chosenLabel,
+                             value: women.fullName, color: DS.Color.female)
+                    if let w = women.woman(in: WomenStore.cache) {
+                        infoCard(icon: "info.circle.fill", label: L10n.t("عنها في الشجرة", "In the tree"),
+                                 value: Self.womanFacts(w), color: DS.Color.female)
+                    }
+                    if let father = women.father {
+                        infoCard(icon: "person.fill", label: L10n.t("أبوها", "Her father"),
+                                 value: father, color: DS.Color.male)
+                    }
                     if let forWhom = women.forWhom {
-                        infoCard(icon: "person.2.fill", label: L10n.t("لـ (شجرة النساء)", "For (women's tree)"),
+                        infoCard(icon: "person.2.fill",
+                                 label: women.relation == .wife ? L10n.t("زوجةً لـ", "Wife of")
+                                     : women.relation == .mother ? L10n.t("أمّاً لـ", "Mother of")
+                                     : L10n.t("لـ (شجرة النساء)", "For (women's tree)"),
                                  value: forWhom, color: AppSection.admin.ink)
+                    }
+                    if let manual = women.manual {
+                        DSNoteCard(L10n.t("المطلوب من الإدارة: ", "For the admins: ") + manual,
+                                   icon: "hand.point.up.left.fill", tint: DS.Color.info)
                     }
                 } else {
                     infoCard(icon: "person.fill", label: L10n.t("الاسم الجديد", "New Name"),
@@ -4129,7 +4196,9 @@ struct AdminAllRequestsView: View {
                 longTextCard(icon: "text.bubble.fill",
                              label: L10n.t("السبب", "Reason"), text: reason)
             }
-            if let notes = payload?.notes, !notes.isEmpty {
+            if let raw = payload?.notes, !raw.isEmpty {
+                // طلب شجرة النساء: ما عُرض بطاقاتٍ أعلاه لا يتكرّر هنا
+                let notes = WomenTreeRequestLines(raw) != nil ? WomenTreeRequestLines.rest(raw) : raw
                 // سطر «⚠︎ تنبيه للإدارة» يُعرض بطاقة تحذير بارزة أعلى الملاحظات (طلب المالك ٢٠٢٦-١١-١١:
                 // أبناء امرأة بلا زوج مسجّل — تُضاف الإدارة الزوج أولاً)
                 let split = notes.adminNoticeSplit
@@ -4146,24 +4215,45 @@ struct AdminAllRequestsView: View {
     }
 
     /// صف معلومة — أيقونة الحقل + العنوان الغامق + القيمة (نفس صفوف المربّعات الموحّدة).
-    private func infoCard(icon: String, label: String, value: String, color: Color) -> some View {
+    /// `whatsapp`: رقم هاتف ← زرّ واتساب في طرف الصف (طلب المالك ٢٠٢٦-١١-١١ «عند رقم الهاتف زر يودي للواتساب»)
+    private func infoCard(icon: String, label: String, value: String, color: Color, whatsapp: String? = nil) -> some View {
         HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: icon, tint: color)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(label)
-                    .dsFieldFont(.label)
-                    .foregroundColor(DS.Color.fieldLabel)
-                Text(value)
-                    .dsFieldFont(.fieldValue)
-                    .foregroundColor(DS.Color.fieldValue)
-                    .lineLimit(2)
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: icon, tint: color)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(label)
+                        .dsFieldFont(.label)
+                        .foregroundColor(DS.Color.fieldLabel)
+                    Text(value)
+                        .dsFieldFont(.fieldValue)
+                        .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(2)
+                }
             }
+            .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
             Spacer(minLength: 0)
+            if let url = KuwaitPhone.whatsappURL(whatsapp) {
+                whatsappButton(url)
+            }
         }
         .frame(maxWidth: .infinity)
         .dsRowBox()
-        .accessibilityElement(children: .combine)   // «العنوان، القيمة» عنصراً واحداً
+    }
+
+    /// زرّ «واتساب» — حبّة مدمجة خضراء بنصّها (الزرّ الواحد بحجم `.compact`)، يفتح المحادثة مع الرقم
+    private func whatsappButton(_ url: URL) -> some View {
+        Button {
+            UIApplication.shared.open(url)
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "message.fill").dsGlyph(DSButtonSize.compact.glyph)
+                Text(L10n.t("واتساب", "WhatsApp"))
+            }
+            .modifier(DSButtonFace(size: .compact, tint: DS.Color.success, fullWidth: false))
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(L10n.t("مراسلة عبر واتساب", "Message on WhatsApp"))
     }
 
     /// صف رابط قابل للنقر — يفتح URL (واتساب/موقع/سوشال) بنفس صفوف المربّعات.
@@ -4228,8 +4318,10 @@ struct AdminAllRequestsView: View {
     }
 
     /// صف مقارنة «قبل/بعد» — القديم مشطوب بالأحمر ← الجديد بالأخضر (تغييرات الاسم/الهاتف).
+    /// `whatsapp`: الرقم الجديد ← زرّ واتساب بجانبه (طلبات تغيير الرقم)
     private func comparisonCard(oldLabel: String, oldValue: String,
-                                 newLabel: String, newValue: String, icon: String) -> some View {
+                                 newLabel: String, newValue: String, icon: String,
+                                 whatsapp: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: icon, tint: DS.Color.error)
@@ -4267,11 +4359,14 @@ struct AdminAllRequestsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
+                if let url = KuwaitPhone.whatsappURL(whatsapp) {
+                    whatsappButton(url)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
-        .accessibilityElement(children: .combine)   // «الحالي… الجديد…» عنصراً واحداً
+        .accessibilityElement(children: .contain)   // «الحالي… الجديد…» + زرّ واتساب منفصل
     }
 
     /// ارتفاع مكان الصورة المقترحة قبل تحميلها، وارتفاع صورة الخبر في شبكة الصور
@@ -4614,12 +4709,66 @@ extension String {
 
 /// سطور طلب «شجرة النساء» في الملاحظات: «الاسم: …» و«لـ: …» (يكتبها `WomanDetailSheet.requestPayload`)
 struct WomenTreeRequestLines {
+    /// الاسم كما في الطلب
     let name: String
     let forWhom: String?
+    /// «أبوها: …» / «أبوها في الشجرة: …» — طلبات الزوجة والأم من العائلة
+    let father: String?
+    /// زوجة أو أم (من سطر العنوان «شجرة النساء — طلب ربط زوجة» …) — nil = غيرهما
+    let relation: Relation?
+    /// عنوان الطلب بعد «شجرة النساء — » («طلب ربط زوجة» …)
+    let kindTitle: String?
+    /// «التنفيذ يدوي: …» — ما تفعله الإدارة
+    let manual: String?
+
+    /// الأسطر التي تُعرض بطاقاتٍ (لا تتكرّر في «ملاحظات»)
+    private static let shownPrefixes = ["شجرة النساء", "Women's tree", "الاسم:", "Name:", "لـ:", "For:",
+                                        "أبوها في الشجرة:", "أبوها:", "Her father in the tree:", "Her father:",
+                                        "التنفيذ يدوي:", "Manual:"]
+
+    /// الملاحظات بلا الأسطر المعروضة بطاقاتٍ — «ملاحظات: …» تبقى نصّها فقط
+    static func rest(_ notes: String) -> String {
+        notes.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { line in !line.isEmpty && !shownPrefixes.contains(where: { line.hasPrefix($0) }) }
+            .map { line in
+                for p in ["ملاحظات:", "Notes:"] where line.hasPrefix(p) {
+                    return line.dropFirst(p.count).trimmingCharacters(in: .whitespaces)
+                }
+                return line
+            }
+            .joined(separator: "\n")
+    }
+
+    /// شرح نوع الطلب بلغة واضحة
+    var kindText: String? {
+        guard let kindTitle else { return nil }
+        let what = relation == .mother ? L10n.t("أمّاً", "as mother") : L10n.t("زوجةً", "as wife")
+        if relation != nil && kindTitle.contains("ربط") {
+            return L10n.t("بنت موجودة في الشجرة تُربط ", "An existing daughter, linked ") + what
+        }
+        if relation != nil && kindTitle.contains("من العائلة") {
+            return L10n.t("بنت جديدة تُضاف تحت أبيها ثم تُربط ", "A new daughter added under her father, then linked ") + what
+        }
+        return kindTitle
+    }
+
+    /// المختارة نفسها في شجرة النساء (اسمها الأول + أبوها) — لعمرها وحالتها
+    func woman(in people: [FamilyMember]) -> FamilyMember? {
+        guard relation != nil, let father, let first = name.split(separator: " ").first else { return nil }
+        let byId = Dictionary(people.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return people.first { w in
+            guard w.isFemale, String(w.firstName.split(separator: " ").first ?? "") == first,
+                  let f = w.fatherId.flatMap({ byId[$0] }) else { return false }
+            return (f.fullName.isEmpty ? f.firstName : f.displayFullName) == father
+        }
+    }
+
+    enum Relation { case wife, mother }
 
     init?(_ notes: String) {
         let lines = notes.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-        guard lines.contains(where: { $0.hasPrefix("شجرة النساء") || $0.hasPrefix("Women's tree") }) else { return nil }
+        guard let head = lines.first(where: { $0.hasPrefix("شجرة النساء") || $0.hasPrefix("Women's tree") }) else { return nil }
         func value(_ prefixes: [String]) -> String? {
             for line in lines {
                 for p in prefixes where line.hasPrefix(p) {
@@ -4632,5 +4781,222 @@ struct WomenTreeRequestLines {
         guard let name = value(["الاسم:", "Name:"]) else { return nil }
         self.name = name
         self.forWhom = value(["لـ:", "For:"])
+        self.father = value(["أبوها في الشجرة:", "أبوها:", "Her father in the tree:", "Her father:"])
+        if head.contains("زوجة") || head.lowercased().contains("wife") { relation = .wife }
+        else if head.contains(" أم") || head.lowercased().contains("mother") { relation = .mother }
+        else { relation = nil }
+        let dash = head.components(separatedBy: "— ")
+        kindTitle = dash.count > 1 ? dash.dropFirst().joined(separator: "— ").trimmingCharacters(in: .whitespaces) : nil
+        manual = value(["التنفيذ يدوي:", "Manual:"])
+    }
+
+    /// الاسم المختار كاملاً (طلب المالك ٢٠٢٦-١١-١٢): بنت الشجرة اسمها غالباً الأول وحده («فاطمة») —
+    /// يُكمَل باسم أبيها الكامل «فاطمة علي حسين … المحمدعلي». الاسم الأطول من نسب أبيها يبقى كما هو.
+    var fullName: String {
+        guard let father, !father.isEmpty else { return name }
+        let words = name.split(separator: " ")
+        guard let first = words.first, words.count <= father.split(separator: " ").count else { return name }
+        return "\(first) \(father)"
+    }
+
+    /// عنوان الاسم في الطلب: «الزوجة المختارة» / «الأم المختارة» / «الاسم الجديد»
+    var chosenLabel: String {
+        switch relation {
+        case .wife: return L10n.t("الزوجة المختارة", "Chosen wife")
+        case .mother: return L10n.t("الأم المختارة", "Chosen mother")
+        case nil: return L10n.t("الاسم الجديد", "New Name")
+        }
+    }
+}
+
+
+// MARK: - «تمت معالجتها» (طلب المالك ٢٠٢٦-١١-١١ «قسم واضح ودقيق: شنو كل طلب صار فيه ومن سواه من الإدارة»)
+
+extension AdminAllRequestsView {
+    /// «عرض المزيد» للطلبات المعالجة — تحت القائمة، أو تحت «لا نتائج» حين يُخفي الفلتر كل المحمَّل
+    var handledMoreButton: some View {
+        Button {
+            Task { await handledStore.loadMore() }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                if handledStore.isLoading { ProgressView() }
+                Text(L10n.t("عرض المزيد", "Show more"))
+            }
+            .modifier(DSButtonFace(role: .cancel))
+        }
+        .buttonStyle(DSPressStyle())
+        .disabled(handledStore.isLoading)
+        .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.lg)
+    }
+
+    /// الطلبات المغلقة (آخر ٣٠ يوماً) بالأيام، الأحدث أولاً، وبحث «الوارد» الواحد — بنفس قواعد ظهور «الطلبات»
+    var handledList: some View {
+        let visible = visibleHandled
+        return List {
+            DSSearchField(text: $searchText, placeholder: AdminInboxView.searchPlaceholder)
+                .reviewListRow(top: DS.Spacing.md, bottom: DS.Spacing.xs)
+            if !handledStore.loadedOnce {
+                DSPageLoader(L10n.t("جارٍ تحميل ما تمت معالجته…", "Loading handled requests…"), fillsSpace: false)
+                    .padding(.top, DS.Spacing.xl)
+                    .reviewListRow()
+            } else if visible.isEmpty {
+                // ما في المحمَّل شي يطابق — والباقي لم يُحمَّل بعد: لا نقول «لا طلبات»، ونُبقي «عرض المزيد»
+                DSEmptyView(handledStore.failed ? L10n.t("تعذّر التحميل", "Couldn't load")
+                                : handledStore.hasMore ? L10n.t("لا نتائج فيما حُمِّل", "No matches in what's loaded")
+                                : L10n.t("لا طلبات معالجة", "Nothing handled yet"),
+                            message: handledStore.failed
+                                ? L10n.t("تحقّق من الاتصال ثم اسحب للتحديث.", "Check your connection, then pull to refresh.")
+                                : handledStore.hasMore
+                                ? L10n.t("اعرض المزيد لتبحث في الطلبات الأقدم.", "Show more to search older requests.")
+                                : L10n.t("الطلبات التي قُبلت أو رُفضت في آخر ٣٠ يوماً تظهر هنا.",
+                                         "Requests approved or rejected in the last 30 days appear here."),
+                            style: .card)
+                    .reviewListRow(top: DS.Spacing.xs)
+                if handledStore.hasMore && !handledStore.failed { handledMoreButton }
+            } else {
+                ForEach(DSDayBuckets.group(visible, date: handledDate)) { group in
+                    DSDayHeader(title: group.title, count: group.items.count)
+                        .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xxs)
+                    ForEach(group.items) { request in
+                        AdminHandledRow(request: request, events: handledStore.events[request.id],
+                                        lookup: { memberVM.member(byId: $0) }) {
+                            handledOpen = request
+                        }
+                        .reviewListRow(top: DS.Spacing.xxs, bottom: DS.Spacing.xxs)
+                    }
+                }
+                if handledStore.hasMore {
+                    handledMoreButton
+                } else {
+                    Text(L10n.t("آخر ٣٠ يوماً", "Last 30 days"))
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity)
+                        .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.lg)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .environment(\.defaultMinListRowHeight, 0)
+        .refreshable { await handledStore.reload() }
+        .task { if !handledStore.loadedOnce { await handledStore.reload() } }
+    }
+
+    /// وقت التجميع: وقت المعالجة، والقديم بلا وقت ردّ بوقت إرساله
+    private func handledDate(_ request: AdminRequest) -> Date {
+        DateHelper.parse(AdminTrailText.handledAt(request, events: handledStore.events[request.id]))
+            ?? DateHelper.parse(request.createdAt) ?? .distantPast
+    }
+
+    /// ما يراه هذا الدور — نفس مجالات «الطلبات» (`tabsForRole` / `canSeeMessages` / الصور المقترحة)
+    private var visibleHandled: [AdminRequest] {
+        let items = handledStore.items.filter(handledVisible)
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return items }
+        return items.filter { r in
+            let texts = [r.member?.fullName, memberVM.member(byId: r.requesterId)?.fullName, r.newValue, r.details,
+                         AdminTrailText.typeTitle(r), r.treeEditPayload?.targetMemberName, r.treeEditPayload?.newMemberName]
+                .compactMap { $0 }
+            return NameSearch.matches(query: q, any: texts)
+        }
+    }
+
+    private func handledVisible(_ r: AdminRequest) -> Bool {
+        switch r.requestType {
+        case "contact_message": return canSeeMessages
+        case RequestType.newsReport.rawValue, RequestType.contentReport.rawValue: return authVM.canModerateContent
+        case RequestType.photoSuggestion.rawValue: return canHandlePhotos
+        case RequestType.accountDelete.rawValue, RequestType.privacyRequest.rawValue: return authVM.isAdmin
+        default: return authVM.canModerateTree
+        }
+    }
+
+    /// التفصيل المقابل لصفّ معالَج — نفس محتوى مربّع «الطلبات»
+    private func handledDetail(for r: AdminRequest) -> RequestDetail? {
+        switch r.requestType {
+        case RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue:
+            return (r.member ?? memberVM.member(byId: r.memberId)).map { .join($0) }
+        case RequestType.nameChange.rawValue, RequestType.familyChange.rawValue: return .nameChange(r)
+        case RequestType.deceasedReport.rawValue: return .deceased(r)
+        case RequestType.childAdd.rawValue: return .child(r)
+        case RequestType.photoSuggestion.rawValue: return .photo(r)
+        case RequestType.treeEdit.rawValue: return .treeEdit(r, r.treeEditPayload?.resolvedAction ?? .other)
+        case RequestType.newsReport.rawValue, RequestType.contentReport.rawValue, "contact_message": return .report(r)
+        case RequestType.phoneChange.rawValue:
+            guard let data = try? JSONEncoder().encode(r),
+                  let phone = try? JSONDecoder().decode(PhoneChangeRequest.self, from: data) else { return nil }
+            return .phone(phone)
+        default: return nil
+        }
+    }
+
+    /// المربّع للعرض فقط: «بيانات الطلب» ← «المرسل» ← «ما تم في الطلب» ← «النتيجة»، و«إغلاق» وحده
+    func handledBox(_ request: AdminRequest) -> some View {
+        let events = handledStore.events[request.id]
+        let decision = AdminTrailText.decision(request, events: events)
+        let when = DateHelper.displayDateTime(AdminTrailText.handledAt(request, events: events))
+        let detail = handledDetail(for: request)
+        return DSComposer(
+            title: AdminTrailText.typeTitle(request),
+            subtitle: decision.title + (when.map { " · " + $0 } ?? ""),
+            icon: AdminTrailText.typeIcon(request),
+            tint: DS.Color.actionNavy,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { handledOpen = nil }
+        ) {
+            if let detail {
+                genericDetailBoxContent(detail, meta: detailMeta(for: detail))
+            } else {
+                handledFallbackInfo(request)
+                AdminSenderSection(info: senderInfo(for: .report(request)), index: 2)
+            }
+            AdminHandlingSections(request: request, events: events, lookup: { memberVM.member(byId: $0) }, startIndex: 3,
+                                  link: joinLink(request))
+        }
+        .task(id: request.id) { await handledStore.loadEvents(for: request.id) }
+    }
+
+    /// «رُبط بـ: …» — مكان الحساب في شجرة العائلة، أو عقدة شجرة النساء المربوطة به
+    private func joinLink(_ request: AdminRequest) -> String? {
+        AdminTrailText.joinLink(request, member: memberVM.member(byId: request.memberId) ?? request.member,
+                                womenName: handledStore.womenLinks[request.memberId])
+    }
+
+    /// «بيانات الطلب» للأنواع بلا مربّع خاص (حذف الحساب، الخصوصية، إضافة قريبة، النسب…)
+    @ViewBuilder
+    private func handledFallbackInfo(_ request: AdminRequest) -> some View {
+        DSComposerSection(title: L10n.t("بيانات الطلب", "Request Info"), icon: "doc.text.fill",
+                          tint: AppSection.admin.ink, index: 1) {
+            let relative = request.requestType == RequestType.relativeAdd.rawValue ? RelativeAddDetails.parse(request.details) : nil
+            DSTileGrid([
+                .wide(DSFieldTileFace(label: L10n.t("النوع", "Type"), value: AdminTrailText.typeTitle(request), glyph: .none)),
+                .wide(DSFieldTileFace(label: relative == nil ? L10n.t("المعني بالطلب", "About") : L10n.t("لمن", "For whom"),
+                                      value: request.member?.fourPartName ?? memberVM.member(byId: request.memberId)?.fourPartName ?? "—",
+                                      glyph: .none)),
+            ])
+            // «إضافة قريبة»: صلة القرابة واسمها كما كتبه (طلب المالك ٢٠٢٦-١١-١٢)
+            if let relative {
+                DSTileGrid([
+                    .half(DSFieldTileFace(label: L10n.t("صلة القرابة", "Relation"),
+                                          value: relative.relationTitle ?? L10n.t("غير محدّدة", "Not set"), glyph: .none)),
+                    .wide(DSFieldTileFace(label: L10n.t("اسمها", "Her name"),
+                                          value: relative.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "—", glyph: .none)),
+                ])
+            }
+            if let details = request.details?.trimmingCharacters(in: .whitespacesAndNewlines), !details.isEmpty,
+               !details.hasPrefix("{") {
+                Text(details)
+                    .dsFieldFont(.fieldValue)
+                    .foregroundColor(DS.Color.tileValue)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .dsRowBox()
+            }
+        }
     }
 }

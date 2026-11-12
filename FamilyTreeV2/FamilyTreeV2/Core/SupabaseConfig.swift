@@ -74,9 +74,23 @@ struct SupabaseConfig {
         supabaseKey: key,
         options: SupabaseClientOptions(
             auth: .init(emitLocalSessionAsInitialSession: true),
-            global: .init(session: requestSession, logger: QuietSupabaseLogger())
+            global: .init(headers: appHeaders, session: requestSession, logger: QuietSupabaseLogger())
         )
     )
+
+    /// «من أين أُرسل الطلب» (طلب المالك ٢٠٢٦-١١-١١): المنصة ونسخة التطبيق وبناؤه مع كل طلب — السيرفر يقرؤها
+    /// من `request.headers` ويحفظها في `admin_requests.sent_via` (20261111150000). قيم ASCII قصيرة فقط.
+    static let appHeaders: [String: String] = {
+        let info = Bundle.main.infoDictionary
+        var headers = ["x-app-platform": "ios"]
+        if let version = info?["CFBundleShortVersionString"] as? String, !version.isEmpty {
+            headers["x-app-version"] = version
+        }
+        if let build = info?["CFBundleVersion"] as? String, !build.isEmpty {
+            headers["x-app-build"] = build
+        }
+        return headers
+    }()
 
     /// مهلة الطلب ٢٥ ث بدل ٦٠ (الافتراضي): طلب بلا رد كان يُبقي شاشة البداية دقيقة كاملة قبل أي محاولة
     /// بديلة (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). المهلة = أقصى صمت بين حزمتين، فرفع ملف كبير

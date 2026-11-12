@@ -137,6 +137,8 @@ struct AdminMemberSheet: View {
         devices = nil
         if !accounts.loaded { await accounts.refresh() }
         guard let m = member, m.isDeceased != true else { return }
+        // «طلب تغيير الصورة» المعلّق (السيرفر القديم: لا شيء)
+        if authVM.canEditMembers { await PhotoChangeRequestStore.shared.refresh(memberId: m.id) }
         if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
         await refreshBan(m)
         if authVM.canViewSystemSettings {
@@ -555,6 +557,16 @@ struct AdminMemberDataSection: View {
     let canEdit: Bool
     let open: (AdminMemberBox) -> Void
     let openTall: (AdminMemberTallBox) -> Void
+    @EnvironmentObject private var authVM: AuthViewModel
+    /// «طلب تغيير الصورة» المعلّق — الصفّ يظهر ويختفي معه
+    @ObservedObject private var photoRequests = PhotoChangeRequestStore.shared
+
+    /// «طلب تغيير الصورة» (طلب المالك ٢٠٢٦-١١-١١): عضو مسجّل حيّ له صورة، ليس أنت، والمالك لا يطلبه منه إلا مالك
+    private var canRequestPhotoChange: Bool {
+        canEdit && member.isDeceased != true && facts.account != nil && !AdminMemberFacts.isBlank(member.avatarUrl)
+            && member.id != authVM.currentUser?.id
+            && (member.role != .owner || authVM.currentUser?.role == .owner)
+    }
 
     private var genderText: String {
         switch (member.gender ?? "").lowercased() {
@@ -608,6 +620,10 @@ struct AdminMemberDataSection: View {
                 AdminSheetRow(icon: "photo.fill", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"), value: photoText,
                               action: canEdit ? (AdminMemberFacts.isBlank(member.avatarUrl) ? L10n.t("إضافة", "Add") : L10n.t("تغيير", "Change"),
                                                  { open(.photo(member)) }) : nil)
+                if canEdit && PhotoChangeRequestSheetRow.isVisible(member: member, canRequest: canRequestPhotoChange) {
+                    PhotoChangeRequestSheetRow(member: member, canRequest: canRequestPhotoChange,
+                                               onRequest: { open(.photoRequest(member)) })
+                }
                 if member.isDeceased == true {
                     AdminSheetRow(icon: "calendar.badge.clock", tint: DS.Color.deceased, title: L10n.t("تاريخ الوفاة", "Death date"),
                                   value: deathText,
@@ -723,7 +739,7 @@ struct AdminSheetRow: View {
 /// مربّعات بمنتصف الشاشة (الموجودة نفسها)
 enum AdminMemberBox: Identifiable {
     case birth(FamilyMember), gender(FamilyMember), photo(FamilyMember), death(FamilyMember), deathDate(FamilyMember)
-    case phone(FamilyMember), name(FamilyMember)
+    case phone(FamilyMember), name(FamilyMember), photoRequest(FamilyMember)
 
     var id: String {
         switch self {
@@ -734,6 +750,7 @@ enum AdminMemberBox: Identifiable {
         case .deathDate(let m): return "deathDate-\(m.id)"
         case .phone(let m): return "phone-\(m.id)"
         case .name(let m): return "name-\(m.id)"
+        case .photoRequest(let m): return "photoRequest-\(m.id)"
         }
     }
 }
@@ -850,6 +867,7 @@ private struct AdminMemberSheetBoxes: ViewModifier {
         case .deathDate(let m): return AnyView(DeceasedDateBox(member: m))
         case .phone(let m): return AnyView(PendingMemberPhoneSheet(member: m, activateOnSave: true).environmentObject(adminRequestVM))
         case .name(let m): return AnyView(EditNameSheet(member: m, memberVM: memberVM))
+        case .photoRequest(let m): return AnyView(PhotoChangeRequestBox(member: m))
         }
     }
 

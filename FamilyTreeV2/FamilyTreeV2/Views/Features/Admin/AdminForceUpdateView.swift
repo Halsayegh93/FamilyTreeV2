@@ -22,6 +22,8 @@ struct AdminForceUpdateView: View {
     @State private var iosURLDraft = ""
     @State private var androidURLDraft = ""
     @State private var messageDraft = ""
+    /// الظهور الأول فقط يملأ المسودّات من المحفوظ
+    @State private var appeared = false
 
     private var canEdit: Bool { authVM.canManageSettings }
     private var s: AppSettings { appSettingsVM.settings }
@@ -43,10 +45,13 @@ struct AdminForceUpdateView: View {
         AdminPage(header: header, lead: AnyView(explainer), content: isNew ? newCards : legacyCards)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear {
+                // يعود الظهور بعد الرجوع من صفحة داخلية — لا نمسح ما عدّله المالك ولم يحفظه بعد
+                guard !appeared else { return }
+                appeared = true
                 iosURLDraft = s.iosUpdateUrl ?? ""
                 androidURLDraft = s.androidUpdateUrl ?? ""
                 messageDraft = s.updateMessage ?? ""
-                if let p = store.policy { adopt(p) }
+                if let p = store.policy, !dirty { adopt(p) }
             }
             .task {
                 await appSettingsVM.fetchSettings()

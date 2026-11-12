@@ -157,6 +157,9 @@ struct DSCenterCard<Content: View>: View {
     /// وضع العرض: المحتوى كله يتمرّر داخل البطاقة إن لم يتّسع — false لمحتوى يمرّر جزءه الطويل بنفسه
     /// (رسائل dsAlert: النص يتمرّر والأزرار ثابتة)
     var scrollsContent: Bool = true
+    /// أقصى عرض للبطاقة — nil = عرض التنبيه (`DSBox.alertMaxWidth`). مربّع التاريخ أعرض لأن عجلة التاريخ
+    /// لا تصغر عن عرضها الطبيعي (كانت تدفع الأزرار عن المنتصف)
+    var maxWidth: CGFloat? = nil
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     /// لون القسم للشريط الرفيع — من الواجهة التي فتحتها، واحتياطاً القسم المختار ثم كحلي العلامة
@@ -186,7 +189,7 @@ struct DSCenterCard<Content: View>: View {
                     cardBody
                 }
             }
-            .frame(maxWidth: landscape ? DS.Landscape.alertMaxWidth : DSBox.alertMaxWidth)
+            .frame(maxWidth: landscape ? DS.Landscape.alertMaxWidth : (maxWidth ?? DSBox.alertMaxWidth))
             .background(DS.Color.background)
             // بلا رأس: شريط رفيع بلون القسم أعلى البطاقة
             .overlay(alignment: .top) {
