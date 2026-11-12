@@ -321,8 +321,11 @@ final class DaughterSonsIndex: ObservableObject {
         if !force, let last = lastFetch, Date().timeIntervalSince(last) < 60 { return }
         lastFetch = Date()
         do {
-            let rows: [Row] = try await SupabaseConfig.client.from("daughter_son_lineage")
-                .select("profile_id").execute().value
+            // مهمة مستقلة: إلغاء مهمة الشاشة (أول فتح لـ«اليوم») كان يقطع الجلب فيُعدّ أبناء البنات في «الرجال»
+            let rows: [Row] = try await Task { () -> [Row] in
+                try await SupabaseConfig.client.from("daughter_son_lineage")
+                    .select("profile_id").execute().value
+            }.value
             let next = Set(rows.map(\.profile_id))
             if next != ids { ids = next }
         } catch {

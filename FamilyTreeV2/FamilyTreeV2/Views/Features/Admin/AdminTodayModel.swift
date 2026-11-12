@@ -207,6 +207,12 @@ struct AdminMemberCounts: Equatable {
     var withPhone: Int? = nil
     /// لهم رقم وما دخلوا التطبيق أبداً
     var neverLogged: Int? = nil
+    /// لم يفتحوا التطبيق ٢١ يوماً أو أكثر (`idle`) — خارج حلقة «المستخدمين» (طلب المالك ٢٠٢٦-١١-١٢)
+    var idle: Int? = nil
+
+    /// حلقة «المستخدمين»: من فتح التطبيق بلا المنقطعين ٢١ يوماً، والعدد = هؤلاء + من لم يفتحه بعد
+    var usersOpened: Int? { accounts.flatMap { a in idle.map { a - $0 } } }
+    var usersTotal: Int? { withPhone.flatMap { w in idle.map { w - $0 } } }
     /// مرشّحو «تحقق من الأحياء» (كبار السن بلا وفاة مسجّلة) — قبل استبعاد ما راجعه المستخدم «حي ✓» على جهازه.
     /// ما دام منهم من لم يُراجَع فأحياء الرجال والإجمالي «تقديري»
     var oldLiving: Set<UUID>? = nil
@@ -260,6 +266,7 @@ struct AdminMemberCounts: Equatable {
         living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
         withPhone = u.active + u.idle + u.loginNoDevice + u.neverLogged
         neverLogged = u.neverLogged
+        idle = u.idle
     }
 
     /// أعداد البداية من آخر ما حُمّل (الشجرة، كاش شجرة النساء، آخر «استخدام التطبيق») — بلا طلب جديد

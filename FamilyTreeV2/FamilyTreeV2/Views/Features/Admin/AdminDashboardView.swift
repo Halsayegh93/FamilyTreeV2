@@ -170,6 +170,8 @@ struct AdminDashboardView: View {
             await loadAllAdminData()
         }
         .onChange(of: memberVM.membersVersion) { _ in recalculate() }
+        // أبناء البنات يصلون بعد الأعضاء أحياناً (أول فتح) — يُعاد الحساب فلا يُعدّون في «الرجال» (٢٠٢٦-١١-١٢)
+        .onReceive(DaughterSonsIndex.shared.$ids.dropFirst()) { _ in recalculate() }
         .onChange(of: pendingRequestsSum) { _ in recalculate() }
         .onChange(of: pendingArchiveCount) { _ in recalculate() }
         .onChange(of: todaySnapshot) { _ in syncTasks() }

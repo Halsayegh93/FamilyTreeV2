@@ -371,7 +371,8 @@ struct AdminFamilyStatsPage: View {
         }
         // «المستخدمين» (طلب المالك ٢٠٢٦-١١-٠٩): العدد = من لهم رقم هاتف، والحلقة من دخل منهم؛ تحتها دخلوا · ما دخلوا أبداً
         // صياغة يفهمها المدير الجديد (طلب المالك ٢٠٢٦-١١-٠٩): من فتح التطبيق، ومن له رقم ولم يفتحه بعد
-        let users = (c.accounts.map { L10n.t("\($0) فتحوا التطبيق", "\($0) opened the app") } ?? "—",
+        // المنقطعون ٢١ يوماً لا يُحسبون من «المستخدمين» (طلب المالك ٢٠٢٦-١١-١٢)
+        let users = (c.usersOpened.map { L10n.t("\($0) فتحوا التطبيق", "\($0) opened the app") } ?? "—",
                      c.neverLogged.map { L10n.t("\($0) لم يفتحوه بعد", "\($0) not yet") } ?? "—")
         return [
             Ring(id: "total", title: L10n.t("الإجمالي", "Total"), tint: DS.Color.accent, total: c.total,
@@ -388,8 +389,8 @@ struct AdminFamilyStatsPage: View {
                  progress: share(stats.outsideMale, stats.outsideTotal),
                  line1: stats.outsideMale.map { L10n.t("\($0) ذكور", "\($0) male") } ?? "—",
                  line2: stats.outsideFemale.map { L10n.t("\($0) إناث", "\($0) female") } ?? "—", target: .outside),
-            Ring(id: "users", title: L10n.t("المستخدمين", "Users"), tint: DS.Color.success.dsReadableGlyph, total: c.withPhone,
-                 progress: share(c.accounts, c.withPhone),
+            Ring(id: "users", title: L10n.t("المستخدمين", "Users"), tint: DS.Color.success.dsReadableGlyph, total: c.usersTotal,
+                 progress: share(c.usersOpened, c.usersTotal),
                  line1: users.0, line2: users.1, target: .accounts)
         ]
     }
