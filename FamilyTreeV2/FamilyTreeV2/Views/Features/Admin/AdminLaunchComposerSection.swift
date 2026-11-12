@@ -39,6 +39,11 @@ struct AdminLaunchChoice {
         return kuwait.date(from: end) ?? day
     }
 
+    /// «انشر الإعلان · يظهر عند الفتح يومين» — زرّ الوضع الخاص (إعلان عند الفتح وحده)
+    var publishTitle: String {
+        L10n.t("انشر الإعلان · يظهر عند الفتح ", "Publish · shows on open ") + durationWords
+    }
+
     /// « · ويظهر عند الفتح يومين» — يُضاف لنصّ زرّ الإرسال
     var sendSuffix: String {
         " · " + L10n.t("ويظهر عند الفتح ", "and shows on open ") + durationWords
@@ -73,6 +78,11 @@ struct AdminLaunchComposerSection: View {
     @Binding var choice: AdminLaunchChoice
     var tint: Color
     var index: Int = 1
+    /// «＋ إعلان جديد» في بطاقة «الإعلانات عند الفتح» (المالك ٢٠٢٦-١١-١٢): بلا المفتاح (مفعّل ضمناً)، و«لمن؟» من المنشئ
+    /// تحت الصورة — الترتيب: الصورة · لمن؟ · لين: · الزر:
+    var launchOnly: Bool = false
+    /// «لمن؟» — شرائح المنشئ نفسها (`AdminAnnounceComposer.audienceBlock`)، في الوضع الخاص فقط
+    var audience: AnyView? = nil
 
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var loadingImage = false
@@ -80,12 +90,19 @@ struct AdminLaunchComposerSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        DSComposerSection(title: L10n.t("يظهر عند فتح التطبيق؟", "Show when the app opens?"),
+        DSComposerSection(title: launchOnly ? L10n.t("الإعلان", "Announcement")
+                                            : L10n.t("يظهر عند فتح التطبيق؟", "Show when the app opens?"),
                           icon: "rectangle.portrait.on.rectangle.portrait.fill", tint: tint, index: index) {
-            toggleRow
-            if isOn {
+            if !launchOnly { toggleRow }
+            if isOn || launchOnly {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
                     imageBlock
+                    if let audience {
+                        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                            label(L10n.t("لمن؟", "To whom?"))
+                            audience
+                        }
+                    }
                     durationBlock
                     buttonBlock
                 }

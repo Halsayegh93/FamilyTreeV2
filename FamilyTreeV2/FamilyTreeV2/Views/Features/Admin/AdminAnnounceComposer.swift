@@ -146,11 +146,14 @@ struct AdminAnnounceDraft {
     var when: When = .now
     /// تعديل إشعار مجدول — معرّف صفّه (nil = جديد)
     var editingId: UUID? = nil
+    /// «＋ إعلان جديد» من بطاقة «الإعلانات عند الفتح»: صفّ `launch_announcements` وحده — بلا إشعار ولا خبر
+    var launchOnly = false
 
-    init(text: String = "", audience: Audience = .all, when: When = .now) {
+    init(text: String = "", audience: Audience = .all, when: When = .now, launchOnly: Bool = false) {
         self.text = text
         self.audience = audience
         self.when = when
+        self.launchOnly = launchOnly
     }
 
     /// إشعار مجدول ← مسودّة تعديل: نصّه، مستلموه (دولة إن طابقوا أعضاءها بالضبط)، وموعده
@@ -185,6 +188,8 @@ struct AdminAnnounceComposer: View {
 
     /// تعديل إشعار مجدول (nil = جديد)
     private let editingId: UUID?
+    /// إعلان عند الفتح وحده (`AdminAnnounceDraft.launchOnly`) — بلا العنوان والنص و«متى»، والمفتاح مفعّل ضمناً
+    private let launchOnly: Bool
 
     /// العنوان — مكتوب مسبقاً «عائلة المحمدعلي» ويتعدّل (المالك ٢٠٢٦-١٠-٢٣ «خل مساحة للنص و العنوان»)
     @State private var title: String
@@ -219,6 +224,8 @@ struct AdminAnnounceComposer: View {
         self.chooser = chooser
         self.onClose = onClose
         editingId = draft.editingId
+        launchOnly = draft.launchOnly && draft.editingId == nil
+        _launchOn = State(initialValue: draft.launchOnly && draft.editingId == nil)
         _title = State(initialValue: draft.title)
         _customTitle = State(initialValue: !AdminAnnounceKit.presetTitles.contains(draft.title))
         _text = State(initialValue: draft.text)
@@ -284,10 +291,10 @@ struct AdminAnnounceComposer: View {
     /// موعد الإرسال — nil = الآن
     private var sendDate: Date? { when == .now ? nil : customDate }
 
-    /// إعلان الفتح مطلوب (المفتاح، وليس تعديل إشعار مجدول)
-    private var wantsLaunch: Bool { launchOn && !isEditing }
-    /// فيه نصّ ← الإشعار كما اليوم؛ بلا نصّ مع إعلان الفتح ← إعلان الفتح وحده
-    private var wantsPush: Bool { !trimmed(text).isEmpty || !wantsLaunch }
+    /// إعلان الفتح مطلوب (المفتاح أو الوضع الخاص، وليس تعديل إشعار مجدول)
+    private var wantsLaunch: Bool { (launchOn || launchOnly) && !isEditing }
+    /// فيه نصّ ← الإشعار كما اليوم؛ بلا نصّ مع إعلان الفتح ← إعلان الفتح وحده؛ الوضع الخاص لا إشعار أبداً
+    private var wantsPush: Bool { !launchOnly && (!trimmed(text).isEmpty || !wantsLaunch) }
 
     /// ما يمنع الإرسال (سطر فوق الزرّ) — nil = جاهز
     private func blocker(_ active: [FamilyMember]) -> String? {
@@ -313,6 +320,7 @@ struct AdminAnnounceComposer: View {
     /// فعل فقط — «لمن» و«متى» ظاهرتان في بطاقتيهما (المالك ٢٠٢٦-١٠-٢٣ «في تكرر بالوقت بمتى و بالارسال»)
     private func actionTitle(_ active: [FamilyMember]) -> String {
         if isEditing { return L10n.t("احفظ", "Save") }
+        if launchOnly { return launch.publishTitle }
         let base = sendDate == nil ? L10n.t("أرسل الآن", "Send now") : L10n.t("جدولة", "Schedule")
         return wantsLaunch ? base + launch.sendSuffix : base
     }
@@ -357,6 +365,35 @@ struct AdminAnnounceComposer: View {
     }
 
     private var composer: some View {
+        launchOnly ? AnyView(launchOnlyComposer) : AnyView(fullComposer)
+    }
+
+    /// «إعلان عند فتح التطبيق» وحده: الصورة · لمن؟ · لين: · الزر: — نفس الحالة والإرسال (`send()` يحفظ الصفّ ويقف)
+    private var launchOnlyComposer: some View {
+        let active = self.active
+        let blocker = self.blocker(active)
+        return DSComposer(
+            title: L10n.t("إعلان عند فتح التطبيق", "Shown when the app opens"),
+            subtitle: L10n.t("صورة تظهر للأعضاء عند فتح التطبيق — بلا إشعار", "An image members see on opening the app — no push"),
+            icon: "rectangle.portrait.on.rectangle.portrait.fill",
+            tint: tint,
+            actionTitle: actionTitle(active),
+            actionIcon: "paperplane.fill",
+            canSubmit: blocker == nil && !isSending,
+            isBusy: isSending,
+            note: blocker,
+            hasUnsavedChanges: launchImage != nil,
+            actionFullRow: true,
+            onSubmit: submit,
+            onCancel: { onClose() }
+        ) {
+            AnyView(AdminLaunchComposerSection(isOn: $launchOn, image: $launchImage, choice: $launch, tint: tint,
+                                               index: 0, launchOnly: true,
+                                               audience: AnyView(audienceBlock(active))))
+        }
+    }
+
+    private var fullComposer: some View {
         let active = self.active
         let blocker = self.blocker(active)
         return DSComposer(
@@ -397,11 +434,13 @@ struct AdminAnnounceComposer: View {
 
     private var confirmTitle: String {
         if isEditing { return L10n.t("حفظ التعديل للكل؟", "Save for everyone?") }
+        if launchOnly { return L10n.t("نشر للكل؟", "Publish to everyone?") }
         return sendDate == nil ? L10n.t("إرسال للكل؟", "Send to everyone?") : L10n.t("جدولة للكل؟", "Schedule for everyone?")
     }
 
     private var confirmButton: String {
         if isEditing { return L10n.t("احفظ", "Save") }
+        if launchOnly { return L10n.t("انشر", "Publish") }
         return sendDate == nil ? L10n.t("أرسل", "Send") : L10n.t("جدول", "Schedule")
     }
 
@@ -426,6 +465,7 @@ struct AdminAnnounceComposer: View {
 
     private var doneTitle: String {
         if isEditing { return L10n.t("تم الحفظ", "Saved") }
+        if launchOnly { return L10n.t("تم النشر", "Published") }
         return sendDate == nil ? L10n.t("تم الإرسال", "Sent") : L10n.t("تمت الجدولة", "Scheduled")
     }
 

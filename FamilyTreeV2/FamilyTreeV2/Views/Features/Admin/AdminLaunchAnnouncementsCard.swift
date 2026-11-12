@@ -3,9 +3,14 @@ import SwiftUI
 // MARK: - «الإعلانات عند الفتح» في «المناسبات والإعلانات» (العينة launch-announcements، الشاشة ٣) — المالك والمدير
 //
 // «تظهر الحين · N»: كل إعلان لم ينتهِ (مصغّرة الصورة، لمن «الكل»/«N عضو»، «لين <اليوم والوقت>»، نوع الزرّ) بحبّة حمراء
-// «إيقاف» (تأكيد ← stopped_at = الآن)، ثم «انتهت» (آخر ١٠). يُنشأ الإعلان من «إنشاء ← إعلان ← يظهر عند فتح التطبيق؟».
+// «إيقاف» (تأكيد ← stopped_at = الآن)، ثم «انتهت» (آخر ١٠). يُنشأ الإعلان من «＋ إعلان جديد» في عنوان البطاقة
+// (المنشئ بوضع `launchOnly`)، أو من مكبّر الصوت ← «إرسال إشعار» ← «يظهر عند فتح التطبيق؟».
 
 struct AdminLaunchAnnouncementsCard: View {
+    @EnvironmentObject private var authVM: AuthViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var newsVM: NewsViewModel
+    @EnvironmentObject private var notificationVM: NotificationViewModel
     @State private var rows: [LaunchAnnouncement]? = nil
     @State private var failed = false
     @State private var stopTarget: LaunchAnnouncement? = nil
@@ -22,7 +27,10 @@ struct AdminLaunchAnnouncementsCard: View {
             .sorted { Self.endDate($0) > Self.endDate($1) }
             .prefix(Self.endedLimit))
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminOccasionsSectionTitle(title: L10n.t("الإعلانات عند الفتح", "Shown when the app opens"))
+            // «＋ إعلان جديد» — المدخل الواضح (المالك ٢٠٢٦-١١-١٢: كان مخفياً في مكبّر الصوت ← «إرسال إشعار»)
+            AdminOccasionsSectionTitle(title: L10n.t("الإعلانات عند الفتح", "Shown when the app opens"),
+                                       actionTitle: authVM.isAdmin ? L10n.t("＋ إعلان جديد", "＋ New") : nil,
+                                       onAction: openComposer)
             if rows == nil && !failed {
                 AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
             } else if failed && rows == nil {
@@ -30,13 +38,12 @@ struct AdminLaunchAnnouncementsCard: View {
                                         text: L10n.t("تعذّر تحميل الإعلانات عند الفتح", "Couldn't load the announcements"))
             } else if all.isEmpty {
                 AdminOccasionsQuietLine(icon: "rectangle.portrait.on.rectangle.portrait",
-                                        text: L10n.t("لا توجد إعلانات عند الفتح — «إنشاء ← إعلان ← يظهر عند فتح التطبيق؟»",
-                                                     "No announcements — Create → Announcement → Show when the app opens?"))
+                                        text: L10n.t("لا توجد إعلانات تظهر الآن", "No announcements are showing now"))
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     groupLabel(L10n.t("تظهر الحين", "Showing now"), count: live.count)
                     if live.isEmpty {
-                        Text(L10n.t("لا يظهر شيء الآن", "Nothing is showing now"))
+                        Text(L10n.t("لا توجد إعلانات تظهر الآن", "No announcements are showing now"))
                             .dsFont(.footnote)
                             .foregroundColor(DS.Color.textTertiary)
                             .padding(.vertical, DS.Spacing.sm)
@@ -85,6 +92,12 @@ struct AdminLaunchAnnouncementsCard: View {
         } message: {
             Text(L10n.t("حاول مرة أخرى.", "Try again."))
         }
+    }
+
+    /// المنشئ نفسه بوضع «إعلان عند فتح التطبيق» وحده — بعد الحفظ `launchAnnouncementsChanged` يعيد جلب البطاقة
+    private func openComposer() {
+        AdminCreateWindow.open(.announcement, announce: AdminAnnounceDraft(launchOnly: true), chooser: false,
+                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
     }
 
     private func load() async {
