@@ -30,6 +30,10 @@ private struct WomenRow: Decodable {
     let spouseShown: Bool?
     let childrenShown: Bool?
     let hiddenChildren: [UUID]?
+    /// من أخفاها ومتى، وهل أخفاها أهلها (`20261112130000_women_hide_by_family`) — اختيارية: قبل الترحيل nil
+    let hiddenBy: UUID?
+    let hiddenAt: String?
+    let hiddenByFamily: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -54,6 +58,9 @@ private struct WomenRow: Decodable {
         case spouseShown = "spouse_shown"
         case childrenShown = "children_shown"
         case hiddenChildren = "hidden_children"
+        case hiddenBy = "hidden_by"
+        case hiddenAt = "hidden_at"
+        case hiddenByFamily = "hidden_by_family"
     }
 }
 
@@ -73,6 +80,9 @@ enum WomenStore {
     static var wifeOrderByWoman: [UUID: Int] = [:]
     /// «أبناء البنات من خارج العائلة»: أزواج البنات من خارج العائلة (`is_outside_family`) — يُرسمون تحت زوجاتهم
     static var outsideFamilyIds: Set<UUID> = []
+    /// المخفيّة: من أخفاها ومتى، وهل أخفاها أهلها (الإظهار منهم وحدهم) — تراها الإدارة فقط
+    struct HiddenInfo: Equatable { let by: UUID?; let at: String?; let byFamily: Bool }
+    static var hiddenInfo: [UUID: HiddenInfo] = [:]
     /// العمود موجود على السيرفر (الترحيل طُبّق) — قبله تختفي «زوج من خارج العائلة»
     static var outsideFamilySupported = false
     /// «ما يظهر في الشجرة» عند البنت (اختيارها هي، ٢٠٢٦-١١-٠٩): بنات زوجهن ظاهر جنبهن، وبنات عيالهن
@@ -118,6 +128,9 @@ enum WomenStore {
         for r in rows { if let o = r.wifeOrder { wifeOrders[r.id] = o } }
         wifeOrderByWoman = wifeOrders
         outsideFamilyIds = Set(rows.lazy.filter { $0.isOutsideFamily == true }.map(\.id))
+        hiddenInfo = Dictionary(uniqueKeysWithValues: rows.lazy.filter { $0.isHiddenFromTree == true }.map {
+            ($0.id, HiddenInfo(by: $0.hiddenBy, at: $0.hiddenAt, byFamily: $0.hiddenByFamily == true))
+        })
         outsideFamilySupported = rows.contains { $0.isOutsideFamily != nil }
         spouseShownIds = Set(rows.lazy.filter { $0.spouseShown == true }.map(\.id))
         childrenShownIds = Set(rows.lazy.filter { $0.childrenShown == true }.map(\.id))

@@ -1282,6 +1282,7 @@ struct ProfileView: View {
         var parts = [entry.member.firstName.isEmpty ? L10n.t("فرد", "Member") : entry.member.firstName]
         if entry.role != .child { parts.append(L10n.t(entry.role.label, entry.role.labelEn)) }
         if entry.member.isDeceased { parts.append(L10n.t("متوفى", "deceased")) }
+        if entry.member.isHiddenFromTree { parts.append(L10n.t("مخفية من شجرة النساء", "hidden from the women's tree")) }
         return parts.joined(separator: L10n.t("، ", ", "))
     }
 
@@ -1461,6 +1462,10 @@ struct ProfileView: View {
                     }
                     if woman.isDeceased {
                         DSStatusChip(text: L10n.t("متوفى", "Deceased"), tint: DS.Color.error, size: .mini)
+                    }
+                    // مخفية من شجرة النساء (من «تعديل الملف الشخصي» أو مربّع الزوجة)
+                    if woman.isHiddenFromTree {
+                        DSStatusChip(text: L10n.t("مخفية", "Hidden"), tint: DS.Color.slate, size: .mini)
                     }
                 }
             }
@@ -1888,7 +1893,7 @@ struct WomanMemberEditSheet: View {
     /// (طلب المالك ٢٠٢٦-١١-١٠ «ترتيب الأوامر») — القيمة والحفظ كما هما
     @ViewBuilder
     private var privacySection: some View {
-        if entry.role == .wife {
+        if entry.role == .wife, WomenStore.linkedUserByWoman[entry.member.id] == nil {
             DSComposerSection(title: L10n.t("الخصوصية", "Privacy"), icon: "lock.fill",
                               tint: DS.Color.primary, index: 3) {
                 DSVisibilityPicker(

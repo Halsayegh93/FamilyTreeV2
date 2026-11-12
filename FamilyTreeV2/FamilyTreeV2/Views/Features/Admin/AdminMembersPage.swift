@@ -475,8 +475,29 @@ struct AdminMembersPage: View {
         var union = Set<Int>()
         for (r, list) in counts where !r.isUsage { union.formUnion(list) }
         return AdminMembersReviewCard(counts: counts.mapValues(\.count), total: union.count,
+                                      progress: reviewProgress(problems: counts[.problems]?.count ?? 0),
                                       accountsReady: index.accountsReady, selected: review,
                                       open: { openReview($0) })
+    }
+
+    /// كم أُنجز من كل قائمة (القرار ٢ «أ + ج»، ٢٠٢٦-١١-١٢): نفس حساب شريط صفحة القائمة —
+    /// الأحياء والوفيات = من رُوجع حياً + من اكتمل تاريخ وفاته · بيانات ناقصة = اكتمال بيانات الأحياء ·
+    /// مشكلات الشجرة = نسبة الأعضاء بلا مشكلة
+    private func reviewProgress(problems: Int) -> [AdminMemberReview: Double] {
+        guard index.built else { return [:] }
+        var out: [AdminMemberReview: Double] = [:]
+        let checkAll = index.rows(.verifyLiving, .all)
+        let checked = checkAll.filter { verified.ids.contains(index.entries[$0].id) }.count
+        let deceased = index.rows(.deceased, .all).count
+        let deathMissing = index.rows(.deceased, .deathIncomplete).count
+        let lifeTotal = checkAll.count + deceased
+        if lifeTotal > 0 { out[.living] = Double(checked + deceased - deathMissing) / Double(lifeTotal) }
+        let living = index.entries.reduce(0) { $0 + ($1.member.isDeceased == true ? 0 : 1) }
+        if living > 0 { out[.gaps] = Double(max(0, living - index.rows(.gaps, .all).count)) / Double(living) }
+        if !index.entries.isEmpty {
+            out[.problems] = Double(max(0, index.entries.count - problems)) / Double(index.entries.count)
+        }
+        return out
     }
 
     // MARK: «الأعضاء»: العنوان والفرع، البحث، الشرائح
@@ -713,16 +734,24 @@ struct AdminMembersPage: View {
     }
 }
 
-// MARK: - «يحتاج مراجعتك» (اختيار المالك ٢٠٢٦-١١-٠٦ «ب»)
+// MARK: - «يحتاج مراجعتك» (القرار ٢ «أ + ج»، اختيار المالك ٢٠٢٦-١١-١٢: «مربعات أ و تحت كل رقم شريط ج»)
 
-/// أربع قوائم بأعدادها، كل صفّ يفتح قائمته عضواً عضواً — في نوعه المستقل (حارس المكدس)
+/// قوائم المراجعة مربّعات صغيرة (أيقونة · الرقم · الاسم · شريط «أُنجز») وقائمتا الاستخدام صفّان تحتها؛
+/// كل واحدة تفتح صفحتها — في نوعه المستقل (حارس المكدس)
 struct AdminMembersReviewCard: View {
     let counts: [AdminMemberReview: Int]
     let total: Int
-    /// قبل وصول قوائم الحسابات: «هل ما زالوا أحياء؟» تقديرية (قد يخرج منها من له حساب)
+    /// كم أُنجز (٠…١) — غائب قبل بناء الفهرس
+    let progress: [AdminMemberReview: Double]
+    /// قبل وصول قوائم الحسابات: قائمتا الاستخدام «—»
     let accountsReady: Bool
     let selected: AdminMemberReview?
     let open: (AdminMemberReview) -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    /// المربّعات بالأهمية: مشكلات الشجرة · الأحياء والوفيات · بيانات ناقصة
+    private static let tiles: [AdminMemberReview] = [.problems, .living, .gaps]
+    private static let usage: [AdminMemberReview] = AdminMemberReview.cardCases.filter(\.isUsage)
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -737,34 +766,99 @@ struct AdminMembersReviewCard: View {
                     .monospacedDigit()
                     .foregroundColor(DS.Color.textTertiary)
             }
+            tileGrid
+            Text(L10n.t("استخدام التطبيق", "App usage"))
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textSecondary)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.top, DS.Spacing.xs)
             VStack(spacing: 0) {
-                ForEach(Array(AdminMemberReview.cardCases.enumerated()), id: \.element) { i, r in
+                ForEach(Array(Self.usage.enumerated()), id: \.element) { i, r in
                     if i > 0 { AdminRowDivider() }
-                    row(r)
+                    usageRow(r)
                 }
-                AdminRowDivider()
-                HStack(spacing: DS.Spacing.xs) {
-                    Image(systemName: "checkmark")
-                        .dsGlyph(DS.Glyph.xs, weight: .semibold)
-                        .foregroundColor(DS.Color.success)
-                        .accessibilityHidden(true)
-                    Text(L10n.t("اضغط أي قائمة لعرض أعضائها", "Tap a list to see its members"))
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, DS.Spacing.sm)
             }
             .adminCard()
         }
     }
 
-    private func row(_ r: AdminMemberReview) -> some View {
+    // MARK: المربّعات
+
+    @ViewBuilder
+    private var tileGrid: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: DS.Spacing.sm) { ForEach(Self.tiles, id: \.self) { tile($0) } }
+        } else {
+            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                ForEach(Self.tiles, id: \.self) { tile($0).frame(maxHeight: .infinity, alignment: .top) }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func count(_ r: AdminMemberReview) -> Int {
         // «الأحياء والوفيات» = القائمتان معاً
-        let n = r == .living ? (counts[.living] ?? 0) + (counts[.death] ?? 0) : (counts[r] ?? 0)
-        // قائمتا الاستخدام قبل وصول الحسابات: «—» لا صفر
-        let pending = r.isUsage && !accountsReady
+        r == .living ? (counts[.living] ?? 0) + (counts[.death] ?? 0) : (counts[r] ?? 0)
+    }
+
+    /// «أُنجز 85٪» — ومشكلات الشجرة «سليم 99٪» (نسبة الأعضاء بلا مشكلة)
+    private func doneText(_ r: AdminMemberReview, _ p: Double?) -> String {
+        guard let p else { return "—" }
+        let pct = Int((p * 100).rounded(.down))
+        return r == .problems ? L10n.t("سليم \(pct)٪", "\(pct)% sound") : L10n.t("أُنجز \(pct)٪", "\(pct)% done")
+    }
+
+    private func tile(_ r: AdminMemberReview) -> some View {
+        let n = count(r)
+        let p = progress[r]
+        return Button { open(r) } label: {
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                Image(systemName: r.icon)
+                    .dsGlyph(DS.Glyph.md, weight: .semibold)
+                    .foregroundColor(r.tint.dsReadableGlyph)
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                        .fill(r.tint.opacity(DS.Opacity.tintFill)))
+                    .accessibilityHidden(true)
+                Text(verbatim: AdminMembersFilterBar.grouped(n))
+                    .dsFont(.statValue)
+                    .monospacedDigit()
+                    .foregroundColor(n > 0 ? DS.Color.textPrimary : DS.Color.textTertiary)
+                Text(verbatim: r.cardTitle)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                // مشكلات الشجرة: الشريط = نسبة السليم، فلونه لون السلامة لا أحمر القائمة
+                DSMeterBar(progress: p, tint: r == .problems ? DS.Color.success : r.tint)
+                    .accessibilityHidden(true)
+                Text(verbatim: doneText(r, p))
+                    .dsFont(.micro)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .padding(DS.Spacing.sm)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(selected == r ? r.tint.opacity(DS.Opacity.selectedStroke)
+                                            : DS.Color.cardBorder, lineWidth: DS.Border.width))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(r.cardTitle)، \(n)، \(doneText(r, p))")
+        .accessibilityHint(L10n.t("يعرض أعضاء القائمة", "Shows the list's members"))
+        .accessibilityAddTraits(selected == r ? [.isButton, .isSelected] : .isButton)
+    }
+
+    // MARK: صفّا الاستخدام
+
+    private func usageRow(_ r: AdminMemberReview) -> some View {
+        let n = count(r)
+        // قبل وصول الحسابات: «—» لا صفر
+        let pending = !accountsReady
         return Button { open(r) } label: {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: r.icon)
@@ -774,16 +868,10 @@ struct AdminMembersReviewCard: View {
                     .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
                         .fill(r.tint.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(verbatim: r.cardTitle)
-                        .dsFont(.rowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(verbatim: r.cardSubtitle)
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(verbatim: r.cardTitle)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: DS.Spacing.sm)
                 Text(verbatim: pending ? "—" : AdminMembersFilterBar.grouped(n))
                     .dsFont(.rowTitle)

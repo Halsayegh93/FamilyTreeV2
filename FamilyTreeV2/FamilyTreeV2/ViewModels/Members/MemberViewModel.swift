@@ -505,6 +505,26 @@ class MemberViewModel: ObservableObject {
     }
 
     /// إخفاء/إظهار زوجة العضو في الشجرة — الإخفاء يمنع ظهورها لأي أحد.
+    /// إخفاء زوجته أو ابنته من شجرة النساء أو إظهارها (طلب المالك ٢٠٢٦-١١-١٢، «تعديل الملف الشخصي») —
+    /// `set_self_woman_hidden`: السيرفر يتحقق أنها زوجته أو ابنته، ويختم من أخفاها، ويُشعر الإدارة
+    func setSelfWomanHidden(womanId: UUID, hidden: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_woman_id: String; let p_hidden: Bool }
+        do {
+            _ = try await supabase.rpc("set_self_woman_hidden",
+                                       params: P(p_woman_id: womanId.uuidString, p_hidden: hidden)).execute()
+            await fetchWomenFamily(for: uid)
+            return true
+        } catch {
+            let raw = "\(error)"
+            self.errorMessage = raw.contains("has_account") || raw.contains("hidden_by_herself")
+                ? L10n.t("لزوجتك حساب، وهي تقرر ظهورها من حسابها.", "Your wife has her own account and decides her visibility.")
+                : L10n.t("تعذّر تغيير الظهور، حاول مرة أخرى.", "Couldn't change visibility. Try again.")
+            Log.error("[Women] setSelfWomanHidden: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func setSelfWifeHidden(wifeId: UUID, hidden: Bool) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         struct P: Encodable { let p_wife_id: String; let p_hidden: Bool }

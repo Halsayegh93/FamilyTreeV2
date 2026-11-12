@@ -720,6 +720,12 @@ struct WomanDetailSheet: View {
                     .transition(.opacity)
             }
 
+            // المخفيّة تراها الإدارة وحدها (السيرفر يخفيها عن الأعضاء): من أخفاها ومتى
+            if woman.isHiddenFromTree, canModerate {
+                hiddenBanner
+                    .padding(.horizontal, DS.Spacing.lg)
+            }
+
             if hasDetails {
                 detailsToggleButton
                     .padding(.horizontal, DS.Spacing.lg)
@@ -864,6 +870,36 @@ struct WomanDetailSheet: View {
                 .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة
             }
         }
+    }
+
+    /// «مخفية عن الأعضاء» — من أخفاها (أبوها/زوجها) ومتى، وما أخفاه أهلها يُظهرونه هم
+    /// (اختيار المالك ٢٠٢٦-١١-١٢ «الإدارة تشوف بس»؛ السيرفر يرفض إظهار الإدارة له)
+    private var hiddenBanner: some View {
+        let info = WomenStore.hiddenInfo[woman.id]
+        var lines: [String] = []
+        let bySelf = info?.by != nil && (info?.by == WomenStore.linkedUserByWoman[woman.id] || info?.by == woman.id)
+        if bySelf {
+            lines.append(L10n.t("أخفت نفسها من حسابها", "She hid herself from her account"))
+        } else if let by = info?.by {
+            let who = memberVM.member(byId: by).map { PersonName.threeParts($0.fullName) } ?? L10n.t("عضو", "a member")
+            let rel = by == woman.fatherId ? L10n.t(" (أبوها)", " (her father)")
+                : by == woman.husbandId ? L10n.t(" (زوجها)", " (her husband)") : ""
+            lines.append(L10n.t("أخفاها: \(who)\(rel)", "Hidden by: \(who)\(rel)"))
+        }
+        if let at = info?.at, let day = DateHelper.displayDate(String(at.prefix(10))) {
+            lines.append(L10n.t("متى: \(day)", "When: \(day)"))
+        }
+        if info?.byFamily == true {
+            lines.append(bySelf
+                ? L10n.t("إظهارها منها هي من «تعديل الملف الشخصي».", "Only she can show herself again.")
+                : L10n.t("أخفاها أهلها، وإظهارها منهم من «تعديل الملف الشخصي».",
+                         "Hidden by her family; only they can show her again."))
+        }
+        if lines.isEmpty { lines.append(L10n.t("لا يراها الأعضاء في شجرة النساء.", "Members don't see her in the women's tree.")) }
+        return DSNoteCard(lines.joined(separator: "\n"),
+                          title: L10n.t("مخفية عن الأعضاء", "Hidden from members"),
+                          icon: "eye.slash.fill",
+                          tint: DS.Color.slate)
     }
 
     /// نتيجة صلة القرابة — ملاحظة العُدّة الملوّنة بلون القرابة

@@ -87,6 +87,12 @@ struct EditProfileView: View {
     @State private var showAdminConfirm = false
     @State private var adminConfirmMessage = ""
     @State private var isSaving = false
+    /// «الظهور في شجرة النساء» لزوجاته وبناته (طلب المالك ٢٠٢٦-١١-١٢): الاختيار يُحفظ فوراً
+    @State private var womenHidden: [UUID: Bool] = [:]
+    @State private var womenHideBusy: Set<UUID> = []
+    @State private var womenHideError: String?
+    /// حساب المرأة: عقدتها في شجرة النساء (ظهورها هي)
+    @State private var myWomanNode: FamilyMember?
 
     private let cooldown = ProfileEditCooldown.shared
 
@@ -157,6 +163,9 @@ struct EditProfileView: View {
             // 3. السيرة الذاتية
             bioStationsSection
                 .cooldownGuarded(.bio, cooldown: cooldown) { showEditLimitAlert = true }
+
+            // 4. الظهور في شجرة النساء — زوجاته وبناته
+            womenVisibilitySection
         }
             .dsAlert(
                 L10n.t("تجاهل التعديلات؟", "Discard Changes?"),
@@ -173,6 +182,21 @@ struct EditProfileView: View {
         // مربّع طويل من الأسفل: لا يُسحب وفيه تعديلات غير محفوظة («إلغاء» يسأل أولاً)
         .interactiveDismissDisabled(hasUnsavedChanges)
         .task { await familyNamesVM.fetch() }
+        .task {
+            // زوجاته وبناته من شجرة النساء (نفس «الأسرة» في الملف)
+            if isOwnMaleProfile {
+                // من لها حساب (تقرر ظهورها بنفسها) — `linkedUserByWoman` من جلب شجرة النساء
+                if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+                await memberVM.fetchWomenFamily(for: member.id)
+            }
+            if isOwnWomanProfile { await loadMyWomanNode() }
+        }
+        .dsAlert(L10n.t("تعذّر الحفظ", "Couldn't save"),
+                 isPresented: Binding(get: { womenHideError != nil }, set: { if !$0 { womenHideError = nil } })) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(womenHideError ?? "")
+        }
             .onAppear {
                 setupData()
             }
@@ -232,6 +256,161 @@ struct EditProfileView: View {
                 Text(saveSummary)
             }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    // MARK: الظهور في شجرة النساء (طلب المالك ٢٠٢٦-١١-١٢)
+
+    /// ملفه هو، وهو رجل — حساب المرأة له «الخصوصية» الخاصة به
+    private var isOwnMaleProfile: Bool {
+        member.id == authVM.currentUser?.id && !member.isWomanAccount
+    }
+
+    /// ملفها هي — حساب امرأة: تخفي ظهورها هي (طلب المالك ٢٠٢٦-١١-١٢)
+    private var isOwnWomanProfile: Bool {
+        member.id == authVM.currentUser?.id && member.isWomanAccount
+    }
+
+    /// زوجاته فقط (طلب المالك ٢٠٢٦-١١-١٢ «شيل البنات فقط بدون الزوجة»)، ومن لا حساب لها فقط
+    /// («إذا ما عندها حساب زوجها يقدر يخفيها أو يظهرها» — صاحبة الحساب تقرر من حسابها)
+    private var hideableWomen: [WomenFamilyEntry] {
+        guard isOwnMaleProfile else { return [] }
+        return memberVM.currentMemberWomenFamily.filter {
+            $0.role == .wife && WomenStore.linkedUserByWoman[$0.member.id] == nil
+        }
+    }
+
+    /// زوجاته صاحبات الحساب — سطر يوضّح أنهن يقررن ظهورهن
+    private var wivesWithAccount: [WomenFamilyEntry] {
+        guard isOwnMaleProfile else { return [] }
+        return memberVM.currentMemberWomenFamily.filter {
+            $0.role == .wife && WomenStore.linkedUserByWoman[$0.member.id] != nil
+        }
+    }
+
+    private func loadMyWomanNode() async {
+        guard let uid = authVM.currentUser?.id else { return }
+        if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+        myWomanNode = WomenStore.node(forAccount: uid)
+    }
+
+    @ViewBuilder
+    private var womenVisibilitySection: some View {
+        let list = hideableWomen
+        if isOwnWomanProfile, let node = myWomanNode {
+            DSComposerSection(title: L10n.t("الظهور في شجرة النساء", "In the women's tree"),
+                              icon: "eye.fill", tint: DS.Color.primary, index: 3) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    DSVisibilityPicker(
+                        hidden: selfHiddenBinding(node),
+                        shownLine: L10n.t("تظهرين لأفراد العائلة في شجرة النساء.", "You're shown to family members in the women's tree."),
+                        hiddenLine: L10n.t("لا يراكِ في شجرة النساء إلا أهلك والإدارة.",
+                                           "Only your family and the admins see you in the women's tree."),
+                        rowTitle: L10n.t("ظهوري في الشجرة", "My visibility in the tree"),
+                        rowIcon: "figure.stand.dress",
+                        feminine: true,
+                        shownState: L10n.t("ظاهرة في شجرة النساء", "Shown in the women's tree"),
+                        hiddenState: L10n.t("مخفية عن الأعضاء", "Hidden from members"))
+                    .disabled(womenHideBusy.contains(node.id))
+                    .opacity(womenHideBusy.contains(node.id) ? DS.Opacity.disabled : 1)
+                    Text(L10n.t("المخفية لا يراها في شجرة النساء إلا أهلها والإدارة، ويُحفظ الاختيار فوراً.",
+                                "Hidden: only your family and the admins see you. Saved right away."))
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else if !list.isEmpty || !wivesWithAccount.isEmpty {
+            DSComposerSection(title: L10n.t("الظهور في شجرة النساء", "In the women's tree"),
+                              icon: "eye.fill", tint: DS.Color.primary, index: 3) {
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    ForEach(list) { e in
+                        DSVisibilityPicker(
+                            hidden: womanHiddenBinding(e),
+                            shownLine: L10n.t("تظهر لأفراد العائلة في شجرة النساء.", "Shown to family members in the women's tree."),
+                            hiddenLine: L10n.t("لا يراها أحد في شجرة النساء إلا أنت والإدارة.",
+                                               "No one sees her in the women's tree except you and the admins."),
+                            rowTitle: womanRowTitle(e),
+                            rowIcon: "figure.stand.dress",
+                            feminine: true,
+                            shownState: L10n.t("ظاهرة في شجرة النساء", "Shown in the women's tree"),
+                            hiddenState: L10n.t("مخفية عن الأعضاء", "Hidden from members"))
+                        .disabled(womenHideBusy.contains(e.id))
+                        .opacity(womenHideBusy.contains(e.id) ? DS.Opacity.disabled : 1)
+                    }
+                    ForEach(wivesWithAccount) { e in
+                        Label {
+                            Text(verbatim: L10n.t("\(womanRowTitle(e)): لها حساب، وتقرر ظهورها من حسابها.",
+                                                  "\(womanRowTitle(e)): has her own account and decides her visibility."))
+                        } icon: {
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                        }
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !list.isEmpty {
+                        Text(L10n.t("المخفية لا يراها في شجرة النساء إلا أهلها والإدارة، ويُحفظ الاختيار فوراً.",
+                                    "Hidden: only her family and the admins see her. Saved right away."))
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    /// «فاطمة · زوجتك»
+    private func womanRowTitle(_ e: WomenFamilyEntry) -> String {
+        let name = e.member.firstName.isEmpty ? L10n.t("بلا اسم", "No name") : e.member.firstName
+        return "\(name) · \(L10n.t("زوجتك", "your wife"))"
+    }
+
+    private func selfHiddenBinding(_ node: FamilyMember) -> Binding<Bool> {
+        Binding(get: { womenHidden[node.id] ?? node.isHiddenFromTree },
+                set: { hidden in
+                    let before = womenHidden[node.id] ?? node.isHiddenFromTree
+                    guard hidden != before, !womenHideBusy.contains(node.id),
+                          NetworkMonitor.shared.requireOnline() else { return }
+                    womenHidden[node.id] = hidden
+                    womenHideBusy.insert(node.id)
+                    Task {
+                        let ok = await memberVM.setSelfWomanHidden(womanId: node.id, hidden: hidden)
+                        if ok {
+                            _ = try? await WomenStore.fetch()
+                            if let uid = authVM.currentUser?.id { myWomanNode = WomenStore.node(forAccount: uid) }
+                            womenHidden[node.id] = nil
+                            UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        } else {
+                            womenHidden[node.id] = before
+                            womenHideError = memberVM.errorMessage
+                        }
+                        womenHideBusy.remove(node.id)
+                    }
+                })
+    }
+
+    private func womanHiddenBinding(_ e: WomenFamilyEntry) -> Binding<Bool> {
+        Binding(get: { womenHidden[e.id] ?? e.member.isHiddenFromTree },
+                set: { setWomanHidden(e, $0) })
+    }
+
+    private func setWomanHidden(_ e: WomenFamilyEntry, _ hidden: Bool) {
+        let before = womenHidden[e.id] ?? e.member.isHiddenFromTree
+        guard hidden != before, !womenHideBusy.contains(e.id), NetworkMonitor.shared.requireOnline() else { return }
+        womenHidden[e.id] = hidden
+        womenHideBusy.insert(e.id)
+        Task {
+            let ok = await memberVM.setSelfWomanHidden(womanId: e.id, hidden: hidden)
+            womenHideBusy.remove(e.id)
+            if ok {
+                womenHidden[e.id] = nil   // القيمة من الجلب الجديد
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            } else {
+                womenHidden[e.id] = before
+                womenHideError = memberVM.errorMessage
+            }
+        }
     }
 
     /// الحالة الاجتماعية — الاختيار الموحّد (`DSChoiceTiles`) بسؤاله، نفس مربّع «الحالة الاجتماعية» في الملف
