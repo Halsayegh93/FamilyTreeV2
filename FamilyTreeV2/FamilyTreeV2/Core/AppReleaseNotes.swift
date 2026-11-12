@@ -5,6 +5,24 @@ import Foundation
 /// المفتاح = رقم البناء (CFBundleVersion). أضف مدخلاً جديداً مع كل إصدار.
 enum AppReleaseNotes {
     static let byBuild: [String: (ar: String, en: String)] = [
+        "51": (
+            ar: """
+            • تصميم موحّد وأوضح في كل الشاشات، والإعدادات مرتّبة في مجموعات.
+            • خصوصية أبسط: مفتاح واحد لكل معلومة.
+            • إضافة الزوجة والأم من مربّع واحد، واختيار الزوج من العائلة أو من خارجها.
+            • إظهار الزوجة أو إخفاؤها في شجرة النساء من «تعديل الملف الشخصي».
+            • إعلانات العائلة تظهر عند فتح التطبيق، وشاشة «ما الجديد» بعد كل تحديث.
+            • تحميل أسرع لبيانات العائلة، وإصلاحات عامة.
+            """,
+            en: """
+            • A clearer, unified design across all screens, with settings in groups.
+            • Simpler privacy: one switch per detail.
+            • Add a wife or mother from one box, and choose a husband from the family or outside it.
+            • Show or hide your wife in the women's tree from «Edit profile».
+            • Family announcements appear when you open the app, and «What's new» after each update.
+            • Faster loading of family data, and general fixes.
+            """
+        ),
         "50": (
             ar: """
             • إضافة الأبناء أسهل، وتذكير لطيف بإضافة صورتك.
