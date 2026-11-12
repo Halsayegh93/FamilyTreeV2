@@ -1141,6 +1141,8 @@ struct AdminLivingCheckRow: View {
     private var subline: String {
         guard let y = entry.living?.birthYear else { return reason }
         let age = Calendar(identifier: .gregorian).component(.year, from: Date()) - y
+        // صفحة القائمة تمرّر السبب نفسه «مواليد …» — لا يتكرّر
+        if reason.contains("\(y)") { return reason }
         return [reason, L10n.t("مواليد \(y) · \(age) سنة", "Born \(y) · \(age) yrs")]
             .filter { !$0.isEmpty }.joined(separator: " · ")
     }
