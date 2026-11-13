@@ -2439,13 +2439,17 @@ struct AdminAllRequestsView: View {
             }
 
             if let phone {
-                // اختيار المالك ٢٠٢٦-١١-١٣ «ج و أ»: الرقم نفسه رابط اتصال، وزر «واتساب» ممتلئ بدل الدائرة
-                HStack(spacing: DS.Spacing.sm) {
+                // اختيار المالك ٢٠٢٦-١١-١٣ «ج»: الرقم نفسه رابط اتصال · «واتساب» رابط نصّي — بدل الدائرة
+                HStack(spacing: DS.Spacing.xs) {
                     phoneCallLink(phone)
-                    Spacer(minLength: 0)
                     if let wa = KuwaitPhone.whatsappURL(phone) {
-                        whatsAppPill(wa)
+                        Text(verbatim: "·")
+                            .dsFont(.chip)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .accessibilityHidden(true)
+                        whatsAppLink(wa)
                     }
+                    Spacer(minLength: 0)
                 }
                 .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
             }
@@ -2603,22 +2607,19 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// «أ»: زر «واتساب» ممتلئ بلون التواصل (البترولي) — بدل الدائرة المجسّمة بلا كلمة
-    private func whatsAppPill(_ url: URL) -> some View {
+    /// «ج»: «واتساب» رابط نصّي بلون التواصل (البترولي) — بدل الدائرة المجسّمة بلا كلمة
+    private func whatsAppLink(_ url: URL) -> some View {
         let pad = (DS.Icon.tapTarget - DS.Icon.row) / 2
         return Button { UIApplication.shared.open(url) } label: {
-            HStack(spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.xxs) {
                 Image(systemName: "message.fill")
-                    .dsGlyph(DS.Glyph.sm)
+                    .dsGlyph(DS.Glyph.micro, weight: .semibold)
                     .accessibilityHidden(true)
                 Text(L10n.t("واتساب", "WhatsApp"))
                     .dsFont(.chip)
                     .lineLimit(1)
             }
-            .foregroundColor(DS.Color.textOnPrimary)
-            .padding(.horizontal, DS.Spacing.md)
-            .frame(minHeight: DS.Icon.row)
-            .background(Capsule().fill(DS.Color.seaFill))
+            .foregroundColor(DS.Color.sea)
             .padding(.vertical, pad)
             .contentShape(Rectangle())
             .padding(.vertical, -pad)
@@ -3609,10 +3610,10 @@ struct AdminAllRequestsView: View {
                 joinFactRow(icon: "phone.fill", tint: DS.Color.sea,
                             label: L10n.t("الهاتف", "Phone"),
                             value: phone.isEmpty ? L10n.t("غير مسجّل", "Not set") : KuwaitPhone.display(phone),
-                            // «ج و أ»: الرقم نفسه رابط اتصال، و«واتساب» زرّ ممتلئ
+                            // «ج»: الرقم نفسه رابط اتصال، و«واتساب» رابط نصّي
                             valueAction: KuwaitPhone.telURL(phone).map { tel in { UIApplication.shared.open(tel) } }) {
                     if !phone.isEmpty, let wa = KuwaitPhone.whatsappURL(phone) {
-                        whatsAppPill(wa)
+                        whatsAppLink(wa)
                     }
                 }
                 Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
