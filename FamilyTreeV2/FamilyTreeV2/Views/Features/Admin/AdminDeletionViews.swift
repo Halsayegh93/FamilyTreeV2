@@ -45,11 +45,14 @@ struct AdminDeletionRow: View {
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "person.badge.minus", tint: DS.Color.error)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(AdminDeletionText.rowTitle(deletion))
-                        .dsFont(.adminRowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                        AdminRequestKindChip(kind: .delete)
+                        Text(AdminDeletionText.rowTitle(deletion))
+                            .dsFont(.adminRowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
                     Text(AdminDeletionText.by(deletion) + " · " + AdminDeletionText.time(deletion))
                         .dsFont(.adminRowSubtitle)
                         .foregroundColor(DS.Color.textSecondary)

@@ -748,15 +748,27 @@ struct AdminHandledRow: View {
         let decision = AdminTrailText.decision(request, events: events)
         let handler = AdminTrailText.person(AdminTrailText.handlerId(request, events: events), lookup: lookup)
         let time = DateHelper.displayDateTime(AdminTrailText.handledAt(request, events: events))
+        // §10: شريحة النوع قبل العنوان، و«مقدّم الطلب» فوق «بواسطة» (إلا إن كان الطلب عن نفسه — اسمه في العنوان)
+        let facts = AdminRequestFacts.of(request, member: lookup)
+        let selfRequest = facts.map { $0.requester != $0.requesterShort } ?? true
         Button(action: onTap) {
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: AdminTrailText.typeIcon(request), tint: decision.tint)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(AdminTrailText.typeTitle(request) + (subject.map { " — " + $0 } ?? ""))
-                        .dsFont(.adminRowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                        if let kind = facts?.kind { AdminRequestKindChip(kind: kind) }
+                        Text(AdminTrailText.typeTitle(request) + (subject.map { " — " + $0 } ?? ""))
+                            .dsFont(.adminRowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                    }
+                    if let facts, !selfRequest, facts.requesterShort != "—" {
+                        Text(AdminRequestFactText.requesterLine(facts.requesterShort))
+                            .dsFont(.adminRowSubtitle)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(1)
+                    }
                     Text(L10n.t("بواسطة: ", "By: ") + (handler ?? AdminTrailText.notRecorded))
                         .dsFont(.adminRowSubtitle)
                         .foregroundColor(handler == nil ? DS.Color.textTertiary : DS.Color.textSecondary)

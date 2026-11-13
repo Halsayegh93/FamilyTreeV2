@@ -185,6 +185,16 @@ struct AdminRequestFactRows: View {
     }
 }
 
+/// شريحة نوع الطلب الصغيرة (قبل العنوان في القوائم)
+struct AdminRequestKindChip: View {
+    let kind: AdminRequestKind
+
+    var body: some View {
+        DSStatusChip(text: kind.title, tint: kind.tint, size: .mini)
+            .fixedSize()
+    }
+}
+
 /// سطر البطاقة: شريحة النوع ثم «مقدّم الطلب: …»
 struct AdminRequestCardLine: View {
     let kind: AdminRequestKind?

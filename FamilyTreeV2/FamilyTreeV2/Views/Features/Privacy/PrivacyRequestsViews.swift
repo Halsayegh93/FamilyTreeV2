@@ -502,11 +502,14 @@ struct AdminPolicyRequestsSection: View {
                                 : isRelative ? "person.badge.plus" : "lock.shield.fill",
                             tint: tint)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title)
-                        .dsFont(.rowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                    // §10: شريحة النوع ثم «مقدّم الطلب: …»
-                    AdminRequestCardLine(kind: facts?.kind, requester: facts?.requesterShort ?? name(request))
+                    // §10: شريحة النوع قبل العنوان، ثم «مقدّم الطلب: …»
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                        if let kind = facts?.kind { AdminRequestKindChip(kind: kind) }
+                        Text(title)
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                    }
+                    AdminRequestCardLine(kind: nil, requester: facts?.requesterShort ?? name(request))
                 }
                 Spacer(minLength: 0)
                 if let created = request.createdAt {

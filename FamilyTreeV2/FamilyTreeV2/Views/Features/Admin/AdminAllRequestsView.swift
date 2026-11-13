@@ -1962,7 +1962,8 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: action.iconName,
                              tint: color,
                              title: L10n.t(action.arabicLabel, action.englishLabel),
-                             subtitle: request.member?.displayFullName ?? L10n.t("عضو", "Member")) {
+                             subtitle: request.member?.displayFullName ?? L10n.t("عضو", "Member"),
+                             kind: AdminRequestKind.of(request)) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
@@ -1971,7 +1972,7 @@ struct AdminAllRequestsView: View {
             let target = payload?.targetMemberId.flatMap(UUID.init(uuidString:)) ?? request.memberId
             if let requester, requester.id != target || action == .add {
                 rowExtras {
-                    requesterLine(requester, kind: AdminRequestKind.of(request))
+                    requesterLine(requester)
                 }
             }
             if newDisplay != nil || request.createdAt != nil {
@@ -2413,11 +2414,15 @@ struct AdminAllRequestsView: View {
                 joinPersonAvatar(member, ring: hasMatches ? DS.Color.success : DS.Color.warning, size: Self.joinAvatar)
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(member.displayFullName)
-                        .dsFieldFont(.adminRowTitle)
-                        .foregroundColor(DS.Color.fieldLabel)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                    // §10: «انضمام» قبل الاسم — مقدّم الطلب هو صاحبه (الاسم نفسه)
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                        AdminRequestKindChip(kind: .join)
+                        Text(member.displayFullName)
+                            .dsFieldFont(.adminRowTitle)
+                            .foregroundColor(DS.Color.fieldLabel)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     // الأنثى لا تُطابق بشجرة الرجال — سطرها «تُربط بشجرة النساء»
                     if !member.isFemale { joinStatusLine(matches: tiers.strongCount, fromWeb: fromWeb) }
                     if member.isFemale { Self.femaleJoinTag }
@@ -2833,11 +2838,15 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: "phone.arrow.right",
                              tint: AppSection.admin.ink,
                              title: L10n.t("طلب تغيير رقم", "Phone Change"),
-                             subtitle: memberName) {
+                             subtitle: memberName, kind: .edit) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
             rowExtras {
+                // §10: «مقدّم الطلب» حين لا يكون صاحب الرقم نفسه (سطر الاسم أعلاه)
+                if let rid = request.requesterId, rid != request.memberId, let requester = memberVM.member(byId: rid) {
+                    requesterLine(requester)
+                }
                 // سطر مقارنة مدمج: الحالي ← الجديد
                 changeLine(old: currentPhone, new: newPhone)
                 // التاريخ تحت
@@ -2903,14 +2912,15 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.error,
                              title: L10n.t("تسجيل وفاة", "Deceased"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                              "For: \(request.member?.displayFullName ?? "Member")")) {
+                                              "For: \(request.member?.displayFullName ?? "Member")"),
+                             kind: .edit) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
             rowExtras {
                 // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
                 if let requester, requester.id != request.memberId {
-                    requesterLine(requester, kind: .edit)
+                    requesterLine(requester)
                 }
                 if let details = request.details, !details.isEmpty {
                     contentBlock(details)
@@ -2935,13 +2945,14 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.info,
                              title: L10n.t("إضافة ابن", "Child Add"),
                              subtitle: child.map { L10n.t("\(father) أضاف ابنه \($0)", "\(father) added his son \($0)") }
-                                ?? L10n.t("الأب: \(father)", "Father: \(father)")) {
+                                ?? L10n.t("الأب: \(father)", "Father: \(father)"),
+                             kind: .add) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
             // مقدّم الطلب غير الأب فقط
             if let requester, requester.id != request.memberId {
-                rowExtras { requesterLine(requester, kind: .add) }
+                rowExtras { requesterLine(requester) }
             }
         }
     }
@@ -2955,14 +2966,15 @@ struct AdminAllRequestsView: View {
                              tint: DS.Color.neonBlue,
                              title: L10n.t("اقتراح صورة", "Photo Suggestion"),
                              subtitle: L10n.t("لـ: \(request.member?.displayFullName ?? "عضو")",
-                                              "For: \(request.member?.displayFullName ?? "Member")")) {
+                                              "For: \(request.member?.displayFullName ?? "Member")"),
+                             kind: .edit) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
             rowExtras {
                 // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
                 if let requester, requester.id != request.memberId {
-                    requesterLine(requester, kind: .edit)
+                    requesterLine(requester)
                 }
                 if let details = request.details, !details.isEmpty {
                     contentBlock(details)
@@ -3014,14 +3026,14 @@ struct AdminAllRequestsView: View {
             requestRowHeader(icon: "rectangle.and.pencil.and.ellipsis",
                              tint: DS.Color.neonPurple,
                              title: isFamily ? L10n.t("تغيير العائلة", "Family Change") : L10n.t("تغيير اسم", "Name Change"),
-                             subtitle: currentName) {
+                             subtitle: currentName, kind: .edit) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
             rowExtras {
                 // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
                 if let requester, requester.id != request.memberId {
-                    requesterLine(requester, kind: .edit)
+                    requesterLine(requester)
                 }
                 // الاسم: الحالي ← الجديد (سطر مدمج)
                 changeLine(old: nil, new: newName)
@@ -3252,12 +3264,13 @@ struct AdminAllRequestsView: View {
         tint: Color,
         title: String,
         subtitle: String?,
+        kind: AdminRequestKind? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(alignment: .center, spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: tint, side: DS.Hub.rowIcon)
                 .accessibilityHidden(true)
-            rowTitles(title: title, subtitle: subtitle)
+            rowTitles(title: title, subtitle: subtitle, kind: kind)
             Spacer(minLength: 0)
             // الشارة بمقاسها — الاسم الطويل يلتفّ بدل أن تنضغط الشارة
             trailing()
@@ -3265,12 +3278,16 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    private func rowTitles(title: String, subtitle: String?) -> some View {
+    private func rowTitles(title: String, subtitle: String?, kind: AdminRequestKind? = nil) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            Text(title)
-                .dsFieldFont(.adminRowTitle)
-                .foregroundColor(DS.Color.fieldLabel)
-                .lineLimit(1)
+            // §10: شريحة نوع الطلب قبل العنوان في سطره
+            HStack(spacing: DS.Spacing.xsm) {
+                if let kind { AdminRequestKindChip(kind: kind) }
+                Text(title)
+                    .dsFieldFont(.adminRowTitle)
+                    .foregroundColor(DS.Color.fieldLabel)
+                    .lineLimit(1)
+            }
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .dsFieldFont(.adminRowSubtitle)
@@ -3303,10 +3320,10 @@ struct AdminAllRequestsView: View {
         .foregroundColor(color)
     }
 
-    /// «[النوع] مقدّم الطلب: …» (§10) — شريحة نوع الطلب في أول السطر
-    private func requesterLine(_ requester: FamilyMember, kind: AdminRequestKind? = nil) -> some View {
+    /// «مقدّم الطلب: …» (§10) — الشريحة على سطر العنوان
+    private func requesterLine(_ requester: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.xsm) {
-            AdminRequestCardLine(kind: kind, requester: requester.chainThreeName)
+            AdminRequestCardLine(kind: nil, requester: requester.chainThreeName)
             ReviewVerifiedMark(requester.id)
         }
     }
