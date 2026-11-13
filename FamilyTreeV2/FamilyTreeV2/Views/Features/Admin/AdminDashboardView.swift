@@ -259,6 +259,9 @@ struct AdminDashboardView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
             }
             group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
+            // طلبات «الوارد» الأخرى (حذف الحساب، الخصوصية، إضافة قريبة، النسب، «طلب حذف من الشجرة») — في العدّاد
+            // و«يحتاج إجراء» في «إشعارات الإدارة» قبل فتح «الوارد»
+            group.addTask { @MainActor in await adminRequestVM.fetchPolicyRequests() }
             group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
             group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
             if isSystem {

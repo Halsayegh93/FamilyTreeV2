@@ -314,7 +314,12 @@ struct NotifAdminRequestSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            if let m = requester { requesterRow(m) }
+            // §10: «نوع الطلب» · «القرابة» · «مقدّم الطلب» أولاً لطلبات الأشخاص، وإلا صفّ مقدّم الطلب كما كان
+            if let facts = AdminRequestFacts.of(request, member: { memberVM.member(byId: $0) }) {
+                AdminRequestFactRows(facts: facts)
+            } else if let m = requester {
+                requesterRow(m)
+            }
             let cells = NotifRequestCells.cells(for: request, memberVM: memberVM)
             if !cells.isEmpty {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -451,6 +456,11 @@ enum NotifRequestCells {
         case RequestType.photoSuggestion.rawValue:
             add(L10n.t("العضو", "Member"), memberName)
             add(L10n.t("التفاصيل", "Details"), freeText(r.details))
+        case RequestType.relativeAdd.rawValue:
+            // النوع والقرابة ومقدّم الطلب في الصفوف الثلاثة (§10) — هنا الاسم وحده
+            add(L10n.t("الاسم", "Name"), RelativeAddDetails.parse(r.details)?.name)
+        case RequestType.relativeRemove.rawValue:
+            add(L10n.t("الاسم", "Name"), RelativeRemoveDetails.parse(r.details)?.trimmedName)
         default:
             add(L10n.t("العضو", "Member"), memberName)
             add(L10n.t("القيمة المطلوبة", "Requested value"),

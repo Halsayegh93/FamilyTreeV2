@@ -37,6 +37,8 @@ struct TreePlaceTreeFocus {
     let mark: TreePlaceMarkStyle
     /// الزوجة من خارج العائلة (مربّع شبح جنب الزوج)
     var wifeName: String? = nil
+    /// حذف الزوجة (§9): شريحتها «تُحذف»/«حُذفت» بالأحمر
+    var wifeRemoval: String? = nil
     /// ارتفاع ما يغطّي أعلى الشجرة (0 = لا شيء — الشريط فوقها)
     var chromeTop: CGFloat = 0
 }
@@ -53,7 +55,8 @@ struct TreePlacePreviewScreen: View {
 
     private var focus: TreePlaceTreeFocus {
         TreePlaceTreeFocus(personId: resolved.person.id, fatherId: resolved.father?.id, mark: resolved.previewMark,
-                           wifeName: resolved.wifeName)
+                           wifeName: resolved.wifeName,
+                           wifeRemoval: resolved.noteIsDanger ? TreePlaceText.wifeRemovalPill(resolved.place) : nil)
     }
 
     /// بيانات المعاينة: الشبح (يُضاف، المحذوف) آخر أبناء أبيه، والتعديل بحالته بعده — نسخة محلية لا تمسّ الأصل
@@ -328,7 +331,7 @@ struct TreePlaceMenCanvas: View {
         if let name = focus.wifeName, let p = layout.positions[Self.wifeSlotId] {
             let M = layout.m
             let h = layout.heights[Self.wifeSlotId] ?? M.nodeHDefault
-            TreePlaceWifeSlot(name: name, k: M.k)
+            TreePlaceWifeSlot(name: name, k: M.k, removal: focus.wifeRemoval)
                 .frame(width: M.nodeW, height: h)
                 .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
         }
@@ -446,19 +449,22 @@ struct TreePlaceNodeMark: View {
 struct TreePlaceWifeSlot: View {
     let name: String
     let k: CGFloat
+    /// حذف الزوجة (§9): «تُحذف»/«حُذفت» بالأحمر — nil = زوجة تُضاف
+    var removal: String? = nil
 
     var body: some View {
         let box = RoundedRectangle(cornerRadius: 22 * k, style: .continuous)
+        let tint = removal == nil ? DS.Color.female : DS.Color.error
         VStack(spacing: DS.Spacing.xs * k) {
             Image(systemName: "person.fill")
                 .dsTreeGlyph(DS.Glyph.xxl, k, weight: .semibold)
-                .foregroundColor(DS.Color.female)
+                .foregroundColor(tint)
             Text(PersonName.firstUnit(name.trimmingCharacters(in: .whitespacesAndNewlines)))
                 .dsTreeFont(.title3Tree, k)
-                .foregroundColor(DS.Color.female)
+                .foregroundColor(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            Text(TreePlaceText.outsideWifePill)
+            Text(removal ?? TreePlaceText.outsideWifePill)
                 .dsTreeFont(.badge, k)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .multilineTextAlignment(.center)
@@ -466,13 +472,13 @@ struct TreePlaceWifeSlot: View {
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, DS.Spacing.sm * k)
                 .padding(.vertical, DS.Spacing.xxs * k)
-                .background(Capsule().fill(DS.Color.femaleFill))
+                .background(Capsule().fill(removal == nil ? DS.Color.femaleFill : DS.Color.errorFill))
         }
         .padding(DS.Spacing.sm * k)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(box.fill(DS.Color.female.opacity(DS.Opacity.tintFillSoft)))
+        .background(box.fill(tint.opacity(DS.Opacity.tintFillSoft)))
         .background(box.fill(DS.Color.background))
-        .overlay(box.stroke(DS.Color.female, style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, dash: [9 * k, 7 * k])))
+        .overlay(box.stroke(tint, style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, dash: [9 * k, 7 * k])))
         .padding(.horizontal, DS.Spacing.xs * k)
         .allowsHitTesting(false)
         .accessibilityHidden(true)

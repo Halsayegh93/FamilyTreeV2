@@ -30,6 +30,8 @@ class AdminRequestViewModel: ObservableObject {
     @Published var relativeAddRequests: [AdminRequest] = []
     /// «طلب النسب» المعلّق (`lineage_request`، أبناء البنات من خارج العائلة) — المالك/المدير/المراقب
     @Published var lineageRequests: [AdminRequest] = []
+    /// «طلب حذف من الشجرة» المعلّقة (`relative_remove`) — المالك/المدير
+    @Published var relativeRemoveRequests: [AdminRequest] = []
     /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
     @Published var myPendingRequests: [AdminRequest] = []
     /// «مسار الموافقات»: صفوف طلبات الانضمام/الربط المعلّقة (مرحلتها) — تُجلب والمفتاح شغّال فقط
@@ -525,7 +527,9 @@ class AdminRequestViewModel: ObservableObject {
         RequestType.nameChange.rawValue,
         RequestType.phoneChange.rawValue,
         RequestType.deceasedReport.rawValue,
-        RequestType.childAdd.rawValue
+        RequestType.childAdd.rawValue,
+        // «طلب حذف من الشجرة» من «عائلتي» (٢٠٢٦-١١-١٣) — يُسحب كغيره
+        RequestType.relativeRemove.rawValue
     ]
 
     /// ما يُضاف لـ«طلباتي» والمسار شغّال: باقي أنواع المسار التي يرسلها عضو مفعّل
@@ -598,6 +602,16 @@ class AdminRequestViewModel: ObservableObject {
             myPendingRequests.removeAll { $0.id == request.id }
         }
         nonisolated struct DeletedRow: Decodable { let id: UUID }
+        // سحب «إضافة ابن» = إلغاء الإضافة (٢٠٢٦-١١-١٣): الحذف أولاً والطلب ما زال معلّقاً — السيرفر يحذف الابن مباشرة
+        // ومعه الطلب نفسه (`remove_self_child`). كان الطلب يُحذف قبله فيصير الحذف «طلب حذف من الشجرة» لغير الإدارة
+        if request.requestType == RequestType.childAdd.rawValue,
+           let raw = request.newValue, let childId = UUID(uuidString: raw), let memberVM,
+           await memberVM.removeSelfChild(id: childId) == .deleted {
+            memberVM.errorMessage = nil
+            Log.info("[MyRequests] سُحب طلب إضافة الابن وحُذف الابن: \(request.id)")
+            return
+        }
+        memberVM?.errorMessage = nil
         do {
             // المعلّق فقط، ونطلب الصفوف المحذوفة: صفر صفوف (عُولج الطلب أو منعته السياسة) لا يعطي خطأ
             // فكان الطلب «يرجع» بعد اختفائه بلا تفسير
@@ -623,24 +637,9 @@ class AdminRequestViewModel: ObservableObject {
                 return
             }
             Log.info("[MyRequests] تم إلغاء الطلب: \(request.id)")
-            // سحب «إضافة ابن» = إلغاء الإضافة: الابن المضاف يُحذف معه — لكل عضو عبر remove_self_child
-            // (أبناؤه هو فقط، بلا حساب دخول)؛ قبل رفع الدالة للسيرفر: المالك والمدير بالحذف المباشر.
-            // فشل الحذف لا يُعرض (الطلب نفسه سُحب) — يُسجَّل فقط
-            if request.requestType == RequestType.childAdd.rawValue,
-               let raw = request.newValue, let childId = UUID(uuidString: raw), let memberVM {
-                switch await memberVM.removeSelfChild(id: childId) {
-                case .deleted:
-                    break   // removeSelfChild يُنعش الأبناء وعائلة شجرة النساء
-                case .serverMissing where authVM?.canDeleteMembers == true:
-                    if await memberVM.deleteMember(memberId: childId) {
-                        await memberVM.fetchChildren(for: uid)   // يُنعش شجرة النساء معه
-                    } else {
-                        Log.warning("[MyRequests] تعذّر حذف الابن بعد سحب طلب إضافته: \(memberVM.errorMessage ?? "")")
-                    }
-                case .serverMissing, .failed:
-                    Log.warning("[MyRequests] لم يُحذف الابن بعد سحب طلب إضافته: \(memberVM.errorMessage ?? "")")
-                }
-                memberVM.errorMessage = nil
+            // «إضافة ابن» لم يُحذف ابنه أعلاه (حساب دخول، سجل متوفى…): سُحب الطلب وحده — يُسجَّل فقط
+            if request.requestType == RequestType.childAdd.rawValue {
+                Log.warning("[MyRequests] سُحب طلب إضافة الابن وبقي الابن")
             }
         } catch {
             Log.error("[MyRequests] فشل إلغاء الطلب: \(error.localizedDescription)")

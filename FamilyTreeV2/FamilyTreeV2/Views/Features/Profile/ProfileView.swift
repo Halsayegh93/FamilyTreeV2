@@ -1147,6 +1147,11 @@ struct ProfileView: View {
         case RequestType.childAdd.rawValue:
             return .init(icon: "person.badge.plus", color: DS.Color.palm,
                          title: L10n.t("إضافة ابن", "Add child"), target: targetName)
+        case RequestType.relativeRemove.rawValue:
+            // «طلب حذف من الشجرة — {الاسم}» (§9)
+            let removed = RelativeRemoveDetails.parse(request.details)?.trimmedName
+            return .init(icon: "person.badge.minus", color: DS.Color.error,
+                         title: RelativeRemoveDetails.genericTitle + (removed.map { " — " + $0 } ?? ""), target: nil)
         // أنواع تظهر في «طلباتي» والمسار شغّال فقط (ليُرد على سؤال المختص)
         case RequestType.familyChange.rawValue:
             return .init(icon: "person.2.fill", color: DS.Color.info,
@@ -1396,6 +1401,10 @@ struct ProfileView: View {
                 if son.isDeceased ?? false {
                     DSStatusChip(text: L10n.t("متوفى", "Deceased"), tint: info.color, size: .mini)
                 }
+                // «طلب حذف من الشجرة» معلّق عليه (§9)
+                if SelfRemovalText.isPending(son.id, in: adminRequestVM.myPendingRequests) {
+                    DSStatusChip(text: SelfRemovalText.pendingChip, tint: DS.Color.slate, size: .mini)
+                }
             }
         }
         .profileCell()
@@ -1466,6 +1475,10 @@ struct ProfileView: View {
                     // مخفية من شجرة النساء (من «تعديل الملف الشخصي» أو مربّع الزوجة)
                     if woman.isHiddenFromTree {
                         DSStatusChip(text: L10n.t("مخفية", "Hidden"), tint: DS.Color.slate, size: .mini)
+                    }
+                    // «طلب حذف من الشجرة» معلّق عليها (§9)
+                    if SelfRemovalText.isPending(woman.id, in: adminRequestVM.myPendingRequests) {
+                        DSStatusChip(text: SelfRemovalText.pendingChip, tint: DS.Color.slate, size: .mini)
                     }
                 }
             }
@@ -1687,6 +1700,8 @@ private extension View {
 /// تعديل فرد من «عائلتي» (شجرة النساء): الاسم/تاريخ الميلاد/متوفى + حذف.
 struct WomanMemberEditSheet: View {
     @ObservedObject var memberVM: MemberViewModel
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     let entry: WomenFamilyEntry
     /// تغيير جنس الابن/الابنة (نقل بين الشجرتين) لمن يعدّل الشجرة فقط — مثل أندرويد
     var canEditGender: Bool = false
@@ -1703,6 +1718,8 @@ struct WomanMemberEditSheet: View {
     @State private var isHidden: Bool
     @State private var isSaving = false
     @State private var showDeleteConfirm = false
+    /// غير الإدارة: أُرسل «طلب حذف من الشجرة» (٢٠٢٦-١١-١٣) — تبقى حتى الموافقة
+    @State private var removalRequested = false
     @State private var errorBanner: String? = nil
     /// نُقل بين الشجرتين بتغيير الجنس — رسالة «تم الحفظ» ثم إغلاق (مثل أندرويد)
     @State private var showMovedAlert = false
@@ -1820,26 +1837,30 @@ struct WomanMemberEditSheet: View {
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        .dsAlert(L10n.t("حذف من العائلة", "Remove from family"), isPresented: $showDeleteConfirm) {
-            Button(L10n.t("حذف", "Delete"), role: .destructive) {
+        .dsAlert(removalAsksAdmin ? SelfRemovalText.confirmTitle : L10n.t("حذف من العائلة", "Remove from family"),
+                 isPresented: $showDeleteConfirm) {
+            Button(removalAsksAdmin ? SelfRemovalText.sendButton : L10n.t("حذف", "Delete"),
+                   role: removalAsksAdmin ? nil : .destructive) {
                 Task {
                     // كلها RPCs مقيّدة على النفس — تعمل لأي دور (الأب/الزوج نفسه).
-                    // الأم: فكّ الارتباط · الزوجة: حذف/فكّ · الابنة: حذف السجل.
-                    let ok: Bool
+                    // الأم: فكّ الارتباط · الزوجة: حذف/فكّ · الابنة: حذف السجل (غير الإدارة: طلب للمالك والمدير).
+                    let result: MemberViewModel.SelfChildRemoval
                     switch entry.role {
-                    case .mother: ok = await memberVM.setSelfMother(motherId: nil)
-                    case .wife:   ok = await memberVM.removeSelfWife(wifeId: entry.member.id)
-                    default:      ok = await memberVM.removeSelfWomanChild(id: entry.member.id)
+                    case .mother: result = await memberVM.setSelfMother(motherId: nil) ? .deleted : .failed
+                    case .wife:   result = await memberVM.removeSelfWife(wifeId: entry.member.id)
+                    default:      result = await memberVM.removeSelfWomanChild(id: entry.member.id)
                     }
-                    // نجاح → إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
-                    await MainActor.run {
-                        if ok {
-                            dismiss()
-                        } else {
-                            errorBanner = memberVM.errorMessage
-                                ?? L10n.t("تعذّر الحذف — قد يتطلب موافقة الإدارة.",
-                                          "Couldn't remove — this may require an admin.")
-                        }
+                    // نجاح → إغلاق؛ طلب → «أُرسل…» ثم إغلاق؛ فشل (مثلاً رفض RLS) → رسالة واضحة بدل لا-عمل صامت.
+                    switch result {
+                    case .deleted:
+                        dismiss()
+                    case .requested:
+                        await adminRequestVM.fetchMyPendingRequests(force: true)
+                        removalRequested = true
+                    case .failed, .serverMissing:
+                        errorBanner = memberVM.errorMessage
+                            ?? L10n.t("تعذّر الحذف — قد يتطلب موافقة الإدارة.",
+                                      "Couldn't remove — this may require an admin.")
                     }
                 }
             }
@@ -1847,13 +1868,24 @@ struct WomanMemberEditSheet: View {
         } message: {
             Text(entry.role == .mother
                  ? L10n.t("إزالة الأم «\(name)» من عائلتك؟ (لن تُحذف من الشجرة)", "Unlink mother “\(name)”?")
+                 : removalAsksAdmin ? SelfRemovalText.confirmMessage(name)
                  : L10n.t("حذف «\(name)» من عائلتك؟", "Remove “\(name)” from your family?"))
+        }
+        .dsAlert(SelfRemovalText.sentTitle, isPresented: $removalRequested, moment: .sentForApproval) {
+            Button(L10n.t("حسناً", "OK")) { dismiss() }
+        } message: {
+            Text(SelfRemovalText.sentMessage)
         }
         .dsAlert(L10n.t("تم الحفظ", "Saved"), isPresented: $showMovedAlert) {
             Button(L10n.t("موافق", "OK")) { dismiss() }
         } message: {
             Text(L10n.t("تم تحديث بيانات الابن بنجاح.", "Child info updated successfully."))
         }
+    }
+
+    /// الزوجة والبنت لغير الإدارة: الحذف طلب للمالك والمدير (الأم فكّ ارتباط كما كان)
+    private var removalAsksAdmin: Bool {
+        entry.role != .mother && !authVM.canModerate
     }
 
     /// الاسم (+ الجنس للأبناء، + الإخفاء للزوجة)

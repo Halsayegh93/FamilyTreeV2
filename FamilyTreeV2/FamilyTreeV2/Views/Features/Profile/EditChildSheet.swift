@@ -32,6 +32,8 @@ struct EditChildSheet: View {
     @State private var selectedMotherId: UUID? = nil
     @State private var originalMotherId: UUID? = nil
     @State private var isDeleting = false
+    /// غير الإدارة: أُرسل «طلب حذف من الشجرة» (٢٠٢٦-١١-١٣) — الابن يبقى حتى الموافقة
+    @State private var removalRequested = false
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
@@ -72,12 +74,24 @@ struct EditChildSheet: View {
         } message: {
             Text(errorMessage)
         }
-        .dsAlert(L10n.t("حذف الابن؟", "Delete this son?"), isPresented: $showDeleteConfirm) {
-            Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) { deleteChild() }
+        .dsAlert(removalAsksAdmin ? SelfRemovalText.confirmTitle : L10n.t("حذف الابن؟", "Delete this son?"),
+                 isPresented: $showDeleteConfirm) {
+            if removalAsksAdmin {
+                Button(SelfRemovalText.sendButton) { deleteChild() }
+            } else {
+                Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) { deleteChild() }
+            }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.t("يُحذف «\(member.firstName)» من الشجرة ومن عائلتك، ويُلغى طلب إضافته إن كان معلّقاً. لا يمكن التراجع.",
-                        "«\(member.firstName)» is removed from the tree and your family, and a pending add request is cancelled. This can't be undone."))
+            Text(removalAsksAdmin
+                 ? SelfRemovalText.confirmMessage(member.firstName)
+                 : L10n.t("يُحذف «\(member.firstName)» من الشجرة ومن عائلتك، ويُلغى طلب إضافته إن كان معلّقاً. لا يمكن التراجع.",
+                          "«\(member.firstName)» is removed from the tree and your family, and a pending add request is cancelled. This can't be undone."))
+        }
+        .dsAlert(SelfRemovalText.sentTitle, isPresented: $removalRequested, moment: .sentForApproval) {
+            Button(L10n.t("حسناً", "OK")) { dismiss() }
+        } message: {
+            Text(SelfRemovalText.sentMessage)
         }
     }
 
@@ -95,6 +109,15 @@ struct EditChildSheet: View {
         DSComposerSection(title: L10n.t("الأم", "Mother"), icon: "person.fill",
                           tint: DS.Color.female, index: 2) {
             ChildMotherPicker(wives: wives, selection: $selectedMotherId)
+        }
+    }
+
+    /// حذف ابنه لغير الإدارة = طلب للمالك والمدير — إلا ابناً أضافه وطلب إضافته معلّق (يُحذف مباشرة كما كان)
+    private var removalAsksAdmin: Bool {
+        guard isOwnSon, !authVM.canModerate else { return false }
+        let id = member.id.uuidString.lowercased()
+        return !adminRequestVM.myPendingRequests.contains {
+            $0.requestType == RequestType.childAdd.rawValue && $0.newValue?.lowercased() == id
         }
     }
 
@@ -120,6 +143,11 @@ struct EditChildSheet: View {
                 switch await memberVM.removeSelfChild(id: member.id) {
                 case .deleted:
                     ok = true
+                case .requested:
+                    await adminRequestVM.fetchMyPendingRequests(force: true)
+                    isDeleting = false
+                    removalRequested = true
+                    return
                 case .serverMissing where authVM.canDeleteMembers:
                     // الدالة لم تُرفع للسيرفر بعد — المالك والمدير بالمسار المباشر القديم
                     ok = await deleteDirectly()
@@ -469,5 +497,71 @@ struct ChildMotherPicker: View {
                    options: [DSChoiceOption<UUID?>(id: nil, title: L10n.t("غير محدّدة", "Not set"))]
                    + wives.map { DSChoiceOption<UUID?>(id: $0.member.id, title: $0.member.firstName, icon: "person.fill") },
                    selection: $selection)
+    }
+}
+
+// MARK: - حذف من «عائلتي» لغير الإدارة = طلب (§9، السيرفر ٢٠٢٦-١١-١٣)
+
+/// نصوص «طلب حذف من الشجرة» من «عائلتي» — الابن والبنت والزوجة (الإدارة تحذف كما كانت)
+enum SelfRemovalText {
+    static let confirmTitle = L10n.t("طلب حذف من الشجرة", "Request to remove from the tree")
+    static let sendButton = L10n.t("إرسال الطلب", "Send request")
+    static let sentTitle = L10n.t("تم الإرسال", "Request Sent")
+    static let sentMessage = L10n.t("أُرسل طلب الحذف إلى الإدارة، ويُحذف بعد الموافقة.",
+                                    "The removal request was sent to the administration; it's removed after approval.")
+    static let pendingChip = L10n.t("بانتظار الحذف", "Removal pending")
+
+    static func confirmMessage(_ name: String) -> String {
+        L10n.t("إرسال طلب حذف «\(name)» إلى الإدارة؟ يُحذف بعد الموافقة.",
+               "Send a request to remove «\(name)» to the administration? It's removed after approval.")
+    }
+
+    /// طلب «حذف من الشجرة» معلّق للعضو على هذا الشخص (`new_value` = معرّفه)
+    static func isPending(_ id: UUID, in requests: [AdminRequest]) -> Bool {
+        let key = id.uuidString.lowercased()
+        return requests.contains {
+            $0.requestType == RequestType.relativeRemove.rawValue && $0.newValue?.lowercased() == key
+        }
+    }
+}
+
+extension SelfRemovalText {
+    static let requestButton = L10n.t("طلب حذف", "Request removal")
+    static let sentButton = L10n.t("أُرسل طلب الحذف", "Removal requested")
+
+    /// طلب حذف معلّق للمشاهد على هذا الشخص (§11): «طلب حذف من الشجرة» أو «تعديل الشجرة — حذف»
+    static func isPendingAny(_ id: UUID, in requests: [AdminRequest]) -> Bool {
+        let key = id.uuidString.lowercased()
+        return isPending(id, in: requests) || requests.contains {
+            $0.requestType == RequestType.treeEdit.rawValue && $0.treeEditPayload?.resolvedAction == .delete
+                && $0.treeEditPayload?.targetMemberId?.lowercased() == key
+        }
+    }
+}
+
+/// «طلب حذف» ظاهر في تفاصيل العضو (§11): إطار أحمر بارتفاع الزرّ الواحد ورمز السلة؛ بعد الإرسال «أُرسل طلب الحذف» معطّلاً
+struct DSDeleteRequestButton: View {
+    let pending: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let tint = pending ? DS.Color.textTertiary : DS.Color.error
+        Button(action: action) {
+            HStack(spacing: DSBox.buttonSpacing) {
+                Image(systemName: pending ? "clock.fill" : "trash")
+                    .dsGlyph(DS.Glyph.md)
+                    .accessibilityHidden(true)
+                Text(pending ? SelfRemovalText.sentButton : SelfRemovalText.requestButton)
+            }
+            .font(DSBox.buttonFont)
+            .foregroundColor(tint)
+            .dsButtonLabelFit()
+            .frame(maxWidth: .infinity, minHeight: DSBox.buttonHeight)
+            .background(DSBox.buttonShape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
+            .overlay(DSBox.buttonShape.strokeBorder(tint, lineWidth: DS.Border.widthBold))
+            .contentShape(DSBox.buttonShape)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .disabled(pending)
     }
 }

@@ -6,6 +6,8 @@ import SwiftUI
 /// (طلب المالك ٢٠٢٦-١٠-٢٥ «اي شي يخص الاناث يكون بشجرة النساء»)
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    /// «مكانه في الشجرة» في «طلب حذف» (§11)
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
     // لون القسم الذي فُتح منه الطلب (الشجرة، الرئيسية، الإدارة…) — الكحلي «إطار» يتبعه
     @Environment(\.dsSection) private var section
@@ -110,6 +112,12 @@ struct TreeEditRequestView: View {
             onSubmit: { submit() },
             onCancel: { dismiss() }
         ) {
+            // «طلب حذف» (§11): «مكانه في الشجرة» أولاً — «يُحذف» بإطار أحمر متقطّع وتنبيه الأبناء، وزرّ الشجرة الكاملة
+            if action == .delete {
+                AnyView(TreePlaceSection(place: TreePlace(tree: .men, change: .delete(member.id),
+                                                          kindLabel: L10n.t("طلب حذف", "Delete Request")),
+                                         index: 0, men: memberVM.allMembers))
+            }
             // قسم واحد بلغة مربّعات العمل («أسلوب واحد»): رأسه نوع الطلب بلونه، ثم العضو، ثم الحقل، ثم الملاحظات
             requestSection
             if action == .add {

@@ -389,6 +389,9 @@ struct AdminNotificationsPage: View {
             ids.formUnion(list.map(\.id))
         }
         ids.formUnion(vm.phoneChangeRequests.map(\.id))
+        // «إضافة قريبة» و«طلب حذف من الشجرة» (§9): يحتاج إجراء ما دام معلّقاً، و«مراجعة» تفتح مربّعه في «الوارد»
+        ids.formUnion(vm.relativeAddRequests.map(\.id))
+        ids.formUnion(vm.relativeRemoveRequests.map(\.id))
         ids.formUnion(vm.contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.map(\.id))
         ids.formUnion(newsVM.pendingNewsRequests.map(\.id))
         ids.formUnion(projectsVM.pendingProjects.map(\.id))

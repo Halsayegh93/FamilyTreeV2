@@ -44,6 +44,10 @@ struct MemberDetailsView: View {
     /// نموذج الطلب المختار من «طلب تعديل» — «ابن» هنا أبناء ذكور فقط (البنت والزوجة في شجرة النساء)
     @State private var pendingEditAction: TreeEditAction? = nil
     @State private var showReportConfirm = false
+    /// «طلب حذف» لابنه هو (§11): تأكيد «عائلتي» ثم `remove_self_child` — طلب للمالك والمدير
+    @State private var confirmSelfRemoval = false
+    @State private var selfRemovalSent = false
+    @State private var selfRemovalError: String? = nil
     /// مربّع «اتصال / واتساب» من بلاطة الهاتف (تدقيق ٢٠٢٦-١١-١٠ #3) — الرقم الظاهر فقط
     @State private var phoneActionsNumber: String? = nil
     @Environment(\.openURL) private var openURL
@@ -328,6 +332,15 @@ struct MemberDetailsView: View {
             .dsCenterBox(item: $pendingEditAction) { action in
                 TreeEditRequestView(member: member, action: action)
             }
+            // «طلب حذف» (§11): بعد إغلاق النموذج تُقرأ «طلباتي» فتظهر «بانتظار الحذف»
+            .onChange(of: pendingEditAction) { action in
+                if action == nil, showsDeleteRequest {
+                    Task { await adminRequestVM.fetchMyPendingRequests(force: true) }
+                }
+            }
+            .task(id: showsDeleteRequest) {
+                if showsDeleteRequest { await adminRequestVM.fetchMyPendingRequests() }
+            }
             .dsCenterBox(isPresented: $showSelfAddChild) {
                 AddChildSheet(member: member)
             }
@@ -351,6 +364,23 @@ struct MemberDetailsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
         } message: {
             Text(L10n.t("حذف السيرة الذاتية؟", "Delete biography?"))
+        }
+        .dsAlert(SelfRemovalText.confirmTitle, isPresented: $confirmSelfRemoval) {
+            Button(SelfRemovalText.sendButton) { sendSelfRemoval() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(SelfRemovalText.confirmMessage(member.firstName))
+        }
+        .dsAlert(SelfRemovalText.sentTitle, isPresented: $selfRemovalSent, moment: .sentForApproval) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(SelfRemovalText.sentMessage)
+        }
+        .dsAlert(L10n.t("تعذّر الإرسال", "Couldn't send"),
+                 isPresented: Binding(get: { selfRemovalError != nil }, set: { if !$0 { selfRemovalError = nil } })) {
+            Button(L10n.t("حسناً", "OK")) { selfRemovalError = nil }
+        } message: {
+            Text(selfRemovalError ?? "")
         }
         .dsAlert(L10n.t("إبلاغ عن عضو", "Report Member"), isPresented: $showReportConfirm) {
             TextField(L10n.t("سبب الإبلاغ (اختياري)", "Reason (optional)"), text: $reportReason)
@@ -473,6 +503,10 @@ struct MemberDetailsView: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .offset(y: heroIn || reduceMotion ? 0 : 10)
                 .opacity(heroIn ? 1 : 0)
+            // طلب حذف معلّق من المشاهد على هذا الشخص (§11)
+            if showsDeleteRequest && deletionPending {
+                DSStatusChip(text: SelfRemovalText.pendingChip, tint: DS.Color.slate, size: .mini)
+            }
         }
         .onAppear {
             withAnimation(reduceMotion ? .easeInOut(duration: 0.2)
@@ -1185,6 +1219,53 @@ struct MemberDetailsView: View {
         }
     }
 
+    // MARK: «طلب حذف» ظاهر (§11، طلب المالك ٢٠٢٦-١١-١٣ «حط طلب حذف في تفاصيل الأعضاء»)
+
+    /// لغير الإدارة، لغير صاحب الملف — الإدارة كما كانت. خانة «حذف» داخل «طلب تعديل» باقية.
+    /// «له حساب دخول» لا يصل العضو (`members_masked` يخفيه) — السيرفر يرفض حذف صاحب الحساب (`has_account`)
+    /// والإدارة تقرّر «تعديل الشجرة — حذف»؛ هنا يُستثنى أصحاب الأدوار الإدارية الظاهرة فقط
+    private var showsDeleteRequest: Bool {
+        guard !authVM.canModerate, !isViewingSelf, !member.isDeleted, authVM.currentUser != nil else { return false }
+        let staff: [FamilyMember.UserRole] = [.owner, .admin, .monitor, .supervisor]
+        return member.role != .pending && !staff.contains(member.role)
+    }
+
+    /// ابنه هو (أبوه = المشاهد) — مسار «عائلتي» بدل «تعديل الشجرة — حذف»
+    private var isOwnChild: Bool {
+        guard let me = authVM.currentUser?.id else { return false }
+        return member.fatherId == me
+    }
+
+    /// طلب حذف معلّق للمشاهد على هذا الشخص
+    private var deletionPending: Bool {
+        SelfRemovalText.isPendingAny(member.id, in: adminRequestVM.myPendingRequests)
+    }
+
+    @ViewBuilder private var deleteRequestButton: some View {
+        if showsDeleteRequest {
+            DSDeleteRequestButton(pending: deletionPending) {
+                if isOwnChild { confirmSelfRemoval = true } else { pendingEditAction = .delete }
+            }
+        }
+    }
+
+    private func sendSelfRemoval() {
+        let id = member.id
+        Task {
+            switch await memberVM.removeSelfChild(id: id) {
+            case .requested:
+                await adminRequestVM.fetchMyPendingRequests(force: true)
+                selfRemovalSent = true
+            case .deleted:
+                await adminRequestVM.fetchMyPendingRequests(force: true)
+                dismiss()
+            case .failed, .serverMissing:
+                selfRemovalError = memberVM.errorMessage ?? L10n.t("تعذّر إرسال الطلب.", "Couldn't send the request.")
+            }
+            memberVM.errorMessage = nil
+        }
+    }
+
     /// «طلب تعديل» في الشريط السفلي
     @ViewBuilder private var requestEditButton: some View {
         if showsRequestEdit {
@@ -1204,6 +1285,16 @@ struct MemberDetailsView: View {
             if dynamicTypeSize >= .xxLarge {
                 VStack(spacing: DSBox.buttonSpacing) {
                     requestEditButton
+                    deleteRequestButton
+                    HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
+                }
+            } else if showsDeleteRequest {
+                // «طلب حذف» بعد «طلب تعديل» في صفّهما، والأزرار الصغيرة و«إغلاق» تحتهما (§11)
+                VStack(spacing: DSBox.buttonSpacing) {
+                    HStack(spacing: DSBox.buttonSpacing) {
+                        requestEditButton
+                        deleteRequestButton
+                    }
                     HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
                 }
             } else {

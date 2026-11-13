@@ -59,6 +59,10 @@ final class AdminHandledStore: ObservableObject {
     @Published private(set) var eventsAvailable: Bool? = nil
     /// اسم عقدة شجرة النساء المربوطة بحساب المنضمة (معرّف الحساب ← الاسم) — لـ«رُبطت بـ» (طلب المالك ٢٠٢٦-١١-١١)
     @Published private(set) var womenLinks: [UUID: String] = [:]
+    /// حذف الإدارة المباشر (بلا طلب) في ما تعرضه القائمة — يُدمج في الأيام (§9، المالك والمدير والمراقب)
+    @Published private(set) var deletions: [MemberDeletePlace] = []
+    /// يضبطها العرض: من يقرأ سجلّ الأماكن (`member_delete_places`) — المالك والمدير والمراقب
+    var includesDeletions = false
 
     static let pageSize = 40
     static let windowDays = 30
@@ -100,10 +104,28 @@ final class AdminHandledStore: ObservableObject {
             hasMore = rows.count == Self.pageSize
             failed = false
             await loadWomenLinks(for: page)
+            await loadDeletions()
         } catch {
             if !ErrorHelper.isCancellation(error) {
                 Log.warning("[Handled] تعذّر جلب الطلبات المعالجة: \(error.localizedDescription)")
                 failed = true
+            }
+        }
+    }
+
+    /// المحذوفون مباشرة منذ أقدم يوم تعرضه القائمة (آخر ٣٠ يوماً، أو أقدم ما حُمِّل إن بقي المزيد)
+    private func loadDeletions() async {
+        guard includesDeletions else { deletions = []; return }
+        let window = Calendar.current.date(byAdding: .day, value: -Self.windowDays, to: Date()) ?? Date()
+        var since = window
+        if hasMore, let oldest = items.compactMap({ DateHelper.parse($0.repliedAt ?? $0.createdAt) }).min() {
+            since = max(window, Calendar.current.startOfDay(for: oldest))
+        }
+        do {
+            deletions = try await TreePlaceDeletedLookup.recent(since: since).filter(\.isStaffDirect)
+        } catch {
+            if !ErrorHelper.isCancellation(error) {
+                Log.warning("[Handled] تعذّر جلب الحذف المباشر: \(error.localizedDescription)")
             }
         }
     }
@@ -222,7 +244,10 @@ enum AdminTrailText {
         case RequestType.privacyRequest.rawValue: return L10n.t("طلب خصوصية", "Privacy request")
         case RequestType.relativeAdd.rawValue:
             // صلة القرابة في العنوان (طلب المالك ٢٠٢٦-١١-١٢ «طلب إضافة قريبة… حدد من»)
-            return RelativeAddDetails.parse(request.details)?.requestTitle ?? L10n.t("طلب إضافة قريبة", "Add relative")
+            return RelativeAddDetails.parse(request.details)?.requestTitle ?? AdminRequestFactText.relativeAddGeneric
+        case RequestType.relativeRemove.rawValue:
+            // «طلب حذف ابن/بنت/زوجة» (§10)
+            return RelativeRemoveDetails.parse(request.details)?.requestTitle ?? RelativeRemoveDetails.genericTitle
         case "lineage_request": return L10n.t("طلب نسب", "Lineage request")
         case "contact_message": return L10n.t("رسالة للإدارة", "Message to admins")
         default: return L10n.t("طلب", "Request")
@@ -240,6 +265,8 @@ enum AdminTrailText {
         case RequestType.deceasedReport.rawValue: return "leaf.fill"
         case RequestType.photoSuggestion.rawValue: return "photo.badge.plus"
         case "contact_message": return "envelope.fill"
+        case RequestType.relativeAdd.rawValue: return "person.badge.plus"
+        case RequestType.relativeRemove.rawValue: return "person.badge.minus"
         default: return "doc.text.fill"
         }
     }
@@ -491,7 +518,9 @@ enum AdminTrailText {
         case RequestType.contentReport.rawValue:
             lines.append(L10n.t("قُبل البلاغ.", "Report accepted."))
         case RequestType.relativeAdd.rawValue:
-            lines.append(L10n.t("نُفّذ: ", "Done: ") + (relativeSummary(request) ?? L10n.t("إضافة قريبة", "Add relative")))
+            lines.append(L10n.t("نُفّذ: ", "Done: ") + (relativeSummary(request) ?? AdminRequestFactText.relativeAddGeneric))
+        case RequestType.relativeRemove.rawValue:
+            lines.append(L10n.t("نُفّذ: ", "Done: ") + (relativeSummary(request) ?? AdminRequestFactText.relativeRemoveGeneric))
         case RequestType.treeEdit.rawValue:
             lines.append(contentsOf: treeEditResult(request))
         default:

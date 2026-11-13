@@ -303,6 +303,8 @@ struct WomanDetailSheet: View {
     /// طلب «زوج من خارج العائلة» (لغير الإدارة) — مربّع الاسم
     @State private var showOutsideHusbandRequest = false
     @State private var outsideHusbandName = ""
+    /// «طلب حذف» لبنته أو زوجته (§11) — تأكيد «عائلتي» ثم الدالة الذاتية (طلب للمالك والمدير)
+    @State private var confirmSelfRemoval = false
 
     enum AddKind: Int, Identifiable {
         /// «ابن» — إجراء واحد وكل اسم داخله ذكر أو أنثى (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن وداخل المربع
@@ -798,6 +800,10 @@ struct WomanDetailSheet: View {
                 .padding(.horizontal, DS.Spacing.lg)
                 .offset(y: heroIn || reduceMotion ? 0 : 10)
                 .opacity(heroIn ? 1 : 0)
+            // طلب حذف معلّق من المشاهد عليها (§11)
+            if showsDeleteRequest && deletionPending {
+                DSStatusChip(text: SelfRemovalText.pendingChip, tint: DS.Color.slate, size: .mini)
+            }
 
             // «من خارج العائلة» / «ابن بنت» (أبناء البنات من خارج العائلة، ٢٠٢٦-١١-٠٧)
             if WomenStore.outsideFamilyIds.contains(woman.id) {
@@ -2000,8 +2006,73 @@ struct WomanDetailSheet: View {
 
     // MARK: - الشريط السفلي (نفس شريط تفاصيل العضو)
 
+    // MARK: «طلب حذف» (§11): بنته أو زوجته فقط، لغير الإدارة، بلا حساب دخول
+
+    private var showsDeleteRequest: Bool {
+        guard !canModerate, let me, mode != .viewOnly, me.isWomanAccount == false,
+              WomenStore.linkedUserByWoman[woman.id] == nil else { return false }
+        return (woman.fatherId == me.id && woman.isFemale) || woman.husbandId == me.id
+    }
+
+    private var deletionPending: Bool {
+        SelfRemovalText.isPendingAny(woman.id, in: adminRequestVM.myPendingRequests)
+    }
+
+    private func sendSelfRemoval() {
+        let isWife = woman.husbandId == me?.id
+        let id = woman.id
+        Task {
+            draft.busy = true
+            let result = isWife ? await memberVM.removeSelfWife(wifeId: id) : await memberVM.removeSelfWomanChild(id: id)
+            draft.busy = false
+            switch result {
+            case .requested:
+                await adminRequestVM.fetchMyPendingRequests(force: true)
+                draft.notice = WomanWriteError(title: SelfRemovalText.sentTitle, message: SelfRemovalText.sentMessage)
+            case .deleted:
+                await onChanged?()
+                dismiss()
+            case .failed, .serverMissing:
+                draft.notice = WomanWriteError(title: L10n.t("تعذّر الإرسال", "Couldn't send"),
+                                               message: memberVM.errorMessage ?? L10n.t("تعذّر إرسال الطلب.", "Couldn't send the request."))
+            }
+            memberVM.errorMessage = nil
+        }
+    }
+
     /// شريط ثابت أسفل المربّع: زرّ الدور يمين (يفتح مربّع الإجراءات)، «إغلاق» يسار — بمقاس واحد
     private var panelFooter: some View {
+        VStack(spacing: DSBox.buttonSpacing) {
+            if showsDeleteRequest {
+                DSDeleteRequestButton(pending: deletionPending) { confirmSelfRemoval = true }
+                    .disabled(draft.busy)
+            }
+            panelFooterRow
+        }
+        // نفس شريط أزرار مربّعات العمل (`DSComposer`) وتفاصيل العضو: هوامشه من `DSBox`
+        .padding(.horizontal, DSBox.footerHorizontal)
+        .padding(.top, DSBox.footerTop)
+        .padding(.bottom, DSBox.footerBottom)
+        .background(
+            DS.Color.background
+                .overlay(alignment: .top) {
+                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
+                        .frame(height: DS.Card.strokeWidth)
+                }
+        )
+        .dsAlert(SelfRemovalText.confirmTitle, isPresented: $confirmSelfRemoval) {
+            Button(SelfRemovalText.sendButton) { sendSelfRemoval() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(SelfRemovalText.confirmMessage(woman.firstName))
+        }
+        .task(id: showsDeleteRequest) {
+            if showsDeleteRequest { await adminRequestVM.fetchMyPendingRequests() }
+        }
+    }
+
+    /// صفّ الأزرار: زرّ الدور + «إغلاق»
+    private var panelFooterRow: some View {
         // صفّ الأزرار بمواصفة `DSBox` الواحدة
         HStack(spacing: DSBox.buttonSpacing) {
             // الإدارة «الإدارة»، والعضو على عقدته «عائلتي»، وغيره «طلب إضافة» — كلها تفتح مربّع الإجراءات
@@ -2020,17 +2091,6 @@ struct WomanDetailSheet: View {
             }
             WomanPanelCloseButton()
         }
-        // نفس شريط أزرار مربّعات العمل (`DSComposer`) وتفاصيل العضو: هوامشه من `DSBox`
-        .padding(.horizontal, DSBox.footerHorizontal)
-        .padding(.top, DSBox.footerTop)
-        .padding(.bottom, DSBox.footerBottom)
-        .background(
-            DS.Color.background
-                .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
-                        .frame(height: DS.Card.strokeWidth)
-                }
-        )
     }
 
     // MARK: - مربّع الإضافة — أكثر من اسم في المرّة (طلب المالك ٢٠٢٦-١٠-٢٥)

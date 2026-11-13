@@ -51,6 +51,9 @@ enum RequestType: String {
     /// إضافة قريبة من «عائلتي» (زوجة/أم/أخت) بانتظار الموافقة — يكتبها السيرفر نفسه (٢٠٢٦-١٠-٢٩)،
     /// والقرار بـ `decide_admin_request`
     case relativeAdd = "relative_add"
+    /// حذف ابن/بنت/زوجة من «عائلتي» لغير الإدارة — يكتبه السيرفر (`remove_self_*`، ٢٠٢٦-١١-١٣)، للمالك والمدير،
+    /// والقرار بـ `decide_admin_request` (الموافقة تحذف باسم صاحب الطلب)
+    case relativeRemove = "relative_remove"
 }
 
 /// أنواع الإشعارات — بدل strings سحرية

@@ -218,6 +218,8 @@ struct AdminAllRequestsView: View {
     @StateObject private var handledStore = AdminHandledStore()
     /// طلب معالَج مفتوح للعرض فقط
     @State private var handledOpen: AdminRequest? = nil
+    /// «المنجزة»: حذف مباشر من الإدارة (§9) — مربّع للعرض فقط
+    @State private var deletionOpen: MemberDeletePlace? = nil
     /// حقل البحث الواحد — يبحث في كل طلبات المجموعة المختارة، وفي الرسائل (`AdminInboxView(sharedSearch:)`)
     @State private var searchText: String = ""
     /// طلب يُفتح مربّعه بعد التحميل («يحتاج قرارك»، المهام، الإشعار) — مرة واحدة
@@ -522,6 +524,9 @@ struct AdminAllRequestsView: View {
         // «تمت معالجتها»: المربّع نفسه للعرض فقط (بلا أزرار قرار) + «ما تم في الطلب» و«النتيجة»
         .dsCenterBox(item: $handledOpen) { request in
             handledBox(request)
+        }
+        .dsCenterBox(item: $deletionOpen) { deletion in
+            AnyView(AdminDeletionBox(deletion: deletion, men: memberVM.allMembers) { deletionOpen = nil })
         }
         // تفاصيل الطلب — مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك)
         .dsCenterBox(item: $selectedDetail) { detail in
@@ -1216,7 +1221,7 @@ struct AdminAllRequestsView: View {
 
                 // طلبات حذف الحساب والخصوصية — بطاقات مستقلّة في «الكل» و«الأعضاء»
                 if showsPolicyRequests {
-                    AdminPolicyRequestsSection(adminRequestVM: adminRequestVM)
+                    AdminPolicyRequestsSection(adminRequestVM: adminRequestVM, focusId: focusId)
                 }
 
                 if isSearching {
@@ -1961,6 +1966,14 @@ struct AdminAllRequestsView: View {
                 pendingChip(Self.requestDate(request.createdAt))
             }
 
+            // §10: «مقدّم الطلب: …» بشريحة نوعه — حين لا يكون هو المعني بالطلب (العنوان الفرعي اسم المعني)
+            let requester = memberVM.member(byId: request.requesterId)
+            let target = payload?.targetMemberId.flatMap(UUID.init(uuidString:)) ?? request.memberId
+            if let requester, requester.id != target || action == .add {
+                rowExtras {
+                    requesterLine(requester, kind: AdminRequestKind.of(request))
+                }
+            }
             if newDisplay != nil || request.createdAt != nil {
                 rowExtras {
                     // قيمة جديدة حسب الإجراء
@@ -2897,7 +2910,7 @@ struct AdminAllRequestsView: View {
             rowExtras {
                 // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
                 if let requester, requester.id != request.memberId {
-                    requesterLine(requester)
+                    requesterLine(requester, kind: .edit)
                 }
                 if let details = request.details, !details.isEmpty {
                     contentBlock(details)
@@ -2928,7 +2941,7 @@ struct AdminAllRequestsView: View {
 
             // مقدّم الطلب غير الأب فقط
             if let requester, requester.id != request.memberId {
-                rowExtras { requesterLine(requester) }
+                rowExtras { requesterLine(requester, kind: .add) }
             }
         }
     }
@@ -2949,7 +2962,7 @@ struct AdminAllRequestsView: View {
             rowExtras {
                 // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
                 if let requester, requester.id != request.memberId {
-                    requesterLine(requester)
+                    requesterLine(requester, kind: .edit)
                 }
                 if let details = request.details, !details.isEmpty {
                     contentBlock(details)
@@ -3008,7 +3021,7 @@ struct AdminAllRequestsView: View {
             rowExtras {
                 // مقدّم الطلب هو صاحبه نفسه → لا يتكرّر (طلب المالك ٢٠٢٦-١٠-٠٧)
                 if let requester, requester.id != request.memberId {
-                    requesterLine(requester)
+                    requesterLine(requester, kind: .edit)
                 }
                 // الاسم: الحالي ← الجديد (سطر مدمج)
                 changeLine(old: nil, new: newName)
@@ -3290,10 +3303,10 @@ struct AdminAllRequestsView: View {
         .foregroundColor(color)
     }
 
-    /// «من: …» — مقدّم الطلب
-    private func requesterLine(_ requester: FamilyMember) -> some View {
+    /// «[النوع] مقدّم الطلب: …» (§10) — شريحة نوع الطلب في أول السطر
+    private func requesterLine(_ requester: FamilyMember, kind: AdminRequestKind? = nil) -> some View {
         HStack(spacing: DS.Spacing.xsm) {
-            metaItem("person.fill", L10n.t("من: \(requester.displayFullName)", "By: \(requester.displayFullName)"))
+            AdminRequestCardLine(kind: kind, requester: requester.chainThreeName)
             ReviewVerifiedMark(requester.id)
         }
     }
@@ -3650,6 +3663,10 @@ struct AdminAllRequestsView: View {
                           icon: detailInfoIcon(detail),
                           tint: AppSection.admin.ink,
                           index: 1) {
+            // §10: «نوع الطلب» · «القرابة» · «مقدّم الطلب» أولاً — لكل طلب يخصّ شخصاً
+            if let facts = requestFacts(for: detail) {
+                AdminRequestFactRows(facts: facts)
+            }
             detailContent(for: detail)
         }
 
@@ -3663,6 +3680,21 @@ struct AdminAllRequestsView: View {
 
         // «المرسل»: مسار الإرسال خطواتٍ مرقّمة، ومن أرسله، والجهاز والوقت (طلب المالك ٢٠٢٦-١١-١١، التصميم المعتمد)
         AdminSenderSection(info: senderInfo(for: detail), index: place == nil ? 2 : 3)
+    }
+
+    /// الصفوف الثلاثة (§10) — طلبات الأشخاص فقط (لا الأخبار والمحتوى والبلاغات والرسائل)
+    private func requestFacts(for detail: RequestDetail) -> AdminRequestFacts? {
+        let lookup: (UUID) -> FamilyMember? = { memberVM.member(byId: $0) }
+        switch detail {
+        case .nameChange(let r), .deceased(let r), .child(let r), .photo(let r), .treeEdit(let r, _):
+            return AdminRequestFacts.of(r, member: lookup)
+        case .phone(let p):
+            return AdminRequestFacts.edit(requesterId: p.requesterId ?? p.memberId, subjectId: p.memberId, member: lookup)
+        case .report(let r):
+            return AdminRequestFacts.of(r, member: lookup)
+        case .join, .news, .diwaniya, .project, .archive:
+            return nil
+        }
     }
 
     /// مكان الطلب المعالَج (§8): المقبول بصيغة ما تمّ، والمرفوض «رُفض» — غيرهما (مسحوب…) بلا قسم
@@ -4011,8 +4043,11 @@ struct AdminAllRequestsView: View {
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .phone(let request):
-            infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
-                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
+            // عن نفسه: «مقدّم الطلب · صاحب الشأن» أعلاه (§10 بلا تكرار)
+            if request.requesterId != nil && request.requesterId != request.memberId {
+                infoCard(icon: "person.fill", label: L10n.t("العضو", "Member"),
+                         value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
+            }
             comparisonCard(
                 oldLabel: L10n.t("الرقم الحالي", "Current"),
                 oldValue: KuwaitPhone.display(request.member?.phoneNumber),
@@ -4065,8 +4100,11 @@ struct AdminAllRequestsView: View {
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
 
         case .child(let request):
-            infoCard(icon: "person.fill", label: L10n.t("الأب", "Father"),
-                     value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
+            // «الأب» = «مقدّم الطلب» غالباً (§10 بلا تكرار)
+            if request.requesterId != request.memberId {
+                infoCard(icon: "person.fill", label: L10n.t("الأب", "Father"),
+                         value: request.member?.displayFullName ?? "—", color: AppSection.admin.ink)
+            }
             longTextCard(icon: "doc.text.fill",
                          label: L10n.t("التفاصيل", "Details"),
                          text: request.details ?? L10n.t("لا توجد تفاصيل", "No details"))
@@ -4896,7 +4934,7 @@ extension AdminAllRequestsView {
 
     /// الطلبات المغلقة (آخر ٣٠ يوماً) بالأيام، الأحدث أولاً، وبحث «الوارد» الواحد — بنفس قواعد ظهور «الطلبات»
     var handledList: some View {
-        let visible = visibleHandled
+        let visible = visibleHandledEntries
         return List {
             DSSearchField(text: $searchText, placeholder: AdminInboxView.searchPlaceholder)
                 .reviewListRow(top: DS.Spacing.md, bottom: DS.Spacing.xs)
@@ -4919,15 +4957,22 @@ extension AdminAllRequestsView {
                     .reviewListRow(top: DS.Spacing.xs)
                 if handledStore.hasMore && !handledStore.failed { handledMoreButton }
             } else {
-                ForEach(DSDayBuckets.group(visible, date: handledDate)) { group in
+                ForEach(DSDayBuckets.group(visible, date: handledEntryDate)) { group in
                     DSDayHeader(title: group.title, count: group.items.count)
                         .reviewListRow(top: DS.Spacing.sm, bottom: DS.Spacing.xxs)
-                    ForEach(group.items) { request in
-                        AdminHandledRow(request: request, events: handledStore.events[request.id],
-                                        lookup: { memberVM.member(byId: $0) }) {
-                            handledOpen = request
+                    ForEach(group.items) { entry in
+                        switch entry {
+                        case .request(let request):
+                            AdminHandledRow(request: request, events: handledStore.events[request.id],
+                                            lookup: { memberVM.member(byId: $0) }) {
+                                handledOpen = request
+                            }
+                            .reviewListRow(top: DS.Spacing.xxs, bottom: DS.Spacing.xxs)
+                        case .deletion(let deletion):
+                            // حذف الإدارة المباشر (§9) — للعرض فقط
+                            AdminDeletionRow(deletion: deletion) { deletionOpen = deletion }
+                                .reviewListRow(top: DS.Spacing.xxs, bottom: DS.Spacing.xxs)
                         }
-                        .reviewListRow(top: DS.Spacing.xxs, bottom: DS.Spacing.xxs)
                     }
                 }
                 if handledStore.hasMore {
@@ -4946,7 +4991,31 @@ extension AdminAllRequestsView {
         .scrollDismissesKeyboard(.interactively)
         .environment(\.defaultMinListRowHeight, 0)
         .refreshable { await handledStore.reload() }
-        .task { if !handledStore.loadedOnce { await handledStore.reload() } }
+        .task {
+            handledStore.includesDeletions = authVM.canModerateTree
+            if !handledStore.loadedOnce { await handledStore.reload() }
+        }
+    }
+
+    /// الطلبات المعالجة + حذف الإدارة المباشر في الأيام نفسها، الأحدث أولاً (§9)
+    private var visibleHandledEntries: [AdminHandledEntry] {
+        var entries = visibleHandled.map(AdminHandledEntry.request)
+        if authVM.canModerateTree {
+            let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let deletions = handledStore.deletions.filter { d in
+                q.isEmpty || NameSearch.matches(query: q, any: [d.displayFullName, d.deletedByName ?? "",
+                                                                 AdminDeletionText.title])
+            }
+            entries += deletions.map(AdminHandledEntry.deletion)
+        }
+        return entries.sorted { handledEntryDate($0) > handledEntryDate($1) }
+    }
+
+    private func handledEntryDate(_ entry: AdminHandledEntry) -> Date {
+        switch entry {
+        case .request(let r): return handledDate(r)
+        case .deletion(let d): return d.deletedDate ?? .distantPast
+        }
     }
 
     /// وقت التجميع: وقت المعالجة، والقديم بلا وقت ردّ بوقت إرساله
@@ -4973,7 +5042,8 @@ extension AdminAllRequestsView {
         case "contact_message": return canSeeMessages
         case RequestType.newsReport.rawValue, RequestType.contentReport.rawValue: return authVM.canModerateContent
         case RequestType.photoSuggestion.rawValue: return canHandlePhotos
-        case RequestType.accountDelete.rawValue, RequestType.privacyRequest.rawValue: return authVM.isAdmin
+        case RequestType.accountDelete.rawValue, RequestType.privacyRequest.rawValue,
+             RequestType.relativeRemove.rawValue: return authVM.isAdmin
         default: return authVM.canModerateTree
         }
     }
@@ -5042,20 +5112,27 @@ extension AdminAllRequestsView {
     private func handledFallbackInfo(_ request: AdminRequest) -> some View {
         DSComposerSection(title: L10n.t("بيانات الطلب", "Request Info"), icon: "doc.text.fill",
                           tint: AppSection.admin.ink, index: 1) {
-            let relative = request.requestType == RequestType.relativeAdd.rawValue ? RelativeAddDetails.parse(request.details) : nil
-            DSTileGrid([
-                .wide(DSFieldTileFace(label: L10n.t("النوع", "Type"), value: AdminTrailText.typeTitle(request), glyph: .none)),
-                .wide(DSFieldTileFace(label: relative == nil ? L10n.t("المعني بالطلب", "About") : L10n.t("لمن", "For whom"),
-                                      value: request.member?.fourPartName ?? memberVM.member(byId: request.memberId)?.fourPartName ?? "—",
-                                      glyph: .none)),
-            ])
-            // «إضافة قريبة»: صلة القرابة واسمها كما كتبه (طلب المالك ٢٠٢٦-١١-١٢)
-            if let relative {
+            // §10: «نوع الطلب» · «القرابة» · «مقدّم الطلب» أولاً، بلا تكرار «النوع»/«لمن»/«صلة القرابة»
+            let facts = AdminRequestFacts.of(request, member: { memberVM.member(byId: $0) })
+            if let facts { AdminRequestFactRows(facts: facts) }
+            let relativeName: String? = {
+                switch request.requestType {
+                case RequestType.relativeAdd.rawValue:
+                    let n = RelativeAddDetails.parse(request.details)?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return n.isEmpty ? "—" : n
+                case RequestType.relativeRemove.rawValue:
+                    return RelativeRemoveDetails.parse(request.details)?.trimmedName ?? "—"
+                default:
+                    return nil
+                }
+            }()
+            if let relativeName {
+                DSTileGrid([.wide(DSFieldTileFace(label: L10n.t("الاسم", "Name"), value: relativeName, glyph: .none))])
+            } else if facts == nil || request.requesterId != request.memberId {
                 DSTileGrid([
-                    .half(DSFieldTileFace(label: L10n.t("صلة القرابة", "Relation"),
-                                          value: relative.relationTitle ?? L10n.t("غير محدّدة", "Not set"), glyph: .none)),
-                    .wide(DSFieldTileFace(label: L10n.t("اسمها", "Her name"),
-                                          value: relative.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "—", glyph: .none)),
+                    .wide(DSFieldTileFace(label: L10n.t("المعني بالطلب", "About"),
+                                          value: request.member?.fourPartName ?? memberVM.member(byId: request.memberId)?.fourPartName ?? "—",
+                                          glyph: .none)),
                 ])
             }
             if let details = request.details?.trimmingCharacters(in: .whitespacesAndNewlines), !details.isEmpty,

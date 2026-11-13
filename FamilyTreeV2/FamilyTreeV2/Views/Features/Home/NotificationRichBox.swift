@@ -599,7 +599,8 @@ enum NotifBoxText {
         case RequestType.linkRequest.rawValue:     return L10n.t("طلب ربط", "Link request")
         case RequestType.accountDelete.rawValue:   return L10n.t("حذف الحساب", "Account deletion")
         case RequestType.privacyRequest.rawValue:  return L10n.t("طلب خصوصية", "Privacy request")
-        case RequestType.relativeAdd.rawValue:     return L10n.t("إضافة قريبة", "Add relative")
+        case RequestType.relativeAdd.rawValue:     return AdminRequestFactText.relativeAddGeneric
+        case RequestType.relativeRemove.rawValue:  return RelativeRemoveDetails.genericTitle
         case "contact_message":                    return L10n.t("رسالة", "Message")
         default:                                   return L10n.t("طلب", "Request")
         }

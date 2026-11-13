@@ -555,17 +555,26 @@ class MemberViewModel: ObservableObject {
 
     /// حذف/فكّ زوجة المستخدم نفسه (RPC remove_self_wife) — يعمل لأي دور.
     /// يفكّ الارتباط، ويحذف الصف فقط إذا كانت زوجة بالاسم بلا روابط أخرى.
+    /// غير الإدارة (٢٠٢٦-١١-١٣): لا حذف — طلب «طلب حذف من الشجرة» للمالك والمدير (`requested`)
     @discardableResult
-    func removeSelfWife(wifeId: UUID) async -> Bool {
-        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+    func removeSelfWife(wifeId: UUID) async -> SelfChildRemoval {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return .failed }
         struct P: Encodable { let p_wife_id: String }
         do {
-            _ = try await supabase.rpc("remove_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute()
-            await fetchWomenFamily(for: uid); return true
+            let data = try await supabase.rpc("remove_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute().data
+            if Self.removalRequested(data) { return .requested }
+            await fetchWomenFamily(for: uid); return .deleted
         } catch {
-            self.errorMessage = L10n.t("تعذّر حذف الزوجة.", "Failed to remove wife.")
-            Log.error("[Women] removeSelfWife: \(error.localizedDescription)"); return false
+            self.errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر حذف الزوجة.", "Failed to remove wife."))
+            Log.error("[Women] removeSelfWife: \(error.localizedDescription)"); return .failed
         }
+    }
+
+    /// ردّ `remove_self_*` (jsonb منذ ٢٠٢٦-١١-١٣): `{requested: true}` = أُرسل طلباً للإدارة ولم يُحذف شيء
+    nonisolated private struct SelfRemoveResponse: Decodable { let requested: Bool? }
+
+    nonisolated private static func removalRequested(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(SelfRemoveResponse.self, from: data))?.requested == true
     }
 
     /// تحديث عائلة العضو — تسري على أبنائه وأحفاده لأن العائلة صفة نسب
@@ -639,23 +648,25 @@ class MemberViewModel: ObservableObject {
         }
     }
 
-    /// حذف ابنة للمستخدم نفسه (RPC remove_self_woman_child).
+    /// حذف ابنة للمستخدم نفسه (RPC remove_self_woman_child) — لغير الإدارة طلب (`requested`)
     @discardableResult
-    func removeSelfWomanChild(id: UUID) async -> Bool {
-        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+    func removeSelfWomanChild(id: UUID) async -> SelfChildRemoval {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return .failed }
         struct P: Encodable { let p_child_id: String }
         do {
-            _ = try await supabase.rpc("remove_self_woman_child", params: P(p_child_id: id.uuidString)).execute()
-            await fetchWomenFamily(for: uid); return true
+            let data = try await supabase.rpc("remove_self_woman_child", params: P(p_child_id: id.uuidString)).execute().data
+            if Self.removalRequested(data) { return .requested }
+            await fetchWomenFamily(for: uid); return .deleted
         } catch {
-            self.errorMessage = L10n.t("تعذّر حذف الابنة.", "Failed to remove daughter.")
-            Log.error("[Women] removeSelfWomanChild: \(error.localizedDescription)"); return false
+            self.errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر حذف الابنة.", "Failed to remove daughter."))
+            Log.error("[Women] removeSelfWomanChild: \(error.localizedDescription)"); return .failed
         }
     }
 
     /// نتيجة حذف ابن المستخدم نفسه — `serverMissing` = الدالة لم تُرفع للسيرفر بعد
     /// (المالك والمدير يرجعان لمسار الحذف المباشر القديم، والعضو يرى «تحتاج تحديث السيرفر»)
-    enum SelfChildRemoval { case deleted, failed, serverMissing }
+    /// `requested` = غير الإدارة: أُرسل «طلب حذف من الشجرة» ولم يُحذف شيء (٢٠٢٦-١١-١٣)
+    enum SelfChildRemoval { case deleted, requested, failed, serverMissing }
 
     /// حذف ابن أضافه المستخدم بالخطأ (RPC remove_self_child — طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»).
     /// لكل عضو مفعّل، لأبنائه هو فقط، بلا حساب دخول، والمتوفى للمالك والمدير. السيرفر يحذف معه طلب
@@ -666,7 +677,12 @@ class MemberViewModel: ObservableObject {
         struct P: Encodable { let p_child_id: String }
         errorMessage = nil
         do {
-            _ = try await supabase.rpc("remove_self_child", params: P(p_child_id: id.uuidString)).execute()
+            let data = try await supabase.rpc("remove_self_child", params: P(p_child_id: id.uuidString)).execute().data
+            // غير الإدارة: طلب للمالك والمدير — الابن يبقى حتى الموافقة
+            if Self.removalRequested(data) {
+                Log.info("[Family] أُرسل طلب حذف ابن من «عائلتي»: \(id)")
+                return .requested
+            }
             // إزالة الابن محلياً من الشجرة العامة (مثل deleteMember)
             allMembers.removeAll { $0.id == id }
             membersVersion += 1

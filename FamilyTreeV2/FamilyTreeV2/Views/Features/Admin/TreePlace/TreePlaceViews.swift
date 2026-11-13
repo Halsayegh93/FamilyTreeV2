@@ -37,20 +37,59 @@ struct TreePlaceSection: View {
     @State private var women: [FamilyMember] = WomenStore.cache
     @State private var showPreview = false
     @State private var runPrimary = false
+    /// نتيجة سؤال سجلّ الأماكن عن المحذوف (§9) — nil = لم تصل بعد
+    @State private var goneResult: TreePlaceDeletedLookup.Result? = nil
+
+    /// المحذوف الذي يُسأل عن مكانه: ما تمّ حذفه (لا المرفوض ولا قبل التنفيذ)
+    private var goneId: UUID? {
+        guard let place, place.tense == .past, !place.rejected, case .delete(let id) = place.change else { return nil }
+        return id
+    }
+
+    /// البيانات المحمّلة + مكان المحذوف من السجلّ
+    private var data: TreePlaceData {
+        var d = TreePlaceData(men: men, women: women)
+        if let id = goneId {
+            switch goneResult ?? TreePlaceDeletedLookup.cached(id) {
+            case .found(let row)?: d.deleted[id] = row
+            case .missing?: d.deletedMissing.insert(id)
+            case .unavailable?, nil: break
+            }
+        }
+        return d
+    }
+
+    /// ينتظر السجلّ: محذوف لم يبقَ في البيانات ولم يصل جوابه
+    private var awaitingGone: Bool {
+        guard let id = goneId, goneResult == nil, TreePlaceDeletedLookup.cached(id) == nil else { return false }
+        return TreePlaceData(men: men, women: women).node(id, in: place?.tree ?? .men) == nil
+    }
 
     var body: some View {
-        let resolved = place?.resolve(TreePlaceData(men: men, women: women))
+        let data = self.data
+        let resolved = place?.resolve(data)
         Group {
             if buttonOnly {
                 if resolved != nil { TreePlaceOpenButton { showPreview = true } }
             } else {
-                section(resolved)
+                section(resolved, data: data)
             }
         }
         // شجرة النساء لم تُفتح بعد في هذه الجلسة: قراءتها مرة (قراءة فقط) ليُرسم المكان
         .task(id: place?.tree == .women) {
             guard place?.tree == .women, women.isEmpty else { return }
             if let fetched = try? await WomenStore.fetch() { women = fetched }
+        }
+        // مكان المحذوف من سجلّ الأماكن (قراءة فقط، مرة لكل معرّف)
+        .task(id: goneId) {
+            guard let id = goneId else { return }
+            let result = await TreePlaceDeletedLookup.lookup(id)
+            // زوجة/بنت في شجرة النساء: أبوها أو زوجها يُرسم منها
+            if case .found(let row) = result, row.isWomenTree, women.isEmpty,
+               let fetched = try? await WomenStore.fetch() {
+                women = fetched
+            }
+            goneResult = result
         }
         .fullScreenCover(isPresented: $showPreview, onDismiss: {
             // الإجراء الرئيسي بعد إغلاق المعاينة — فيعمل المعالج نفسه (وتأكيده إن كان له) فوق المربّع
@@ -67,12 +106,14 @@ struct TreePlaceSection: View {
         }
     }
 
-    private func section(_ resolved: TreePlaceResolved?) -> some View {
+    private func section(_ resolved: TreePlaceResolved?, data: TreePlaceData) -> some View {
         DSComposerSection(title: TreePlaceText.sectionTitle, icon: AppSection.tree.symbol,
                           tint: AppSection.tree.ink, index: index) {
-            if let resolved {
+            if resolved == nil && awaitingGone {
+                DSPageLoader(L10n.t("جارٍ البحث عن مكانه…", "Finding its place…"), fillsSpace: false)
+            } else if let resolved {
                 VStack(spacing: DS.Spacing.md) {
-                    TreePlaceSnippet(resolved: resolved, data: TreePlaceData(men: men, women: women))
+                    TreePlaceSnippet(resolved: resolved, data: data)
                         .frame(maxWidth: .infinity)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(resolved.note)
@@ -89,7 +130,7 @@ struct TreePlaceSection: View {
                 DSNoteCard(emptyNote, icon: "person.badge.plus", tint: DS.Color.warning)
             } else if let place {
                 // لا أب مسجّل، أو ما تمّ/رُفض وشخصه لم يعد في الشجرة
-                DSNoteCard(place.unresolvedNote(TreePlaceData(men: men, women: women)),
+                DSNoteCard(place.unresolvedNote(data),
                            icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
             }
         }
@@ -153,7 +194,8 @@ struct TreePlaceSnippet: View {
         case .outsideWife:
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 TreePlaceMiniNode(member: resolved.person, role: .father)
-                TreePlaceWifeGhost(name: resolved.wifeName ?? "")
+                TreePlaceWifeGhost(name: resolved.wifeName ?? "",
+                                   removal: resolved.noteIsDanger ? TreePlaceText.wifeRemovalPill(resolved.place) : nil)
             }
         case .rootOnly:
             TreePlaceMiniNode(member: resolved.person, mark: resolved.mark)
@@ -482,29 +524,32 @@ struct TreePlaceMiniNode: View {
 /// زوجة من خارج العائلة: مربّع شبح وردي متقطّع باسمها وشريحة «زوجة من خارج العائلة» — بلا خط
 struct TreePlaceWifeGhost: View {
     let name: String
+    /// حذف الزوجة (§9): الشريحة «تُحذف»/«حُذفت» والإطار أحمر — nil = زوجة تُضاف
+    var removal: String? = nil
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        let tint = removal == nil ? DS.Color.female : DS.Color.error
         VStack(spacing: DS.Spacing.xxs) {
             Text(PersonName.firstUnit(name.trimmingCharacters(in: .whitespacesAndNewlines)))
                 .dsFont(.chip)
-                .foregroundColor(DS.Color.female)
+                .foregroundColor(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            Text(TreePlaceText.outsideWifePill)
+            Text(removal ?? TreePlaceText.outsideWifePill)
                 .dsFont(.badge)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .padding(.horizontal, DS.Spacing.xsm)
                 .padding(.vertical, DS.Spacing.xxs)
-                .background(Capsule().fill(DS.Color.femaleFill))
+                .background(Capsule().fill(removal == nil ? DS.Color.femaleFill : DS.Color.errorFill))
         }
         .padding(.vertical, DS.Spacing.md)
         .padding(.horizontal, DS.Spacing.sm)
         .frame(minWidth: TreePlaceMetrics.nodeWidth * 1.6)
-        .background(shape.fill(DS.Color.female.opacity(DS.Opacity.tintFillSoft)))
-        .overlay(shape.strokeBorder(DS.Color.female, style: StrokeStyle(lineWidth: TreePlaceMetrics.markBorder,
-                                                                         dash: [DS.Spacing.xs, DS.Spacing.xs - 1])))
+        .background(shape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
+        .overlay(shape.strokeBorder(tint, style: StrokeStyle(lineWidth: TreePlaceMetrics.markBorder,
+                                                              dash: [DS.Spacing.xs, DS.Spacing.xs - 1])))
     }
 }
