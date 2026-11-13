@@ -2439,14 +2439,12 @@ struct AdminAllRequestsView: View {
             }
 
             if let phone {
+                // اختيار المالك ٢٠٢٦-١١-١٣ «ج و أ»: الرقم نفسه رابط اتصال، وزر «واتساب» ممتلئ بدل الدائرة
                 HStack(spacing: DS.Spacing.sm) {
-                    metaItem("phone.fill", KuwaitPhone.display(phone), color: DS.Color.fieldValue)
+                    phoneCallLink(phone)
                     Spacer(minLength: 0)
                     if let wa = KuwaitPhone.whatsappURL(phone) {
-                        roundContactButton(icon: "message.fill", tint: DS.Color.sea,
-                                           label: L10n.t("واتساب", "WhatsApp")) {
-                            UIApplication.shared.open(wa)
-                        }
+                        whatsAppPill(wa)
                     }
                 }
                 .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
@@ -2576,17 +2574,58 @@ struct AdminAllRequestsView: View {
     }
 
     /// زر تواصل (واتساب/اتصال): قرص الحالة المجسّم بلون المعنى، بمساحة ضغط ٤٤ نقطة
-    private func roundContactButton(icon: String, tint: Color, label: String,
-                                    action: @escaping () -> Void) -> some View {
-        let pad = (DS.Icon.tapTarget - DS.Icon.rowCompact) / 2
-        return Button(action: action) {
-            DSStateIcon(icon, tint: tint.dsReadableGlyph, size: DS.Icon.rowCompact, mapsChrome: false)
-                .padding(pad)
+    /// «ج»: الرقم نفسه رابط اتصال بلون التواصل — منطقة اللمس ٤٤ بلا تكبير السطر
+    @ViewBuilder
+    private func phoneCallLink(_ phone: String, font: DS.TextRole = .chip) -> some View {
+        let shown = KuwaitPhone.display(phone)
+        if let tel = KuwaitPhone.telURL(phone) {
+            let pad = (DS.Icon.tapTarget - DS.Icon.row) / 2
+            Button { UIApplication.shared.open(tel) } label: {
+                HStack(spacing: DS.Spacing.xxs) {
+                    Image(dsSymbol: "phone.fill")
+                        .dsGlyph(DS.Glyph.micro, weight: .semibold)
+                        .accessibilityHidden(true)
+                    Text(verbatim: shown)
+                        .dsFont(font)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .foregroundColor(DS.Color.sea)
+                .padding(.vertical, pad)
                 .contentShape(Rectangle())
-                .padding(-pad)
+                .padding(.vertical, -pad)
+            }
+            .buttonStyle(DSScaleButtonStyle())
+            .accessibilityLabel(L10n.t("اتصال بـ \(shown)", "Call \(shown)"))
+        } else {
+            metaItem("phone.fill", shown, color: DS.Color.fieldValue)
+        }
+    }
+
+    /// «أ»: زر «واتساب» ممتلئ بلون التواصل (البترولي) — بدل الدائرة المجسّمة بلا كلمة
+    private func whatsAppPill(_ url: URL) -> some View {
+        let pad = (DS.Icon.tapTarget - DS.Icon.row) / 2
+        return Button { UIApplication.shared.open(url) } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(systemName: "message.fill")
+                    .dsGlyph(DS.Glyph.sm)
+                    .accessibilityHidden(true)
+                Text(L10n.t("واتساب", "WhatsApp"))
+                    .dsFont(.chip)
+                    .lineLimit(1)
+            }
+            .foregroundColor(DS.Color.textOnPrimary)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: DS.Icon.row)
+            .background(Capsule().fill(DS.Color.seaFill))
+            .padding(.vertical, pad)
+            .contentShape(Rectangle())
+            .padding(.vertical, -pad)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .accessibilityLabel(label)
+        .fixedSize()
+        .accessibilityLabel(L10n.t("مراسلة على واتساب", "Message on WhatsApp"))
     }
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
@@ -3569,22 +3608,11 @@ struct AdminAllRequestsView: View {
             VStack(spacing: 0) {
                 joinFactRow(icon: "phone.fill", tint: DS.Color.sea,
                             label: L10n.t("الهاتف", "Phone"),
-                            value: phone.isEmpty ? L10n.t("غير مسجّل", "Not set") : KuwaitPhone.display(phone)) {
-                    if !phone.isEmpty {
-                        HStack(spacing: DS.Spacing.xsm) {
-                            if let wa = KuwaitPhone.whatsappURL(phone) {
-                                roundContactButton(icon: "message.fill", tint: DS.Color.sea,
-                                                   label: L10n.t("واتساب", "WhatsApp")) {
-                                    UIApplication.shared.open(wa)
-                                }
-                            }
-                            if let tel = KuwaitPhone.telURL(phone) {
-                                roundContactButton(icon: "phone.fill", tint: AppSection.admin.ink,
-                                                   label: L10n.t("اتصال", "Call")) {
-                                    UIApplication.shared.open(tel)
-                                }
-                            }
-                        }
+                            value: phone.isEmpty ? L10n.t("غير مسجّل", "Not set") : KuwaitPhone.display(phone),
+                            // «ج و أ»: الرقم نفسه رابط اتصال، و«واتساب» زرّ ممتلئ
+                            valueAction: KuwaitPhone.telURL(phone).map { tel in { UIApplication.shared.open(tel) } }) {
+                    if !phone.isEmpty, let wa = KuwaitPhone.whatsappURL(phone) {
+                        whatsAppPill(wa)
                     }
                 }
                 Divider().padding(.leading, DS.Icon.row + DS.Spacing.sm + DS.Spacing.xs)
@@ -3647,22 +3675,31 @@ struct AdminAllRequestsView: View {
 
     /// صف معلومة: أيقونة + العنوان فوق القيمة (وأزرار اختيارية) — مثل بطاقات جهات الاتصال
     private func joinFactRow<Trailing: View>(icon: String, tint: Color, label: String, value: String,
+                                             valueAction: (() -> Void)? = nil,
                                              @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             DSFieldIcon(name: icon, tint: tint)
                 .accessibilityHidden(true)
+            // القيمة رابط حين يُمرَّر إجراء (رقم الهاتف = اتصال) — بلون التواصل
+            let valueText = Text(value)
+                .dsFieldFont(.headlineCompact)
+                .foregroundColor(valueAction == nil ? DS.Color.fieldLabel : DS.Color.sea)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
-                Text(value)
-                    .dsFieldFont(.headlineCompact)
-                    .foregroundColor(DS.Color.fieldLabel)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                if let valueAction {
+                    Button(action: valueAction) { valueText }
+                        .buttonStyle(DSScaleButtonStyle())
+                        .accessibilityHint(L10n.t("اتصال", "Call"))
+                } else {
+                    valueText
+                }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: valueAction == nil ? .combine : .contain)
             Spacer(minLength: DS.Spacing.xs)
             trailing()
         }
