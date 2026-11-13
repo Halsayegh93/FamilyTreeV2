@@ -87,6 +87,10 @@ struct WomenClassicTreeView: View {
     var autoLocate: Bool = false
     /// ↻ «تحديث الشجرة» — إعادة جلب شجرة النساء (من `WomenTreeView`)
     var onRefresh: (() async -> Void)? = nil
+    /// معاينة «مكانه في الشجرة» قبل التنفيذ (طلب المالك ٢٠٢٦-١١-١٣): هذه الشجرة نفسها نسخةً معزولة (حالتها خاصة بها) —
+    /// بلا شريط أدوات ولا أزرار عائمة، لمس العقد لا يفعل شيئاً، وتفتح على مسار الجذر ← الأب والشخص بعلامة التغيير،
+    /// والباقي باهت. nil = الشجرة العادية كما هي
+    var preview: TreePlaceTreeFocus? = nil
 
     // أبعاد العقدة والفجوات: `WomenTreeMetrics` × معامل «حجم النص» — يُقرأ مرة هنا ويُخزَّن مع التخطيط
     @Environment(\.dsTreeScale) private var envTreeScale
@@ -135,6 +139,8 @@ struct WomenClassicTreeView: View {
     @State private var cOutsideHusband: [UUID: FamilyMember] = [:]
     /// آخر عقدة توسّعت — أبناؤها يدخلون بتدرّج
     @State private var lastExpandedId: UUID? = nil
+    /// المعاينة: المسار والأب وإخوة الشخص (غير باهتين)
+    @State private var previewLit: Set<UUID> = []
 
     // ─── بيانات الشجرة ───
     private var byId: [UUID: FamilyMember] {
@@ -592,14 +598,19 @@ struct WomenClassicTreeView: View {
                             .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
+                            if let preview { previewMark(preview, .back) }
                             // العُقد
                             ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
                                 nodeView(m, at: layout.positions[m.id]!)
+                                    .opacity(preview != nil && !previewLit.contains(m.id) ? 0.35 : 1)
                             }
+                            if let preview { previewMark(preview, .front) }
                         }
                         .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                         .scaleEffect(scale, anchor: .topLeading)
                         .offset(offset)
+                        // المعاينة: لمس العقد لا يفعل شيئاً (السحب والقرص على الكانفس)
+                        .allowsHitTesting(preview == nil)
                     }
                 // الـ canvas مثبّت LTR — يمنع انعكاس اتجاه السحب في بيئة RTL.
                 .environment(\.layoutDirection, .leftToRight)
@@ -607,6 +618,9 @@ struct WomenClassicTreeView: View {
                 .clipped()                                   // الحركة لا تتجاوز حدود الصندوق
                 .frame(height: geo.size.height, alignment: .top)
                 .gesture(dragGesture)
+                // المعاينة وحدها: نقر مزدوج للتكبير (الشجرة العادية بلا تغيير)
+                .simultaneousGesture(SpatialTapGesture(count: 2).onEnded { previewDoubleTap(at: $0.location) },
+                                     including: preview == nil ? .subviews : .all)
                 .modifier(PinchZoomModifier(scale: $scale, baseScale: $baseScale,
                                             offset: $offset, baseOffset: $baseOffset,
                                             userInteracted: $userInteracted, clamp: clampOffset,
@@ -620,6 +634,10 @@ struct WomenClassicTreeView: View {
                 .onAppear {
                     viewport = geo.size
                     treeScale = envTreeScale
+                    if let preview {
+                        previewLocate(preview)
+                        return
+                    }
                     initIfNeeded()
                     let L = rebuild()
                     fit(in: geo.size, layout: L)
@@ -664,6 +682,12 @@ struct WomenClassicTreeView: View {
                 .onChange(of: membersSignature) { _ in
                     rebuild()
                 }
+                // المعاينة: شريط «هذا مكانه بعد التنفيذ» قيس بعد أول ملاءمة — تُعاد ما لم يحرّك المستخدم شيئاً
+                .onChange(of: preview?.chromeTop ?? 0) { _ in
+                    // لم يحرّك المستخدم شيئاً بعد الملاءمة الأولى ← تُعاد بالارتفاع الجديد
+                    guard let preview, let f = autoFit, f.scale == scale, f.offset == offset else { return }
+                    previewCamera(preview, in: layout)
+                }
                 .onChange(of: collapsed) { _ in
                     // كل تغيّر التخطيط داخل الـ transaction — العقد والخطوط تتحرك بسلاسة («تقليل الحركة»: مباشرة)
                     withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
@@ -684,36 +708,109 @@ struct WomenClassicTreeView: View {
             }
 
             // ── شريط الأدوات يطفو فوق الشجرة (شفافيته تبان لما تمر العقد تحته) ──
-            // الوضع الأفقي: البار يصير جانبياً عمودياً (طلب المالك)
-            if verticalSizeClass == .compact {
-                landscapeSideToolbar
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-                    .padding(.leading, DS.Spacing.sm)
-                    .zIndex(101)
-            } else {
-                toolbarRow
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { let grew = $0 > chromeMaxY; chromeMaxY = $0; refitAfterChromeChange(grew: grew) }
-                    .zIndex(101)
-            }
+            // الوضع الأفقي: البار يصير جانبياً عمودياً (طلب المالك). المعاينة: بلا أدوات
+            if preview == nil {
+                if verticalSizeClass == .compact {
+                    landscapeSideToolbar
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                        .padding(.leading, DS.Spacing.sm)
+                        .zIndex(101)
+                } else {
+                    toolbarRow
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { let grew = $0 > chromeMaxY; chromeMaxY = $0; refitAfterChromeChange(grew: grew) }
+                        .zIndex(101)
+                }
 
-            // «تكبير» / «تصغير» / ↻ — نفس عمود شجرة العائلة (الشكل والمكان والتسميات)
-            VStack {
-                Spacer()
-                TreeFloatingTools(isRefreshing: isRefreshing,
-                                  onZoomIn: { zoomStep(1.25) },
-                                  onZoomOut: { zoomStep(1 / 1.25) },
-                                  onRefresh: {
-                                      isRefreshing = true
-                                      Task {
-                                          await onRefresh?()
-                                          goHome()
-                                          withAnimation { isRefreshing = false }
-                                      }
-                                  },
-                                  onFrame: { toolsFrame = $0 })
+                // «تكبير» / «تصغير» / ↻ — نفس عمود شجرة العائلة (الشكل والمكان والتسميات)
+                VStack {
+                    Spacer()
+                    TreeFloatingTools(isRefreshing: isRefreshing,
+                                      onZoomIn: { zoomStep(1.25) },
+                                      onZoomOut: { zoomStep(1 / 1.25) },
+                                      onRefresh: {
+                                          isRefreshing = true
+                                          Task {
+                                              await onRefresh?()
+                                              goHome()
+                                              withAnimation { isRefreshing = false }
+                                          }
+                                      },
+                                      onFrame: { toolsFrame = $0 })
+                }
+                .zIndex(100)
             }
-            .zIndex(100)
         }
+    }
+
+    // MARK: - معاينة «مكانه في الشجرة»
+
+    /// مسار الجذر ← الأب مفتوح وباقي الفروع مطويّة كما تطويها الشجرة (الشخص غير مفتوح فيظهر إخوته)، ثم الانتقال
+    /// للشخص بقاعدة «موقعي» نفسها (`focusMember`)
+    private func previewLocate(_ f: TreePlaceTreeFocus) {
+        var path: [UUID] = []
+        var cur: UUID? = f.fatherId
+        var seen = Set<UUID>()
+        while let c = cur, !seen.contains(c) {
+            seen.insert(c)
+            path.append(c)
+            cur = treeParentId(c)
+        }
+        collapsed = Set(members.compactMap { $0.fatherId }).union(outsideWifeOf.values).subtracting(path)
+        let L = rebuild()
+        let kids = f.fatherId.flatMap { cChildrenOf[$0] } ?? []
+        previewLit = Set(path).union(kids.map(\.id)).union([f.personId])
+        previewCamera(f, in: L)
+    }
+
+    /// كاميرا المعاينة بقواعد الشجرة نفسها (`TreeGroupFit.camera`): الأب والشخص معاً بالتكبير الافتراضي
+    /// (تصغير خفيف إن لم يتّسعا) — التمركز على الشخص وحده كان يخفي الأب تحت الشريط
+    private func previewCamera(_ f: TreePlaceTreeFocus, in L: Layout) {
+        guard viewport.width > 0, viewport.height > 0 else { return }
+        let ids = [f.fatherId, f.personId].compactMap { $0 }.filter { L.positions[$0] != nil }
+        let nodes = (ids.isEmpty ? [activeRoot].compactMap { $0 } : ids).compactMap { id in
+            L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeH) }
+        }
+        let rect = nodes.reduce(CGRect.null) { $0.union($1) }.insetBy(dx: 0, dy: -L.m.k * DS.Spacing.lg)
+        guard !rect.isNull, rect.width > 0 else { return }
+        let r = TreeGroupFit.autoRange(k: L.m.k)
+        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: cameraArea(viewport), lo: r.lo, hi: r.hi)
+        scale = cam.scale; baseScale = cam.scale
+        userInteracted = true
+        looseClamp = true
+        offset = TreeGroupFit.looseClamp(cam.offset,
+                                         content: CGSize(width: L.size.width * cam.scale, height: L.size.height * cam.scale),
+                                         viewport: viewport)
+        baseOffset = offset
+        autoFit = (f.personId, .group, scale, offset)
+    }
+
+    /// علامة الشخص (إطار التغيير وشريحته) — نفس علامة شجرة العائلة في المعاينة
+    @ViewBuilder
+    private func previewMark(_ f: TreePlaceTreeFocus, _ layer: TreePlaceNodeMark.Layer) -> some View {
+        if let p = layout.positions[f.personId] {
+            let M = layout.m
+            let h = layout.heights[f.personId] ?? M.nodeH
+            TreePlaceNodeMark(style: f.mark, layer: layer, k: M.k, size: CGSize(width: M.nodeW, height: h),
+                              wifeName: f.wifeName)
+                .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
+        }
+    }
+
+    /// نقر مزدوج في المعاينة: تكبير نحو نقطة اللمس، أو رجوع للتكبير الافتراضي
+    private func previewDoubleTap(at location: CGPoint) {
+        guard preview != nil else { return }
+        let k = layout.m.k
+        let base = TreeGroupFit.defaultScale / k
+        let zoomedIn = scale > base + 0.05
+        let ns: CGFloat = zoomedIn ? base : min(1.8 / k, max(base * 2, 0.95))
+        let r = scale > 0 ? ns / scale : 1
+        userInteracted = true
+        let apply = {
+            offset = clampOffset(CGSize(width: location.x - (location.x - offset.width) * r,
+                                        height: location.y - (location.y - offset.height) * r))
+            scale = ns; baseScale = ns; baseOffset = offset
+        }
+        if reduceMotion { apply() } else { withAnimation(.easeInOut(duration: 0.3)) { apply() } }
     }
 
     /// تكبير/تصغير بخطوة ×1.25 حول منتصف الشاشة — بحدود القرص نفسها، وبلا حركة مع «تقليل الحركة»
@@ -841,8 +938,9 @@ struct WomenClassicTreeView: View {
     /// (والبار الجانبي أفقياً) — `TreeGroupFit.area`
     private func cameraArea(_ viewport: CGSize) -> TreeGroupFit.Area {
         let landscape = viewport.width > viewport.height
-        let chromeTop: CGFloat = landscape ? 0
-            : (chromeMaxY > canvasFrame.minY ? chromeMaxY - canvasFrame.minY : 79)
+        // المعاينة: بلا شريط أدوات — أعلاها شريط «هذا مكانه بعد التنفيذ» وحده
+        let chromeTop: CGFloat = preview.map(\.chromeTop) ?? (landscape ? 0
+            : (chromeMaxY > canvasFrame.minY ? chromeMaxY - canvasFrame.minY : 79))
         return TreeGroupFit.area(viewport: viewport, canvas: canvasFrame, chromeTop: chromeTop, tools: toolsFrame,
                                  sideBar: landscape ? DS.Icon.tapTarget + DS.Spacing.lg + TreeGroupFit.margin : 0)
     }

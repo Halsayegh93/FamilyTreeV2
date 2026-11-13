@@ -32,6 +32,8 @@ struct AdminAllRequestsView: View {
     @State private var swipeRejectDetail: RequestDetail? = nil
     @State private var swipeRejectReason: String = ""
     @State private var swipeDeleteDetail: RequestDetail? = nil
+    /// «مكانه في الشجرة» لطلب الانضمام: المطابق المعروض (العضو المعلّق ← المطابق) — الضغط على صفّ مطابق يبدّله
+    @State private var joinPlacePick: [UUID: UUID] = [:]
 
     /// نوع الطلب المحدد لعرض التفاصيل
     enum RequestDetail: Identifiable {
@@ -2581,7 +2583,7 @@ struct AdminAllRequestsView: View {
         return DateHelper.displayDateTime(date)
     }
 
-    private func joinMatchRow(match: JoinMatch, pendingMember: FamilyMember) -> some View {
+    private func joinMatchRow(match: JoinMatch, pendingMember: FamilyMember, isPlaced: Bool = false) -> some View {
         // عمق التطابق بالترتيب (الأول ثم الأب ثم الجد…) من أجزاء اسم المتقدّم — بلا اسم العائلة والروابط
         let totalParts = max(match.total, 1)
         let birth = match.member.birthDate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -2617,6 +2619,13 @@ struct AdminAllRequestsView: View {
                 }
             }
             .accessibilityElement(children: .combine)
+            // جسم الصفّ (لا شريحة «ربط») يعرض هذا المطابق في «مكانه في الشجرة»
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(DS.Anim.snappy) { joinPlacePick[pendingMember.id] = match.member.id }
+            }
+            .accessibilityAddTraits(isPlaced ? [.isButton, .isSelected] : .isButton)
+            .accessibilityHint(L10n.t("يعرض مكانه في الشجرة", "Shows its place in the tree"))
 
             Spacer(minLength: 0)
 
@@ -2628,8 +2637,10 @@ struct AdminAllRequestsView: View {
             .accessibilityLabel(L10n.t("ربط بـ \(match.member.displayFullName)",
                                        "Link to \(match.member.displayFullName)"))
         }
-        // البطاقة الواحدة
+        // البطاقة الواحدة — المطابق المعروض في «مكانه في الشجرة» بإطار ذهبي
         .dsCard(padding: DS.Spacing.sm)
+        .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+            .strokeBorder(DS.Color.accentLight.opacity(isPlaced ? 1 : 0), lineWidth: DS.Border.widthBold))
     }
 
     // MARK: - Registration Matches
@@ -3562,7 +3573,16 @@ struct AdminAllRequestsView: View {
             .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
         }
 
-        // ٣) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد. الأنثى: شجرة النساء (زرّ المربّع «ربط بشجرة النساء»)
+        // ٣) «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣): المطابق الأرجح (أو الذي ضُغط صفّه) ← «يُربط بحسابه»،
+        // وبلا مطابق ملاحظة وحدها. حساب المرأة يُربط من مربّع شجرة النساء (المقطع هناك)
+        let placeMatch = results.first { $0.member.id == joinPlacePick[member.id] }?.member ?? results.first?.member
+        if !member.isFemale {
+            AnyView(TreePlaceSection(place: placeMatch.map { TreePlace.join(match: $0) }, index: 2,
+                                     men: memberVM.allMembers, primary: placePrimary(for: .join(member)),
+                                     emptyNote: TreePlaceText.noMatch))
+        }
+
+        // ٤) في الشجرة — المطابقات بزر «ربط»، أو اسم جديد. الأنثى: شجرة النساء (زرّ المربّع «ربط بشجرة النساء»)
         if member.isFemale {
             DSComposerSection(title: L10n.t("في شجرة النساء", "In the women's tree"),
                               icon: "figure.stand.dress",
@@ -3577,7 +3597,7 @@ struct AdminAllRequestsView: View {
                               icon: results.isEmpty ? "sparkles" : "person.2.fill",
                               tint: results.isEmpty ? DS.Color.warning : DS.Color.success,
                               trailing: results.isEmpty ? nil : "\(results.count)",
-                              index: 2) {
+                              index: 3) {
                 if results.isEmpty {
                     // الملاحظة الموحّدة
                     DSNoteCard(L10n.t("لا يوجد اسم مطابق في الشجرة — عند «ربط بالشجرة» يُضاف عضواً جديداً.",
@@ -3586,7 +3606,8 @@ struct AdminAllRequestsView: View {
                 } else {
                     VStack(spacing: DS.Spacing.xsm) {
                         ForEach(results, id: \.member.id) { match in
-                            joinMatchRow(match: match, pendingMember: member)
+                            joinMatchRow(match: match, pendingMember: member,
+                                         isPlaced: results.count > 1 && match.member.id == placeMatch?.id)
                         }
                     }
                 }
@@ -3619,7 +3640,7 @@ struct AdminAllRequestsView: View {
     }
 
     @ViewBuilder
-    private func genericDetailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
+    private func genericDetailBoxContent(_ detail: RequestDetail, meta: DetailMeta, showsPlace: Bool = true) -> some View {
         if let imageUrl = meta.imageUrl, let url = URL(string: imageUrl) {
             detailHeroImage(url: url, color: meta.color)
                 .dsStaggerIn(0)
@@ -3632,8 +3653,45 @@ struct AdminAllRequestsView: View {
             detailContent(for: detail)
         }
 
+        // «مكانه في الشجرة» قبل التنفيذ (طلب المالك ٢٠٢٦-١١-١٣) — للطلبات التي تخصّ شخصاً في الشجرة فقط
+        let place = showsPlace ? treePlace(for: detail) : nil
+        if let place {
+            AnyView(TreePlaceSection(place: place, index: 2, men: memberVM.allMembers,
+                                     primary: placePrimary(for: detail)))
+        }
+
         // «المرسل»: مسار الإرسال خطواتٍ مرقّمة، ومن أرسله، والجهاز والوقت (طلب المالك ٢٠٢٦-١١-١١، التصميم المعتمد)
-        AdminSenderSection(info: senderInfo(for: detail), index: 2)
+        AdminSenderSection(info: senderInfo(for: detail), index: place == nil ? 2 : 3)
+    }
+
+    /// مكان الطلب في الشجرة (`TreePlace`) — المحتوى (أخبار، ديوانيات، مشاريع، أرشيف، بلاغات، رسائل) بلا قسم
+    private func treePlace(for detail: RequestDetail) -> TreePlace? {
+        let label = detailMeta(for: detail).title
+        let data = TreePlaceData(men: memberVM.allMembers, women: WomenStore.cache)
+        switch detail {
+        case .join: return nil   // للانضمام قسمه في `joinDetailContent` (المطابق المختار)
+        case .child(let r): return TreePlace.childAdd(r, kindLabel: label)
+        case .treeEdit(let r, let action): return TreePlace.treeEdit(r, action: action, kindLabel: label, data: data)
+        case .nameChange(let r): return TreePlace.nameChange(r, kindLabel: label)
+        case .deceased(let r): return TreePlace.deceasedReport(r, kindLabel: label)
+        case .photo(let r): return TreePlace.photoSuggestion(r, kindLabel: label)
+        case .phone(let r): return TreePlace.subject(memberId: r.memberId, kindLabel: label, data: data)
+        case .news, .report, .diwaniya, .project, .archive: return nil
+        }
+    }
+
+    /// زرّ المربّع الرئيسي في المعاينة: نفس العنوان والمعالج. مع «مسار الموافقات» = «تنفيذ» للمختص في مرحلة التنفيذ
+    /// وحدها (غيرها يحتاج ملاحظة أو مبدّلاً داخل المربّع) — وإلا «العودة إلى الطلب» وحده
+    private func placePrimary(for detail: RequestDetail) -> TreePlacePrimary? {
+        if let flow = approvalSnapshot(for: detail) {
+            let live = adminRequestVM.liveApprovalSnapshot(requestId: flow.requestId) ?? flow
+            guard live.stage == .execute, !adminRequestVM.isOwnApprovalRequest(live),
+                  !adminRequestVM.isApprovalDecisionLocked(live), adminRequestVM.canActAsApprovalSpecialist(live)
+            else { return nil }
+            return TreePlacePrimary(title: L10n.t("تنفيذ", "Carry out"), icon: "checkmark.circle.fill") { approveDetail(detail) }
+        }
+        guard detailHasDecision(detail) else { return nil }
+        return TreePlacePrimary(title: approveLabelFor(detail), icon: approveIconFor(detail)) { approveDetail(detail) }
     }
 
     /// صفّ `admin_requests` وراء التفصيل (المسار والجهاز والوقت) — المحتوى (أخبار، ديوانيات…) بلا صفّ
@@ -4951,7 +5009,7 @@ extension AdminAllRequestsView {
             onCancel: { handledOpen = nil }
         ) {
             if let detail {
-                genericDetailBoxContent(detail, meta: detailMeta(for: detail))
+                genericDetailBoxContent(detail, meta: detailMeta(for: detail), showsPlace: false)
             } else {
                 handledFallbackInfo(request)
                 AdminSenderSection(info: senderInfo(for: .report(request)), index: 2)

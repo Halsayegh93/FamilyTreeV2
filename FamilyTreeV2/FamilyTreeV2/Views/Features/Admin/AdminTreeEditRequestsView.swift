@@ -384,6 +384,17 @@ struct AdminTreeEditRequestsView: View {
                 .padding(.top, DS.Spacing.xxs)
             }
 
+            // «افتح بالشجرة الكاملة» (طلب المالك ٢٠٢٦-١١-١٣) — المعاينة بملاحظتها و«موافقة» البطاقة نفسها
+            if let place = treePlace(request, action: action) {
+                AnyView(TreePlaceSection(place: place, men: memberVM.allMembers,
+                                         primary: showApprove ? TreePlacePrimary(title: L10n.t("موافقة", "Approve"),
+                                                                                icon: "checkmark.circle.fill") {
+                                             Task { await adminRequestVM.approveTreeEditRequest(request: request) }
+                                         } : nil,
+                                         buttonOnly: true))
+                    .padding(.top, DS.Spacing.xxs)
+            }
+
             // القرار — نفس الصلاحيات تماماً، بالزرّ الواحد (الموافقة بتعبئة القسم، الرفض أحمر)
             // أزرار الطلبات على التصميم الجديد (٢٠٢٦-١١-١١): الموافقة حبّة كحلية، والرفض دائرة حمراء (المقاس المدمج)
             if showApprove || showReject {
@@ -410,6 +421,12 @@ struct AdminTreeEditRequestsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
+    }
+
+    /// مكان طلب الشجرة (`TreePlace.treeEdit`)
+    private func treePlace(_ request: AdminRequest, action: TreeEditAction) -> TreePlace? {
+        TreePlace.treeEdit(request, action: action, kindLabel: L10n.t(action.arabicLabel, action.englishLabel),
+                           data: TreePlaceData(men: memberVM.allMembers, women: WomenStore.cache))
     }
 
     // MARK: - «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥)
@@ -444,6 +461,21 @@ struct AdminTreeEditRequestsView: View {
                 DSComposerSection(title: L10n.t("بيانات الطلب", "Request Info"), icon: "doc.text.fill",
                                   tint: AppSection.admin.ink, index: 1) {
                     detailLines(for: request, payload: payload, action: action)
+                }
+                // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣) — «تنفيذ» في المعاينة للمختص في مرحلة التنفيذ وحدها
+                if let place = treePlace(request, action: action) {
+                    let live = adminRequestVM.liveApprovalSnapshot(requestId: flow.requestId) ?? flow
+                    let executes = live.stage == .execute && !adminRequestVM.isOwnApprovalRequest(live)
+                        && !adminRequestVM.isApprovalDecisionLocked(live) && adminRequestVM.canActAsApprovalSpecialist(live)
+                    AnyView(TreePlaceSection(place: place, index: 2, men: memberVM.allMembers,
+                                             primary: executes ? TreePlacePrimary(title: L10n.t("تنفيذ", "Carry out"),
+                                                                                  icon: "checkmark.circle.fill") {
+                                                 approvalRequest = nil
+                                                 Task {
+                                                     await adminRequestVM.approveTreeEditRequest(request: request)
+                                                     AdminApprovalMoment.after(adminRequestVM, title: L10n.t("تم التنفيذ", "Carried out"))
+                                                 }
+                                             } : nil))
                 }
             }
         } else {

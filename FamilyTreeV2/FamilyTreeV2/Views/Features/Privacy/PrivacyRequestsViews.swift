@@ -469,6 +469,16 @@ struct AdminPolicyRequestsSection: View {
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
             }
+            // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣) — زرّ المعاينة الرئيسي = زرّ البطاقة نفسه
+            if let place = treePlace(request, title: title) {
+                AnyView(TreePlaceSection(place: place, men: adminRequestVM.memberVM?.allMembers ?? [],
+                                         primary: TreePlacePrimary(
+                                            title: isDeletion ? L10n.t("تنفيذ الحذف", "Delete account") : L10n.t("موافقة", "Approve"),
+                                            icon: isDeletion ? "trash" : "checkmark") {
+                                                if isDeletion { confirmDelete = request } else { approve(request) }
+                                            })
+                    .environment(\.dsFlatComposerSections, true))
+            }
             HStack(spacing: DS.Spacing.sm) {
                 DSButton(isDeletion ? L10n.t("تنفيذ الحذف", "Delete account") : L10n.t("موافقة", "Approve"),
                          icon: isDeletion ? "trash" : "checkmark",
@@ -489,6 +499,15 @@ struct AdminPolicyRequestsSection: View {
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: DS.Spacing.xsm, leading: DS.Spacing.lg, bottom: DS.Spacing.xsm, trailing: DS.Spacing.lg))
+    }
+
+    /// مكان الطلب: «إضافة قريبة» بنوعها، والحذف والخصوصية تعريف بالعضو
+    private func treePlace(_ request: AdminRequest, title: String) -> TreePlace? {
+        if request.requestType == RequestType.relativeAdd.rawValue {
+            return TreePlace.relativeAdd(request, kindLabel: title)
+        }
+        let data = TreePlaceData(men: adminRequestVM.memberVM?.allMembers ?? [], women: WomenStore.cache)
+        return TreePlace.subject(memberId: request.memberId, kindLabel: title, data: data)
     }
 
     private func approve(_ request: AdminRequest) {

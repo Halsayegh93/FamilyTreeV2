@@ -1411,6 +1411,16 @@ struct AdminLineageRequestCard: View {
                           "On approval he's added under his mother in the women's tree" + (isNewFather ? ", and his father as her husband." : ".")))
                 .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣): أمّه في شجرة النساء — زرّ المعاينة الرئيسي = «موافقة»
+            let men = adminRequestVM.memberVM?.allMembers ?? []
+            if let place = TreePlace.lineage(request, kindLabel: DaughterSons.text("inbox_title", "طلب نسب · ابن بنت", "Lineage request · daughter's son"),
+                                             data: TreePlaceData(men: men, women: WomenStore.cache)) {
+                AnyView(TreePlaceSection(place: place, men: men,
+                                         primary: TreePlacePrimary(title: L10n.t("موافقة", "Approve")) {
+                                             decide(approve: true, reason: nil)
+                                         })
+                    .environment(\.dsFlatComposerSections, true))
+            }
             HStack(spacing: DS.Spacing.sm) {
                 DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark", tint: DS.Color.success, isLoading: busy) {
                     decide(approve: true, reason: nil)

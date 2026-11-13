@@ -1,0 +1,625 @@
+import SwiftUI
+
+// MARK: - «مكانه في الشجرة» قبل التنفيذ (طلب المالك ٢٠٢٦-١١-١٣، الاختيار «ج» — نفسه في الآيفون والأندرويد)
+//
+// «أبي أي إجراء يصير قبل التنفيذ أشوف مكانه بالواقع بعدين أنفّذ»: كل طلب في «الوارد» (ومربّعا الربط) يخصّ شخصاً في
+// الشجرة يعرض مقطعاً صغيراً حقيقياً حول المكان (الجد ← الأب ← الإخوة) والشخص بشكل التغيير، وسطر ملاحظة، وزرّ
+// «افتح بالشجرة الكاملة» يفتح الشجرة الحقيقية نفسها على المكان. كله من بيانات محمّلة — لا كتابة ولا دوال جديدة.
+// النموذج الواحد `TreePlace` (نفس الاسم في الأندرويد) ← `TreePlaceResolved` (المقطع والملاحظة) ← العرض.
+
+/// أي شجرة: شجرة العائلة (الرجال) أو شجرة النساء (الآباء ملفات رجال، والبنات عقد نساء)
+enum TreePlaceTree: Equatable {
+    case men
+    case women
+}
+
+/// التغيير الذي ينفّذه الطلب على الشخص
+enum TreePlaceChange: Equatable {
+    /// ليس في الشجرة بعد — يُرسم شبحاً بعد آخر أبناء الأب (`TreePlace.addFatherId`)
+    case add(name: String, female: Bool)
+    /// عقدة موجودة يُربط بها الحساب
+    case link(UUID)
+    /// أُضيف فعلاً وينتظر التأكيد (إضافة ابن)
+    case added(UUID)
+    case rename(UUID, newName: String)
+    case birth(UUID, newBirth: String)
+    case deceased(UUID, deathDate: String?)
+    case photo(UUID, newPhotoUrl: String?)
+    case delete(UUID)
+    /// من تحت أبيه الحالي إلى تحت أب جديد — مقطعان «قبل» ثم «بعد»
+    case moveFather(UUID, newFatherId: UUID)
+    /// تعريف بالشخص فقط (الرقم، الخصوصية، طلب آخر…) — إطار ذهبي بلا شريحة
+    case subject(UUID)
+    /// زوجة من خارج العائلة: عقدة الزوج ومربّع شبح جنبه بلا خط
+    case outsideWife(husbandId: UUID, name: String)
+
+    /// الشخص المعني (nil = إضافة جديدة)
+    var personId: UUID? {
+        switch self {
+        case .add: return nil
+        case .link(let id), .added(let id), .delete(let id), .subject(let id): return id
+        case .rename(let id, _), .birth(let id, _), .deceased(let id, _), .photo(let id, _): return id
+        case .moveFather(let id, _): return id
+        case .outsideWife(let id, _): return id
+        }
+    }
+}
+
+/// مكان الطلب في الشجرة
+struct TreePlace: Equatable {
+    let tree: TreePlaceTree
+    let change: TreePlaceChange
+    /// أب الإضافة (`add`) — الباقي يُقرأ أبوه من الشجرة نفسها، فلا يتأخر عن آخر تعديل
+    var addFatherId: UUID? = nil
+    /// عنوان نوع الطلب — للمعاينة («طلب انضمام · محمد»)
+    let kindLabel: String
+    /// سطر خاص بدل الملاحظة المعتادة (أمّ من خارج العائلة، ابن بنت العائلة)
+    var noteOverride: String? = nil
+}
+
+/// الزرّ الرئيسي للمربّع نفسه — يتكرّر في المعاينة («ربط بالشجرة»، «موافقة»، «تنفيذ»…) ويشغّل نفس المعالج
+struct TreePlacePrimary {
+    let title: String
+    var icon: String = "checkmark"
+    let action: () -> Void
+}
+
+// MARK: - شكل العلامة (المقطع والشجرة الكاملة)
+
+/// شكل الشخص بحسب التغيير — ذهبي للرجال، وردي للنساء، أحمر للحذف، رمادي للوفاة
+struct TreePlaceMarkStyle: Equatable {
+    enum Kind: Equatable {
+        /// إطار متقطّع + تعبئة خفيفة (يُضاف، أُضيف، يُنقل)
+        case ghost
+        /// إطار صلب + هالة (يُربط)
+        case halo
+        /// إطار صلب فقط (تعريف، بعد التعديل)
+        case ring
+        /// رمادي (متوفى)
+        case grey
+        /// متقطّع أحمر (يُحذف)
+        case danger
+    }
+    let kind: Kind
+    let pill: String?
+    let female: Bool
+
+    /// لون الإطار والخط
+    var tint: Color {
+        switch kind {
+        case .danger: return DS.Color.error
+        case .grey: return DS.Color.deceased
+        default: return female ? DS.Color.female : DS.Color.accentLight
+        }
+    }
+    /// لون النص في عقدة الشبح
+    var ink: Color {
+        switch kind {
+        case .danger: return DS.Color.error
+        case .grey: return DS.Color.textTertiary
+        default: return female ? DS.Color.female : DS.Color.accent
+        }
+    }
+    /// تعبئة الشريحة تحت النص الأبيض
+    var pillFill: Color {
+        switch kind {
+        case .danger: return DS.Color.errorFill
+        case .grey: return DS.Color.deceasedFill
+        default: return female ? DS.Color.femaleFill : DS.Color.goldFill
+        }
+    }
+    var dashed: Bool { kind == .ghost || kind == .danger }
+    var fillOpacity: Double {
+        switch kind {
+        case .ghost: return DS.Opacity.tintFillSoft
+        case .danger: return 0.06
+        case .grey: return DS.Opacity.tintFill
+        default: return 0
+        }
+    }
+}
+
+// MARK: - البيانات (محمّلة مسبقاً — لا جلب ولا كتابة)
+
+struct TreePlaceData {
+    /// أعضاء شجرة العائلة (`memberVM.allMembers`)
+    let men: [FamilyMember]
+    /// شجرة النساء (`WomenStore.cache`) — الرجال فيها بنفس معرّفات ملفاتهم
+    let women: [FamilyMember]
+
+    func man(_ id: UUID?) -> FamilyMember? {
+        guard let id else { return nil }
+        return men.first { $0.id == id }
+    }
+
+    func woman(_ id: UUID?) -> FamilyMember? {
+        guard let id else { return nil }
+        return women.first { $0.id == id }
+    }
+
+    /// العقدة في الشجرة المعنية — النساء: عقدتها أولاً ثم ملف الرجل
+    func node(_ id: UUID?, in tree: TreePlaceTree) -> FamilyMember? {
+        tree == .women ? (woman(id) ?? man(id)) : man(id)
+    }
+
+    /// الأب (رجل دائماً): ملفه في شجرة العائلة، وإلا مرآته في شجرة النساء
+    func father(_ id: UUID?) -> FamilyMember? { man(id) ?? woman(id) }
+
+    /// الإخوة بترتيب الشجرة نفسها: العائلة = من يُعرض فيها (`isCountable`) بترتيب العرض، والنساء = البنات بترتيبهن
+    func children(of fatherId: UUID, in tree: TreePlaceTree) -> [FamilyMember] {
+        switch tree {
+        case .men:
+            return men.filter { $0.fatherId == fatherId && $0.isCountable }.sortedForDisplay()
+        case .women:
+            return women.filter { $0.fatherId == fatherId && $0.isFemale && !$0.isHiddenFromTree }
+                .sorted {
+                    $0.sortOrder != $1.sortOrder ? $0.sortOrder < $1.sortOrder
+                        : $0.firstName.localizedCompare($1.firstName) == .orderedAscending
+                }
+        }
+    }
+
+    /// عدد الأبناء والبنات المرتبطين (الشجرتان، بلا تكرار المرايا)
+    func childCount(of id: UUID) -> Int {
+        let a = men.lazy.filter { $0.fatherId == id }.map(\.id)
+        let b = women.lazy.filter { $0.fatherId == id }.map(\.id)
+        return Set(a).union(b).count
+    }
+}
+
+// MARK: - المقطع المحلول
+
+/// كل ما يرسمه المقطع والمعاينة: الجد والأب والإخوة والشخص (قبل/بعد) والملاحظة والعلامة
+struct TreePlaceResolved {
+    enum Shape { case tree, beforeAfter, moveFather, outsideWife, rootOnly }
+
+    let place: TreePlace
+    let shape: Shape
+    let female: Bool
+    /// الشخص كما هو الآن (أو الشبح)
+    let person: FamilyMember
+    /// الشخص بعد التنفيذ (اسم/ميلاد/صورة/وفاة/نقل)
+    let after: FamilyMember?
+    let father: FamilyMember?
+    let grandfather: FamilyMember?
+    /// الإخوة بترتيب الشجرة، والشخص بينهم (الشبح آخرهم)
+    let siblings: [FamilyMember]
+    /// النقل: الأب الحالي وإخوته الحاليون
+    let oldFather: FamilyMember?
+    let oldGrandfather: FamilyMember?
+    let oldSiblings: [FamilyMember]
+    let note: String
+    let noteIsDanger: Bool
+    /// علامة الشخص في المقطع (قبل/بعد له شكله الخاص)
+    let mark: TreePlaceMarkStyle
+    /// علامته في الشجرة الكاملة (قبل ← بعد: «بعد التعديل»)
+    let previewMark: TreePlaceMarkStyle
+    /// اسم الزوجة من خارج العائلة (مربّع الشبح)
+    let wifeName: String?
+
+    /// معرّف الشبح في الرسم (لا وجود له في البيانات)
+    static let ghostId = UUID(uuidString: "7E1A0000-0000-4000-8000-00000000A0D1")!
+
+    var personFirstName: String { TreePlaceText.firstName(after ?? person) }
+}
+
+// MARK: - النصوص (العربية الرسمية — كما في المواصفة حرفياً)
+
+enum TreePlaceText {
+    static let sectionTitle = L10n.t("مكانه في الشجرة", "Place in the tree")
+    static let openFull = L10n.t("افتح بالشجرة الكاملة", "Open in the full tree")
+    static let noFather = L10n.t("لا يمكن تحديد مكانه في الشجرة — لا يوجد أب مسجّل.",
+                                 "Can't place it in the tree — no father on record.")
+    static let noMatch = L10n.t("لا يوجد اسم مطابق في الشجرة", "No matching name in the tree")
+    static let previewTitle = L10n.t("معاينة في الشجرة", "Preview in the tree")
+    static let previewBanner = L10n.t("هذا مكانه بعد التنفيذ — لا تتغيّر الشجرة قبل موافقتك",
+                                      "This is its place after you carry it out — the tree doesn't change before you approve")
+    static let previewHint = L10n.t("يمكنك التكبير والتنقّل في الشجرة", "You can zoom and move around the tree")
+    static let backToRequest = L10n.t("العودة إلى الطلب", "Back to the request")
+    static let afterEdit = L10n.t("بعد التعديل", "After the change")
+    static let before = L10n.t("قبل", "Before")
+    static let after = L10n.t("بعد", "After")
+    static let grandfather = L10n.t("الجد", "Grandfather")
+    static let father = L10n.t("الأب", "Father")
+    static let herFather = L10n.t("أبوها", "Her father")
+    static let outsideWifePill = L10n.t("زوجة من خارج العائلة", "Wife from outside the family")
+
+    static func firstName(_ m: FamilyMember) -> String {
+        let first = m.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !first.isEmpty { return first }
+        let full = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return full.isEmpty ? L10n.t("بدون اسم", "No name") : PersonName.firstUnit(full)
+    }
+
+    /// «X» = الاسم الأول + اسم أبيه («أحمد خالد»)
+    static func pair(_ m: FamilyMember?, fatherOf: (UUID?) -> FamilyMember?) -> String {
+        guard let m else { return "" }
+        let own = firstName(m)
+        guard let f = fatherOf(m.fatherId) else { return own }
+        return own + " " + firstName(f)
+    }
+
+    private static let ordinalsM = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر"]
+    private static let ordinalsF = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة"]
+    private static let ordinalsEn = ["1st", "2nd", "3rd"]
+
+    /// الترتيب بين الإخوة: الأول … العاشر، ثم «رقم 11»
+    static func ordinal(_ n: Int, female: Bool) -> String {
+        let list = female ? ordinalsF : ordinalsM
+        let ar = (1...list.count).contains(n) ? list[n - 1] : "رقم \(n)"
+        let en = n <= 3 && n >= 1 ? ordinalsEn[n - 1] : "\(n)th"
+        return L10n.t(ar, en)
+    }
+
+    /// السنة من تاريخ (أول أربعة أرقام) — nil إن لم تكن سنة
+    static func year(_ date: String?) -> String? {
+        guard let d = date?.trimmingCharacters(in: .whitespacesAndNewlines), d.count >= 4 else { return nil }
+        let y = String(d.prefix(4))
+        return y.allSatisfy(\.isNumber) ? y : nil
+    }
+
+    static func deceasedPill(female: Bool, date: String?) -> String {
+        let word = female ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased")
+        return year(date).map { word + " " + $0 } ?? word
+    }
+
+    /// أول ما يختلف بين اسمين كاملين (كلمتان على الأكثر من كل طرف) — nil = متطابقان
+    static func nameDiff(_ old: String, _ new: String) -> (old: String, new: String)? {
+        let a = old.split(whereSeparator: \.isWhitespace).map(String.init)
+        let b = new.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let i = (0..<max(a.count, b.count)).first(where: { $0 >= a.count || $0 >= b.count || a[$0] != b[$0] })
+        else { return nil }
+        let o = a.count > i ? a[i..<min(a.count, i + 2)].joined(separator: " ") : "—"
+        let n = b.count > i ? b[i..<min(b.count, i + 2)].joined(separator: " ") : "—"
+        return (o, n)
+    }
+
+    static func birthCaption(_ date: String?) -> String? {
+        year(date).map { L10n.t("مواليد ", "Born ") + $0 }
+    }
+}
+
+// MARK: - الحلّ: من الطلب إلى المقطع
+
+extension TreePlace {
+    /// يحلّ المكان من البيانات المحمّلة — nil = لا أب يُعرف (ملاحظة «لا يمكن تحديد مكانه» بلا زرّ)
+    func resolve(_ data: TreePlaceData) -> TreePlaceResolved? {
+        let fatherOf: (UUID?) -> FamilyMember? = { data.man($0) ?? data.woman($0) }
+        let fatherWord: (Bool) -> String = { female in female ? L10n.t("بنت", "Daughter of") : L10n.t("ابن", "Son of") }
+
+        // الشخص قبل التنفيذ (أو الشبح) وأبوه
+        var person: FamilyMember
+        var female: Bool
+        var fatherId: UUID?
+        switch change {
+        case .add(let name, let isFemale):
+            let first = PersonName.firstUnit(name.trimmingCharacters(in: .whitespacesAndNewlines))
+            female = isFemale
+            fatherId = addFatherId
+            person = FamilyMember(id: TreePlaceResolved.ghostId, firstName: first.isEmpty ? name : first, fullName: name,
+                                  fatherId: addFatherId, sortOrder: Int.max, status: .active,
+                                  gender: isFemale ? "female" : "male")
+        default:
+            guard let pid = change.personId, let node = data.node(pid, in: tree) else { return nil }
+            person = node
+            female = node.isFemale
+            fatherId = node.fatherId
+        }
+
+        let father = fatherId.flatMap { data.father($0) }
+        let grandfather = father.flatMap { fatherOf($0.fatherId) }
+        let X = TreePlaceText.pair(father, fatherOf: fatherOf)
+        let son = fatherWord(female)
+        let lineOf = X.isEmpty ? L10n.t("في رأس الشجرة", "At the top of the tree") : "\(son) «\(X)»"
+
+        // الإخوة بترتيب الشجرة والشخص بينهم (الشبح آخرهم)
+        func siblingsWith(_ p: FamilyMember, under f: UUID?) -> [FamilyMember] {
+            guard let f else { return [p] }
+            var list = data.children(of: f, in: tree)
+            if let i = list.firstIndex(where: { $0.id == p.id }) {
+                list[i] = p
+            } else {
+                list.append(p)
+            }
+            return list
+        }
+
+        func mark(_ kind: TreePlaceMarkStyle.Kind, _ pill: String?) -> TreePlaceMarkStyle {
+            TreePlaceMarkStyle(kind: kind, pill: pill, female: female)
+        }
+
+        // بلا أب: الرأس نفسه يُعرض (تعريف) وما سواه لا يُحدَّد
+        if father == nil {
+            guard case .subject = change, data.childCount(of: person.id) > 0 else { return nil }
+            return TreePlaceResolved(place: self, shape: .rootOnly, female: female, person: person, after: nil,
+                                     father: nil, grandfather: nil, siblings: [person],
+                                     oldFather: nil, oldGrandfather: nil, oldSiblings: [],
+                                     note: noteOverride ?? lineOf, noteIsDanger: false,
+                                     mark: mark(.ring, nil), previewMark: mark(.ring, nil), wifeName: nil)
+        }
+
+        let siblings = siblingsWith(person, under: fatherId)
+        let order = (siblings.firstIndex { $0.id == person.id } ?? siblings.count - 1) + 1
+        let ord = TreePlaceText.ordinal(order, female: female)
+
+        func make(shape: TreePlaceResolved.Shape = .tree, after: FamilyMember? = nil, sibs: [FamilyMember]? = nil,
+                  note: String, danger: Bool = false, mark m: TreePlaceMarkStyle,
+                  preview: TreePlaceMarkStyle? = nil, oldFather: FamilyMember? = nil, oldSibs: [FamilyMember] = [],
+                  wife: String? = nil, father f: FamilyMember? = nil, grandfather g: FamilyMember? = nil) -> TreePlaceResolved {
+            TreePlaceResolved(place: self, shape: shape, female: female, person: person, after: after,
+                              father: f ?? father, grandfather: g ?? grandfather, siblings: sibs ?? siblings,
+                              oldFather: oldFather, oldGrandfather: oldFather.flatMap { fatherOf($0.fatherId) },
+                              oldSiblings: oldSibs, note: noteOverride ?? note, noteIsDanger: danger,
+                              mark: m, previewMark: preview ?? m, wifeName: wife)
+        }
+
+        let afterPill = mark(.ring, TreePlaceText.afterEdit)
+        switch change {
+        case .add:
+            let note = female
+                ? L10n.t("تُضاف بنتاً لـ «\(X)» — \(ord) بين أخواتها", "Added as a daughter of «\(X)» — \(ord) among her sisters")
+                : L10n.t("يُضاف ابناً لـ «\(X)» — \(ord) بين إخوانه", "Added as a son of «\(X)» — \(ord) among his brothers")
+            return make(note: note, mark: mark(.ghost, female ? L10n.t("تُضاف", "Added") : L10n.t("يُضاف", "Added")))
+
+        case .link:
+            let note = tree == .women
+                ? L10n.t("الاسم موجود في شجرة النساء — يُربط حسابها به ولا يُضاف اسم جديد",
+                         "The name is in the women's tree — her account is linked to it; no new name is added")
+                : L10n.t("الاسم موجود في الشجرة — يُربط حسابه به ولا يُضاف اسم جديد",
+                         "The name is in the tree — the account is linked to it; no new name is added")
+            return make(note: note, mark: mark(.halo, female ? L10n.t("تُربط بحسابها", "Linked") : L10n.t("يُربط بحسابه", "Linked")))
+
+        case .added:
+            let note = female
+                ? L10n.t("أُضيفت بنتاً لـ «\(X)» — \(ord) بين أخواتها", "Added as a daughter of «\(X)» — \(ord) among her sisters")
+                : L10n.t("أُضيف ابناً لـ «\(X)» — \(ord) بين إخوانه", "Added as a son of «\(X)» — \(ord) among his brothers")
+            return make(note: note, mark: mark(.ghost, female ? L10n.t("أُضيفت", "Added") : L10n.t("أُضيف", "Added")))
+
+        case .rename(_, let newName):
+            let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let after = TreePlaceCopy.with(person, firstName: PersonName.firstUnit(trimmed), fullName: trimmed)
+            let n = data.childCount(of: person.id)
+            var note = female
+                ? L10n.t("\(lineOf) · يتحدّث اسمها الكامل", "\(lineOf) · her full name is updated")
+                : L10n.t("\(lineOf) · يتحدّث اسمه الكامل", "\(lineOf) · his full name is updated")
+            if n > 0 {
+                note += female ? L10n.t(" واسم أبنائها (\(n))", " and her children's (\(n))")
+                               : L10n.t(" واسم أبنائه (\(n))", " and his children's (\(n))")
+            }
+            return make(shape: .beforeAfter, after: after, note: note, mark: mark(.ring, nil), preview: afterPill)
+
+        case .birth(_, let newBirth):
+            let after = TreePlaceCopy.with(person, birthDate: newBirth)
+            return make(shape: .beforeAfter, after: after,
+                        note: L10n.t("\(lineOf) · يتغيّر تاريخ الميلاد فقط", "\(lineOf) · only the birth date changes"),
+                        mark: mark(.ring, nil), preview: afterPill)
+
+        case .photo(_, let url):
+            let after = TreePlaceCopy.with(person, avatarUrl: url)
+            let note = female
+                ? L10n.t("\(lineOf) · تتغيّر صورتها في الشجرة", "\(lineOf) · her photo in the tree changes")
+                : L10n.t("\(lineOf) · تتغيّر صورته في الشجرة", "\(lineOf) · his photo in the tree changes")
+            return make(shape: .beforeAfter, after: after, note: note, mark: mark(.ring, nil), preview: afterPill)
+
+        case .deceased(_, let date):
+            let after = TreePlaceCopy.with(person, isDeceased: true, deathDate: date ?? person.deathDate)
+            let note = female
+                ? L10n.t("\(lineOf) · تظهر في الشجرة متوفاة", "\(lineOf) · shown in the tree as deceased")
+                : L10n.t("\(lineOf) · يظهر في الشجرة متوفى", "\(lineOf) · shown in the tree as deceased")
+            return make(after: after, sibs: siblingsWith(after, under: fatherId), note: note,
+                        mark: mark(.grey, TreePlaceText.deceasedPill(female: female, date: date ?? person.deathDate)))
+
+        case .delete:
+            let n = data.childCount(of: person.id)
+            let note: String
+            if n > 0 {
+                note = female
+                    ? L10n.t("لها \(n) أبناء مرتبطون — لا تُحذف قبل نقلهم", "She has \(n) linked children — she can't be deleted before they're moved")
+                    : L10n.t("له \(n) أبناء مرتبطون — لا يُحذف قبل نقلهم", "He has \(n) linked children — he can't be deleted before they're moved")
+            } else {
+                note = female
+                    ? L10n.t("\(lineOf) · تُحذف من الشجرة", "\(lineOf) · removed from the tree")
+                    : L10n.t("\(lineOf) · يُحذف من الشجرة", "\(lineOf) · removed from the tree")
+            }
+            return make(note: note, danger: true, mark: mark(.danger, female ? L10n.t("تُحذف", "Deleted") : L10n.t("يُحذف", "Deleted")))
+
+        case .moveFather(_, let newFatherId):
+            guard let newFather = data.father(newFatherId) else { return nil }
+            let after = TreePlaceCopy.with(person, fatherId: newFatherId, sortOrder: Int.max)
+            let A = X, B = TreePlaceText.pair(newFather, fatherOf: fatherOf)
+            let note = female
+                ? L10n.t("تُنقل من تحت «\(A)» إلى تحت «\(B)» — يتحدّث اسمها الكامل", "Moved from under «\(A)» to under «\(B)» — her full name is updated")
+                : L10n.t("يُنقل من تحت «\(A)» إلى تحت «\(B)» — يتحدّث اسمه الكامل", "Moved from under «\(A)» to under «\(B)» — his full name is updated")
+            let pill = female ? L10n.t("تُنقل", "Moved") : L10n.t("يُنقل", "Moved")
+            return make(shape: .moveFather, after: after, sibs: siblingsWith(after, under: newFatherId), note: note,
+                        mark: mark(.ghost, pill), oldFather: father, oldSibs: siblings,
+                        father: newFather, grandfather: fatherOf(newFather.fatherId))
+
+        case .subject:
+            return make(note: lineOf, mark: mark(.ring, nil))
+
+        case .outsideWife(_, let name):
+            let H = TreePlaceText.pair(person, fatherOf: fatherOf)
+            return make(shape: .outsideWife, sibs: [person],
+                        note: L10n.t("زوجة «\(H)» من خارج العائلة", "Wife of «\(H)» from outside the family"),
+                        mark: mark(.ring, nil), wife: name)
+        }
+    }
+}
+
+/// نسخة من العضو بقيم «بعد التنفيذ» — للرسم فقط
+enum TreePlaceCopy {
+    static func with(_ m: FamilyMember, firstName: String? = nil, fullName: String? = nil, birthDate: String? = nil,
+                     isDeceased: Bool? = nil, deathDate: String? = nil, avatarUrl: String?? = nil,
+                     fatherId: UUID? = nil, sortOrder: Int? = nil) -> FamilyMember {
+        var copy = FamilyMember(
+            id: m.id, firstName: firstName ?? m.firstName, fullName: fullName ?? m.fullName,
+            familyName: m.familyName, phoneNumber: m.phoneNumber, birthDate: birthDate ?? m.birthDate,
+            deathDate: deathDate ?? m.deathDate, isDeceased: isDeceased ?? m.isDeceased, role: m.role,
+            fatherId: fatherId ?? m.fatherId, motherId: m.motherId, husbandId: m.husbandId,
+            photoURL: avatarUrl != nil ? nil : m.photoURL,
+            isPhoneHidden: m.isPhoneHidden, isBirthDateHidden: m.isBirthDateHidden, badgeEnabled: m.badgeEnabled,
+            isHiddenFromTree: m.isHiddenFromTree, sortOrder: sortOrder ?? m.sortOrder, bio: m.bio, status: m.status,
+            avatarUrl: avatarUrl ?? m.avatarUrl, coverUrl: m.coverUrl, isMarried: m.isMarried, gender: m.gender,
+            createdAt: m.createdAt, registrationPlatform: m.registrationPlatform, username: m.username, email: m.email)
+        copy.deathDateUnknown = m.deathDateUnknown
+        copy.isPhotoHidden = m.isPhotoHidden
+        return copy
+    }
+}
+
+// MARK: - من كل نوع طلب إلى مكانه (دالة لكل نوع — نفسها في الأندرويد)
+
+extension TreePlace {
+    /// انضمام (حساب رجل): المطابق المختار ← «يُربط بحسابه»
+    static func join(match: FamilyMember) -> TreePlace {
+        TreePlace(tree: .men, change: .link(match.id), kindLabel: L10n.t("طلب انضمام", "Join request"))
+    }
+
+    /// «إضافة ابن»: الابن أُضيف وينتظر التأكيد (`new_value` = معرّفه)
+    static func childAdd(_ r: AdminRequest, kindLabel: String) -> TreePlace? {
+        guard let id = r.newValue.flatMap(UUID.init(uuidString:)) else { return nil }
+        return TreePlace(tree: .men, change: .added(id), kindLabel: kindLabel)
+    }
+
+    /// طلب تعديل الشجرة بإجرائه
+    static func treeEdit(_ r: AdminRequest, action: TreeEditAction, kindLabel: String, data: TreePlaceData) -> TreePlace? {
+        let p = r.treeEditPayload
+        let target = p?.targetMemberId.flatMap(UUID.init(uuidString:)) ?? r.memberId
+        // عقدة في شجرة النساء (لا ملف رجل بمعرّفها) ← شجرة النساء
+        let tree: TreePlaceTree = data.man(target) == nil && data.woman(target) != nil ? .women : .men
+        switch action {
+        case .add:
+            // طلب من شجرة النساء (زوجة/أم/بنت): الاسم ولمن من أسطر الملاحظات
+            if let notes = p?.notes, let lines = WomenTreeRequestLines(notes) {
+                if let w = lines.woman(in: data.women) {
+                    return TreePlace(tree: .women, change: .subject(w.id), kindLabel: kindLabel)
+                }
+                switch lines.relation {
+                case .wife:
+                    return TreePlace(tree: .men, change: .outsideWife(husbandId: r.requesterId, name: lines.name),
+                                     kindLabel: kindLabel)
+                case .mother:
+                    return TreePlace(tree: .men, change: .subject(r.requesterId), kindLabel: kindLabel,
+                                     noteOverride: L10n.t("أمّ من خارج العائلة: \(lines.name)", "Mother from outside the family: \(lines.name)"))
+                case nil:
+                    guard let f = p?.parentMemberId.flatMap(UUID.init(uuidString:)), data.man(f) != nil else { return nil }
+                    return TreePlace(tree: .women, change: .add(name: lines.name, female: true), addFatherId: f,
+                                     kindLabel: kindLabel)
+                }
+            }
+            let name = (p?.newMemberName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            return TreePlace(tree: .men, change: .add(name: name, female: false),
+                             addFatherId: p?.parentMemberId.flatMap(UUID.init(uuidString:)), kindLabel: kindLabel)
+        case .editName:
+            guard let n = p?.newName, !n.trimmingCharacters(in: .whitespaces).isEmpty else {
+                return TreePlace(tree: tree, change: .subject(target), kindLabel: kindLabel)
+            }
+            return TreePlace(tree: tree, change: .rename(target, newName: n), kindLabel: kindLabel)
+        case .editBirth:
+            guard let b = p?.newBirthDate ?? p?.newName, !b.isEmpty else {
+                return TreePlace(tree: tree, change: .subject(target), kindLabel: kindLabel)
+            }
+            return TreePlace(tree: tree, change: .birth(target, newBirth: b), kindLabel: kindLabel)
+        case .deceased, .addDeathDate:
+            return TreePlace(tree: tree, change: .deceased(target, deathDate: p?.deathDate), kindLabel: kindLabel)
+        case .addPhoto:
+            return TreePlace(tree: tree, change: .photo(target, newPhotoUrl: p?.newPhotoUrl), kindLabel: kindLabel)
+        case .delete:
+            return TreePlace(tree: tree, change: .delete(target), kindLabel: kindLabel)
+        case .editPhone, .other:
+            return TreePlace(tree: tree, change: .subject(target), kindLabel: kindLabel)
+        }
+    }
+
+    /// تغيير الاسم (`new_value` = الاسم الجديد)؛ تغيير العائلة تعريف فقط
+    static func nameChange(_ r: AdminRequest, kindLabel: String) -> TreePlace {
+        if r.requestType == RequestType.familyChange.rawValue {
+            return TreePlace(tree: .men, change: .subject(r.memberId), kindLabel: kindLabel)
+        }
+        let n = (r.newValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return TreePlace(tree: .men, change: n.isEmpty ? .subject(r.memberId) : .rename(r.memberId, newName: n),
+                         kindLabel: kindLabel)
+    }
+
+    /// بلاغ وفاة (التاريخ إن كان في `new_value`)
+    static func deceasedReport(_ r: AdminRequest, kindLabel: String) -> TreePlace {
+        let date = TreePlaceText.year(r.newValue) != nil ? r.newValue : nil
+        return TreePlace(tree: .men, change: .deceased(r.memberId, deathDate: date), kindLabel: kindLabel)
+    }
+
+    /// صورة مقترحة (`new_value` = رابطها)
+    static func photoSuggestion(_ r: AdminRequest, kindLabel: String) -> TreePlace {
+        TreePlace(tree: .men, change: .photo(r.memberId, newPhotoUrl: r.newValue), kindLabel: kindLabel)
+    }
+
+    /// تعريف بالعضو (الرقم، تغيير العائلة، الخصوصية، حذف الحساب) — حساب المرأة: عقدتها في شجرة النساء
+    static func subject(memberId: UUID, kindLabel: String, data: TreePlaceData) -> TreePlace {
+        if let m = data.man(memberId), m.isWomanAccount, let node = WomenStore.node(forAccount: memberId) {
+            return TreePlace(tree: .women, change: .subject(node.id), kindLabel: kindLabel)
+        }
+        return TreePlace(tree: .men, change: .subject(memberId), kindLabel: kindLabel)
+    }
+
+    /// «إضافة قريبة» (`relative_add`): موجودة ← تُربط، تحت أب ← تُضاف، والقديم (اسم فقط) ← زوجة من خارج العائلة / أم
+    static func relativeAdd(_ r: AdminRequest, kindLabel: String) -> TreePlace? {
+        guard let d = RelativeAddPayload.parse(r.details) else { return nil }
+        let a = d.args
+        let name = (a?.name ?? d.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let w = a?.womanId.flatMap(UUID.init(uuidString:)) {
+            return TreePlace(tree: .women, change: .link(w), kindLabel: kindLabel)
+        }
+        if let f = a?.fatherId.flatMap(UUID.init(uuidString:)), !name.isEmpty {
+            return TreePlace(tree: .women, change: .add(name: name, female: true), addFatherId: f, kindLabel: kindLabel)
+        }
+        let requester = d.requesterId.flatMap(UUID.init(uuidString:)) ?? r.requesterId
+        let kind = a?.kind ?? d.kind ?? ""
+        let rpc = d.rpc ?? ""
+        if kind == "mother" || rpc.contains("mother") {
+            return TreePlace(tree: .men, change: .subject(requester), kindLabel: kindLabel,
+                             noteOverride: L10n.t("أمّ من خارج العائلة: \(name)", "Mother from outside the family: \(name)"))
+        }
+        guard !name.isEmpty else { return nil }
+        return TreePlace(tree: .men, change: .outsideWife(husbandId: requester, name: name), kindLabel: kindLabel)
+    }
+
+    /// «طلب نسب» (ابن بنت العائلة): أمّه في شجرة النساء
+    static func lineage(_ r: AdminRequest, kindLabel: String, data: TreePlaceData) -> TreePlace? {
+        guard let d = LineageRequestDetails.parse(r.details), let mid = d.motherId.flatMap(UUID.init(uuidString:)) else {
+            return nil
+        }
+        let mother = data.woman(mid)
+        let name = mother.map { TreePlaceText.pair($0, fatherOf: { data.man($0) ?? data.woman($0) }) } ?? (d.motherName ?? "")
+        return TreePlace(tree: .women, change: .subject(mid), kindLabel: kindLabel,
+                         noteOverride: L10n.t("ابن بنت العائلة «\(name)»", "Son of the family's daughter «\(name)»"))
+    }
+}
+
+/// `details` لطلب `relative_add`: `kind`، `rpc`، `args{p_kind,p_father_id,p_woman_id,p_name}`، `requester_id`
+nonisolated struct RelativeAddPayload: Decodable, Sendable {
+    struct Args: Decodable, Sendable {
+        let kind: String?
+        let fatherId: String?
+        let womanId: String?
+        let name: String?
+        enum CodingKeys: String, CodingKey {
+            case kind = "p_kind", fatherId = "p_father_id", womanId = "p_woman_id", name = "p_name"
+        }
+    }
+    let kind: String?
+    let name: String?
+    let rpc: String?
+    let args: Args?
+    let requesterId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind, name, rpc, args
+        case requesterId = "requester_id"
+    }
+
+    static func parse(_ details: String?) -> RelativeAddPayload? {
+        guard let data = details?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(RelativeAddPayload.self, from: data)
+    }
+}

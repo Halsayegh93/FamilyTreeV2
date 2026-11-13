@@ -207,6 +207,17 @@ struct LinkToExistingMemberSheet: View {
                     .accessibilityLabel(L10n.t("إلغاء الاختيار", "Clear selection"))
                 }
                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+
+                // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣): العضو المختار بمكانه الحقيقي ← «افتح بالشجرة الكاملة»،
+                // وزرّ المعاينة الرئيسي = «ربط» هذا المربّع (يفتح تأكيده)
+                AnyView(TreePlaceSection(place: TreePlace(tree: .men, change: .link(selected.id),
+                                                          kindLabel: L10n.t("ربط بالشجرة", "Link to Tree")),
+                                         men: memberVM.allMembers,
+                                         primary: TreePlacePrimary(title: L10n.t("ربط", "Link"), icon: "link") {
+                                             showConfirm = true
+                                         })
+                    .environment(\.dsFlatComposerSections, true)
+                    .padding(.top, DS.Spacing.md))
             } else {
                 HStack(spacing: DS.Spacing.sm) {
                     Circle()
@@ -648,6 +659,21 @@ struct LinkWomanAccountSheet: View {
         return women.first { $0.id == id }
     }
 
+    /// مكان الاختيار في شجرة النساء: البنت المختارة ← «تُربط بحسابها»، أو «بنت جديدة» شبحاً آخر بنات الأب
+    private var womanPlace: TreePlace? {
+        let label = L10n.t("ربط بشجرة النساء", "Link to Women's Tree")
+        switch choice {
+        case .woman(let id):
+            return TreePlace(tree: .women, change: .link(id), kindLabel: label)
+        case .newDaughter:
+            guard let fid = father?.id, !trimmedNewName.isEmpty else { return nil }
+            return TreePlace(tree: .women, change: .add(name: trimmedNewName, female: true), addFatherId: fid,
+                             kindLabel: label)
+        case nil:
+            return nil
+        }
+    }
+
     // MARK: المربّع
 
     private var mainBox: some View {
@@ -669,6 +695,15 @@ struct LinkWomanAccountSheet: View {
                 daughtersSection
                 if !otherMatches.isEmpty { otherMatchesSection }
                 newDaughterSection
+                // «مكانه في الشجرة» بعد اختيار الأب والبنت (أو «بنت جديدة») — في شجرة النساء
+                if let place = womanPlace {
+                    AnyView(TreePlaceSection(place: place, index: 4, men: memberVM.allMembers,
+                                             primary: canSubmit
+                                                ? TreePlacePrimary(title: choice == .newDaughter ? L10n.t("إضافة وربط", "Add & Link")
+                                                                                                 : L10n.t("ربط بهذه", "Link to her"),
+                                                                   icon: "link") { showConfirm = true }
+                                                : nil))
+                }
                 if requestInfo == nil {
                     DSNoteCard(L10n.t("لا يوجد طلب انضمام معلّق لهذا الحساب — ربما عولج من قبل.",
                                       "No pending join request for this account — it may have been handled already."),
