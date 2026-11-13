@@ -152,6 +152,8 @@ struct AdminNoticeDetailBox: View {
             if !person.isEmpty {
                 AnyView(personCard)
             }
+            // «مكانه في الشجرة» بعد بطاقة الشخص وقبل التغييرات (§7، طلب المالك ٢٠٢٦-١١-١٣) — بصيغة ما تمّ
+            AnyView(TreePlaceNoticeSection(notification: notification))
             if !AdminNoticeText.bodyRepeats(notification, title: title, person: person) {
                 NotifQuoteCard(text: AnyView(Text(verbatim: body).dsFont(.body).foregroundColor(DS.Color.textPrimary)))
             }

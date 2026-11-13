@@ -602,7 +602,7 @@ struct WomenClassicTreeView: View {
                             // العُقد
                             ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
                                 nodeView(m, at: layout.positions[m.id]!)
-                                    .opacity(preview != nil && !previewLit.contains(m.id) ? 0.35 : 1)
+                                    .opacity(previewOpacity(m.id))
                             }
                             if let preview { previewMark(preview, .front) }
                         }
@@ -782,6 +782,13 @@ struct WomenClassicTreeView: View {
                                          viewport: viewport)
         baseOffset = offset
         autoFit = (f.personId, .group, scale, offset)
+    }
+
+    /// المعاينة: خارج المسار باهت ٣٥٪، والشخص في الطلب المرفوض باهت — الشجرة العادية كما هي
+    private func previewOpacity(_ id: UUID) -> Double {
+        guard let preview else { return 1 }
+        if !previewLit.contains(id) { return 0.35 }
+        return id == preview.personId && preview.mark.fadesPerson ? 0.45 : 1
     }
 
     /// علامة الشخص (إطار التغيير وشريحته) — نفس علامة شجرة العائلة في المعاينة

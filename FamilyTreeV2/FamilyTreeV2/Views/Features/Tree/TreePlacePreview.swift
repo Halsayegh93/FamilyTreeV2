@@ -28,6 +28,7 @@ struct TreePlacePreviewScreen: View {
     let women: [FamilyMember]
     let primaryTitle: String?
     var primaryIcon: String? = nil
+    var backTitle: String = TreePlaceText.backToRequest
     let onBack: () -> Void
     let onPrimary: () -> Void
 
@@ -36,18 +37,20 @@ struct TreePlacePreviewScreen: View {
                            wifeName: resolved.wifeName)
     }
 
-    /// بيانات المعاينة: الشبح آخر أبناء أبيه، والتعديل بحالته بعد التنفيذ — نسخة محلية لا تمسّ الأصل
+    /// بيانات المعاينة: الشبح (يُضاف، المحذوف) آخر أبناء أبيه، والتعديل بحالته بعده — نسخة محلية لا تمسّ الأصل
     private func previewMembers(_ base: [FamilyMember]) -> [FamilyMember] {
         var list = base
-        switch resolved.place.change {
-        case .add:
-            list.append(resolved.person)
-        case .rename, .birth, .photo, .deceased, .moveFather:
-            if let after = resolved.after, let i = list.firstIndex(where: { $0.id == after.id }) { list[i] = after }
-        default:
-            break
+        if !list.contains(where: { $0.id == resolved.person.id }) { list.append(resolved.person) }
+        if !resolved.place.rejected, let after = resolved.after, let i = list.firstIndex(where: { $0.id == after.id }) {
+            list[i] = after
         }
         return list
+    }
+
+    /// الشريط تحت الرأس بحسب الزمن: قبل التنفيذ · بعد التغيير · مرفوض
+    private var banner: String {
+        if resolved.place.rejected { return TreePlaceText.rejectedNote }
+        return resolved.place.tense == .past ? TreePlaceText.pastBanner : TreePlaceText.previewBanner
     }
 
     var body: some View {
@@ -56,7 +59,7 @@ struct TreePlacePreviewScreen: View {
                             subtitle: "\(resolved.place.kindLabel) · \(resolved.personFirstName)",
                             section: .tree, nav: .close, onBack: onBack)
             // الشريط فوق الشجرة لا عليها — فالكاميرا تبدأ تحته بلا قياس
-            Text(TreePlaceText.previewBanner)
+            Text(banner)
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .multilineTextAlignment(.center)
@@ -104,7 +107,7 @@ struct TreePlacePreviewScreen: View {
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
             HStack(spacing: DS.Spacing.sm) {
-                DSButton(TreePlaceText.backToRequest, role: .cancel, action: onBack)
+                DSButton(backTitle, role: .cancel, action: onBack)
                 if let primaryTitle {
                     DSButton(primaryTitle, icon: primaryIcon, action: onPrimary)
                 }
@@ -256,7 +259,7 @@ struct TreePlaceMenCanvas: View {
             .equatable()
             .frame(width: M.nodeW, height: h, alignment: .top)
             .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
-            .opacity(lit.contains(m.id) ? 1 : 0.35)
+            .opacity(!lit.contains(m.id) ? 0.35 : (m.id == focus.personId && focus.mark.fadesPerson ? 0.45 : 1))
     }
 
     @ViewBuilder
@@ -375,7 +378,7 @@ struct TreePlaceNodeMark: View {
 
     @ViewBuilder private var frame: some View {
         switch style.kind {
-        case .ghost, .danger:
+        case .ghost, .danger, .rejected:
             shape.stroke(style.tint, style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, dash: [9 * k, 7 * k]))
         case .halo:
             shape.stroke(style.tint, lineWidth: 3.5 * k)

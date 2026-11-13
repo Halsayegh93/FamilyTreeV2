@@ -31,6 +31,8 @@ struct TreePlaceSection: View {
     var emptyNote: String? = nil
     /// في بطاقات القوائم: زرّ «افتح بالشجرة الكاملة» وحده (الملاحظة في لوحة المعاينة)
     var buttonOnly: Bool = false
+    /// زرّ الرجوع في المعاينة: «العودة إلى الطلب» (الافتراضي) أو «العودة إلى الإشعار»
+    var backTitle: String = TreePlaceText.backToRequest
 
     @State private var women: [FamilyMember] = WomenStore.cache
     @State private var showPreview = false
@@ -58,7 +60,7 @@ struct TreePlaceSection: View {
         }) {
             if let resolved {
                 TreePlacePreviewScreen(resolved: resolved, men: men, women: women,
-                                       primaryTitle: primary?.title, primaryIcon: primary?.icon,
+                                       primaryTitle: primary?.title, primaryIcon: primary?.icon, backTitle: backTitle,
                                        onBack: { showPreview = false },
                                        onPrimary: { runPrimary = true; showPreview = false })
             }
@@ -85,8 +87,10 @@ struct TreePlaceSection: View {
                 }
             } else if let emptyNote {
                 DSNoteCard(emptyNote, icon: "person.badge.plus", tint: DS.Color.warning)
-            } else {
-                DSNoteCard(TreePlaceText.noFather, icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+            } else if let place {
+                // لا أب مسجّل، أو ما تمّ/رُفض وشخصه لم يعد في الشجرة
+                DSNoteCard(place.unresolvedNote(TreePlaceData(men: men, women: women)),
+                           icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
             }
         }
     }
@@ -171,7 +175,7 @@ struct TreePlaceSnippet: View {
             if let grandfather {
                 TreePlaceMiniNode(member: grandfather, caption: TreePlaceText.grandfather, role: .grandfather)
                 Rectangle()
-                    .fill(DS.Color.accentLight)
+                    .fill(TreePlaceSiblingRow.pathColor(mark))
                     .frame(width: TreePlaceMetrics.line, height: TreePlaceMetrics.parentLink)
                     .accessibilityHidden(true)
             }
@@ -247,6 +251,11 @@ struct TreePlaceSiblingRow: View {
     let hasFather: Bool
     @Environment(\.layoutDirection) private var direction
 
+    /// لون الطريق من الجد والأب إلى الشخص: ذهبي، ورمادي للطلب المرفوض (بلا ذهبي)
+    static func pathColor(_ mark: TreePlaceMarkStyle) -> Color {
+        mark.kind == .rejected ? DS.Color.textTertiary.opacity(DS.Opacity.selectedStroke) : DS.Color.accentLight
+    }
+
     /// النوافذ بالترتيب لـ `ViewThatFits`: الكل (≤ ٥) أو ±٢، ثم ±١، ثم الشخص وحده — nil = الكل
     static func windows(count: Int) -> [Int?] {
         count <= 5 ? [nil, 1, 0] : [2, 1, 0]
@@ -321,7 +330,7 @@ struct TreePlaceSiblingRow: View {
         let xs = centers + [fx]
         let lo = xs.min() ?? fx, hi = xs.max() ?? fx
         let grey = DS.Color.textTertiary.opacity(DS.Opacity.tintStroke)
-        let gold = DS.Color.accentLight
+        let gold = Self.pathColor(mark)
         let w = TreePlaceMetrics.line
         return Canvas { ctx, _ in
             var bus = Path()
@@ -398,14 +407,14 @@ struct TreePlaceMiniNode: View {
         .overlay(fillOverlay)
         .overlay(border)
         .background(halo)
-        .opacity(role == .grandfather ? TreePlaceMetrics.grandfatherOpacity : 1)
+        .opacity(role == .grandfather || mark?.fadesPerson == true ? TreePlaceMetrics.grandfatherOpacity : 1)
     }
 
     private var nameColor: Color {
         if struck || dimmed { return DS.Color.textTertiary }
         guard let mark else { return DS.Color.textPrimary }
         switch mark.kind {
-        case .ghost, .danger, .grey: return mark.ink
+        case .ghost, .danger, .grey, .rejected: return mark.ink
         default: return DS.Color.textPrimary
         }
     }
@@ -419,7 +428,7 @@ struct TreePlaceMiniNode: View {
     @ViewBuilder private var border: some View {
         if let mark {
             switch mark.kind {
-            case .ghost, .danger:
+            case .ghost, .danger, .rejected:
                 shape.strokeBorder(mark.tint, style: StrokeStyle(lineWidth: TreePlaceMetrics.markBorder,
                                                                  dash: [DS.Spacing.xs, DS.Spacing.xs - 1]))
             case .halo:
@@ -446,7 +455,7 @@ struct TreePlaceMiniNode: View {
 
     @ViewBuilder private var avatar: some View {
         let url = (member.avatarUrl ?? member.photoURL).flatMap { URL(string: $0) }
-        let solid = mark.map { $0.kind == .ghost || $0.kind == .grey || $0.kind == .danger } ?? false
+        let solid = mark.map { [.ghost, .grey, .danger, .rejected].contains($0.kind) } ?? false
         ZStack {
             Circle().fill(solid ? (mark?.pillFill ?? tint) : tint.opacity(DS.Opacity.tintFill))
             Text(String(TreePlaceText.firstName(member).prefix(1)))

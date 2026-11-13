@@ -138,6 +138,12 @@ struct NotificationDetailBox: View {
                 NotifBoxLabel(text: L10n.t("التغييرات (\(changes.count))", "Changes (\(changes.count))"))
                 NotificationChangeCards(changes: changes, isStaff: isStaff, subjectName: subjectName ?? "")
             }
+            // «مكانه في الشجرة» (§7، للإدارة): من الطلب بزمن نتيجته، وزرّ المعاينة = «موافقة» المربّع حين تظهر فيه
+            if isStaff {
+                AnyView(TreePlaceRequestNoticeSection(notification: notification, request: request,
+                                                      isRequestNotice: requestId != nil, subjectMember: subjectMember,
+                                                      primary: placePrimary))
+            }
             if isStaff, let name = subjectName, request == nil || subjectMember?.id != request?.requesterId {
                 NotifBoxLabel(text: L10n.t("العضو المعني", "Member concerned"))
                 Button { openMember = subjectMember } label: {
@@ -174,6 +180,14 @@ struct NotificationDetailBox: View {
         if let nid = notification.details?.newsId.flatMap(UUID.init(uuidString:)) {
             NotifButtonRow(items: [.init(title: L10n.t("فتح الخبر", "Open post"), kind: .secondary) { onOpenNews(nid) }])
         }
+    }
+
+    /// «موافقة» المربّع نفسه — طلب معلّق تملك قراره (كما يظهر في `NotifAdminRequestSection`)
+    private var placePrimary: TreePlacePrimary? {
+        guard let r = request, r.status == ApprovalStatus.pending.rawValue, adminRequestVM.canApproveFromBox(r) else {
+            return nil
+        }
+        return TreePlacePrimary(title: L10n.t("موافقة", "Approve"), icon: "checkmark", action: approve)
     }
 
     // MARK: القرار (دوال «الوارد» نفسها)

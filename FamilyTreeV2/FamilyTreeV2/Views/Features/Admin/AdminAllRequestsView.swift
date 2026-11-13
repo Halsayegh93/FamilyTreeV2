@@ -3640,7 +3640,7 @@ struct AdminAllRequestsView: View {
     }
 
     @ViewBuilder
-    private func genericDetailBoxContent(_ detail: RequestDetail, meta: DetailMeta, showsPlace: Bool = true) -> some View {
+    private func genericDetailBoxContent(_ detail: RequestDetail, meta: DetailMeta, handled: AdminRequest? = nil) -> some View {
         if let imageUrl = meta.imageUrl, let url = URL(string: imageUrl) {
             detailHeroImage(url: url, color: meta.color)
                 .dsStaggerIn(0)
@@ -3653,15 +3653,22 @@ struct AdminAllRequestsView: View {
             detailContent(for: detail)
         }
 
-        // «مكانه في الشجرة» قبل التنفيذ (طلب المالك ٢٠٢٦-١١-١٣) — للطلبات التي تخصّ شخصاً في الشجرة فقط
-        let place = showsPlace ? treePlace(for: detail) : nil
+        // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣) — للطلبات التي تخصّ شخصاً في الشجرة فقط: قبل التنفيذ، وفي
+        // المعالَج (§8) بنتيجته (تمّ / «رُفض») بلا زرّ إجراء في المعاينة
+        let place = handled.map { handledPlace($0) } ?? treePlace(for: detail)
         if let place {
             AnyView(TreePlaceSection(place: place, index: 2, men: memberVM.allMembers,
-                                     primary: placePrimary(for: detail)))
+                                     primary: handled == nil ? placePrimary(for: detail) : nil))
         }
 
         // «المرسل»: مسار الإرسال خطواتٍ مرقّمة، ومن أرسله، والجهاز والوقت (طلب المالك ٢٠٢٦-١١-١١، التصميم المعتمد)
         AdminSenderSection(info: senderInfo(for: detail), index: place == nil ? 2 : 3)
+    }
+
+    /// مكان الطلب المعالَج (§8): المقبول بصيغة ما تمّ، والمرفوض «رُفض» — غيرهما (مسحوب…) بلا قسم
+    private func handledPlace(_ r: AdminRequest) -> TreePlace? {
+        guard r.status == ApprovalStatus.approved.rawValue || r.status == ApprovalStatus.rejected.rawValue else { return nil }
+        return TreePlace.fromRequest(r, data: TreePlaceData(men: memberVM.allMembers, women: WomenStore.cache))
     }
 
     /// مكان الطلب في الشجرة (`TreePlace`) — المحتوى (أخبار، ديوانيات، مشاريع، أرشيف، بلاغات، رسائل) بلا قسم
@@ -5009,9 +5016,13 @@ extension AdminAllRequestsView {
             onCancel: { handledOpen = nil }
         ) {
             if let detail {
-                genericDetailBoxContent(detail, meta: detailMeta(for: detail), showsPlace: false)
+                genericDetailBoxContent(detail, meta: detailMeta(for: detail), handled: request)
             } else {
                 handledFallbackInfo(request)
+                // «مكانه في الشجرة» (§8) — إضافة قريبة، النسب، الخصوصية، حذف الحساب
+                if let place = handledPlace(request) {
+                    AnyView(TreePlaceSection(place: place, index: 2, men: memberVM.allMembers))
+                }
                 AdminSenderSection(info: senderInfo(for: .report(request)), index: 2)
             }
             AdminHandlingSections(request: request, events: events, lookup: { memberVM.member(byId: $0) }, startIndex: 3,
