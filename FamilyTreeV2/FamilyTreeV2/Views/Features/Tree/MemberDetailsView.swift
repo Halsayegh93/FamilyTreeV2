@@ -1221,13 +1221,12 @@ struct MemberDetailsView: View {
 
     // MARK: «طلب حذف» ظاهر (§11، طلب المالك ٢٠٢٦-١١-١٣ «حط طلب حذف في تفاصيل الأعضاء»)
 
-    /// لغير الإدارة، لغير صاحب الملف — الإدارة كما كانت. خانة «حذف» داخل «طلب تعديل» باقية.
-    /// «له حساب دخول» لا يصل العضو (`members_masked` يخفيه) — السيرفر يرفض حذف صاحب الحساب (`has_account`)
-    /// والإدارة تقرّر «تعديل الشجرة — حذف»؛ هنا يُستثنى أصحاب الأدوار الإدارية الظاهرة فقط
+    /// لغير الإدارة، لغير صاحب الملف، ولمن لا يبدو مسجّلاً في التطبيق (`looksRegistered` — نفس الأندرويد) —
+    /// الإدارة كما كانت. خانة «حذف» داخل «طلب تعديل» باقية، والسيرفر يرفض حذف صاحب الحساب (`has_account`)
     private var showsDeleteRequest: Bool {
         guard !authVM.canModerate, !isViewingSelf, !member.isDeleted, authVM.currentUser != nil else { return false }
         let staff: [FamilyMember.UserRole] = [.owner, .admin, .monitor, .supervisor]
-        return member.role != .pending && !staff.contains(member.role)
+        return !member.looksRegistered && member.role != .pending && !staff.contains(member.role)
     }
 
     /// ابنه هو (أبوه = المشاهد) — مسار «عائلتي» بدل «تعديل الشجرة — حذف»
