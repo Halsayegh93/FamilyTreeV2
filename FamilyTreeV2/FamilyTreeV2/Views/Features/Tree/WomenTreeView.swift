@@ -1097,7 +1097,7 @@ struct WomanDetailSheet: View {
             switch id {
             // «إضافة زوجة» الواحدة تضيف وتربط — مع الإضافة («ربط زوجة» اندمج فيها، طلب المالك ٢٠٢٦-١٠-٢٥)
             case "child", "wife", "addMother", "sister", "outsideHusband": return .add
-            case "husband", "mother": return .link
+            case "husband", "mother", "changeFather": return .link
             default: return .record
             }
         }
@@ -1162,6 +1162,10 @@ struct WomanDetailSheet: View {
         case "reorder": return L10n.t("أبناء ", "Children of ") + who
         case "wifeOrder": return L10n.t("زوجات ", "Wives of ") + who
         case "edit": return L10n.t("بيانات ", "Details of ") + who
+        // الأب الحالي باسمه — وإلا «بلا أب في الشجرة»
+        case "changeFather":
+            if let f = father { return L10n.t("بنت «", "Daughter of «") + shortName(f) + "»" }
+            return L10n.t("بلا أب في الشجرة", "No father in the tree")
         default: return nil
         }
     }
@@ -1216,6 +1220,12 @@ struct WomanDetailSheet: View {
         if !children.isEmpty {
             list.append(AdminAction(id: "reorder", title: L10n.t("ترتيب الأبناء", "Reorder"),
                                     icon: "arrow.up.arrow.down") { openReorderBox() })
+        }
+        // «تغيير الأب» (طلب المالك ٢٠٢٦-١١-١٣ «تغيير الاب للنساء المربوطة»): للأنثى وحدها — الذكر نسخة من الشجرة العامة
+        // وأبوه من `profiles` — ولا لمن هي «من خارج العائلة»
+        if canChangeFather {
+            list.append(AdminAction(id: "changeFather", title: L10n.t("تغيير الأب", "Change father"),
+                                    icon: "person.fill.turn.down") { openChangeFather() })
         }
         // الوفاة والجنس بيانات — مكانها «تعديل البيانات» لا مربّعات مستقلّة (طلب المالك ٢٠٢٦-١٠-٢٥)
         list.append(AdminAction(id: "edit", title: L10n.t("تعديل البيانات", "Edit details"),
@@ -1327,6 +1337,85 @@ struct WomanDetailSheet: View {
         draft.showMother = true
     }
 
+    // MARK: - «تغيير الأب» (الإدارة، طلب المالك ٢٠٢٦-١١-١٣ «ابى تغيير الاب للنساء المربوطة»)
+
+    /// للأنثى وحدها (الذكر نسخة من الشجرة العامة وأبوه من `profiles`)، ولا لمن هي «من خارج العائلة» — وللإدارة فقط
+    private var canChangeFather: Bool {
+        mode == .direct && woman.isFemale && !WomenStore.outsideFamilyIds.contains(woman.id)
+    }
+
+    /// رجال العائلة بشروط قائمة الآباء نفسها (أحياء ومتوفّون)، بلا أبيها الحالي — محسوبة مرة (`WifeCandidateRules`)
+    private var changeFatherCandidates: [FamilyMember] {
+        WifeCandidateRules.cachedDaughterFathers(for: woman, in: allWomen, showsHidden: canEdit)
+    }
+
+    private func openChangeFather() {
+        wifeSearch = ""
+        draft.changeFatherPicked = nil
+        draft.showChangeFather = true
+    }
+
+    /// «نقل فاطمة تحت علي حسين …؟»
+    private var changeFatherTitle: String {
+        guard let f = draft.changeFatherPicked else { return "" }
+        return L10n.t("نقل \(shortName(woman)) تحت \(displayName(f))؟", "Move \(shortName(woman)) under \(displayName(f))?")
+    }
+
+    /// المنتقي فوق مربّع الإجراءات ثم التأكيد — خلف `AnyView` (حارس المكدس: سلسلة مُعدِّلات مربّع الإجراءات
+    /// طويلة أصلاً، فلا يعمّقها هذان)
+    private func withChangeFather<Box: View>(_ box: Box) -> AnyView {
+        AnyView(box
+            .dsCenterBox(isPresented: $draft.showChangeFather) {
+                DSMemberPickerBox(
+                    title: L10n.t("اختيار الأب الجديد", "Choose the new father"),
+                    subtitle: displayName(woman),
+                    icon: "person.fill.turn.down",
+                    candidates: changeFatherCandidates,
+                    search: $wifeSearch,
+                    emptyTitle: L10n.t("لا يوجد ذكور في الشجرة", "No family men"),
+                    matchesFromFirstName: true,
+                    onPick: { draft.changeFatherPicked = $0 },
+                    onCancel: { draft.showChangeFather = false; draft.changeFatherPicked = nil; wifeSearch = "" })
+            }
+            // التأكيد فوق المنتقي (نافذة الرسائل المستقلّة) — «إلغاء» يرجع للمنتقي نفسه
+            .dsAlert(changeFatherTitle,
+                     isPresented: Binding(get: { draft.changeFatherPicked != nil },
+                                          set: { if !$0 { draft.changeFatherPicked = nil } })) {
+                if let picked = draft.changeFatherPicked {
+                    Button(L10n.t("نقل", "Move")) { performChangeFather(picked) }
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+            } message: {
+                Text(L10n.t("يتحدّث اسمها الكامل، وتُمسح الأم إذا لم تكن من زوجات الأب الجديد.",
+                            "Her full name is updated, and the mother is cleared unless she is one of the new father's wives."))
+            }
+        )
+    }
+
+    /// الكتابة: `women_members` (الأب، الاسم الكامل = اسمها + نسب الأب الجديد، آخر بناته، والأم تُمسح إن لم تكن من زوجاته)،
+    /// ولحسابها المربوط الاسم الكامل نفسه في `profiles` — ثم تحديث الشجرة ولحظة النجاح، والخطأ في مربّع الخطأ الموجود
+    private func performChangeFather(_ newFather: FamilyMember) {
+        guard canChangeFather, newFather.id != woman.fatherId else { return }
+        let womanId = woman.id
+        let given = woman.firstName.trimmingCharacters(in: .whitespaces)
+        let first = given.isEmpty ? PersonName.firstUnit(woman.fullName) : given
+        let lineage = newFather.fullName.trimmingCharacters(in: .whitespaces)
+        let fullName = lineage.isEmpty ? first : "\(first) \(lineage)"
+        let clearsMother = woman.motherId != nil && mother?.husbandId != newFather.id
+        let sort = (allWomen.filter { $0.fatherId == newFather.id }.map(\.sortOrder).max() ?? -1) + 1
+        let linkedUser = WomenStore.linkedUserByWoman[womanId]
+        let members = memberVM
+        runWrite(failTitle: L10n.t("تعذّر النقل", "Couldn't move"), {
+            try await WomenStore.changeFather(womanId: womanId, newFatherId: newFather.id, fullName: fullName,
+                                              sortOrder: sort, clearsMother: clearsMother, linkedUserId: linkedUser)
+            // اسم حسابها في الشجرة العامة (الملف والبحث) — بعد كتابته
+            if linkedUser != nil { await members.fetchAllMembers(force: true) }
+        }, onSuccess: {
+            DSMomentToast.show(L10n.t("تم النقل", "Moved"), moment: .success, section: AppSection.current)
+            dismiss()
+        })
+    }
+
     /// عنوان مربّع الإجراءات وزرّه في الشريط حسب الآلية
     private var actionsBoxTitle: String {
         switch mode {
@@ -1369,7 +1458,7 @@ struct WomanDetailSheet: View {
     /// و«حذف» الأحمر في شريط المربّع مع «إغلاق» (طلب المالك ٢٠٢٦-١٠-٢٥ «حطلي زر الحذف جنب الاغلاق») — بلا زر إجراء
     private var actionsBox: some View {
         let actions = adminActions
-        return withAdminPresentations(
+        return withAdminPresentations(withChangeFather(
             DSComposer(
                 title: actionsBoxTitle,
                 subtitle: displayName(woman),
@@ -1390,7 +1479,8 @@ struct WomanDetailSheet: View {
             ) {
                 // رجعنا للمربّعات الصغيرة اثنين في السطر (المالك ٢٠٢٦-١١-٠٧: «المربعات كبيرة… الايقونات نطورها مو مربعات
                 // نكبرها») — الأيقونات أوضح لكل إجراء (`refinedIcon`)، والترتيب: الأم وجنبها الزوجة، ثم الأبناء…
-                let order = ["addMother", "mother", "wife", "wifeOrder", "husband", "outsideHusband", "child", "reorder", "sister", "edit"]
+                let order = ["addMother", "mother", "wife", "wifeOrder", "husband", "outsideHusband", "child", "reorder", "sister",
+                             "changeFather", "edit"]
                 let tiles = actions.enumerated().sorted {
                     (order.firstIndex(of: $0.element.id) ?? order.count, $0.offset)
                         < (order.firstIndex(of: $1.element.id) ?? order.count, $1.offset)
@@ -1410,7 +1500,7 @@ struct WomanDetailSheet: View {
                     .disabled(draft.busy)
                 }
             }
-        )
+        ))
     }
 
     /// أيقونة أوضح لكل إجراء (طلب المالك ٢٠٢٦-١١-٠٧ «نطور الايقونات»)
@@ -1425,6 +1515,7 @@ struct WomanDetailSheet: View {
         case "wifeOrder": return "list.number"
         case "reorder": return "arrow.up.arrow.down.circle.fill"
         case "edit": return "square.and.pencil"
+        case "changeFather": return "person.fill.turn.down"
         default: return action.icon
         }
     }
@@ -1433,7 +1524,8 @@ struct WomanDetailSheet: View {
     private func orderedTiles(_ actions: [AdminAction], _ order: [String]) -> [AdminAction] {
         order.compactMap { id in actions.first { $0.id == id } }
             + (order.contains("edit") ? actions.filter { a in
-                !(["addMother", "mother", "wife", "husband", "outsideHusband", "child", "sister", "wifeOrder", "reorder", "edit"]).contains(a.id)
+                !(["addMother", "mother", "wife", "husband", "outsideHusband", "child", "sister", "wifeOrder", "reorder",
+                   "changeFather", "edit"]).contains(a.id)
             } : [])
     }
 
@@ -2940,6 +3032,9 @@ private final class WomanAdminDraft: ObservableObject {
     /// زوجة أو أم — المربّع نفسه
     @Published var flowRelation: DSWifeFlowBox.Relation = .wife
     @Published var showHusbandPicker = false
+    /// «تغيير الأب» (الإدارة، طلب المالك ٢٠٢٦-١١-١٣): المنتقي، ثم الأب المختار ينتظر التأكيد
+    @Published var showChangeFather = false
+    @Published var changeFatherPicked: FamilyMember? = nil
     @Published var showGender = false
     @Published var showDelete = false
     /// كتابة جارية — في المسودّة حتى يراها المربّع المفتوح فوق التفاصيل (يبقى مفتوحاً بدوّارته)
@@ -2952,13 +3047,14 @@ private final class WomanAdminDraft: ObservableObject {
     /// مربّع مفتوح فوق مربّع الإجراءات → يتقلّص خلفه قليلاً
     var boxOnTop: Bool {
         addKind != nil || showEdit || showReorder || showWifeReorder || showMother || showWifeFlow
-            || showHusbandPicker || showFatherPicker
+            || showHusbandPicker || showFatherPicker || showChangeFather
     }
 
     func closeBoxes() {
         addKind = nil
         showEdit = false; showReorder = false; showWifeReorder = false
         showMother = false; showWifeFlow = false; showHusbandPicker = false; showFatherPicker = false
+        showChangeFather = false; changeFatherPicked = nil
     }
 }
 

@@ -4,17 +4,23 @@ import SwiftUI
 //
 // تحت أرقام العائلة مفتاح «شجرة العائلة | شجرة النساء». هنا كل ما يخص النساء وشجرتهن في مكان واحد:
 // مدخل «شجرة النساء» (يفتح تبويب الشجرة عليها) ← بحث باسمها أو اسم أبوها ← شرائح: الكل · المسجّلات · المتزوجات (اسم الزوج
-// تحتها) · متوفيات · فرع خارج العائلة ← القائمة. للمالك والمدير وحدهما (طلب المالك ٢٠٢٦-١١-٠٨). الضغط على امرأة يفتح مربّع تفاصيلها نفسه في شجرة النساء
+// تحتها) · متوفيات · فرع خارج العائلة ← القائمة. «الأحدث» بعد «الكل» (طلب المالك ٢٠٢٦-١١-١٣): المضافات أو المربوطات بحساب خلال
+// ٣٠ يوماً، الأحدث أولاً. للمالك والمدير وحدهما (طلب المالك ٢٠٢٦-١١-٠٨). الضغط على امرأة يفتح مربّع تفاصيلها نفسه في شجرة النساء
 // (`WomanDetailSheet`). «فرع خارج العائلة» = أبناء البنات (`DaughterSonsIndex`، يفتح ورقة حسابه) وأزواج البنات من خارج
 // العائلة (`WomenStore.outsideFamilyIds`) — لا يُعدّون في أي رقم للعائلة. «شجرة العائلة» بلا أي امرأة (`AdminMembersIndex`).
 
 enum AdminWomenChip: String, CaseIterable, Identifiable {
-    case all, accounts, married, deceased, outside
+    case all, recent, accounts, married, deceased, outside
     var id: String { rawValue }
+
+    /// نافذة «الأحدث» بالأيام — أُضيفت عقدتها أو أُنشئ حسابها المربوط خلالها
+    static let recentDays = 30
 
     var title: String {
         switch self {
         case .all:       return L10n.t("الكل", "All")
+        // «الأحدث» (طلب المالك ٢٠٢٦-١١-١٣ «فلتر اخر الاسماء المضافة او المربوطة بالتطبيق»)
+        case .recent:    return L10n.t("الأحدث", "Newest")
         // بلا «ال» كشرائح «شجرة العائلة» («مسجّلون · متوفون») — طلب المالك ٢٠٢٦-١١-١١ «الفلاتر مو مضبوطة»
         case .accounts:  return L10n.t("مسجّلات", "Registered")
         case .married:   return L10n.t("متزوجات", "Married")
@@ -92,6 +98,9 @@ struct AdminWomenPanel: View {
         let linked = WomenStore.linkedUserByWoman
         let outside = WomenStore.outsideFamilyIds
         var out: [AdminWomenChip: [AdminWomenEntry]] = [:]
+        // «الأحدث»: تاريخ إضافة العقدة أو إنشاء حسابها المربوط (الأحدث منهما) خلال النافذة — يُرتَّب بعد الحلقة
+        let cutoff = Calendar.current.date(byAdding: .day, value: -AdminWomenChip.recentDays, to: Date()) ?? .distantPast
+        var recent: [(date: Date, entry: AdminWomenEntry)] = []
         let females = AdminGrouping.alphabetical(women.filter { $0.isFemale && !name($0).trimmingCharacters(in: .whitespaces).isEmpty })
         for w in females {
             let husband = w.husbandId.flatMap { map[$0] }
@@ -114,7 +123,18 @@ struct AdminWomenPanel: View {
             if w.isDeceased == true { out[.deceased, default: []].append(e) }
             // «المتزوجات» (طلب المالك ٢٠٢٦-١١-٠٨): اسم الزوج تحتها، أو «الزوج غير مسجّل»
             if w.husbandId != nil || w.isMarried == true { out[.married, default: []].append(e) }
+            let added = ApprovalWorkflow.date(w.createdAt)
+            let linkedAt = linked[w.id].flatMap { memberVM.member(byId: $0) }.flatMap { ApprovalWorkflow.date($0.createdAt) }
+            let byLink = linkedAt.map { l in added.map { l > $0 } ?? true } ?? false
+            if let latest = byLink ? linkedAt : added, latest >= cutoff {
+                let day = AdminOccasionsText.shortDate(latest)
+                let line = byLink ? L10n.t("رُبطت بحساب \(day)", "Linked to an account \(day)")
+                                  : L10n.t("أُضيفت \(day)", "Added \(day)")
+                recent.append((latest, AdminWomenEntry(kind: .woman(w), title: e.title, subtitle: line, status: status,
+                                                        needle: e.needle)))
+            }
         }
+        out[.recent] = recent.sorted { $0.date > $1.date }.map(\.entry)
         // فرع خارج العائلة: أبناء البنات (حساباتهم) ثم أزواج البنات من خارج العائلة
         var outsideRows: [AdminWomenEntry] = []
         // حساب مراجعة أبل ليس فرداً في «فرع خارج العائلة»
@@ -178,7 +198,7 @@ struct AdminWomenPanel: View {
                 if women.isEmpty || !built {
                     AdminPageStateCard(.loading(L10n.t("جارٍ تحميل شجرة النساء…", "Loading the women's tree…")))
                 } else if shown.isEmpty {
-                    AdminPageStateCard(.empty(query.isEmpty ? L10n.t("لا أحد هنا الآن", "Nobody here right now") : L10n.t("لا نتائج", "No results"),
+                    AdminPageStateCard(.empty(query.isEmpty ? emptyTitle : L10n.t("لا نتائج", "No results"),
                                               message: query.isEmpty ? nil : L10n.t("جرّب اسماً آخر", "Try another name")))
                 } else {
                     list(shown)
@@ -260,11 +280,22 @@ struct AdminWomenPanel: View {
         }
     }
 
+    /// الحالة الفاضية بلا بحث — «الأحدث» تقول ما الذي تبحث عنه
+    private var emptyTitle: String {
+        chip == .recent
+            ? L10n.t("لا أسماء مضافة أو مربوطة خلال \(AdminWomenChip.recentDays) يوماً",
+                     "No names added or linked in the last \(AdminWomenChip.recentDays) days")
+            : L10n.t("لا أحد هنا الآن", "Nobody here right now")
+    }
+
     private func countText(_ n: Int) -> String {
         let number = AdminMembersFilterBar.grouped(n)
         if !query.trimmingCharacters(in: .whitespaces).isEmpty { return L10n.t("\(number) نتيجة", "\(number) results") }
-        return chip == .outside ? L10n.t("\(number) · لا يُعدّون في أرقام العائلة", "\(number) · not counted in family numbers")
-                                : L10n.t("\(number) · أبجدياً", "\(number) · A–Z")
+        switch chip {
+        case .outside: return L10n.t("\(number) · لا يُعدّون في أرقام العائلة", "\(number) · not counted in family numbers")
+        case .recent: return L10n.t("\(number) · الأحدث أولاً", "\(number) · newest first")
+        default: return L10n.t("\(number) · أبجدياً", "\(number) · A–Z")
+        }
     }
 
     private func list(_ shown: [AdminWomenEntry]) -> some View {

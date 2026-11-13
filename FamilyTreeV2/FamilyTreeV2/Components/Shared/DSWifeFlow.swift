@@ -166,6 +166,29 @@ enum WifeCandidateRules {
             .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
     }
 
+    /// آباء «تغيير الأب» (الإدارة، طلب المالك ٢٠٢٦-١١-١٣): رجال الشجرة بشروط قائمة الآباء نفسها (رجل فعلاً، يصلح أباً —
+    /// الأحياء والمتوفّون، المخفيّون للإدارة)، عدا البنت نفسها وأبيها الحالي وزوجها. أعضاء العائلة فقط وبذاكرة —
+    /// كالقائمتين أعلاه (آلاف الرجال مع كل حرف بحث)
+    @MainActor static func cachedDaughterFathers(for person: FamilyMember, in people: [FamilyMember],
+                                                 showsHidden: Bool) -> [FamilyMember] {
+        let family = familyMemberIds
+        let key = "f-\(person.id)-\(person.fatherId?.uuidString ?? "")-\(person.husbandId?.uuidString ?? "")"
+            + "-\(people.count)-\(showsHidden)-\(fatherMinimumAge)-\(family.count)"
+        if let hit = fathersMemo[key] { return hit }
+        let excluded: Set<UUID> = Set([person.id, person.fatherId, person.husbandId].compactMap { $0 })
+        var list = people
+            .filter { m in
+                isMan(m) && !excluded.contains(m.id) && canBeFather(m)
+                    && (showsHidden || !m.isHiddenFromTree)
+                    && !m.fullName.trimmingCharacters(in: .whitespaces).isEmpty
+            }
+            .sorted { $0.fullName.localizedCompare($1.fullName) == .orderedAscending }
+        if !family.isEmpty { list = list.filter { family.contains($0.id) } }
+        if fathersMemo.count > 8 { fathersMemo.removeAll() }
+        fathersMemo[key] = list
+        return list
+    }
+
     /// بنات الأب للأم: بلا زوج أو زوجها أبو صاحب العقدة (المتوفّاة تظهر — قد تكون الأم متوفّاة)، وعدد من سواهنّ
     static func motherDaughters(of fatherId: UUID, personId: UUID, personFatherId: UUID?, in people: [FamilyMember],
                                 showsHidden: Bool) -> (eligible: [FamilyMember], hidden: Int) {

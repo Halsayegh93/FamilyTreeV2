@@ -320,6 +320,27 @@ enum WomenStore {
             .eq("id", value: childId.uuidString).execute()
     }
 
+    /// «تغيير الأب» (الإدارة، طلب المالك ٢٠٢٦-١١-١٣) — كتابة مباشرة بسياسة `women_members_update` (مالك، مدير، مراقب):
+    /// البنت تحت الأب الجديد باسمها الكامل الجديد وآخر بناته، والأم تُمسح إن لم تكن من زوجات الأب الجديد (`clearsMother`).
+    /// لها حساب (`linkedUserId`) ← اسم الحساب الكامل نفسه في `profiles` (الاسم الأول باقٍ)
+    static func changeFather(womanId: UUID, newFatherId: UUID, fullName: String, sortOrder: Int,
+                             clearsMother: Bool, linkedUserId: UUID?) async throws {
+        var payload: [String: AnyEncodable] = [
+            "parent_id": AnyEncodable(newFatherId.uuidString),
+            "full_name": AnyEncodable(fullName),
+            "sort_order": AnyEncodable(sortOrder)
+        ]
+        if clearsMother { payload["mother_id"] = AnyEncodable(Optional<String>.none) }
+        try await SupabaseConfig.client.from("women_members")
+            .update(payload)
+            .eq("id", value: womanId.uuidString).execute()
+        if let linkedUserId {
+            try await SupabaseConfig.client.from("profiles")
+                .update(["full_name": AnyEncodable(fullName)])
+                .eq("id", value: linkedUserId.uuidString).execute()
+        }
+    }
+
     /// ربط أنثى موجودة في الشجرة كزوجة لعقدة (اختيار زوجة من العائلة).
     /// ربط/فكّ زوج — الربط يعلّم «متزوجة» تلقائياً (المرتبطة بزوج متزوجة فعلاً).
     static func setHusbandId(womanId: UUID, husbandId: UUID?) async throws {
