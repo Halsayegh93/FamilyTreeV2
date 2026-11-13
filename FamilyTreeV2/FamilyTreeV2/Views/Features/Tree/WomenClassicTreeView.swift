@@ -629,6 +629,7 @@ struct WomenClassicTreeView: View {
                 .onChange(of: envTreeScale) { newScale in
                     treeScale = newScale
                     let L = rebuild()
+                    if let preview { previewCamera(preview, in: L); return }
                     if !userInteracted { fit(in: geo.size, layout: L) } else if let r = activeRoot { scrollNodeToTop(r, in: L) }
                 }
                 .onAppear {
@@ -663,10 +664,10 @@ struct WomenClassicTreeView: View {
                     let orientationFlipped = (viewport.width > viewport.height) != (newSize.width > newSize.height)
                     viewport = newSize
                     if orientationFlipped {
-                        // تدوير: أعد البناء ثم مركّز العقدة الحالية بالمنتصف تلقائياً
+                        // تدوير: أعد البناء ثم مركّز العقدة الحالية بالمنتصف تلقائياً (المعاينة: مجموعتها بالمنتصف)
                         withAnimation(DS.Anim.smooth) {
                             let L = rebuild()
-                            fit(in: newSize, layout: L)
+                            if let preview { previewCamera(preview, in: L) } else { fit(in: newSize, layout: L) }
                         }
                     }
                 }
@@ -766,14 +767,24 @@ struct WomenClassicTreeView: View {
     /// (تصغير خفيف إن لم يتّسعا) — التمركز على الشخص وحده كان يخفي الأب تحت الشريط
     private func previewCamera(_ f: TreePlaceTreeFocus, in L: Layout) {
         guard viewport.width > 0, viewport.height > 0 else { return }
-        let ids = [f.fatherId, f.personId].compactMap { $0 }.filter { L.positions[$0] != nil }
-        let nodes = (ids.isEmpty ? [activeRoot].compactMap { $0 } : ids).compactMap { id in
-            L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeH) }
+        let M = L.m
+        func box(_ id: UUID) -> CGRect? {
+            L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: M.nodeW, height: L.heights[id] ?? M.nodeH) }
         }
-        let rect = nodes.reduce(CGRect.null) { $0.union($1) }.insetBy(dx: 0, dy: -L.m.k * DS.Spacing.lg)
+        // مجموعة المكان: الجد إن ظهر، الأب بعرض زوجاته/زوجه جنبه، وأبناؤه وبناته (الشخص والشبح بينهم)
+        var nodes: [CGRect] = [box(f.personId)].compactMap { $0 }
+        if let fid = f.fatherId, let fp = L.positions[fid] {
+            let wivesN = min(3, cWives[fid]?.count ?? 0)
+            let side = max(L.husbandCells.contains(fid) ? M.husbandOverhang : 0, M.wivesOverhang(wivesN), 0)
+            nodes.append(CGRect(x: fp.x - side, y: fp.y, width: M.nodeW + side * 2, height: L.heights[fid] ?? M.nodeH))
+            if let g = treeParentId(fid), let gb = box(g) { nodes.append(gb) }
+            nodes += (L.childGroups[fid] ?? []).flatMap { $0.flatMap { $0 } }.compactMap(box)
+        }
+        if nodes.isEmpty, let r = activeRoot, let rb = box(r) { nodes = [rb] }
+        let rect = nodes.reduce(CGRect.null) { $0.union($1) }.insetBy(dx: 0, dy: -M.k * DS.Spacing.lg)
         guard !rect.isNull, rect.width > 0 else { return }
-        let r = TreeGroupFit.autoRange(k: L.m.k)
-        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: cameraArea(viewport), lo: r.lo, hi: r.hi)
+        // بالمنتصف أفقياً وعمودياً (طلب المالك ٢٠٢٦-١١-١٣) — `TreePlaceCamera.center`
+        let cam = TreePlaceCamera.center(rect: rect, viewport: viewport, k: M.k)
         scale = cam.scale; baseScale = cam.scale
         userInteracted = true
         looseClamp = true

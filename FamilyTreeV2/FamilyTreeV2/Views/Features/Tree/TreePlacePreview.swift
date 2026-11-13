@@ -9,6 +9,25 @@ import SwiftUI
 //  • شجرة النساء: `WomenClassicTreeView` نفسها بوضع المعاينة (`preview:`) — نسخة معزولة بلا أدوات.
 // الشبح (يُضاف/أُضيف) يُدرج آخر أبناء الأب في التخطيط فقط، والتعديل يُرسم بحالته «بعد التنفيذ».
 
+/// كاميرا المعاينة الأولى في الشجرتين (طلب المالك ٢٠٢٦-١١-١٣ «ابيك تخلي صورة الشجرة بالمنتصف»): مجموعة المكان
+/// (الجد إن ظهر، الأب، صفّ الإخوة بالشخص/الشبح/خانة الزوجة) بمنتصف المساحة الحرّة أفقياً وعمودياً — بين الشريط
+/// الداكن واللوحة السفلية — بهامش مريح؛ المقياس يلائمها بين التصغير الخفيف للشجرة وتكبيرها الافتراضي (لا أكبر
+/// من حجم تبويب الشجرة المعتاد). الأطول من المساحة بعد التصغير الخفيف: أعلاها في الأعلى. السحب والقرص حرّان بعدها
+enum TreePlaceCamera {
+    static let margin: CGFloat = TreeGroupFit.margin + DS.Spacing.sm
+
+    static func center(rect: CGRect, viewport: CGSize, k: CGFloat) -> (scale: CGFloat, offset: CGSize) {
+        let avail = CGRect(x: margin, y: margin, width: max(1, viewport.width - margin * 2),
+                           height: max(1, viewport.height - margin * 2))
+        let range = TreeGroupFit.autoRange(k: k)
+        let fit = min(avail.width / max(1, rect.width), avail.height / max(1, rect.height))
+        let s = min(range.hi, max(range.lo, fit))
+        let x = avail.midX - rect.midX * s
+        let y = rect.height * s <= avail.height ? avail.midY - rect.midY * s : avail.minY - rect.minY * s
+        return (s, CGSize(width: x, height: y))
+    }
+}
+
 /// ما تفتح عليه المعاينة في الشجرتين
 struct TreePlaceTreeFocus {
     /// الشخص (أو الشبح) في بيانات المعاينة
@@ -188,6 +207,8 @@ struct TreePlaceMenCanvas: View {
                     build()
                 }
                 .onChange(of: geo.size) { size in
+                    // تدوير الشاشة: تُعاد الكاميرا للمنتصف كما تفعل الشجرة
+                    if (viewport.width > viewport.height) != (size.width > size.height) { userInteracted = false }
                     viewport = size
                     relayout()
                 }
@@ -247,21 +268,28 @@ struct TreePlaceMenCanvas: View {
         if !userInteracted { focusPerson(in: L) }
     }
 
-    /// الكاميرا بقواعد الشجرة نفسها (`TreeGroupFit.camera` — ملاءمة مجموعة): الأب والشخص معاً في المساحة الظاهرة
-    /// بالتكبير الافتراضي (تصغير خفيف إن لم يتّسعا) — كان التمركز على الشخص وحده يخفي الأب تحت الشريط
+    /// الكاميرا الأولى: مجموعة المكان (الجد إن ظهر، الأب، صفّ الإخوة بالشخص والشبح وخانة الزوجة) بالمنتصف —
+    /// `TreePlaceCamera.center`
     private func focusPerson(in L: FamilyLayout) {
         guard viewport.width > 0, viewport.height > 0 else { return }
-        let ids = [focus.fatherId, focus.personId].compactMap { $0 }.filter { L.positions[$0] != nil }
-        let nodes = (ids.isEmpty ? [index?.roots.first?.id].compactMap { $0 } : ids).compactMap { id in
+        var ids: [UUID] = [focus.personId]
+        if let f = focus.fatherId {
+            ids.append(f)
+            if let g = index?.byId[f]?.fatherId { ids.append(g) }
+            ids += (L.childRows[f] ?? []).flatMap { $0 }
+        }
+        if L.positions[Self.wifeSlotId] != nil { ids.append(Self.wifeSlotId) }
+        let nodes = ids.compactMap { id in
             L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeHDefault) }
         }
-        let rect = nodes.reduce(CGRect.null) { $0.union($1) }
+        let fallback = index?.roots.first.flatMap { root in
+            L.positions[root.id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[root.id] ?? L.m.nodeHDefault) }
+        }
+        let rect = (nodes.isEmpty ? [fallback].compactMap { $0 } : nodes).reduce(CGRect.null) { $0.union($1) }
             // الشريحة تحت عقدة الشخص
             .insetBy(dx: 0, dy: -L.m.k * DS.Spacing.lg)
         guard !rect.isNull, rect.width > 0 else { return }
-        let area = TreeGroupFit.area(viewport: viewport, canvas: .zero, chromeTop: focus.chromeTop, tools: .zero, sideBar: 0)
-        let r = TreeGroupFit.autoRange(k: L.m.k)
-        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: area, lo: r.lo, hi: r.hi)
+        let cam = TreePlaceCamera.center(rect: rect, viewport: viewport, k: L.m.k)
         scale = cam.scale; baseScale = cam.scale; fittedScale = cam.scale
         offset = TreeGroupFit.looseClamp(cam.offset,
                                          content: CGSize(width: L.size.width * cam.scale, height: L.size.height * cam.scale),
