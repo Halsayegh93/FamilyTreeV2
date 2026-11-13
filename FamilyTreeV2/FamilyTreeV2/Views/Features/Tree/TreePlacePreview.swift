@@ -165,6 +165,7 @@ struct TreePlaceMenCanvas: View {
                         ForEach(nodes, id: \.id) { m in
                             node(m)
                         }
+                        wifeSlot
                         markLayer(.front)
                     }
                     .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
@@ -200,8 +201,24 @@ struct TreePlaceMenCanvas: View {
     }
 
     /// الفهرس (نفس قاعدة التبويب) ← مسار الجذر ← الأب مفتوح، والشخص غير مفتوح فيظهر إخوته كلهم
+    /// خانة الزوجة من خارج العائلة في التخطيط (لا وجود لها في البيانات)
+    static let wifeSlotId = UUID(uuidString: "7E1A0000-0000-4000-8000-00000000A0D2")!
+
     private func build() {
-        let idx = FamilyTreeLayoutEngine.index(members)
+        var idx = FamilyTreeLayoutEngine.index(members)
+        // الزوجة من خارج العائلة: خانة حقيقية بعد الزوج مباشرة بين إخوته (يسار الزوج في العربية) — فيتزحزح الإخوة ولا
+        // يغطّي مربّعها عقدة أحد؛ بلا خط إليها (تُحذف من خطوط الأب في `relayout`)
+        if let wife = focus.wifeName, let husband = idx.byId[focus.personId], let f = husband.fatherId,
+           var kids = idx.children[f], let i = kids.firstIndex(where: { $0.id == husband.id }) {
+            let slot = FamilyMember(id: Self.wifeSlotId, firstName: wife, fullName: wife, fatherId: f,
+                                    sortOrder: husband.sortOrder, status: .active, gender: "female")
+            kids.insert(slot, at: i + 1)
+            var children = idx.children
+            children[f] = kids
+            var byId = idx.byId
+            byId[slot.id] = slot
+            idx = FamilyTreeLayoutEngine.Index(visible: idx.visible, byId: byId, roots: idx.roots, children: children)
+        }
         index = idx
         var path = Set<UUID>()
         var cur = focus.fatherId
@@ -217,9 +234,14 @@ struct TreePlaceMenCanvas: View {
 
     private func relayout() {
         guard let idx = index else { return }
-        let L = FamilyTreeLayoutEngine.layout(rootId: idx.roots.first?.id, children: idx.children, byId: idx.byId,
+        var L = FamilyTreeLayoutEngine.layout(rootId: idx.roots.first?.id, children: idx.children, byId: idx.byId,
                                               activePath: activePath, kinship: [],
                                               landscape: viewport.width > viewport.height, k: envTreeScale)
+        // خانة الزوجة: مكانها محجوز، وبلا خط من الأب إليها
+        if L.positions[Self.wifeSlotId] != nil, let f = idx.byId[Self.wifeSlotId]?.fatherId, let rows = L.childRows[f] {
+            L.childRows[f] = rows.map { $0.filter { $0 != Self.wifeSlotId } }.filter { !$0.isEmpty }
+            L.connectors = FamilyTreeLayoutEngine.connectors(L, kinship: [])
+        }
         layout = L
         nodes = idx.visible.filter { L.positions[$0.id] != nil }
         if !userInteracted { focusPerson(in: L) }
@@ -251,7 +273,7 @@ struct TreePlaceMenCanvas: View {
         let M = layout.m
         let p = layout.positions[m.id] ?? .zero
         let h = layout.heights[m.id] ?? M.nodeHDefault
-        let kids = index?.children[m.id] ?? []
+        let kids = (index?.children[m.id] ?? []).filter { $0.id != Self.wifeSlotId }
         return TreeMemberNode(member: m, isExpanded: activePath.contains(m.id), searchedMemberID: .constant(nil),
                               hasChildren: !kids.isEmpty, childrenCount: kids.count, showName: true,
                               level: layout.depth[m.id] ?? 0, currentLocationMemberID: nil, k: M.k,
@@ -267,8 +289,19 @@ struct TreePlaceMenCanvas: View {
         if let p = layout.positions[focus.personId] {
             let M = layout.m
             let h = layout.heights[focus.personId] ?? M.nodeHDefault
-            TreePlaceNodeMark(style: focus.mark, layer: layer, k: M.k, size: CGSize(width: M.nodeW, height: h),
-                              wifeName: focus.wifeName)
+            TreePlaceNodeMark(style: focus.mark, layer: layer, k: M.k, size: CGSize(width: M.nodeW, height: h))
+                .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
+        }
+    }
+
+    /// مربّع الزوجة من خارج العائلة في خانته المحجوزة بجانب الزوج
+    @ViewBuilder
+    private var wifeSlot: some View {
+        if let name = focus.wifeName, let p = layout.positions[Self.wifeSlotId] {
+            let M = layout.m
+            let h = layout.heights[Self.wifeSlotId] ?? M.nodeHDefault
+            TreePlaceWifeSlot(name: name, k: M.k)
+                .frame(width: M.nodeW, height: h)
                 .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
         }
     }
@@ -313,7 +346,7 @@ struct TreePlaceMenCanvas: View {
 
 // MARK: - علامة الشخص فوق عقدة الشجرة (الشجرتان)
 
-/// إطار حول العقدة بشكل التغيير + شريحة تحتها (+ مربّع الزوجة من خارج العائلة جنبها) — بإحداثيات العقدة × معامل
+/// إطار حول العقدة بشكل التغيير + شريحة تحتها — بإحداثيات العقدة × معامل
 /// «حجم النص» فيكبر معها. `back` تحت العقد (التعبئة والهالة)، `front` فوقها (الإطار والشريحة)
 struct TreePlaceNodeMark: View {
     enum Layer { case back, front }
@@ -323,7 +356,6 @@ struct TreePlaceNodeMark: View {
     let k: CGFloat
     /// صندوق العقدة في التخطيط (عرض × ارتفاع)
     let size: CGSize
-    var wifeName: String? = nil
 
     private var pad: CGFloat { 8 * k }
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: 28 * k, style: .continuous) }
@@ -362,16 +394,6 @@ struct TreePlaceNodeMark: View {
                         .fixedSize()
                     }
                 }
-                .overlay(alignment: .trailing) {
-                    if let wifeName {
-                        // يسار الزوج بلا خط (الكانفس من اليسار): المربّع ثم فراغ بعرض العقدة
-                        HStack(spacing: pad + 14 * k) {
-                            wifeBox(wifeName)
-                            Color.clear.frame(width: size.width, height: 1)
-                        }
-                        .fixedSize()
-                    }
-                }
                 .allowsHitTesting(false)
         }
     }
@@ -389,10 +411,17 @@ struct TreePlaceNodeMark: View {
         }
     }
 
-    /// مربّع الزوجة الشبح بشكل شجرة النساء: إطار وردي متقطّع، اسمها، وشريحة «زوجة من خارج العائلة»
-    private func wifeBox(_ name: String) -> some View {
+}
+
+/// مربّع الزوجة الشبح بشكل شجرة النساء داخل خانتها المحجوزة (بعرض العقدة — لا يتجاوزها فلا يغطّي جاراً):
+/// إطار وردي متقطّع، اسمها، وشريحة «زوجة من خارج العائلة»
+struct TreePlaceWifeSlot: View {
+    let name: String
+    let k: CGFloat
+
+    var body: some View {
         let box = RoundedRectangle(cornerRadius: 22 * k, style: .continuous)
-        return VStack(spacing: DS.Spacing.xs * k) {
+        VStack(spacing: DS.Spacing.xs * k) {
             Image(systemName: "person.fill")
                 .dsTreeGlyph(DS.Glyph.xxl, k, weight: .semibold)
                 .foregroundColor(DS.Color.female)
@@ -400,18 +429,24 @@ struct TreePlaceNodeMark: View {
                 .dsTreeFont(.title3Tree, k)
                 .foregroundColor(DS.Color.female)
                 .lineLimit(1)
+                .minimumScaleFactor(0.6)
             Text(TreePlaceText.outsideWifePill)
                 .dsTreeFont(.badge, k)
                 .foregroundColor(DS.Color.textOnPrimary)
-                .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
                 .padding(.horizontal, DS.Spacing.sm * k)
                 .padding(.vertical, DS.Spacing.xxs * k)
                 .background(Capsule().fill(DS.Color.femaleFill))
         }
-        .padding(.horizontal, DS.Spacing.md * k)
-        .padding(.vertical, DS.Spacing.md * k)
+        .padding(DS.Spacing.sm * k)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(box.fill(DS.Color.female.opacity(DS.Opacity.tintFillSoft)))
         .background(box.fill(DS.Color.background))
         .overlay(box.stroke(DS.Color.female, style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, dash: [9 * k, 7 * k])))
+        .padding(.horizontal, DS.Spacing.xs * k)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

@@ -797,8 +797,7 @@ struct WomenClassicTreeView: View {
         if let p = layout.positions[f.personId] {
             let M = layout.m
             let h = layout.heights[f.personId] ?? M.nodeH
-            TreePlaceNodeMark(style: f.mark, layer: layer, k: M.k, size: CGSize(width: M.nodeW, height: h),
-                              wifeName: f.wifeName)
+            TreePlaceNodeMark(style: f.mark, layer: layer, k: M.k, size: CGSize(width: M.nodeW, height: h))
                 .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
         }
     }
