@@ -2596,6 +2596,10 @@ struct AdminAllRequestsView: View {
                         .minimumScaleFactor(0.8)
                 }
                 .foregroundColor(DS.Color.sea)
+                // إطار على الرقم (طلب المالك ٢٠٢٦-١١-١٣ «خلّ على الرقم إطار»)
+                .padding(.horizontal, DS.Spacing.sm)
+                .frame(minHeight: DS.Icon.row)
+                .overlay(Capsule().strokeBorder(DS.Color.sea, lineWidth: DS.Border.widthBold))
                 .padding(.vertical, pad)
                 .contentShape(Rectangle())
                 .padding(.vertical, -pad)
@@ -3693,7 +3697,13 @@ struct AdminAllRequestsView: View {
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
                 if let valueAction {
-                    Button(action: valueAction) { valueText }
+                    // إطار على الرقم كرابط الاتصال في البطاقة
+                    Button(action: valueAction) {
+                        valueText
+                            .padding(.horizontal, DS.Spacing.sm)
+                            .frame(minHeight: DS.Icon.row)
+                            .overlay(Capsule().strokeBorder(DS.Color.sea, lineWidth: DS.Border.widthBold))
+                    }
                         .buttonStyle(DSScaleButtonStyle())
                         .accessibilityHint(L10n.t("اتصال", "Call"))
                 } else {
