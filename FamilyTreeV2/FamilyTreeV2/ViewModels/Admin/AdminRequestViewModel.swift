@@ -495,13 +495,16 @@ class AdminRequestViewModel: ObservableObject {
             let memberName = payload.targetMemberName ?? payload.newMemberName ?? ""
             let actionLabelAr = payload.resolvedAction?.arabicLabel ?? payload.action
             let actionLabelEn = payload.resolvedAction?.englishLabel ?? payload.action
-            let requesterFirstName = user.firstName
+            // الاسم الأول قد يكون فارغاً — لا يبدأ النص بمسافة
+            let firstName = user.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let requesterAr = firstName.isEmpty ? "عضو" : firstName
+            let requesterEn = firstName.isEmpty ? "A member" : firstName
             let bodyAr: String = memberName.isEmpty
-                ? "\(requesterFirstName) قدّم طلب \(actionLabelAr)"
-                : "\(requesterFirstName) قدّم طلب \(actionLabelAr) لـ «\(memberName)»"
+                ? "\(requesterAr) قدّم طلب \(actionLabelAr)"
+                : "\(requesterAr) قدّم طلب \(actionLabelAr) لـ «\(memberName)»"
             let bodyEn: String = memberName.isEmpty
-                ? "\(requesterFirstName) submitted a \(actionLabelEn) request"
-                : "\(requesterFirstName) submitted a \(actionLabelEn) request for «\(memberName)»"
+                ? "\(requesterEn) submitted a \(actionLabelEn) request"
+                : "\(requesterEn) submitted a \(actionLabelEn) request for «\(memberName)»"
             await notificationVM?.notifyAdminsWithPush(
                 title: L10n.stored("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
                 body: L10n.stored(bodyAr, bodyEn),

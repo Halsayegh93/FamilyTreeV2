@@ -567,8 +567,8 @@ class NotificationViewModel: ObservableObject {
     
     // MARK: - Admin Device Management
     
-    /// جلب أجهزة عضو محدد (للمدير)
-    func fetchDevicesForMember(_ memberId: UUID) async -> [LinkedDevice] {
+    /// جلب أجهزة عضو محدد (للمدير) — nil = تعذّر التحميل (لا يُعرض كأنه «لا أجهزة»)
+    func fetchDevicesForMember(_ memberId: UUID) async -> [LinkedDevice]? {
         guard canModerate else {
             Log.warning("[AUTH] Unauthorized fetchDevicesForMember attempt")
             return []
@@ -584,7 +584,7 @@ class NotificationViewModel: ObservableObject {
             return devices
         } catch {
             Log.fetchError("[ADMIN-DEVICE] خطأ جلب أجهزة العضو", error)
-            return []
+            return nil
         }
     }
     

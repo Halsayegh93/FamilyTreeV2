@@ -61,9 +61,12 @@ struct NotificationDetailBox: View {
             }
             .transaction { t in if openMember != nil { t.disablesAnimations = true } }
             .dsAlert(L10n.t("رفض الطلب؟", "Reject this request?"), isPresented: $confirmReject, icon: "xmark.circle.fill") {
-                TextField(L10n.t("سبب الرفض (اختياري)", "Reason (optional)"), text: $rejectReason)
-                    .dsAlertField()
-                    .layoutValue(key: DSAlertIsFieldKey.self, value: true)
+                // رفض البلاغ لا يحمل سبباً (rejectNewsReport) — لا حقل يُكتب فيه ثم يضيع
+                if request?.requestType != RequestType.newsReport.rawValue {
+                    TextField(L10n.t("سبب الرفض (اختياري)", "Reason (optional)"), text: $rejectReason)
+                        .dsAlertField()
+                        .layoutValue(key: DSAlertIsFieldKey.self, value: true)
+                }
                 Button(L10n.t("رفض", "Reject"), role: .destructive) { reject() }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
@@ -211,8 +214,8 @@ struct NotificationDetailBox: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         Task {
             adminRequestVM.errorMessage = nil
-            await adminRequestVM.rejectFromBox(r, reason: reason)
-            await finish(ok: true, rid: r.id)
+            let ok = await adminRequestVM.rejectFromBox(r, reason: reason)
+            await finish(ok: ok, rid: r.id)
         }
     }
 

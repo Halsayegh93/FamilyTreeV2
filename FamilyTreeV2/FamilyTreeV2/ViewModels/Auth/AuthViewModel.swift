@@ -1952,24 +1952,33 @@ class AuthViewModel: ObservableObject {
             ]
             
             let path = source ?? RequestSource(.contact, RequestSourceStep("paperplane.fill", "رسالة للإدارة"))
-            try await AdminRequestSource.send(path) { path in
+            // الصف المُدرَج — معرّفه يمرّ في إشعار الإدارة (مثل باقي الطلبات) فيفتحه الضغط عليه
+            let inserted: AdminRequest = try await AdminRequestSource.send(path) { path in
                 do {
                     var payload = AdminRequestSource.payload(basePayload, path)
                     payload["new_value"] = AnyEncodable(category)
 
-                    try await supabase
+                    let row: AdminRequest = try await supabase
                         .from("admin_requests")
                         .insert(payload)
+                        .select()
+                        .single()
                         .execute()
+                        .value
                     Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
+                    return row
                 } catch {
                     if ErrorHelper.isMissingColumn(error, column: "new_value") {
                         Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
-                        try await supabase
+                        let row: AdminRequest = try await supabase
                             .from("admin_requests")
                             .insert(AdminRequestSource.payload(basePayload, path))
+                            .select()
+                            .single()
                             .execute()
+                            .value
                         Log.info("[Contact] ✅ تم الحفظ في admin_requests (بدون new_value)")
+                        return row
                     } else {
                         throw error
                     }
@@ -1978,12 +1987,16 @@ class AuthViewModel: ObservableObject {
 
             // 2. إرسال الإيميل عبر contact-email
             Log.info("[Contact] 2️⃣ استدعاء contact-email edge function...")
-            let emailPayload: [String: AnyEncodable] = [
+            var emailPayload: [String: AnyEncodable] = [
                 "category": AnyEncodable(category),
                 "message": AnyEncodable(cleanMessage),
                 "sender_name": AnyEncodable(user.displayFullName),
                 "sender_phone": AnyEncodable(user.phoneNumber)
             ]
+            // وسيلة التواصل الاختيارية تصل للإيميل أيضاً (الدالة تقرأ preferred_contact)
+            if let pc = preferredContact?.trimmingCharacters(in: .whitespacesAndNewlines), !pc.isEmpty {
+                emailPayload["preferred_contact"] = AnyEncodable(pc)
+            }
 
             do {
                 try await supabase.functions.invoke(
@@ -2001,7 +2014,9 @@ class AuthViewModel: ObservableObject {
             await notifyAdminsWithPush(
                 title: "رسالة تواصل",
                 body: "رسالة \(category) جديدة.",
-                kind: "contact_message"
+                kind: "contact_message",
+                requestId: inserted.id,
+                requestType: inserted.requestType
             )
             Log.info("[Contact] ✅ تم إرسال إشعار المشرفين")
 

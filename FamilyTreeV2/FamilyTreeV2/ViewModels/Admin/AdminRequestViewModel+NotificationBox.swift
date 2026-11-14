@@ -67,8 +67,9 @@ extension AdminRequestViewModel {
     }
 
     /// الرفض = دالة الرفض الموجودة لكل نوع
-    func rejectFromBox(_ request: AdminRequest, reason: String?) async {
-        guard canRejectFromBox(request) else { return }
+    /// يعيد نجاح الرفض فعلاً على السيرفر (`awaitDecision`) — حارس محلي أو خطأ = false
+    func rejectFromBox(_ request: AdminRequest, reason: String?) async -> Bool {
+        guard canRejectFromBox(request) else { return false }
         let r = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
         let why = (r?.isEmpty ?? true) ? nil : r
         switch request.requestType {
@@ -77,7 +78,8 @@ extension AdminRequestViewModel {
         case RequestType.nameChange.rawValue:       await rejectNameChangeRequest(request: request, reason: why)
         case RequestType.photoSuggestion.rawValue:  await rejectPhotoSuggestion(request: request, reason: why)
         case RequestType.newsReport.rawValue:       await rejectNewsReport(request: request)
-        default: break
+        default: return false
         }
+        return await awaitDecision(request.id)
     }
 }

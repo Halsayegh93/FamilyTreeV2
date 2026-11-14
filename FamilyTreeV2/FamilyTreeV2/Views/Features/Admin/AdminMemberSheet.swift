@@ -29,6 +29,7 @@ struct AdminMemberSheet: View {
     @State private var liveStatus: FamilyMember.MemberStatus?
     @State private var ban: BannedPhone?
     @State private var devices: [NotificationViewModel.LinkedDevice]?
+    @State private var devicesFailed = false
     @State private var tree: AdminMemberFacts.TreeContext?
 
     @State private var box: AdminMemberBox?
@@ -135,6 +136,7 @@ struct AdminMemberSheet: View {
         liveStatus = nil
         ban = nil
         devices = nil
+        devicesFailed = false
         if !accounts.loaded { await accounts.refresh() }
         guard let m = member, m.isDeceased != true else { return }
         // «طلب تغيير الصورة» المعلّق (السيرفر القديم: لا شيء)
@@ -142,8 +144,15 @@ struct AdminMemberSheet: View {
         if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
         await refreshBan(m)
         if authVM.canViewSystemSettings {
-            devices = await notificationVM.fetchDevicesForMember(m.id)
+            await loadDevices(m)
         }
+    }
+
+    /// تعذّر الجلب ≠ «لا أجهزة» — سطر «تعذّر تحميل الأجهزة.» بدل «لا تصله الإشعارات»
+    private func loadDevices(_ m: FamilyMember) async {
+        let list = await notificationVM.fetchDevicesForMember(m.id)
+        devicesFailed = list == nil
+        devices = list ?? []
     }
 
     private func refreshBan(_ m: FamilyMember) async {
@@ -185,7 +194,7 @@ struct AdminMemberSheet: View {
                 ok = await memberVM.clearPhoneNumber(for: m.id)
             case .signOut(let device):
                 ok = await notificationVM.removeDeviceByAdmin(device)
-                devices = await notificationVM.fetchDevicesForMember(m.id)
+                await loadDevices(m)
                 if !ok { failure = notificationVM.lastDeviceError }
             case .delete:
                 if await memberVM.deleteMember(memberId: m.id) {
@@ -335,7 +344,10 @@ struct AdminMemberSheet: View {
     @ViewBuilder
     private func devicesRows(_ m: FamilyMember) -> some View {
         if let devices {
-            if devices.isEmpty {
+            if devicesFailed {
+                AdminSheetRow(icon: "exclamationmark.triangle", tint: DS.Color.warning, title: L10n.t("الأجهزة المرتبطة", "Linked devices"),
+                              value: L10n.t("تعذّر تحميل الأجهزة.", "Couldn't load devices."))
+            } else if devices.isEmpty {
                 AdminSheetRow(icon: "iphone.slash", tint: DS.Color.slate, title: L10n.t("الأجهزة المرتبطة", "Linked devices"),
                               value: L10n.t("لا أجهزة مرتبطة — لا تصله الإشعارات", "No linked devices — no notifications"))
             } else {
