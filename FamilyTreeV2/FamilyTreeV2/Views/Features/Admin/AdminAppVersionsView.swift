@@ -108,7 +108,7 @@ struct AdminAppVersionsView: View {
         let onLatest = (o?.ios.on_latest ?? 0) + (o?.android.on_latest ?? 0)
         return AdminPageHeader(
             title: L10n.t("النسخ عند الأعضاء", "Versions on devices"),
-            subtitle: L10n.t("آخر \(Self.days) يوم", "Last \(Self.days) days"),
+            subtitle: L10n.t("آخر \(Self.days) يوماً", "Last \(Self.days) days"),
             glyph: "iphone.and.arrow.forward",
             kpis: [
                 AdminPageKPI(AdminPageKPI.count(onLatest, ready: o != nil), L10n.t("على الأخيرة", "On latest"),

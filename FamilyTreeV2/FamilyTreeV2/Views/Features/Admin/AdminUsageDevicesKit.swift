@@ -138,13 +138,13 @@ enum AdminLiveUsage {
     }
 
     static func minutesLabel(_ m: Int) -> String {
-        if m < 1 { return L10n.t("الحين", "now") }
+        if m < 1 { return L10n.t("الآن", "now") }
         if m < 60 { return L10n.t("\(m) د", "\(m)m") }
         return L10n.t("\(m / 60) س", "\(m / 60)h")
     }
 
     static func secondsLabel(_ s: Int) -> String {
-        if s < 60 { return L10n.t("الحين", "now") }
+        if s < 60 { return L10n.t("الآن", "now") }
         return L10n.t("\(s / 60) د", "\(s / 60)m")
     }
 

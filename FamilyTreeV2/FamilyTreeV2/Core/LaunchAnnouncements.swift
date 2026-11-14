@@ -76,7 +76,7 @@ struct LaunchAnnouncement: Codable, Identifiable, Equatable {
     static func defaultTitle(_ kind: Kind) -> String? {
         switch kind {
         case .none:   return nil
-        case .update: return L10n.t("حدّث الحين", "Update now")
+        case .update: return L10n.t("حدّث الآن", "Update now")
         case .news:   return L10n.t("افتح الأخبار", "Open News")
         case .link:   return L10n.t("فتح الرابط", "Open link")
         }

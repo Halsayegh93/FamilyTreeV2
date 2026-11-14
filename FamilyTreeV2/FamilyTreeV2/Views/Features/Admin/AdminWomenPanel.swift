@@ -184,7 +184,7 @@ struct AdminWomenPanel: View {
         let shown = built ? rows(all) : []
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             treeEntry
-            AdminMembersSearchField(text: $query, placeholder: L10n.t("ابحث باسمها أو اسم أبوها", "Search by her or her father's name"))
+            AdminMembersSearchField(text: $query, placeholder: L10n.t("ابحث باسمها أو اسم أبيها", "Search by her or her father's name"))
             chips(all)
             HStack {
                 Spacer(minLength: 0)

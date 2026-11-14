@@ -54,7 +54,7 @@ struct AdminLaunchChoice {
         switch duration {
         case .day:     return L10n.t("يوم", "1 day")
         case .twoDays: return L10n.t("يومين", "2 days")
-        case .until:   return L10n.t("لين \(AdminOccasionsText.shortDate(untilDay))",
+        case .until:   return L10n.t("حتى \(AdminOccasionsText.shortDate(untilDay))",
                                      "until \(AdminOccasionsText.shortDate(untilDay))")
         }
     }
@@ -225,7 +225,7 @@ struct AdminLaunchComposerSection: View {
                     }
                 } label: {
                     AdminChoiceChip(title: choice.duration == .until
-                                        ? AdminOccasionsText.shortDate(choice.untilDay) : L10n.t("اختر تاريخ", "Pick a date"),
+                                        ? AdminOccasionsText.shortDate(choice.untilDay) : L10n.t("اختر تاريخاً", "Pick a date"),
                                     isSelected: choice.duration == .until, expands: true)
                 }
                 .buttonStyle(DSPressStyle())
@@ -262,7 +262,7 @@ struct AdminLaunchComposerSection: View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             label(L10n.t("الزر:", "Button:"))
             AdminChoiceRow {
-                buttonChip(.update, title: L10n.t("حدّث الحين ← المتجر", "Update now → Store"))
+                buttonChip(.update, title: L10n.t("حدّث الآن ← المتجر", "Update now → Store"))
                 buttonChip(.news, title: L10n.t("افتح الأخبار", "Open News"))
             }
             AdminChoiceRow {

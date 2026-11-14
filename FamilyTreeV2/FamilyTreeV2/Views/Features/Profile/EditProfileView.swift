@@ -1704,7 +1704,6 @@ struct BioEditCard: View {
                         .padding(-(DS.Icon.tapTarget - DS.Icon.discSmall) / 2)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(t("حذف المحطة", "Delete entry"))
                 .accessibilityLabel(t("حذف الحدث", "Delete entry"))
             }
 

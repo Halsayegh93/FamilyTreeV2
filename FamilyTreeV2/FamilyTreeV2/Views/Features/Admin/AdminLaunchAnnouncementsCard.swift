@@ -41,7 +41,7 @@ struct AdminLaunchAnnouncementsCard: View {
                                         text: L10n.t("لا توجد إعلانات تظهر الآن", "No announcements are showing now"))
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    groupLabel(L10n.t("تظهر الحين", "Showing now"), count: live.count)
+                    groupLabel(L10n.t("تظهر الآن", "Showing now"), count: live.count)
                     if live.isEmpty {
                         Text(L10n.t("لا توجد إعلانات تظهر الآن", "No announcements are showing now"))
                             .dsFont(.footnote)
@@ -192,7 +192,7 @@ struct AdminLaunchAnnouncementsCard: View {
                 parts.append(L10n.t("تبدأ \(AdminAnnounceKit.when(s))", "starts \(AdminAnnounceKit.when(s))"))
             }
             if let e = item.ends {
-                parts.append(L10n.t("لين \(AdminAnnounceKit.when(e))", "until \(AdminAnnounceKit.when(e))"))
+                parts.append(L10n.t("حتى \(AdminAnnounceKit.when(e))", "until \(AdminAnnounceKit.when(e))"))
             }
         } else if let stopped = item.stopped {
             parts.append(L10n.t("أُوقف \(AdminOccasionsText.shortDate(stopped))", "stopped \(AdminOccasionsText.shortDate(stopped))"))
