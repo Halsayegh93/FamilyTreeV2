@@ -516,6 +516,18 @@ struct AdminAllRequestsView: View {
         } message: {
             Text(adminRequestVM.errorMessage ?? "")
         }
+        // خطأ اعتماد/رفض مشروع (الحذف كان تفاؤلياً وتعود البطاقة)
+        .dsAlert(
+            L10n.t("تنبيه", "Notice"),
+            isPresented: Binding(
+                get: { projectsVM.decisionError != nil },
+                set: { if !$0 { projectsVM.decisionError = nil } }
+            )
+        ) {
+            Button(L10n.t("حسناً", "OK")) { projectsVM.decisionError = nil }
+        } message: {
+            Text(projectsVM.decisionError ?? "")
+        }
     }
 
     /// مربّع تفاصيل الطلب، والسحب (رفض/حذف)، وربط طلب الانضمام ودمجه

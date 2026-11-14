@@ -11,6 +11,8 @@ class DiwaniyasViewModel: ObservableObject {
     @Published var pendingDiwaniyas: [Diwaniya] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// ما يعيده زرّ «إعادة المحاولة» في تنبيه الخطأ — الحذف/الاعتماد/الرفض الذي فشل (nil = إعادة تحميل القائمة)
+    var retryAction: (() async -> Void)?
     
     let supabase = SupabaseConfig.client
 
@@ -235,6 +237,7 @@ class DiwaniyasViewModel: ObservableObject {
             await fetchDiwaniyas()
         } catch {
             self.errorMessage = L10n.t("فشل حذف الديوانية. حاول مرة أخرى.", "Failed to delete diwaniya. Please try again.")
+            self.retryAction = { [weak self] in await self?.deleteDiwaniya(id: id) }
             Log.error("خطأ حذف ديوانية: \(error.localizedDescription)")
             isLoading = false
         }
@@ -287,6 +290,7 @@ class DiwaniyasViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.errorMessage = L10n.t("فشل اعتماد الديوانية. حاول مرة أخرى.", "Failed to approve diwaniya. Please try again.")
+                    self?.retryAction = { [weak self] in await self?.approveDiwaniya(id: id, adminId: adminId) }
                 }
                 Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
             }
@@ -421,6 +425,7 @@ class DiwaniyasViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.errorMessage = L10n.t("فشل رفض الديوانية. حاول مرة أخرى.", "Failed to reject diwaniya. Please try again.")
+                    self?.retryAction = { [weak self] in await self?.rejectDiwaniya(id: id) }
                 }
                 Log.error("خطأ رفض ديوانية: \(error.localizedDescription)")
             }

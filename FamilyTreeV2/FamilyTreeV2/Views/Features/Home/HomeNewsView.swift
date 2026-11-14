@@ -25,6 +25,7 @@ struct HomeNewsView: View {
     @State private var postToReport: NewsPost? = nil
     @State private var newsReportReason = ""
     @State private var newsReportSent = false
+    @State private var reportFailed = false
     /// حظر ناشر الخبر (Guideline 1.2) — أخبار المحظورين لا تظهر للحاظر
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
@@ -334,7 +335,7 @@ struct HomeNewsView: View {
                             source: RequestSource(.home, RequestSourceStep("newspaper.fill", "الأخبار"),
                                                   RequestSourceStep("flag.fill", "بلاغ عن منشور"))
                         )
-                        if ok { await MainActor.run { newsReportSent = true } }
+                        if ok { await MainActor.run { newsReportSent = true } } else { await MainActor.run { reportFailed = true } }
                     }
                 }
                 postToReport = nil
@@ -343,6 +344,11 @@ struct HomeNewsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
         } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
                                 "Enter a reason; it will be sent to the admins to review this post.")) }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
+        }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $newsReportSent) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {

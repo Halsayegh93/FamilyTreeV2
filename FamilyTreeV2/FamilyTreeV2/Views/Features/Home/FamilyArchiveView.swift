@@ -24,6 +24,7 @@ struct FamilyArchiveView: View {
     @State private var itemToReject: ArchiveItem? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
 
     // وضع التحديد المتعدّد (للمدراء فقط)
     @State private var selectionMode = false
@@ -217,7 +218,7 @@ struct FamilyArchiveView: View {
                                                   RequestSourceStep("doc.fill", target.title),
                                                   RequestSourceStep("flag.fill", "بلاغ عن محتوى"))
                         )
-                        if ok { await MainActor.run { reportSent = true } }
+                        if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                     }
                 }
             }
@@ -225,6 +226,11 @@ struct FamilyArchiveView: View {
         } message: {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا العنصر.",
                        "Enter a reason; it will be sent to the admins to review this item."))
+        }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}

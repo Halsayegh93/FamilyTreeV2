@@ -53,6 +53,7 @@ struct MemberDetailsView: View {
     @Environment(\.openURL) private var openURL
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
     /// حظر العضو / إلغاء حظره (Guideline 1.2) — بجانب «إبلاغ»
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
@@ -398,13 +399,18 @@ struct MemberDetailsView: View {
                         source: RequestSource(.tree, .member(target.fullName),
                                               RequestSourceStep("flag.fill", "بلاغ عن ملف عضو"))
                     )
-                    if ok { await MainActor.run { reportSent = true } }
+                    if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                 }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { reportReason = "" }
         } message: {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة ملف هذا العضو.",
                        "Enter a reason; it will be sent to the admins to review this member's profile."))
+        }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) { }

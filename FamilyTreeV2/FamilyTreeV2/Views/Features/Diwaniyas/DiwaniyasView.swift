@@ -13,6 +13,7 @@ struct DiwaniyasView: View {
     @State private var diwaniyaToReport: Diwaniya? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
     @State private var appeared = false
     /// الظاهرة للمستخدم (المعتمدة + طلباته/المعلّقة للإدارة) — كلها في قائمة واحدة: شريط «الديوانيات/الحسينيات»
     /// شيل (طلب المالك ٢٠٢٦-١٠-٢٤)، والنوع علامة على البطاقة
@@ -118,7 +119,7 @@ struct DiwaniyasView: View {
                                                       RequestSourceStep("house.fill", target.title),
                                                       RequestSourceStep("flag.fill", "بلاغ عن ديوانية"))
                             )
-                            if ok { await MainActor.run { reportSent = true } }
+                            if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                         }
                     }
                 }
@@ -126,6 +127,11 @@ struct DiwaniyasView: View {
             } message: {
                 Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذه الديوانية.",
                            "Enter a reason; it will be sent to the admins to review this diwaniya."))
+            }
+            .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
             }
             .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
                 Button(L10n.t("حسناً", "OK")) {}
@@ -169,13 +175,18 @@ struct DiwaniyasView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
+                set: { if !$0 { viewModel.errorMessage = nil; viewModel.retryAction = nil } }
             )) {
+                // يعيد العملية التي فشلت (حذف/اعتماد/رفض) — وإلا إعادة تحميل القائمة
                 Button(L10n.t("إعادة المحاولة", "Retry")) {
+                    let retry = viewModel.retryAction
+                    viewModel.retryAction = nil
                     viewModel.errorMessage = nil
-                    Task { await viewModel.fetchDiwaniyas() }
+                    Task {
+                        if let retry { await retry() } else { await viewModel.fetchDiwaniyas() }
+                    }
                 }
-                Button(L10n.t("إغلاق", "Dismiss"), role: .cancel) { viewModel.errorMessage = nil }
+                Button(L10n.t("إغلاق", "Dismiss"), role: .cancel) { viewModel.errorMessage = nil; viewModel.retryAction = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }

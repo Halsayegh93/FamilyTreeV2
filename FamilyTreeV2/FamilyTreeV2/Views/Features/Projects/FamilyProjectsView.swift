@@ -23,6 +23,7 @@ struct FamilyProjectsView: View {
     @State private var projectToReport: Project? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
     /// دخول البطاقات مرة واحدة عند ظهور الشبكة (نمط الأخبار والديوانيات)
     @State private var appeared = false
 
@@ -168,7 +169,7 @@ struct FamilyProjectsView: View {
                                                   RequestSourceStep("briefcase", target.title),
                                                   RequestSourceStep("flag.fill", "بلاغ عن مشروع"))
                         )
-                        if ok { await MainActor.run { reportSent = true } }
+                        if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                     }
                 }
             }
@@ -176,6 +177,23 @@ struct FamilyProjectsView: View {
         } message: {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا المشروع.",
                        "Enter a reason; it will be sent to the admins to review this project."))
+        }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
+        }
+        // خطأ اعتماد/رفض مشروع من زر النقاط
+        .dsAlert(
+            L10n.t("تنبيه", "Notice"),
+            isPresented: Binding(
+                get: { projectsVM.decisionError != nil },
+                set: { if !$0 { projectsVM.decisionError = nil } }
+            )
+        ) {
+            Button(L10n.t("حسناً", "OK")) { projectsVM.decisionError = nil }
+        } message: {
+            Text(projectsVM.decisionError ?? "")
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}
