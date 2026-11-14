@@ -304,6 +304,10 @@ struct DSComposer<Content: View>: View {
     var note: String? = nil
     /// تقدّم الرفع (٠…١) — يظهر شريطاً فوق الأزرار
     var progress: Double? = nil
+    /// إيقاف العمل الجاري (مثل «إيقاف الرفع» في المكتبة) — يُبقي زرّ «إلغاء» ممكناً أثناء `isBusy` بهذا النص.
+    /// nil = «إلغاء» معطّل أثناء العمل كما كان
+    var onBusyCancel: (() -> Void)? = nil
+    var busyCancelTitle: String = L10n.t("إيقاف", "Stop")
     /// مربّع إضافي مفتوح فوقه → يتقلّص خلفه قليلاً
     var isBehindExtra: Bool = false
     /// هامش المحتوى الجانبي — ٠ لبطاقات تحمل هامشها بنفسها (تعديل البيانات)
@@ -642,12 +646,13 @@ struct DSComposer<Content: View>: View {
 
     private var cancelButton: some View {
         Button {
+            if isBusy, let onBusyCancel { onBusyCancel(); return }
             if hasUnsavedChanges { confirmDiscard = true } else { onCancel() }
         } label: {
             // وجه «إلغاء» الواحد (`DSButtonFace(role: .cancel)`): حبّة بيضاء بإطار رفيع ونصّ أساسي
-            Text(cancelTitle).modifier(DSButtonFace(role: .cancel))
+            Text(isBusy && onBusyCancel != nil ? busyCancelTitle : cancelTitle).modifier(DSButtonFace(role: .cancel))
         }
-        .disabled(isBusy)
+        .disabled(isBusy && onBusyCancel == nil)
     }
 
     private func enterFooter() {

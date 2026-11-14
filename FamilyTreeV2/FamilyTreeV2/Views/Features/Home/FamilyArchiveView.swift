@@ -918,7 +918,11 @@ struct ArchiveUploadSheet: View {
     @State private var description = ""
     @State private var yearText = ""
     @State private var categoryKey: String
+    /// الصورة المختارة (JPEG معاد ترميزه — صغيرة) في الذاكرة
     @State private var pickedFileData: Data? = nil
+    /// ملف PDF المختار: نسخة مؤقتة على القرص — يُرفع منها قطعةً قطعة فلا يُحمَّل ١٠٠ ميغابايت في الذاكرة
+    @State private var pickedFileURL: URL? = nil
+    @State private var pickedFileSize: Int64 = 0
     @State private var pickedFileName: String = ""
     @State private var pickedMimeType: String = ""
     @State private var showFileImporter = false
@@ -936,16 +940,24 @@ struct ArchiveUploadSheet: View {
                                   ? defaultCategory.rawValue : (keys.first ?? defaultCategory.rawValue)))
     }
 
+    private var hasPickedFile: Bool { pickedFileData != nil || pickedFileURL != nil }
+
+    /// نصّ الزرّ أثناء الرفع: «جارٍ الرفع ٤٢٪»
+    private var uploadingTitle: String {
+        let percent = Int((archiveVM.uploadProgress * 100).rounded())
+        return L10n.isArabic ? "جارٍ الرفع \(LibraryUpload.arabicDigits(percent))٪" : "Uploading \(percent)%"
+    }
+
     private var canSubmit: Bool {
         !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        pickedFileData != nil &&
+        hasPickedFile &&
         !archiveVM.isUploading
     }
 
     /// ملف مختار أو نص مكتوب لم يُرفع — «إلغاء» يسأل قبل التجاهل (توصية أبل).
     /// «القسم» اختيار فقط فلا يُحتسب.
     private var hasUnsavedChanges: Bool {
-        pickedFileData != nil
+        hasPickedFile
             || !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !yearText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -966,20 +978,23 @@ struct ArchiveUploadSheet: View {
             subtitle: L10n.t("وثيقة أو صورة من تاريخ العائلة", "A document or photo from family history"),
             icon: "books.vertical.fill",
             tint: tint,
-            actionTitle: L10n.t("إضافة إلى المكتبة", "Add to Library"),
+            actionTitle: archiveVM.isUploading ? uploadingTitle : L10n.t("إضافة إلى المكتبة", "Add to Library"),
             actionIcon: "tray.and.arrow.down.fill",
             canSubmit: canSubmit,
             isBusy: archiveVM.isUploading,
             progress: archiveVM.isUploading ? archiveVM.uploadProgress : nil,
+            onBusyCancel: { archiveVM.cancelUpload() },
+            busyCancelTitle: L10n.t("إيقاف الرفع", "Stop upload"),
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: { submit() },
-            onCancel: { dismiss() }
+            onCancel: { removePickedTempFile(); dismiss() }
         ) {
             // ── الملف ──
             DSComposerSection(title: L10n.t("الملف", "File"), icon: "doc.on.doc.fill", tint: tint,
-                              trailing: pickedFileData == nil ? L10n.t("صورة أو PDF", "Photo or PDF") : nil,
+                              trailing: hasPickedFile ? nil
+                                : LibraryUpload.pickerHint(mb: FamilyArchiveViewModel.maxUploadMB, arabic: L10n.isArabic),
                               index: 0) {
-                if pickedFileData != nil {
+                if hasPickedFile {
                     pickedPreview
                         .transition(reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity))
                 } else {
@@ -1018,7 +1033,9 @@ struct ArchiveUploadSheet: View {
                 DSNoteCard(errorBanner, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
-        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: pickedFileData != nil)
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: hasPickedFile)
+        // الحدّ من السيرفر (مرة كل ٥ دقائق على الأكثر)
+        .task { await AppConfigValues.shared.refresh() }
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [UTType.pdf],
@@ -1062,7 +1079,7 @@ struct ArchiveUploadSheet: View {
 
     /// معاينة الملف المختار: الصورة نفسها، أو بطاقة PDF
     private var pickedPreview: some View {
-        let size = ByteCountFormatter().string(fromByteCount: Int64(pickedFileData?.count ?? 0))
+        let size = ByteCountFormatter().string(fromByteCount: pickedFileURL != nil ? pickedFileSize : Int64(pickedFileData?.count ?? 0))
         return VStack(spacing: 0) {
             if let img = pickedImage {
                 Image(uiImage: img)
@@ -1113,6 +1130,7 @@ struct ArchiveUploadSheet: View {
                 Spacer(minLength: 0)
                 DSChipButton(L10n.t("إزالة", "Remove"), icon: "trash", tint: DS.Color.error) {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        removePickedTempFile()
                         pickedFileData = nil
                         pickedFileName = ""
                         pickedMimeType = ""
@@ -1138,36 +1156,58 @@ struct ArchiveUploadSheet: View {
         }
         let limit = FamilyArchiveViewModel.maxUploadBytes
         Task {
-            // الحجم من خصائص الملف قبل القراءة، والقراءة خارج الخيط الرئيسي — كان ملف ضخم
-            // يُقرأ كاملاً على الخيط الرئيسي ثم يُرفض عند الرفع
-            let outcome = await Task.detached(priority: .userInitiated, operation: { () -> (data: Data?, tooLarge: Bool) in
-                // الوصول الآمن للملف
+            // الحجم من خصائص الملف قبل النسخ، والنسخ خارج الخيط الرئيسي — نسخة مؤقتة على القرص (لا قراءة في الذاكرة)
+            // لأن إذن الوصول للملف الأصلي ينتهي بعد الاختيار، والرفع يقرؤها قطعةً قطعة
+            let outcome = await Task.detached(priority: .userInitiated, operation: { () -> (copy: URL?, size: Int64, tooLarge: Bool) in
                 let didStart = url.startAccessingSecurityScopedResource()
                 defer { if didStart { url.stopAccessingSecurityScopedResource() } }
-                if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > limit {
-                    return (nil, true)
+                if let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, Int64(size) > limit {
+                    return (nil, 0, true)
                 }
-                guard let data = try? Data(contentsOf: url) else { return (nil, false) }
-                if data.count > limit { return (nil, true) }
-                return (data, false)
+                let copy = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("library-upload-\(UUID().uuidString).pdf")
+                do {
+                    try FileManager.default.copyItem(at: url, to: copy)
+                } catch {
+                    return (nil, 0, false)
+                }
+                let size = LibraryUploadSource.file(copy).size
+                if size > limit {
+                    try? FileManager.default.removeItem(at: copy)
+                    return (nil, 0, true)
+                }
+                guard size > 0 else {
+                    try? FileManager.default.removeItem(at: copy)
+                    return (nil, 0, false)
+                }
+                return (copy, size, false)
             }).value
             if outcome.tooLarge {
-                errorBanner = L10n.t("الملف أكبر من ٢٥ ميغابايت — اختر ملفاً أصغر أو صورة مضغوطة.",
-                                     "The file is larger than 25 MB — choose a smaller file or a compressed photo.")
+                errorBanner = FamilyArchiveViewModel.tooLargeMessage
                 return
             }
-            guard let data = outcome.data else {
+            guard let copy = outcome.copy else {
                 errorBanner = L10n.t("تعذّر قراءة الملف.", "Failed to read file.")
                 return
             }
             errorBanner = nil
-            pickedFileData = data
+            removePickedTempFile()
+            pickedFileData = nil
+            pickedFileURL = copy
+            pickedFileSize = outcome.size
             pickedFileName = url.lastPathComponent
             pickedMimeType = "application/pdf"
             if title.isEmpty {
                 title = url.deletingPathExtension().lastPathComponent
             }
         }
+    }
+
+    /// حذف نسخة PDF المؤقتة (عند الإزالة/التغيير/الإغلاق/بعد الرفع)
+    private func removePickedTempFile() {
+        if let pickedFileURL { try? FileManager.default.removeItem(at: pickedFileURL) }
+        pickedFileURL = nil
+        pickedFileSize = 0
     }
 
     private func handlePhotoPick(_ item: PhotosPickerItem?) {
@@ -1187,6 +1227,7 @@ struct ArchiveUploadSheet: View {
                         return
                     }
                     errorBanner = nil
+                    removePickedTempFile()
                     pickedFileData = jpeg
                     pickedMimeType = "image/jpeg"
                     pickedFileName = "image.jpg"
@@ -1200,18 +1241,23 @@ struct ArchiveUploadSheet: View {
     }
 
     private func submit() {
-        guard let data = pickedFileData else { return }
+        let source: LibraryUploadSource
+        if let pickedFileURL { source = .file(pickedFileURL) }
+        else if let pickedFileData { source = .data(pickedFileData) }
+        else { return }
+        errorBanner = nil
         Task {
             let item = await archiveVM.uploadItem(
                 title: title,
                 description: description,
                 categoryKey: categoryKey,
                 year: Int(yearText.trimmingCharacters(in: .whitespacesAndNewlines)),
-                fileData: data,
+                source: source,
                 fileName: pickedFileName,
                 mimeType: pickedMimeType
             )
             if item != nil {
+                removePickedTempFile()
                 dismiss()
             } else if let err = archiveVM.errorMessage {
                 errorBanner = err

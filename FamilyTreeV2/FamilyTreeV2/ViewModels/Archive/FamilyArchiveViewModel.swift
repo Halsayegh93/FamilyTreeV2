@@ -11,8 +11,19 @@ final class FamilyArchiveViewModel: ObservableObject {
     private let supabase = SupabaseConfig.client
     private let tableName = "family_archive"
     private let bucketName = "family-archive"
-    /// حدود مستودع المكتبة على السيرفر (20261007120000)
-    static let maxUploadBytes = 25 * 1024 * 1024
+    /// حدّ حجم ملف المكتبة بالميغابايت — من السيرفر (`app_config.library_max_upload_mb`، ٥…١٠٠)،
+    /// وغيابه = ٢٥ (حدّ المستودع قبل 20261114180000). المشغّل على السيرفر يُبقي حدّ المستودع مطابقاً له.
+    static var maxUploadMB: Int {
+        let values = AppConfigValues.shared
+        let raw: Int? = values.values[LibraryUpload.configKey] == nil
+            ? nil : values.int(LibraryUpload.configKey, default: LibraryUpload.fallbackMB)
+        return LibraryUpload.limitMB(fromConfig: raw)
+    }
+    static var maxUploadBytes: Int64 { LibraryUpload.maxBytes(mb: maxUploadMB) }
+    /// «الملف أكبر من N ميغابايت…» بالحدّ الحيّ
+    static var tooLargeMessage: String {
+        LibraryUpload.tooLargeText(mb: maxUploadMB, arabic: L10n.isArabic)
+    }
     static let allowedMimeTypes: Set<String> = ["application/pdf", "image/jpeg", "image/jpg", "image/png",
                                                  "image/heic", "image/heif", "image/webp"]
 
@@ -24,6 +35,8 @@ final class FamilyArchiveViewModel: ObservableObject {
     @Published var isUploading = false
     @Published var uploadProgress: Double = 0
     @Published var errorMessage: String?
+    /// الرفع الجاري — «إيقاف الرفع» يلغيه
+    private var uploadTask: Task<ArchiveItem?, Never>?
 
     func configure(authVM: AuthViewModel, notificationVM: NotificationViewModel? = nil) {
         self.authVM = authVM
@@ -86,7 +99,32 @@ final class FamilyArchiveViewModel: ObservableObject {
         description: String?,
         categoryKey: String,
         year: Int? = nil,
-        fileData: Data,
+        source: LibraryUploadSource,
+        fileName: String,
+        mimeType: String
+    ) async -> ArchiveItem? {
+        guard uploadTask == nil else { return nil }
+        let task = Task { [weak self] () -> ArchiveItem? in
+            guard let self else { return nil }
+            return await self.performUpload(title: title, description: description, categoryKey: categoryKey,
+                                            year: year, source: source, fileName: fileName, mimeType: mimeType)
+        }
+        uploadTask = task
+        defer { uploadTask = nil }
+        return await task.value
+    }
+
+    /// «إيقاف الرفع» — يوقف الطلب الجاري فوراً، ولا يُحفظ شيء (الجزء المرفوع بالرفع المستأنَف لا يصير ملفاً)
+    func cancelUpload() {
+        uploadTask?.cancel()
+    }
+
+    private func performUpload(
+        title: String,
+        description: String?,
+        categoryKey: String,
+        year: Int?,
+        source: LibraryUploadSource,
         fileName: String,
         mimeType: String
     ) async -> ArchiveItem? {
@@ -95,10 +133,10 @@ final class FamilyArchiveViewModel: ObservableObject {
             errorMessage = L10n.t("لم يتم تسجيل الدخول.", "Not signed in.")
             return nil
         }
-        // حدّ السيرفر للمكتبة ٢٥ ميغابايت (20261007120000) — رسالة واضحة قبل الرفع بدل رفض عام
-        guard fileData.count <= Self.maxUploadBytes else {
-            errorMessage = L10n.t("الملف أكبر من ٢٥ ميغابايت — اختر ملفاً أصغر أو صورة مضغوطة.",
-                                  "The file is larger than 25 MB — choose a smaller file or a compressed photo.")
+        let fileSize = source.size
+        // حدّ المكتبة من السيرفر — رسالة واضحة قبل الرفع بدل رفض عام
+        guard fileSize > 0, fileSize <= Self.maxUploadBytes else {
+            errorMessage = fileSize > 0 ? Self.tooLargeMessage : L10n.t("تعذّر قراءة الملف.", "Failed to read file.")
             return nil
         }
         // السيرفر يقبل pdf والصور (jpeg/png/heic/webp) فقط
@@ -123,17 +161,52 @@ final class FamilyArchiveViewModel: ObservableObject {
         let fields = ArchiveItem.storageFields(forKey: categoryKey)
         let storagePath = "\(fields.category)/\(itemId.uuidString).\(safeExt)"
 
+        // 1) رفع الملف إلى Storage — ما فوق ٦ ميغابايت بالرفع المستأنَف (TUS)، والأصغر كما كان
         do {
-            // 1) رفع الملف إلى Storage
-            uploadProgress = 0.1
-            try await supabase.storage
-                .from(bucketName)
-                .upload(storagePath, data: fileData, options: .init(
+            if LibraryUpload.usesResumable(size: fileSize) {
+                let uploader = TusUploader(
+                    endpoint: LibraryUpload.resumableEndpoint(projectURL: SupabaseConfig.url),
+                    apiKey: SupabaseConfig.key,
+                    bucket: bucketName,
+                    objectName: storagePath,
                     contentType: mimeType,
-                    upsert: false
-                ))
-            uploadProgress = 0.7
+                    upsert: false,
+                    extraHeaders: SupabaseConfig.appHeaders,
+                    accessToken: { try await SupabaseConfig.client.auth.session.accessToken }
+                )
+                // الملف = ٠…٩٠٪ من الشريط، وحفظ الصف الباقي
+                try await uploader.upload(source) { fraction in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.isUploading else { return }
+                        self.uploadProgress = max(self.uploadProgress, 0.9 * fraction)
+                    }
+                }
+            } else {
+                uploadProgress = 0.1
+                let fileData = try source.readAll()
+                try Task.checkCancellation()
+                try await supabase.storage
+                    .from(bucketName)
+                    .upload(storagePath, data: fileData, options: .init(
+                        contentType: mimeType,
+                        upsert: false
+                    ))
+            }
+            try Task.checkCancellation()
+            uploadProgress = 0.9
+        } catch {
+            if isCancellation(error) {
+                // أُلغي — قد يكون الملف البسيط اكتمل قبل الإلغاء مباشرة
+                removeUploadedFile(storagePath)
+                Log.info("[Archive] أُلغي الرفع")
+                return nil
+            }
+            errorMessage = LibraryUpload.failureText(arabic: L10n.isArabic)
+            Log.error("[Archive] خطأ رفع الملف: \(error.localizedDescription)")
+            return nil
+        }
 
+        do {
             // 2) الحصول على URL عام
             let publicURL = try supabase.storage
                 .from(bucketName)
@@ -151,7 +224,7 @@ final class FamilyArchiveViewModel: ObservableObject {
                 "category_key":    AnyEncodable(fields.categoryKey),
                 "file_url":        AnyEncodable(publicURL.absoluteString),
                 "file_type":       AnyEncodable(mimeType),
-                "file_size":       AnyEncodable(Int64(fileData.count)),
+                "file_size":       AnyEncodable(fileSize),
                 "file_name":       AnyEncodable(fileName),
                 "uploaded_by":     AnyEncodable(uploaderId.uuidString),
                 "approval_status": AnyEncodable(isAdmin ? "approved" : "pending")
@@ -191,7 +264,8 @@ final class FamilyArchiveViewModel: ObservableObject {
             return nil
         } catch {
             // تنظيف: لو رفع الملف نجح والإدراج فشل، احذف الملف
-            _ = try? await supabase.storage.from(bucketName).remove(paths: [storagePath])
+            removeUploadedFile(storagePath)
+            if isCancellation(error) { return nil }
             self.errorMessage = ObjectionableText.message(for: error) ?? L10n.t("تعذّر رفع العنصر.", "Failed to upload item.")
             Log.error("[Archive] خطأ رفع: \(error.localizedDescription)")
             return nil
@@ -558,6 +632,19 @@ final class FamilyArchiveViewModel: ObservableObject {
         case "image/heic":      return "heic"
         default:                return "bin"
         }
+    }
+
+    /// حذف ملف رُفع بلا صفّ — مهمة مستقلة فلا يلغيها «إيقاف الرفع» نفسه
+    private func removeUploadedFile(_ path: String) {
+        let bucket = bucketName
+        Task { @MainActor in
+            _ = try? await SupabaseConfig.client.storage.from(bucket).remove(paths: [path])
+        }
+    }
+
+    /// إلغاء الرفع (زرّ «إيقاف الرفع») — لا رسالة خطأ
+    private func isCancellation(_ error: Error) -> Bool {
+        Task.isCancelled || error is CancellationError || ErrorHelper.isCancellation(error)
     }
 
     private func isMissingTableError(_ error: Error) -> Bool {
