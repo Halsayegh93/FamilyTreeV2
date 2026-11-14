@@ -12,6 +12,7 @@ enum ShareUploader {
         case notSignedIn
         case storageFailed(String)
         case insertFailed(String)
+        case tooLarge
 
         var errorDescription: String? {
             switch self {
@@ -21,6 +22,8 @@ enum ShareUploader {
                 return "تعذّر رفع الملف. \(m)"
             case .insertFailed(let m):
                 return "رُفع الملف لكن تعذّر حفظ بياناته. \(m)"
+            case .tooLarge:
+                return "الملف أكبر من ٢٥ ميغابايت. ارفعه من التطبيق: «المكتبة» ← إضافة."
             }
         }
     }
@@ -106,6 +109,9 @@ enum ShareUploader {
     }
 
     private static let bucket = "family-archive"
+    /// المشاركة رفعة واحدة في الذاكرة وذاكرة الامتداد محدودة — الملفات الأكبر (حتى حدّ السيرفر) من التطبيق
+    /// نفسه بالرفع على دفعات (`LibraryUpload`)
+    private static let maxShareBytes = 25 * 1024 * 1024
     private static let table = "family_archive"
     private static let avatarBucket = "avatars"
 
@@ -118,6 +124,7 @@ enum ShareUploader {
         guard let session = SharedSessionStore.current() else {
             throw UploadError.notSignedIn
         }
+        guard data.count <= maxShareBytes else { throw UploadError.tooLarge }
 
         let itemId = UUID().uuidString
         var ext = (fileName as NSString).pathExtension.lowercased()
