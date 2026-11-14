@@ -217,7 +217,7 @@ enum AdminTrailText {
     static func roleName(raw: String?) -> String? {
         guard let raw, !raw.isEmpty else { return nil }
         if raw == "server" { return L10n.t("السيرفر", "Server") }
-        if raw == "frozen" { return L10n.t("مجمّد", "Frozen") }
+        if raw == "frozen" { return L10n.t("موقوف", "Suspended") }
         return roleName(FamilyMember.UserRole(rawValue: raw))
     }
 

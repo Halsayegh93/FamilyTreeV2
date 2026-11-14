@@ -382,11 +382,11 @@ struct AdminOccasionsGriefCard: View {
         .buttonStyle(.plain)
     }
 
-    /// المنشئ الواحد على «إعلان وفاة» والمتوفى جاهز
+    /// مربّع «إعلان وفاة» مباشرة والمتوفى جاهز (كصفحة المتوفى والأندرويد) — شريط «إنشاء» لا يضمّ «إعلان وفاة»
+    /// فكان يفتح «إرسال إشعار» بدله
     private func announce(_ m: FamilyMember) {
-        AdminCreateWindow.open(.death, death: DeathAnnouncementTarget(id: m.id, name: m.fullName, isFemale: m.isFemale,
-                                                                      deathDate: m.deathDate),
-                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+        DeathAnnouncementPresenter.open(DeathAnnouncementTarget(id: m.id, name: m.fullName, isFemale: m.isFemale,
+                                                                deathDate: m.deathDate))
     }
 }
 

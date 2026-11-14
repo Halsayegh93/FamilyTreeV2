@@ -1005,7 +1005,7 @@ struct AdminReportsView: View {
             return member.roleName
         case .status:
             if member.isDeceased == true { return "متوفى" }
-            if member.status == .frozen { return "مجمّد" }
+            if member.status == .frozen { return "موقوف" }
             let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if phone.isEmpty { return "بدون هاتف" }
             return "نشط"

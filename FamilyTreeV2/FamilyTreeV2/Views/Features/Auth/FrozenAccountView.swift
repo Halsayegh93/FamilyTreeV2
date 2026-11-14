@@ -81,7 +81,7 @@ struct FrozenAccountView: View {
 
                 // العنوان والوصف
                 VStack(spacing: DS.Spacing.md) {
-                    Text(t("الحساب مجمّد", "Account Frozen"))
+                    Text(t("الحساب موقوف", "Account Suspended"))
                         .dsFont(.emptyTitle)
                         .foregroundColor(DS.Color.textPrimary)
 

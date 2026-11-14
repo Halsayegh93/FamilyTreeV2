@@ -70,6 +70,8 @@ struct AdminMemberDetailSheet: View {
     // «حالة الحساب»: تجميد / حظر الرقم وإلغاؤهما من هنا (طلب المالك ٢٠٢٦-١٠-١٠)
     private enum AccountAction: Identifiable { case activate, freeze, unfreeze, ban, unban; var id: Self { self } }
     @State private var pendingAccountAction: AccountAction?
+    /// سبب الإيقاف الاختياري — يصل للعضو في إشعاره (كورقة العضو `AdminMemberSheet`)
+    @State private var suspendReason = ""
     @State private var accountBusy: AccountAction?
     /// حالة الحساب هنا — المجمّد قد لا يكون في قائمة الأعضاء المحمّلة، فلا يُقرأ منها
     @State private var accountStatus: FamilyMember.MemberStatus?
@@ -267,6 +269,10 @@ struct AdminMemberDetailSheet: View {
                      isPresented: Binding(get: { pendingAccountAction != nil },
                                           set: { if !$0 { pendingAccountAction = nil } }),
                      presenting: pendingAccountAction) { action in
+                if action == .freeze {
+                    TextField(L10n.t("سبب الإيقاف (اختياري)", "Reason (optional)"), text: $suspendReason)
+                        .dsAlertField()
+                }
                 Button(accountActionButton(action),
                        role: action == .freeze || action == .ban ? .destructive : nil) {
                     performAccountAction(action)
@@ -923,6 +929,7 @@ struct AdminMemberDetailSheet: View {
                         } else {
                             DSButton(L10n.t("إيقاف الحساب", "Suspend"), icon: "hand.raised.fill",
                                      tint: DS.Color.info, isLoading: accountBusy == .freeze) {
+                                suspendReason = ""
                                 pendingAccountAction = .freeze
                             }
                         }
@@ -996,8 +1003,8 @@ struct AdminMemberDetailSheet: View {
     private func accountActionMessage(_ action: AccountAction) -> String {
         switch action {
         case .activate: return L10n.t("سيتمكن من الدخول للتطبيق برقمه.", "They will be able to sign in with their number.")
-        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف.",
-                                    "They won't be able to use the app until the suspension is lifted.")
+        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف. يصله إشعار بالسبب إن كتبته.",
+                                    "They can't use the app until the suspension is lifted. They're notified, with the reason if you add one.")
         case .unfreeze: return L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to use the app again.")
         case .ban: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُوقف حساب صاحبه.",
                                  "This number won't be able to sign up, and its account will be suspended.")
@@ -1039,8 +1046,12 @@ struct AdminMemberDetailSheet: View {
                     break
                 }
                 let target: FamilyMember.MemberStatus = action == .freeze ? .frozen : .active
-                ok = await memberVM.setMemberStatus(memberId: member.id, status: target)
+                // من السيرفر بالسبب وإشعار العضو (`set_member_suspension`) — كورقة العضو والأندرويد
+                let reason = suspendReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                ok = await memberVM.setMemberSuspension(memberId: member.id, suspend: action == .freeze,
+                                                        reason: action == .freeze && !reason.isEmpty ? reason : nil)
                 if ok { withAnimation(DS.Anim.snappy) { accountStatus = target } }
+                else if let msg = memberVM.errorMessage { accountErrorText = msg }
             case .ban:
                 ok = await authVM.banPhone(savedPhone, reason: L10n.t("من «بيانات العضو»: \(member.fullName)",
                                                                       "From Member details: \(member.fullName)"))
