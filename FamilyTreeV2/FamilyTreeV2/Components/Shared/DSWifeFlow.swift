@@ -471,7 +471,8 @@ struct DSWifeFlowBox: View {
         let query = settledSearch.trimmingCharacters(in: .whitespaces)
         if isLoading {
             DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
-        } else if query.isEmpty {
+        } else if query.isEmpty || (NamePrivacy.isStrict && !NamePrivacy.isSpecific(query)) {
+            // العضو العادي: لا أسماء قبل اسمين متتاليين (`NamePrivacy`، طلب المالك ٢٠٢٦-١١-١٤)
             Text(L10n.t("ابدأ باسمه الأول ثم اسم أبيه — مثل «علي حسين».",
                         "Start with his first name, then his father's — e.g. «Ali Hussain»."))
                 .dsFont(.footnote)
@@ -486,7 +487,7 @@ struct DSWifeFlowBox: View {
                 $0.fullName.isEmpty ? $0.firstName : $0.fullName
             }
             let matches = Array((all.filter { fathersOfDaughters.contains($0.id) }
-                                 + all.filter { !fathersOfDaughters.contains($0.id) }).prefix(8))
+                                 + all.filter { !fathersOfDaughters.contains($0.id) }).prefix(NamePrivacy.isStrict ? 5 : 8))
             if matches.isEmpty {
                 DSEmptyView(L10n.t("لم يُعثر على اسم مطابق", "No matching name"),
                             icon: "person.fill.questionmark", style: .inline)

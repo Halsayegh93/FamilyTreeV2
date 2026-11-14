@@ -106,7 +106,11 @@ class AuthViewModel: ObservableObject {
     private var sessionGeneration = UUID()
     @Published var currentUser: FamilyMember? = nil {
         // «إظهار آخر ظهوري ونشاطي» مطفأ → لا يُرسَل `current_screen` (٢٠٢٦-١٠-٢٩)
-        didSet { MemberActivityTracker.setVisible(currentUser?.activityVisible ?? true) }
+        didSet {
+            MemberActivityTracker.setVisible(currentUser?.activityVisible ?? true)
+            // قوائم الأسماء: الإدارة كما كانت، وغيرها متشدّد (`NamePrivacy`)
+            NamePrivacy.isStrict = !canModerate
+        }
     }
     @Published var status: AuthStatus = .checking {
         didSet {

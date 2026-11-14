@@ -650,7 +650,10 @@ enum AdminMemberFacts {
     }
 
     static func problems(_ m: FamilyMember, in ctx: TreeContext) -> [AdminMemberProblem] {
-        guard m.role != .pending, m.status != .frozen else { return [] }
+        // ليست مشكلات شجرة (طلب المالك ٢٠٢٦-١١-١٤): تسجيل لم يكتمل (الحالة معلّقة)، وحساب مربوط بعقدته في شجرة
+        // النساء (البنت المسجّلة، زوج من خارج العائلة) — مكانه هناك لا في شجرة الرجال
+        guard m.role != .pending, m.status != .frozen, m.status != .pending,
+              WomenStore.node(forAccount: m.id) == nil else { return [] }
         var list: [AdminMemberProblem] = []
         if m.fatherId == nil && !ctx.fatherIds.contains(m.id) { list.append(.orphan) }
         let name = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -990,8 +990,14 @@ extension TreePlace {
         let d = n.details
         let selfChild = d?.selfChild == true
         guard let action = selfChild ? "add" : d?.action, ["add", "edit", "delete"].contains(action),
-              let id = d?.subject?.id.flatMap(UUID.init(uuidString:)) ?? n.subjectMemberId else { return nil }
-        let tree: TreePlaceTree = d?.tree == "women" ? .women : .men
+              var id = d?.subject?.id.flatMap(UUID.init(uuidString:)) ?? n.subjectMemberId else { return nil }
+        var tree: TreePlaceTree = d?.tree == "women" ? .women : .men
+        // حساب امرأة («X عدّلت بياناتها»، «عدّلت الإدارة بياناتك»): الإشعار يحمل معرّف الحساب في شجرة الرجال بلا أب،
+        // ومكانها الحقيقي عقدتها في شجرة النساء — كان يظهر «لا يمكن تحديد مكانه» مع أنها رُبطت (طلب المالك ٢٠٢٦-١١-١٤)
+        if tree == .men, let w = WomenStore.node(forAccount: id) {
+            tree = .women
+            id = w.id
+        }
         let label = AdminNoticeText.eventTitle(n)
         let changes = d?.changes ?? []
         func entry(_ fields: [String]) -> AppNotification.NotificationDetails.ChangeEntry? {
