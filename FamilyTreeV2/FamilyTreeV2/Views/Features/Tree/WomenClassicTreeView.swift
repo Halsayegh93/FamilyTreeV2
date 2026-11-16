@@ -46,7 +46,12 @@ private struct WomenTreeMetrics: Equatable {
     var husbandSquare: CGFloat { 66 * k }   // أكبر (طلب المالك ٢٠٢٦-١١-٠٩)
     var husbandCellW: CGFloat { 150 * k }   // الاسم أكبر (طلب المالك ٢٠٢٦-١١-٠٩)
     /// المسافة بين شكل البنت ومربّع زوجها — بلا خط بينهما، مثل مربّعات الزوجات (طلب المالك ٢٠٢٦-١١-٠٩)
-    var husbandCellX: CGFloat { circle / 2 + 18 * k + husbandCellW / 2 }   // أبعد شوي عن البنت (طلب المالك ٢٠٢٦-١١-٠٩)
+    /// مركز خلية الزوج: بطاقة اسمه تبدأ بعد كبسولة اسم البنت مباشرة فلا تغطيها
+    var husbandCellX: CGFloat { (nodeW - 8 * k) / 2 + 4 * k + husbandCellW / 2 }
+    /// دائرة الزوج مندمجة في عقدة البنت (طلب المالك ٢٠٢٦-١١-١٦ «يندمج فيها مع الشكل دائري»): تدخل تحت طرفها
+    /// بمقدار `husbandMerge` — تُزاح نحوها داخل خليته، وبطاقة الاسم تبقى في مكانها
+    var husbandMerge: CGFloat { 14 * k }
+    var husbandCircleShift: CGFloat { husbandCellX - (circle / 2 + husbandSquare / 2 - husbandMerge) }
     var husbandOverhang: CGFloat { husbandCellX + husbandCellW / 2 + 2 * k - nodeW / 2 }
     /// الزوجات بنفس شكل الزوج (طلب المالك ٢٠٢٦-١١-٠٩ «طبّق على الزوجات»): عقدة أصغر من عقدته شوي وبطاقة اسم بيضاء
     var wifeSquare: CGFloat { 56 * k }
@@ -1242,7 +1247,8 @@ struct WomenClassicTreeView: View {
                     .offset(y: CIRCLE / 2 - M.wifeSquare / 2)
                 }
             }
-            .overlay(alignment: .top) {
+            // خلف عقدتها (background) — دائرة الزوج تدخل تحت طرفها فيبان الاثنين عقدة واحدة
+            .background(alignment: .top) {
                 if layout.husbandCells.contains(m.id), let h = cOutsideHusband[m.id] {
                     husbandCell(h)
                         .offset(x: M.husbandCellX, y: CIRCLE / 2 - M.husbandSquare / 2)
@@ -1400,7 +1406,8 @@ struct WomenClassicTreeView: View {
         let k = layout.m.k, side = layout.m.husbandSquare
         let deceased = h.isDeceased == true
         let fill = DS.Color.male
-        let shape = TreeNodeShape(leaf: true, sharp: 3 * k)
+        // دائرة — شكل الرجال في الشجرة (طلب المالك ٢٠٢٦-١١-١٦؛ كانت ورقة)
+        let shape = TreeNodeShape(leaf: false)
         let pillW = layout.m.husbandCellW - 2 * k
         return VStack(spacing: DS.Spacing.xs * k) {
             shape
@@ -1439,6 +1446,8 @@ struct WomenClassicTreeView: View {
                     }
                 }
                 .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
+                // نحو البنت حتى تدخل تحت طرف عقدتها — الإزاحة لا تغيّر التخطيط
+                .offset(x: -layout.m.husbandCircleShift)
             spouseCard(h, deceasedText: L10n.t("متوفى", "Deceased"), width: pillW)
         }
         .contentShape(Rectangle())
