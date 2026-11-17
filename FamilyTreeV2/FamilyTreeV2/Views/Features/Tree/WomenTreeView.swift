@@ -305,6 +305,8 @@ struct WomanDetailSheet: View {
     @State private var outsideHusbandName = ""
     /// «طلب حذف» لبنته أو زوجته (§11) — تأكيد «عائلتي» ثم الدالة الذاتية (طلب للمالك والمدير)
     @State private var confirmSelfRemoval = false
+    /// طلبات تعديل البيانات في «الطلبات» (الشكل «أ»، قرار المالك ٢٠٢٦-١١-١٧) — مربّع الطلب المفتوح
+    @State private var editRequest: WomanEditRequest? = nil
 
     enum AddKind: Int, Identifiable {
         /// «ابن» — إجراء واحد وكل اسم داخله ذكر أو أنثى (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن وداخل المربع
@@ -1275,14 +1277,13 @@ struct WomanDetailSheet: View {
     }
 
     /// غيره — «طلب إضافة» للإدارة (عنوان المربّع وملاحظته تقولان إنها طلبات)، و«أخت» مباشرة على عقدة أبيه
+    /// الترتيب (قرار المالك ٢٠٢٦-١١-١٧): أبناء · الزوج · أم · أخت · تعديل اسم · تعديل ميلاد · تسجيل وفاة · طلب آخر · حذف —
+    /// بلا «إضافة صورة». ما لا ينطبق على العقدة (زوج مسجّل، أم مسجّلة، الأخت لغير عقدة أبيه، وفاة مسجّلة) يُترك.
     private var requestActions: [AdminAction] {
-        var list: [AdminAction] = []
-        if isMyFatherNode {
-            list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
-                                    icon: "figure.stand.dress") { startAdd(.sister) })
-        }
-        list.append(AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
-                                icon: "person.badge.plus") { startAdd(.child) })
+        var list: [AdminAction] = [
+            AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
+                        icon: "figure.2.and.child.holdinghands") { startAdd(.child) }
+        ]
         if !woman.isFemale {
             list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
                                     icon: "heart.fill") { openWifeFlow() })
@@ -1292,9 +1293,49 @@ struct WomanDetailSheet: View {
         }
         if mother == nil {
             list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
-                                    icon: "figure.stand.dress") { openMotherFlow() })
+                                    icon: "figure.and.child.holdinghands") { openMotherFlow() })
+        }
+        if isMyFatherNode {
+            list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
+                                    icon: "figure.stand.dress") { startAdd(.sister) })
+        }
+        var edits: [WomanEditRequest] = [.editName, .editBirth]
+        if woman.isDeceased != true { edits.append(.deceased) }
+        edits += [.other, .delete]
+        for kind in edits {
+            list.append(AdminAction(id: "req." + kind.rawValue, title: kind.title, icon: kind.icon) {
+                editRequest = kind
+            })
         }
         return list
+    }
+
+    /// لون الخانة الدائرية: الإضافة أخضر، تعديل البيانات كحلي، الوفاة رمادي، الحذف أحمر
+    private func requestTint(_ id: String) -> WomenRequestTint {
+        switch id {
+        case "req.deceased": return .death
+        case "req.delete": return .delete
+        case "req.editName", "req.editBirth", "req.other": return .edit
+        default: return .add
+        }
+    }
+
+    /// إرسال طلب تعديل للإدارة — بصيغة طلبات شجرة النساء اليدوية نفسها (`add` بلا اسم جديد، معلّق على العقدة أو
+    /// أبيها/زوجها وإلا مقدّم الطلب): حارس السيرفر يرفض `other` من العضو، و`add` بلا اسم لا يكتب شيئاً عند القبول —
+    /// الإدارة تنفّذه من شجرة النساء ثم تقبله، والسطر الأول من الملاحظات يقول نوع الطلب الحقيقي
+    private func sendEditRequest(_ kind: WomanEditRequest, _ fields: [String]) {
+        guard let anchor = requestAnchor(preferHusband: false) else { return }
+        var lines = ["شجرة النساء — " + kind.sourceTitle, "لـ: " + displayName(woman)]
+        lines += fields
+        lines.append("التنفيذ يدوي: يُنفَّذ من شجرة النساء (تفاصيل العضو ← الإدارة) ثم يُقبل الطلب.")
+        let payload = TreeEditPayload.make(action: .add,
+                                           targetMemberId: anchor.uuidString,
+                                           targetMemberName: displayName(woman),
+                                           parentMemberId: anchor.uuidString,
+                                           parentMemberName: displayName(woman),
+                                           notes: lines.joined(separator: "\n"))
+        editRequest = nil
+        sendRequest(payload, sourceTitle: kind.sourceTitle, icon: kind.icon)
     }
 
     /// «إضافة زوجة» الواحدة — يبدأ بسؤال «من أين الزوجة؟» (كان «إضافة زوجة» و«ربط زوجة» مربّعين)
@@ -1427,7 +1468,7 @@ struct WomanDetailSheet: View {
         switch mode {
         case .direct: return L10n.t("الإدارة", "Manage")
         case .selfFamily: return L10n.t("الأسرة", "My family")
-        case .request, .viewOnly: return L10n.t("طلب إضافة", "Request an addition")
+        case .request, .viewOnly: return L10n.t("الطلبات", "Requests")
         }
     }
     private var actionsBoxIcon: String {
@@ -1442,7 +1483,7 @@ struct WomanDetailSheet: View {
         switch mode {
         case .direct: return L10n.t("يفتح الإضافة والربط وإدارة السجل", "Opens add, link and record actions")
         case .selfFamily: return L10n.t("يضيف لعائلتك", "Adds to your family")
-        case .request, .viewOnly: return L10n.t("يرسل طلب إضافة للإدارة", "Sends an addition request to the admins")
+        case .request, .viewOnly: return L10n.t("يرسل طلب إضافة أو تعديل للإدارة", "Sends an addition or edit request to the admins")
         }
     }
 
@@ -1464,7 +1505,7 @@ struct WomanDetailSheet: View {
     /// و«حذف» الأحمر في شريط المربّع مع «إغلاق» (طلب المالك ٢٠٢٦-١٠-٢٥ «حطلي زر الحذف جنب الاغلاق») — بلا زر إجراء
     private var actionsBox: some View {
         let actions = adminActions
-        return withAdminPresentations(withChangeFather(
+        return withEditRequests(withAdminPresentations(withChangeFather(
             DSComposer(
                 title: actionsBoxTitle,
                 subtitle: displayName(woman),
@@ -1491,7 +1532,24 @@ struct WomanDetailSheet: View {
                     (order.firstIndex(of: $0.element.id) ?? order.count, $0.offset)
                         < (order.firstIndex(of: $1.element.id) ?? order.count, $1.offset)
                 }.map(\.element)
-                if !tiles.isEmpty {
+                if mode == .request {
+                    // الشكل «أ»: قسم واحد بخانات دائرية خفيفة، ثلاث في السطر والناقص في الوسط
+                    DSComposerSection(title: L10n.t("الطلبات", "Requests"), icon: "paperplane.fill",
+                                      tint: DS.Color.actionNavy, index: 0) {
+                        WomenRequestCircleGrid {
+                            ForEach(Array(actions.enumerated()), id: \.element.id) { i, action in
+                                WomenRequestCircle(title: action.title, icon: action.icon,
+                                                   tint: requestTint(action.id),
+                                                   isNew: action.id.hasPrefix("req."),
+                                                   hint: tileSubtitle(action.id),
+                                                   action: action.run)
+                                    .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
+                                                y: DSMotion.rise, scale: DSMotion.riseScale)
+                            }
+                        }
+                    }
+                    .disabled(draft.busy)
+                } else if !tiles.isEmpty {
                     DSComposerSection(title: L10n.t("الإجراءات", "Actions"), icon: "square.grid.2x2.fill",
                                       tint: DS.Color.actionNavy, index: 0) {
                         DSActionTileGrid {
@@ -1506,7 +1564,19 @@ struct WomanDetailSheet: View {
                     .disabled(draft.busy)
                 }
             }
-        ))
+        )))
+    }
+
+    /// مربّع طلب التعديل فوق مربّع «الطلبات» — خلف `AnyView` (حارس المكدس)
+    private func withEditRequests<Box: View>(_ box: Box) -> AnyView {
+        AnyView(box.dsCenterBox(item: $editRequest) { kind in
+            WomanEditRequestBox(kind: kind,
+                                womanName: displayName(woman),
+                                currentFirstName: woman.firstName,
+                                isBusy: draft.busy,
+                                onSend: { sendEditRequest(kind, $0) },
+                                onCancel: { editRequest = nil })
+        })
     }
 
     /// أيقونة أوضح لكل إجراء (طلب المالك ٢٠٢٦-١١-٠٧ «نطور الايقونات»)

@@ -51,9 +51,12 @@ struct RegistrationView: View {
                     VStack(spacing: DS.Spacing.lg) {
                         if topInset > 0 { Color.clear.frame(height: topInset) }
                         // الصورة الشخصية — في الأعلى مثل حسابي
-                        AnyView(photoSection)
-                            .scaleEffect(headerScale)
-                            .opacity(headerOpacity)
+                        // لا صور للإناث (قاعدة المالك ٢٠٢٦-١١-١٧) — الخانة تختفي عند اختيار «أنثى»، والسيرفر يفرّغ أي صورة لأنثى
+                        if selectedGender != "female" {
+                            AnyView(photoSection)
+                                .scaleEffect(headerScale)
+                                .opacity(headerOpacity)
+                        }
 
                         // الحقول — بطاقة القسم الواحدة وحقول المربّعات (نفس «تسجيل عضو جديد» في الإدارة)،
                         // تدخل بعد الصورة: البيانات ← زر الإرسال
@@ -343,6 +346,8 @@ struct RegistrationView: View {
         // الأب لغير الأنثى لا يُحمل
         .onChange(of: selectedGender) { g in
             if g != "female" { selectedFather = nil }
+            // الأنثى بلا صورة — تُمسح المختارة قبل التبديل
+            if g == "female" { selectedImage = nil }
         }
     }
 
@@ -464,7 +469,7 @@ struct RegistrationView: View {
                             gender: selectedGender,
                             fatherId: selectedGender == "female" ? selectedFather?.id : nil,
                             fatherName: selectedGender == "female" ? selectedFather?.fullName : nil,
-                            avatarImage: selectedImage
+                            avatarImage: selectedGender == "female" ? nil : selectedImage
                         )
                     }
                 }
