@@ -100,7 +100,8 @@ struct WomenTreeView: View {
                         meWomanId: resolveMyWomanId(),
                         // حساب امرأة: تفتح الشجرة على عقدتها
                         autoLocate: (authVM.currentUser?.isWomanAccount ?? false) || LineageGateStore.shared.status?.flagged == true,
-                        onRefresh: { await reloadWomen() }
+                        onRefresh: { await reloadWomen() },
+                        linkedAvatars: linkedAvatars
                     )
                 }
             }
@@ -174,6 +175,20 @@ struct WomenTreeView: View {
     /// إعادة الجلب عند وصول تغيير حيّ من جهاز آخر.
     private var womenChangePublisher: NotificationCenter.Publisher {
         NotificationCenter.default.publisher(for: .womenMembersChanged)
+    }
+
+    /// صورة حساب الذكر المرتبط بعقدته حين لا صورة على العقدة (ابن البنت صاحب الحساب — صورته في ملفه لا في
+    /// شجرة النساء). الإناث لا صور لهن أبداً («العضو ابن البنت اذا حاط صورة خلها تظهر بالشجرة» ٢٠٢٦-١١-٢٤)
+    private var linkedAvatars: [UUID: String] {
+        var out: [UUID: String] = [:]
+        for m in allMembers where !m.isFemale && (m.avatarUrl ?? "").isEmpty {
+            guard let uid = WomenStore.linkedUserByWoman[m.id],
+                  let profile = memberVM.member(byId: uid),
+                  !profile.isFemale,
+                  let a = profile.avatarUrl, !a.isEmpty else { continue }
+            out[m.id] = a
+        }
+        return out
     }
 
     /// الرجال (شجرة العائلة) + نساء شجرة النساء — نفس «الإجمالي»؛ قبل وصول الشجرتين يبقى عدد الصفوف

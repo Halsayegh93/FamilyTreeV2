@@ -3045,14 +3045,16 @@ struct AdminAllRequestsView: View {
 
     private func archiveRow(for item: ArchiveItem) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-            requestRowHeader(icon: item.categoryIcon,
+            // نوع المحتوى ظاهر قبل الموافقة (طلب المالك ٢٠٢٦-١١-٢٤): «صورة للمكتبة» / «ملف PDF للمكتبة» + الحجم
+            requestRowHeader(icon: item.fileKindIcon,
                              tint: DS.Color.warning,
-                             title: L10n.t("عنصر أرشيف", "Archive Item"),
+                             title: L10n.t("\(item.fileKindName) للمكتبة", "\(item.fileKindName) for the library"),
                              subtitle: item.title) {
                 pendingChip(item.createdAt)
             }
 
             rowExtras {
+                detailRow(icon: item.fileKindIcon, text: item.fileKindLine)
                 detailRow(icon: item.categoryIcon, text: item.categoryDisplayName)
                 if let year = item.year {
                     detailRow(icon: "calendar", text: "\(year)")
@@ -3864,7 +3866,10 @@ struct AdminAllRequestsView: View {
             if let facts = requestFacts(for: detail) {
                 AdminRequestFactRows(facts: facts)
             }
-            detailContent(for: detail)
+            // الحقول القصيرة جنب بعض، والطويلة بعرض المربّع («اذا كان النص صغير خلهم جنب بعض» ٢٠٢٦-١١-٢٤)
+            AdminDetailPairLayout(spacing: DS.Spacing.sm) {
+                detailContent(for: detail)
+            }
         }
 
         // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣) — للطلبات التي تخصّ شخصاً في الشجرة فقط: قبل التنفيذ، وفي
@@ -4479,8 +4484,12 @@ struct AdminAllRequestsView: View {
             }
 
         case .archive(let item):
+            // نوع المحتوى ومعاينته قبل الموافقة (طلب المالك ٢٠٢٦-١١-٢٤ «ما يبين شنو نوع المحتوى قبل الموافقة»)
+            AdminArchivePreviewCard(item: item)
             infoCard(icon: "textformat", label: L10n.t("العنوان", "Title"),
                      value: item.title, color: DS.Color.sadu)
+            infoCard(icon: item.fileKindIcon, label: L10n.t("نوع المحتوى", "Content type"),
+                     value: item.fileKindLine, color: DS.Color.sadu)
             infoCard(icon: item.categoryIcon, label: L10n.t("القسم", "Category"),
                      value: item.categoryDisplayName,
                      color: DS.Color.info)
@@ -4639,9 +4648,10 @@ struct AdminAllRequestsView: View {
                     Text(label)
                         .dsFieldFont(.label)
                         .foregroundColor(DS.Color.fieldLabel)
+                    // القيمة أوضح من العنوان: بوزن أثقل ولون النص الأساسي («خلها واضحة اكثر» ٢٠٢٦-١١-٢٤)
                     Text(value)
-                        .dsFieldFont(.fieldValue)
-                        .foregroundColor(DS.Color.fieldValue)
+                        .dsFieldFont(.rowTitle)
+                        .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                 }
             }
@@ -4651,8 +4661,11 @@ struct AdminAllRequestsView: View {
                 whatsappButton(url)
             }
         }
-        .frame(maxWidth: .infinity)
+        // يمتدّ لارتفاع جاره حين يكونان جنب بعض (`AdminDetailPairLayout`) — المربّعان بطول واحد
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .dsRowBox()
+        // حقل يصلح أن يكون جنب حقل آخر في تفاصيل الطلب — الصور والأزرار والأقسام تبقى بعرض المربّع
+        .layoutValue(key: AdminDetailPairable.self, value: whatsapp == nil)
     }
 
     /// زرّ «واتساب» — حبّة مدمجة خضراء بنصّها (الزرّ الواحد بحجم `.compact`)، يفتح المحادثة مع الرقم
@@ -5456,6 +5469,132 @@ extension AdminAllRequestsView {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .dsRowBox()
             }
+        }
+    }
+}
+
+// MARK: - معاينة عنصر المكتبة قبل الموافقة
+
+/// معاينة عنصر المكتبة في تفاصيل «الوارد» (طلب المالك ٢٠٢٦-١١-٢٤ «وصلني بالمكتبة بس ما يبين شنو نوع المحتوى قبل
+/// الموافقة»): الصورة نفسها أو الصفحة الأولى من الـPDF إن وُجدت مصغّرتها، وزرّ «عرض المحتوى» يفتحه بالعارض نفسه
+/// في المكتبة (`ProjectPhotoViewer` للصورة، `ArchivePDFReader` للـPDF). الإدارة لا تُحجب عنها لقطة الشاشة
+private struct AdminArchivePreviewCard: View {
+    let item: ArchiveItem
+    @State private var showImage = false
+    @State private var showReader = false
+
+    private var previewURL: URL? {
+        if item.isImage { return URL(string: item.fileUrl) }
+        return item.thumbnailUrl.flatMap { URL(string: $0) }
+    }
+
+    private var canOpen: Bool { (item.isImage || item.isPDF) && URL(string: item.fileUrl) != nil }
+
+    var body: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            if let u = previewURL {
+                CachedAsyncImage(url: u) { img in
+                    img.resizable().scaledToFit()
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        .fill(DS.Color.cardBackgroundSoft)
+                        .frame(height: 140)
+                }
+                .frame(maxWidth: .infinity, maxHeight: 200)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
+                .contentShape(Rectangle())
+                .onTapGesture { open() }
+                .accessibilityLabel(L10n.t("معاينة \(item.fileKindName)", "Preview of \(item.fileKindName)"))
+                .accessibilityAddTraits(.isButton)
+            } else {
+                // بلا معاينة (PDF بلا مصغّرة): رمز النوع كبيراً مع اسمه
+                VStack(spacing: DS.Spacing.xs) {
+                    Image(systemName: item.fileKindIcon)
+                        .dsGlyph(DS.Glyph.xxl)
+                        .foregroundColor(DS.Color.sadu)
+                    Text(verbatim: item.fileKindLine)
+                        .dsFont(.label)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 96)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                    .fill(DS.Color.cardBackgroundSoft))
+                .accessibilityElement(children: .combine)
+            }
+            if canOpen {
+                DSButton(item.isPDF ? L10n.t("فتح الملف", "Open file") : L10n.t("عرض الصورة", "View image"),
+                         icon: item.isPDF ? "doc.text.magnifyingglass" : "photo",
+                         tint: DS.Color.sadu) { open() }
+            }
+        }
+        .fullScreenCover(isPresented: $showImage) {
+            ProjectPhotoViewer(urls: [item.fileUrl], startIndex: 0, section: .library, shielded: false)
+        }
+        .fullScreenCover(isPresented: $showReader) {
+            if let url = URL(string: item.fileUrl) {
+                ArchivePDFReader(url: url, title: item.title, shielded: false)
+            }
+        }
+    }
+
+    private func open() {
+        if item.isImage { showImage = true } else if item.isPDF { showReader = true }
+    }
+}
+
+// MARK: - الحقول القصيرة جنب بعض
+
+/// حقل معلومة (`infoCard` بلا زرّ واتساب) — وحده يدخل الأزواج؛ غيره بعرض المربّع دائماً
+nonisolated private struct AdminDetailPairable: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// تفاصيل الطلب في «الوارد» (طلب المالك ٢٠٢٦-١١-٢٤ «اذا كان النص صغير خلهم جنب بعض»): كل حقلين متتاليين
+/// قصيرين — عرضه الطبيعي يكفيه نصف السطر — في صفّ واحد بعرضين متساويين وطول واحد، والطويل (الاسم الكامل، الرقم
+/// مع واتساب، الوصف، الصور) بعرض المربّع. يكبر الخط (أحجام إمكانية الوصول) ← تقلّ الأزواج تلقائياً
+private struct AdminDetailPairLayout: Layout {
+    var spacing: CGFloat
+
+    private func rows(_ subviews: Subviews, width: CGFloat) -> [[Int]] {
+        let half = (width - spacing) / 2
+        func short(_ i: Int) -> Bool {
+            subviews[i][AdminDetailPairable.self] && subviews[i].sizeThatFits(.unspecified).width <= half
+        }
+        var out: [[Int]] = []
+        var i = 0
+        while i < subviews.count {
+            if i + 1 < subviews.count, short(i), short(i + 1) {
+                out.append([i, i + 1]); i += 2
+            } else {
+                out.append([i]); i += 1
+            }
+        }
+        return out
+    }
+
+    private func rowHeight(_ row: [Int], _ subviews: Subviews, width: CGFloat) -> CGFloat {
+        let w = row.count == 2 ? (width - spacing) / 2 : width
+        return row.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w, height: nil)).height }.max() ?? 0
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 320
+        let rs = rows(subviews, width: width)
+        let heights = rs.map { rowHeight($0, subviews, width: width) }
+        let total = heights.reduce(0, +) + spacing * CGFloat(max(0, rs.count - 1))
+        return CGSize(width: width, height: total)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in rows(subviews, width: bounds.width) {
+            let w = row.count == 2 ? (bounds.width - spacing) / 2 : bounds.width
+            let h = rowHeight(row, subviews, width: bounds.width)
+            for (k, idx) in row.enumerated() {
+                subviews[idx].place(at: CGPoint(x: bounds.minX + CGFloat(k) * (w + spacing), y: y),
+                                    anchor: .topLeading, proposal: ProposedViewSize(width: w, height: h))
+            }
+            y += h + spacing
         }
     }
 }

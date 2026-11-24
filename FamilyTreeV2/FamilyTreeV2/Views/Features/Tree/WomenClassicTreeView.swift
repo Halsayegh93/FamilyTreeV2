@@ -45,9 +45,11 @@ private struct WomenTreeMetrics: Equatable {
     /// المتشابكتين): دائرة بمقاس مربّع الزوجة يمين البنت مكان الزوجة الأولى، على مستوى وسط شكلها، وخط ذهبي قصير
     /// بينهما، وتحت دائرته بطاقة اسمه الأول والعائلة — مثل الزوجات جنب الرجال. خط الأبناء من البنت نفسها
     var husbandSquare: CGFloat { 92 * k }                // قطر دائرته — قريب من دائرتها (١٠٥): «كبر الصورة زيادة» ثم «كبّره أكثر» ٢٠٢٦-١١-٢٤
-    var husbandCellW: CGFloat { wifeCellW }              // عرض خليته وبطاقة اسمه
-    var husbandCellX: CGFloat { wivesCenterX(1) }        // مركز خليته عن مركز العقدة — مكان الزوجة الأولى
-    var husbandOverhang: CGFloat { wivesOverhang(1) }
+    /// عرض خليته وكبسولة اسمه — أعرض من كبسولة العضو (١١٦) لأن اسمه كلمتان، فيبقى بخط اسم العضو نفسه بلا تصغير
+    /// («اسم الزوج خله نفس حجم اسم العضو» ٢٠٢٦-١١-٢٤)
+    var husbandCellW: CGFloat { 150 * k }
+    var husbandCellX: CGFloat { circle / 2 + 18 * k + husbandCellW / 2 }   // مركز خليته عن مركز العقدة — يمينها
+    var husbandOverhang: CGFloat { husbandCellX + husbandCellW / 2 + 2 * k - nodeW / 2 }
     /// الزوجات بنفس شكل الزوج (طلب المالك ٢٠٢٦-١١-٠٩ «طبّق على الزوجات»): عقدة أصغر من عقدته شوي وبطاقة اسم بيضاء
     var wifeSquare: CGFloat { 56 * k }
     var wifeCellW: CGFloat { 120 * k }
@@ -87,6 +89,9 @@ struct WomenClassicTreeView: View {
     var autoLocate: Bool = false
     /// ↻ «تحديث الشجرة» — إعادة جلب شجرة النساء (من `WomenTreeView`)
     var onRefresh: (() async -> Void)? = nil
+    /// صورة حساب الذكر المرتبط بعقدته (ابن البنت صاحب الحساب) حين لا صورة على عقدته — عقدة → رابط الصورة
+    /// («العضو ابن البنت اذا حاط صورة خلها تظهر بالشجرة» ٢٠٢٦-١١-٢٤؛ الإناث بلا صور دائماً)
+    var linkedAvatars: [UUID: String] = [:]
     /// معاينة «مكانه في الشجرة» قبل التنفيذ (طلب المالك ٢٠٢٦-١١-١٣): هذه الشجرة نفسها نسخةً معزولة (حالتها خاصة بها) —
     /// بلا شريط أدوات ولا أزرار عائمة، لمس العقد لا يفعل شيئاً، وتفتح على مسار الجذر ← الأب والشخص بعلامة التغيير،
     /// والباقي باهت. nil = الشجرة العادية كما هي
@@ -238,6 +243,7 @@ struct WomenClassicTreeView: View {
             h.combine(m.isMarried)
             h.combine(WomenStore.outsideFamilyIds.contains(m.id))
             h.combine(WomenStore.linkedUserByWoman[m.id] != nil)
+            h.combine(linkedAvatars[m.id])   // صورة حساب ابن البنت تصل بعد تحميل الأعضاء
         }
         return h.finalize()
     }
@@ -1076,7 +1082,10 @@ struct WomenClassicTreeView: View {
         // كل البنات «ورقة» — ومنهن من لها زوج من خارج العائلة (شكل «ب»، ٢٠٢٦-١١-٢٤)
         let leafNode = female
         let shape = TreeNodeShape(leaf: leafNode, sharp: leafSharp)
-        let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil
+        // صورة الذكر: صورة عقدته، وإلا صورة حسابه المرتبط (ابن البنت) — الإناث بلا صور دائماً
+        let maleAvatar: String? = female ? nil
+            : ((m.avatarUrl?.isEmpty == false ? m.avatarUrl : nil) ?? linkedAvatars[m.id])
+        let noPhotoMale = !female && maleAvatar.flatMap { URL(string: $0) } == nil
 
         // ٧ بين الصورة والاسم = مكان حلقة شجرة العائلة (circleFull ١١٢ − الدائرة ١٠٥) — الاسم بنفس موضعه هناك
         VStack(spacing: 7 * k) {
@@ -1121,7 +1130,7 @@ struct WomenClassicTreeView: View {
                     }
                     .overlay(
                         Group {
-                            if !female, let url = m.avatarUrl, let u = URL(string: url) {
+                            if !female, let url = maleAvatar, let u = URL(string: url) {
                                 CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: {
                                     Image(systemName: "person.fill")
                                         .dsTreeGlyph(DS.Glyph.xl, k, weight: .semibold)
@@ -1423,7 +1432,9 @@ struct WomenClassicTreeView: View {
         let tint = husbandRingColor(h)
         let name = wifeShortName(h)
         let photo = h.avatarUrl.flatMap { URL(string: $0) }
-        return VStack(spacing: DS.Spacing.xs * k) {
+        // كبسولة اسمه على مستوى كبسولة اسمها (أعلاها = الدائرة + ٧) — الخلية تبدأ من أعلى دائرته (وسطها على وسط شكلها)
+        let nameGap = layout.m.circle / 2 + 7 * k - side / 2
+        return VStack(spacing: max(DS.Spacing.xs * k, nameGap)) {
             Circle()
                 .fill(DS.Color.background)
                 .overlay(Circle().fill(tint.opacity(DS.Opacity.tintFill)))
@@ -1454,8 +1465,32 @@ struct WomenClassicTreeView: View {
                     }
                 }
                 .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
-            spouseCard(h, deceasedText: L10n.t("متوفى", "Deceased"), width: layout.m.husbandCellW - 2 * k,
-                       lines: 1, name: name)
+            // اسمه بكبسولة اسم العضو نفسها: نفس الخط والارتفاع والإطار، و«متوفى» شريطاً متصلاً تحته
+            // («اسم الزوج خله نفس حجم اسم العضو» ٢٠٢٦-١١-٢٤)
+            VStack(spacing: 0) {
+                Text(name)
+                    .dsTreeFont(.title3Tree, k)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 10 * k)
+                    .frame(width: layout.m.husbandCellW - 4 * k, height: layout.m.pillH)
+                    .background(DS.Color.surface)
+                if deceased {
+                    Text(L10n.t("متوفى", "Deceased"))
+                        .dsTreeFont(.treeYears, k)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(width: layout.m.husbandCellW - 4 * k, height: layout.m.lifeH)
+                        .background(DS.Color.deceasedStrip)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: layout.m.pillH / 2, style: .continuous))
+            .modifier(DSClaySkin(radius: layout.m.pillH / 2, compact: true, section: .tree))
+            .overlay(RoundedRectangle(cornerRadius: layout.m.pillH / 2, style: .continuous)
+                .stroke(DS.Color.male.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * k))
+            .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
         }
         .contentShape(Rectangle())
         .onTapGesture {
