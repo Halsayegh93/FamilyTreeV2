@@ -41,17 +41,13 @@ private struct WomenTreeMetrics: Equatable {
         spineRoom = 18 * k; spineOut = 12 * k; lineCorner = 10 * k; pad = 60 * k
     }
 
-    /// مربّع الزوج من خارج العائلة جنب البنت: مركزه عن مركز العقدة، ومربّعه، وكم يطلع عن حافة العقدة
-    /// أكبر شوي من مربّع الزوجة (٤٠) لكونه رجلاً — طلب المالك ٢٠٢٦-١١-٠٨
-    /// شكل «ح٤ — حلقتان متشابكتان» (اختيار المالك ٢٠٢٦-١١-١٧): البنت دائرة ممتلئة، وزوجها من خارج العائلة حلقة
-    /// منقّطة بقطرها تتشابك معها من اليمين، ومنطقة التشابك ذهبية ينزل منها خط الأبناء؛ الاسمان تحت الحلقتين
-    var husbandSquare: CGFloat { circle }                 // قطر حلقته = قطر دائرتها
-    var husbandCellW: CGFloat { 92 * k }                  // عرض بطاقة اسمه
-    var husbandCellX: CGFloat { circle * 0.72 }           // مركز حلقته عن مركزها — تتشابكان
-    var husbandNameX: CGFloat { nodeW / 2 + husbandCellW / 2 }   // مركز بطاقة اسمه — ملاصقة لبطاقة اسمها
-    var husbandPillH: CGFloat { pillH }
-    var husbandLifeH: CGFloat { lifeH }
-    var husbandOverhang: CGFloat { max(husbandCellX + husbandSquare / 2, husbandNameX + husbandCellW / 2) + 2 * k - nodeW / 2 }
+    /// الزوج من خارج العائلة جنب البنت — شكل «ب: دائرة صغيرة جنبها» (اختيار المالك ٢٠٢٦-١١-٢٤، بدل «ح٤» الحلقتين
+    /// المتشابكتين): دائرة بمقاس مربّع الزوجة يمين البنت مكان الزوجة الأولى، على مستوى وسط شكلها، وخط ذهبي قصير
+    /// بينهما، وتحت دائرته بطاقة اسمه الأول والعائلة — مثل الزوجات جنب الرجال. خط الأبناء من البنت نفسها
+    var husbandSquare: CGFloat { wifeSquare }            // قطر دائرته = مربّع الزوجة
+    var husbandCellW: CGFloat { wifeCellW }              // عرض خليته وبطاقة اسمه
+    var husbandCellX: CGFloat { wivesCenterX(1) }        // مركز خليته عن مركز العقدة — مكان الزوجة الأولى
+    var husbandOverhang: CGFloat { wivesOverhang(1) }
     /// الزوجات بنفس شكل الزوج (طلب المالك ٢٠٢٦-١١-٠٩ «طبّق على الزوجات»): عقدة أصغر من عقدته شوي وبطاقة اسم بيضاء
     var wifeSquare: CGFloat { 56 * k }
     var wifeCellW: CGFloat { 120 * k }
@@ -483,11 +479,9 @@ struct WomenClassicTreeView: View {
         var out: [WomenConnector] = []
         for (pid, groupIds) in L.childGroups {
             guard let pp = L.positions[pid] else { continue }
-            // بنت لها زوج من خارج العائلة: خط الأبناء من المنتصف بينها وبين زوجها (طلب المالك ٢٠٢٦-١١-١٧)
-            let withHusband = L.husbandCells.contains(pid)
-            let fx = pp.x + NODE_W / 2 + (withHusband ? M.husbandCellX / 2 : 0)
-            // مع الزوج: الخط يبدأ من أسفل منطقة التشابك الذهبية (يمرّ خلف بطاقة الاسم)
-            let fy = withHusband ? pp.y + M.circle * 0.82 : pp.y + (L.heights[pid] ?? M.nodeH) - 2 * k
+            // خط الأبناء من أسفل العقدة — والبنت التي لها زوج من خارج العائلة مثل غيرها (شكل «ب»، ٢٠٢٦-١١-٢٤)
+            let fx = pp.x + NODE_W / 2
+            let fy = pp.y + (L.heights[pid] ?? M.nodeH) - 2 * k
             let groups: [[[Kid]]] = groupIds.map { g in
                 g.map { row in
                     row.compactMap { id in L.positions[id].map { (id: id, x: $0.x + NODE_W / 2, top: $0.y + 3 * k) } }
@@ -1079,8 +1073,8 @@ struct WomenClassicTreeView: View {
         let showWives = !isCollapsed && !kids.isEmpty
         let wives = showWives ? (cWives[m.id] ?? []) : []
 
-        // «ح٤»: البنت التي لها زوج من خارج العائلة دائرة (حلقتها تتشابك مع حلقته) لا ورقة
-        let leafNode = female && !layout.husbandCells.contains(m.id)
+        // كل البنات «ورقة» — ومنهن من لها زوج من خارج العائلة (شكل «ب»، ٢٠٢٦-١١-٢٤)
+        let leafNode = female
         let shape = TreeNodeShape(leaf: leafNode, sharp: leafSharp)
         let noPhotoMale = !female && m.avatarUrl.flatMap { URL(string: $0) } == nil
 
@@ -1227,8 +1221,6 @@ struct WomenClassicTreeView: View {
                     }
             }
             .frame(width: CIRCLE, height: CIRCLE)
-            // زوج البنت من خارج العائلة: مربّع صغير يمينها مثل مربّع الزوجة، ومربّعه على مستوى وسط شكلها
-            // بلا خط بينهما (طلب المالك ٢٠٢٦-١١-٠٩) — طلب المالك ٢٠٢٦-١١-٠٨
             // الزوجات جنب العضو — الأولى يمين والثانية والثالثة يسار (طلب المالك ٢٠٢٦-١١-٠٧)، بشكل الزوج
             // (طلب المالك ٢٠٢٦-١١-٠٩)، ومربّعاتهن على مستوى وسط شكله. فوق الشكل لا داخله — لا يكبّر العقدة
             .overlay(alignment: .top) {
@@ -1251,21 +1243,22 @@ struct WomenClassicTreeView: View {
                     .offset(y: CIRCLE / 2 - M.wifeSquare / 2)
                 }
             }
-            // «ح٤»: حلقة الزوج خلف دائرتها، ثم فوقها منطقة التشابك الذهبية وحدّ حلقته المنقّط، واسمه بجانب اسمها
-            .background(alignment: .top) {
-                if layout.husbandCells.contains(m.id), let h = cOutsideHusband[m.id] {
-                    husbandCircle(h).offset(x: M.husbandCellX)
-                }
-            }
+            // «ب» (اختيار المالك ٢٠٢٦-١١-٢٤): زوجها من خارج العائلة دائرة صغيرة يمينها مكان الزوجة الأولى، على مستوى
+            // وسط شكلها، وخط ذهبي قصير من حافتها إلى دائرته. فوق الشكل لا داخله — لا يكبّر العقدة
             .overlay(alignment: .top) {
                 if layout.husbandCells.contains(m.id), let h = cOutsideHusband[m.id] {
-                    husbandLens(h)
-                }
-            }
-            .overlay(alignment: .top) {
-                if layout.husbandCells.contains(m.id), let h = cOutsideHusband[m.id] {
-                    husbandNameCard(h)
-                        .offset(x: M.husbandNameX, y: CIRCLE + 7 * M.k)
+                    let lineFrom = CIRCLE / 2
+                    let lineTo = M.husbandCellX - M.husbandSquare / 2
+                    ZStack(alignment: .top) {
+                        Rectangle()
+                            .fill(DS.Color.accentLight)
+                            .frame(width: max(0, lineTo - lineFrom), height: 2 * M.k)
+                            .offset(x: (lineFrom + lineTo) / 2, y: CIRCLE / 2 - M.k)
+                            .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
+                            .accessibilityHidden(true)
+                        husbandCell(h)
+                            .offset(x: M.husbandCellX, y: CIRCLE / 2 - M.husbandSquare / 2)
+                    }
                 }
             }
             // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك)
@@ -1374,11 +1367,13 @@ struct WomenClassicTreeView: View {
         .accessibilityHint(L10n.t("يفتح التفاصيل", "Open details"))
     }
 
-    /// بطاقة اسم الزوج/الزوجة: الاسم الثلاثي (سطران إن طال) و«متوفى/متوفية» بالأحمر تحته، بإطار خفيف
-    private func spouseCard(_ p: FamilyMember, deceasedText: String, width: CGFloat, lines: Int = 2) -> some View {
+    /// بطاقة اسم الزوج/الزوجة: الاسم الثلاثي (سطران إن طال) و«متوفى/متوفية» بالأحمر تحته، بإطار خفيف.
+    /// `name` يغيّر النص المعروض (الزوج من خارج العائلة: الاسم الأول والعائلة)
+    private func spouseCard(_ p: FamilyMember, deceasedText: String, width: CGFloat, lines: Int = 2,
+                            name: String? = nil) -> some View {
         let k = layout.m.k
         return VStack(spacing: 0) {
-            Text(tripleName(p))
+            Text(name ?? tripleName(p))
                 .dsTreeFont(.title3Tree, k)
                 .foregroundColor(DS.Color.textPrimary)
                 .multilineTextAlignment(.center)
@@ -1419,96 +1414,49 @@ struct WomenClassicTreeView: View {
         h.isDeceased == true ? DS.Color.textTertiary : DS.Color.male
     }
 
-    /// حلقة الزوج من خارج العائلة — «ح٤»: تعبئة فاتحة (صورته إن وُجدت) وحدّ منقّط = ليس من العائلة؛ ترسم خلف دائرتها
-    private func husbandCircle(_ h: FamilyMember) -> some View {
+    /// خلية الزوج من خارج العائلة — شكل «ب» (اختيار المالك ٢٠٢٦-١١-٢٤): دائرة بمقاس مربّع الزوجة بحدّ كحلي
+    /// (رمادي للمتوفى)، فيها صورته إن وُجدت وإلا أول حرف من اسمه، وتحتها بطاقة اسمه الأول والعائلة
+    /// («خل اسم الزوج يطلع الاسم الاول الاخير و اذا في صورة خلها تظهر»). الضغط يفتح تفاصيله
+    private func husbandCell(_ h: FamilyMember) -> some View {
         let k = layout.m.k, side = layout.m.husbandSquare
         let deceased = h.isDeceased == true
         let tint = husbandRingColor(h)
-        return Circle()
-            .fill(DS.Color.background)
-            .overlay(Circle().fill(tint.opacity(DS.Opacity.tintFill)))
-            .overlay(Group {
-                if let s = h.avatarUrl, let u = URL(string: s) {
-                    CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: { Color.clear }
-                        .clipShape(Circle())
-                        .saturation(deceased ? 0 : 1)
-                }
-            })
-            .frame(width: side, height: side)
-            .overlay(Circle().strokeBorder(tint, style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, dash: [1.5 * k, 6 * k])))
-            // «من خارج العائلة» على أعلى الحلقة
-            .overlay(alignment: .top) {
-                if WomenStore.outsideFamilyIds.contains(h.id) {
-                    Text(DaughterSons.text("outside_tag", "من خارج العائلة", "Outside the family"))
-                        .dsTreeFont(.micro, k)
-                        .foregroundColor(DS.Color.textOnPrimary)
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, DS.Spacing.xs * k)
-                        .padding(.vertical, 1 * k)
-                        .background(Capsule().fill(DS.Color.slateFill))
-                        .overlay(Capsule().stroke(DS.Color.textOnPrimary, lineWidth: 1 * k))
-                        .offset(x: 14 * k, y: -8 * k)
-                }
-            }
-            .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
-            .contentShape(Circle())
-            .onTapGesture {
-                guard TreeTapGuard.allowsTap else { return }
-                onSelect?(h)
-            }
-            .accessibilityHidden(true)
-    }
-
-    /// منطقة التشابك الذهبية فوق دائرتها (حلقته مقصوصة بدائرتها)، وفوقها حدّ حلقته المنقّط — لا تلتقط اللمس
-    private func husbandLens(_ h: FamilyMember) -> some View {
-        let M = layout.m, k = M.k, side = M.circle
-        return ZStack {
-            Circle().fill(DS.Color.accentLight)
-                .frame(width: side - 4 * k, height: side - 4 * k)
-                .offset(x: M.husbandCellX)
-                .frame(width: side, height: side)
-                .clipShape(Circle())
+        let name = wifeShortName(h)
+        let photo = h.avatarUrl.flatMap { URL(string: $0) }
+        return VStack(spacing: DS.Spacing.xs * k) {
             Circle()
-                .strokeBorder(husbandRingColor(h), style: StrokeStyle(lineWidth: 3 * k, lineCap: .round, dash: [1.5 * k, 6 * k]))
+                .fill(DS.Color.background)
+                .overlay(Circle().fill(tint.opacity(DS.Opacity.tintFill)))
+                .overlay {
+                    if let u = photo {
+                        CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: { Color.clear }
+                            .clipShape(Circle())
+                            .saturation(deceased ? 0 : 1)
+                    } else {
+                        Text(name.isEmpty ? L10n.t("زوج", "H") : String(name.prefix(1)))
+                            .dsTreeFont(.callout, k)
+                            .foregroundColor(tint)
+                    }
+                }
                 .frame(width: side, height: side)
-                .offset(x: M.husbandCellX)
+                .overlay(Circle().strokeBorder(tint, lineWidth: 2 * k))
+                // نفس شارة الإخفاء على مربّع الزوجة — بمقاس الخلية الصغيرة
+                .overlay(alignment: .topTrailing) {
+                    if h.isHiddenFromTree {
+                        Circle().fill(DS.Color.background)
+                            .frame(width: 18 * k, height: 18 * k)
+                            .overlay(
+                                Image(systemName: "eye.slash.fill")
+                                    .dsTreeGlyph(DS.Glyph.microCompact, k)
+                                    .foregroundColor(DS.Color.slate)
+                            )
+                            .offset(x: 3 * k, y: -3 * k)
+                    }
+                }
+                .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
+            spouseCard(h, deceasedText: L10n.t("متوفى", "Deceased"), width: layout.m.husbandCellW - 2 * k,
+                       lines: 1, name: name)
         }
-        .frame(width: side, height: side)
-        .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    /// بطاقة اسم الزوج الأول تحت دائرته — نفس بطاقة أسماء العقد (كبسولة بيضاء، و«متوفى» شريطاً تحت الاسم)
-    private func husbandNameCard(_ h: FamilyMember) -> some View {
-        let M = layout.m, k = M.k
-        let deceased = h.isDeceased == true
-        let first = h.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let name = first.isEmpty ? (PersonName.units(h.fullName).first ?? h.fullName) : first
-        return VStack(spacing: 0) {
-            Text(name)
-                .dsTreeFont(.title3Tree, k)
-                .foregroundColor(DS.Color.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .padding(.horizontal, 8 * k)
-                .frame(width: M.husbandCellW, height: M.husbandPillH)
-                .background(DS.Color.surface)
-            if deceased {
-                Text(L10n.t("متوفى", "Deceased"))
-                    .dsTreeFont(.badge, k)
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .lineLimit(1)
-                    .frame(width: M.husbandCellW, height: M.husbandLifeH)
-                    .background(DS.Color.deceasedStrip)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: M.husbandPillH / 2, style: .continuous))
-        .modifier(DSClaySkin(radius: M.husbandPillH / 2, compact: true, section: .tree))
-        .overlay(RoundedRectangle(cornerRadius: M.husbandPillH / 2, style: .continuous)
-            .stroke(DS.Color.male.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * k))
-        .opacity(h.isHiddenFromTree ? DS.Opacity.disabled : 1)
         .contentShape(Rectangle())
         .onTapGesture {
             guard TreeTapGuard.allowsTap else { return }
@@ -1520,7 +1468,7 @@ struct WomenClassicTreeView: View {
         .accessibilityHint(L10n.t("يفتح التفاصيل", "Open details"))
     }
 
-    /// اسم الزوجة المختصر: الاسم الأول والأخير فقط (طلب المالك).
+    /// اسم الزوجة (والزوج من خارج العائلة) المختصر: الاسم الأول والأخير فقط (طلب المالك).
     /// نفضّل الاسم الكامل متى ما كان فيه أكثر من كلمة — بعض السجلات تخزّن
     /// كلمة وحدة فقط في حقل الاسم الأول والباقي في الاسم الكامل.
     /// الأول والأخير وحدات (PersonName): «فاطمة الزهراء … المحمدعلي» ← «فاطمة الزهراء المحمدعلي».
