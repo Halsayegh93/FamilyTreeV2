@@ -472,7 +472,7 @@ struct EditChildSheet: View {
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
                 }
             } else {
-                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+                errorMessage = memberVM.errorMessage ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
                 showErrorAlert = true
             }
         }

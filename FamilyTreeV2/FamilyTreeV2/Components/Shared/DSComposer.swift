@@ -101,6 +101,9 @@ enum DSMotion {
 
     // التفاعل
     static let press = Animation.spring(response: 0.26, dampingFraction: 0.72)
+    /// ضغط البطاقات والصفوف: تباطؤ سريع (لا نابض — الضغط ردّ فوري لا حركة)
+    static let tap = Animation.easeOut(duration: 0.14)
+    static let cardPressScale: CGFloat = 0.98
     static let expand = Animation.spring(response: 0.38, dampingFraction: 0.86)
     static let enable = Animation.easeInOut(duration: 0.25)
     /// «تقليل الحركة»: تلاشٍ قصير بدل أي حركة
@@ -191,6 +194,27 @@ struct DSIconPop: ViewModifier {
                 guard !shown else { return }
                 withAnimation(reduceMotion ? DSMotion.fade : DSMotion.iconPop.delay(delay)) { shown = true }
             }
+    }
+}
+
+/// ضغطة البطاقة الكاملة (بطاقة طلب في «الوارد»، صفّ «الطلبات المرسلة») — طلب المالك ٢٠٢٦-١١-١٧ بقواعد
+/// Emil Kowalski: تصغير خفيف ٠٫٩٨ (البطاقة كبيرة — ٠٫٩٦ للأزرار) بتباطؤ سريع ١٤٠ م.ث، يرجع فور الرفع.
+/// «تقليل الحركة»: خفوت فقط.
+struct DSCardPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        DSCardPressLabel(configuration: configuration)
+    }
+}
+
+private struct DSCardPressLabel: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? DSMotion.cardPressScale : 1)
+            .opacity(configuration.isPressed && reduceMotion ? 0.85 : 1)
+            .animation(DSMotion.tap, value: configuration.isPressed)
     }
 }
 

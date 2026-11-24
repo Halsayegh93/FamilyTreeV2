@@ -15,9 +15,13 @@ struct HomeInfoButton: View {
                 .dsGlyph(DS.Glyph.xxl, weight: .semibold)
                 .foregroundStyle(DS.Color.headerGlyph)
                 .frame(width: DS.Icon.row, height: DS.Icon.tapTarget)
+                // مساحة لمس ٤٤ رغم العرض الأضيق: تمتدّ للخارج فقط (بعيداً عن الجرس) ولا يتغيّر الشكل
+                .padding(.trailing, DS.Icon.tapTarget - DS.Icon.row)
+                .contentShape(Rectangle())
         }
         .buttonStyle(BounceButtonStyle())
-        .accessibilityLabel(L10n.t("عن التطبيق ودليل الاستخدام", "About & User Guide"))
+        .padding(.trailing, -(DS.Icon.tapTarget - DS.Icon.row))
+        .accessibilityLabel(L10n.t("عن التطبيق", "About the app"))
         .dsCenterBox(isPresented: $showGuide, onBackgroundTap: { showGuide = false }) {
             AppGuideBox()
                 .environmentObject(authVM)

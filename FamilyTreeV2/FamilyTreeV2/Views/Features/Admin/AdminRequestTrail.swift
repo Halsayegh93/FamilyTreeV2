@@ -228,7 +228,7 @@ enum AdminTrailText {
         case RequestType.treeEdit.rawValue:
             let p = request.treeEditPayload
             if let reason = AdminAllRequestsView.profileReasonTitle(p?.reason) { return reason }
-            if let a = p?.resolvedAction, a != .other {
+            if let a = p?.displayAction, a != .other {
                 return L10n.t("طلب ", "") + (L10n.isArabic ? a.arabicLabel : a.englishLabel)
             }
             return L10n.t("طلب تعديل", "Edit request")
@@ -543,10 +543,12 @@ enum AdminTrailText {
         let target = p.targetMemberName ?? p.parentMemberName ?? ""
         switch action {
         case .add:
-            if let name = p.newMemberName, !name.isEmpty {
+            // القاعدة الواحدة `AdminRequestExecution`: ما ينفّذه السيرفر (بالاسم الجديد أو بحقل `women` المنظّم) أُضيف فعلاً
+            if AdminRequestExecution.of(request) == .auto,
+               let name = [p.newMemberName, p.women?.name].compactMap({ $0?.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) {
                 return [L10n.t("أُضيف: ", "Added: ") + name + (target.isEmpty ? "" : L10n.t(" — تحت ", " — under ") + target)]
             }
-            // طلبات شجرة النساء والإضافات اليدوية: الإدارة تنفّذها بنفسها حسب الملاحظات
+            // طلبات شجرة النساء القديمة والإضافات اليدوية: الإدارة تنفّذها بنفسها حسب الملاحظات
             return [L10n.t("قُبل — التنفيذ يدوي كما في ملاحظات الطلب.", "Approved — carried out manually per the request notes.")]
         case .editName:
             return [L10n.t("تغيّر الاسم إلى: ", "Name changed to: ") + (p.newName ?? "—")]
@@ -589,11 +591,15 @@ struct AdminSenderInfo {
 struct AdminSenderSection: View {
     let info: AdminSenderInfo
     var index: Int = 2
+    /// عنوان القسم — «من أين وصل» في تفاصيل الطلب المعلّق (العيّنة ١٦) حيث «المرسل» بطاقة مستقلّة
+    var title: String = L10n.t("المرسل", "Sender")
+    /// خانة «أرسله» — تختفي حين تعرضه بطاقة «المرسل» فوقه
+    var showsSender: Bool = true
     /// ورقة المرسل («أرسله» ←)
     @State private var openSender: AdminMemberSheetContext?
 
     var body: some View {
-        DSComposerSection(title: L10n.t("المرسل", "Sender"),
+        DSComposerSection(title: title,
                           icon: "paperplane.fill",
                           tint: AppSection.admin.ink,
                           index: index) {
@@ -604,16 +610,20 @@ struct AdminSenderSection: View {
             if let chosenName = info.chosenName, let chosenLabel = info.chosenLabel {
                 DSTileGrid([.wide(DSFieldTileFace(label: chosenLabel, value: chosenName, glyph: .none))])
             }
-            DSTileGrid([
-                .wide(senderTile),
-                .half(DSFieldTileFace(label: L10n.t("الجهاز", "Device"), value: info.device,
-                                      isPlaceholder: !info.deviceRecorded, glyph: .none)),
-                .half(DSFieldTileFace(label: L10n.t("الوقت", "Time"), value: info.time, glyph: .none)),
-            ])
+            DSTileGrid(tiles)
         }
         .dsTallBox(item: $openSender) { context in
             AdminMemberSheet(ids: context.ids, start: context.start)
         }
+    }
+
+    private var tiles: [DSTileItem] {
+        var items: [DSTileItem] = []
+        if showsSender { items.append(.wide(senderTile)) }
+        items.append(.half(DSFieldTileFace(label: L10n.t("الجهاز", "Device"), value: info.device,
+                                           isPlaceholder: !info.deviceRecorded, glyph: .none)))
+        items.append(.half(DSFieldTileFace(label: L10n.t("الوقت", "Time"), value: info.time, glyph: .none)))
+        return items
     }
 
     /// «أرسله»: الاسم الرباعي · الدور · الصلة — والضغط يفتح تفاصيل العضو حين يُعرف

@@ -625,6 +625,7 @@ struct DSStatusChip: View {
             }
             Text(text)
                 .dsFont(.badge)
+                .monospacedDigit()   // أرقام بعرض ثابت — العدد والعمر والنسخة لا يهزّون الشارة (٢٠٢٦-١١-١٧)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }

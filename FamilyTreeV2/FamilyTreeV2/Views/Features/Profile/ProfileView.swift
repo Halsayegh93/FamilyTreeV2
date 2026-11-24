@@ -137,8 +137,6 @@ struct ProfileView: View {
                                         .frame(maxWidth: .infinity)
 
                                         VStack(spacing: DS.Spacing.md) {
-                                            myRequestsSection
-                                                .dsCardCascade(2, appeared: appeared)
                                             if reviewCard.card != nil {
                                                 EmptyView()
                                             } else if isWomanAccount {
@@ -174,9 +172,7 @@ struct ProfileView: View {
                                                 .dsCardCascade(1, appeared: appeared)
                                         }
 
-                                        // طلباتي — الطلبات المعلّقة التي أرسلها العضو للإدارة
-                                        myRequestsSection
-                                            .dsCardCascade(2, appeared: appeared)
+                                        // «طلباتي» انتقلت إلى الإشعارات ← «الطلبات المرسلة» (طلب المالك ٢٠٢٦-١١-١٧)
 
                                         // حساب امرأة: «موقعي في شجرة النساء» بدل «عائلتي» (روابطه من شجرة الرجال)
                                         if reviewCard.card != nil {
@@ -444,7 +440,17 @@ struct ProfileView: View {
                     .frame(width: DS.Icon.profileAvatarRing - DS.Spacing.xs,
                            height: DS.Icon.profileAvatarRing - DS.Spacing.xs)
 
-                if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {
+                // لا صور للإناث (قاعدة المالك ٢٠٢٦-١١-١٧): رمز امرأة محايد بدل الصورة والحرف، بلا معاينة
+                if user.isFemale {
+                    Circle()
+                        .fill(DS.Color.female.opacity(DS.Opacity.tintFill))
+                        .frame(width: DS.Icon.profileAvatar, height: DS.Icon.profileAvatar)
+                        .overlay(
+                            Image(systemName: "figure.stand.dress")
+                                .dsGlyph(DS.Glyph.xxl * 2, weight: .regular)
+                                .foregroundColor(DS.Color.female)
+                        )
+                } else if let urlStr = user.avatarUrl, let url = URL(string: urlStr) {
                     CachedAsyncImage(url: url) { img in img.resizable().scaledToFill() }
                     placeholder: { AppSection.profile.ink.opacity(DS.Opacity.tintFill) }
                     .frame(width: DS.Icon.profileAvatar, height: DS.Icon.profileAvatar).clipShape(Circle())
@@ -460,9 +466,10 @@ struct ProfileView: View {
                 }
             }
             .contentShape(Circle())
-            .onTapGesture { showAvatarPreview = true }
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(L10n.t("معاينة الصورة", "Preview photo"))
+            .onTapGesture { if !user.isFemale { showAvatarPreview = true } }
+            .accessibilityAddTraits(user.isFemale ? [] : .isButton)
+            .accessibilityLabel(user.isFemale ? "" : L10n.t("معاينة الصورة", "Preview photo"))
+            .accessibilityHidden(user.isFemale)
             .padding(.top, DS.Spacing.xl)
             
             // User Info
@@ -999,189 +1006,6 @@ struct ProfileView: View {
     }
 
     // MARK: - Children Section
-    // MARK: - طلباتي (My Requests)
-
-    /// الطلبات المعلّقة التي أرسلها العضو للإدارة — عرض + متابعة + سحب.
-    @ViewBuilder
-    private var myRequestsSection: some View {
-        let requests = adminRequestVM.myPendingRequests
-        if !requests.isEmpty {
-            DSFormCard(L10n.t("الطلبات", "My Requests"), icon: "clock.badge.exclamationmark.fill",
-                       color: DS.Color.warning) {
-                Text("\(requests.count)")
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textTertiary)
-            } content: {
-                VStack(spacing: DS.Spacing.sm) {
-                    ForEach(requests, id: \.id) { request in
-                        myRequestRow(request)
-                    }
-                }
-            }
-            .dsPageMargin()
-        }
-    }
-
-    /// المسار شغّال (أو الطلب نفسه يحمل مرحلة من السيرفر) → صفّ بمرحلة الطلب ومتتبّعه (وما تطلبه الإدارة)،
-    /// وإلا الصفّ كما كان
-    @ViewBuilder
-    private func myRequestRow(_ request: AdminRequest) -> some View {
-        if let flow = adminRequestVM.memberApprovalSnapshot(for: request) {
-            myApprovalRequestRow(request, flow: flow)
-        } else {
-            myClassicRequestRow(request)
-        }
-    }
-
-    /// «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥): العنوان وشارة المرحلة ← متتبّع الخطوات ← وإن طلبت
-    /// الإدارة معلومات: ما تطلبه وحقل لكل مطلوب و«إرسال للإدارة» — العضو يُخاطَب بـ«الإدارة» لا بالأدوار
-    private func myApprovalRequestRow(_ request: AdminRequest, flow: ApprovalSnapshot) -> some View {
-        let info = myRequestDisplay(for: request)
-        return VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            HStack(spacing: DS.Spacing.md) {
-                DSStateIcon(info.icon, tint: info.color, size: DS.Icon.rowLarge)
-
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(info.title)
-                        .dsFont(.rowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(1)
-                    if let target = info.target, !target.isEmpty {
-                        Text(target)
-                            .dsFont(.subtitle)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .lineLimit(1)
-                    }
-                    ApprovalStageChips(snapshot: flow, audience: .member)
-                }
-
-                Spacer(minLength: DS.Spacing.sm)
-
-                DSChipButton(L10n.t("سحب", "Withdraw"), tint: DS.Color.error, size: .small) { requestToCancel = request }
-                    .accessibilityLabel(L10n.t("سحب الطلب", "Withdraw request"))
-            }
-
-            ApprovalTracker(stage: flow.stage, audience: .member)
-
-            if flow.stage == .info {
-                ApprovalMemberReplyCard(adminRequestVM: adminRequestVM, snapshot: flow) {
-                    showApprovalReplySent = true
-                }
-                // سؤال جديد = مسودة جديدة (لا تبقى قيم ردّ سابق)
-                .id("\(flow.requestId)-\(flow.stageSince?.timeIntervalSince1970 ?? 0)")
-            }
-        }
-        .profileCell()
-    }
-
-    private func myClassicRequestRow(_ request: AdminRequest) -> some View {
-        let info = myRequestDisplay(for: request)
-        return HStack(spacing: DS.Spacing.md) {
-            DSStateIcon(info.icon, tint: info.color, size: DS.Icon.rowLarge)
-
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                Text(info.title)
-                    .dsFont(.rowTitle)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(1)
-
-                if let target = info.target, !target.isEmpty {
-                    Text(target)
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .lineLimit(1)
-                }
-
-                // شارة «تحت المراجعة» — كبسولة الحالة المشتركة
-                DSStatusChip(text: L10n.t("قيد المراجعة", "Under Review"),
-                             icon: "clock.badge.questionmark", tint: DS.Color.warning)
-            }
-
-            Spacer(minLength: DS.Spacing.sm)
-
-            // سحب/إلغاء الطلب — الشريحة الواحدة بلون الحذف
-            DSChipButton(L10n.t("سحب", "Withdraw"), tint: DS.Color.error, size: .small) { requestToCancel = request }
-                .accessibilityLabel(L10n.t("سحب الطلب", "Withdraw request"))
-        }
-        .profileCell()
-    }
-
-    private struct MyRequestDisplay {
-        let icon: String
-        let color: Color
-        let title: String
-        let target: String?
-    }
-
-    /// يشتق أيقونة/لون/عنوان/هدف الطلب حسب نوعه للعرض في «طلباتي».
-    private func myRequestDisplay(for request: AdminRequest) -> MyRequestDisplay {
-        let selfId = authVM.currentUser?.id
-        // اسم العضو المستهدف — نُخفيه إن كان العضو نفسه (زائد بلا فائدة)
-        let targetName: String? = {
-            guard let m = request.member, m.id != selfId else { return nil }
-            return m.displayFullName
-        }()
-
-        switch request.requestType {
-        case RequestType.treeEdit.rawValue:
-            let action = request.treeEditPayload?.resolvedAction
-            let name = memberVM.treeEditTargetName(request.treeEditPayload)
-                ?? request.treeEditPayload?.newMemberName
-                ?? targetName
-            return MyRequestDisplay(
-                icon: action?.iconName ?? "square.and.pencil",
-                color: treeEditColor(for: action),
-                title: L10n.t(action?.arabicLabel ?? "طلب تعديل", action?.englishLabel ?? "Edit request"),
-                target: name
-            )
-        case RequestType.nameChange.rawValue:
-            return .init(icon: "pencil.line", color: DS.Color.info,
-                         title: L10n.t("تغيير الاسم", "Name change"),
-                         target: request.newValue ?? targetName)
-        case RequestType.phoneChange.rawValue:
-            return .init(icon: "phone.arrow.up.right", color: AppSection.profile.ink,
-                         title: L10n.t("تغيير رقم الهاتف", "Phone change"), target: targetName)
-        case RequestType.deceasedReport.rawValue:
-            return .init(icon: "leaf.fill", color: DS.Color.textTertiary,
-                         title: L10n.t("تسجيل وفاة", "Deceased report"), target: targetName)
-        case RequestType.childAdd.rawValue:
-            return .init(icon: "person.badge.plus", color: DS.Color.palm,
-                         title: L10n.t("إضافة ابن", "Add child"), target: targetName)
-        case RequestType.relativeRemove.rawValue:
-            // «طلب حذف من الشجرة — {الاسم}» (§9)
-            let removed = RelativeRemoveDetails.parse(request.details)?.trimmedName
-            return .init(icon: "person.badge.minus", color: DS.Color.error,
-                         title: RelativeRemoveDetails.genericTitle + (removed.map { " — " + $0 } ?? ""), target: nil)
-        // أنواع تظهر في «طلباتي» والمسار شغّال فقط (ليُرد على سؤال المختص)
-        case RequestType.familyChange.rawValue:
-            return .init(icon: "person.2.fill", color: DS.Color.info,
-                         title: L10n.t("تغيير العائلة", "Family change"), target: request.newValue ?? targetName)
-        case RequestType.photoSuggestion.rawValue:
-            return .init(icon: "camera.badge.ellipsis", color: AppSection.profile.ink,
-                         title: L10n.t("اقتراح صورة", "Photo suggestion"), target: targetName)
-        case RequestType.newsReport.rawValue, RequestType.contentReport.rawValue:
-            return .init(icon: "exclamationmark.bubble.fill", color: DS.Color.error,
-                         title: L10n.t("بلاغ", "Report"), target: nil)
-        default:
-            return .init(icon: "clock", color: DS.Color.warning,
-                         title: L10n.t("طلب", "Request"), target: targetName)
-        }
-    }
-
-    private func treeEditColor(for action: TreeEditAction?) -> Color {
-        switch action {
-        case .add: return DS.Color.palm
-        case .editName: return DS.Color.info
-        case .editPhone: return AppSection.profile.ink
-        case .editBirth: return DS.Color.palm
-        case .deceased, .addDeathDate: return DS.Color.textTertiary
-        case .addPhoto: return AppSection.profile.ink
-        case .delete: return DS.Color.error
-        case .other: return DS.Color.accent
-        case .none: return DS.Color.warning
-        }
-    }
-
     /// يمكن ترتيب الأبناء (شجرة الرجال — profiles) لأي عضو لعائلته نفسه.
     private var canReorderSons: Bool { memberVM.currentMemberChildren.count > 1 }
     /// ترتيب البنات (شجرة النساء — women_members) مقيّد على الإدارة حسب RLS.
@@ -1677,7 +1501,7 @@ struct ProfileView: View {
 
 /// خلية داخل بطاقات «حسابي» (معلوماتي، طلباتي، عائلتي): صندوق الصفوف الموحّد (`dsRowBox`) —
 /// وخانة الإضافة بإطار متقطّع بلونها (نفس خانات «+» المشتركة `DSAddChipLabel`)
-private extension View {
+extension View {
     func profileCell(dashed tint: Color? = nil) -> some View {
         frame(maxWidth: .infinity, alignment: .leading)
             .dsRowBox()
@@ -2047,7 +1871,7 @@ struct WomanMemberEditSheet: View {
         if ok {
             showMovedAlert = true
         } else {
-            errorBanner = L10n.t("تعذّر حفظ التعديلات، يرجى المحاولة مرة أخرى.", "Save failed. Try again.")
+            errorBanner = memberVM.errorMessage ?? L10n.t("تعذّر حفظ التعديلات، يرجى المحاولة مرة أخرى.", "Save failed. Try again.")
         }
     }
 }

@@ -130,7 +130,8 @@ struct EditProfileView: View {
             onSubmit: saveChangesAction,
             onCancel: cancelTapped
         ) {
-            // 1. الصورة الشخصية — قسم بعنوانه الموحّد مثل «إضافة ابن» و«تعديل ابن»
+            // 1. الصورة الشخصية — قسم بعنوانه الموحّد مثل «إضافة ابن» و«تعديل ابن» (للذكر فقط — لا صور للإناث، ٢٠٢٦-١١-١٧)
+            if !member.isFemale {
             DSComposerSection(title: L10n.t("الصورة الشخصية", "Profile Photo"), icon: "camera.fill",
                               tint: DS.Color.primary, index: 0) {
                 VStack(spacing: DS.Spacing.xs) {
@@ -146,6 +147,7 @@ struct EditProfileView: View {
                     .foregroundColor(chromeInk)
                 }
                 .frame(maxWidth: .infinity)
+            }
             }
 
             // 2. المعلومات الشخصية — نفس أقسام وحقول مربّعات الإضافة (تصميم موحّد)

@@ -397,7 +397,7 @@ enum AdminTodayFeed {
                      name: name(m), date: date(m.createdAt))
             }
             for r in adminRequestVM.treeEditRequests {
-                let action = r.treeEditPayload?.resolvedAction ?? .other
+                let action = r.treeEditPayload?.displayAction ?? .other
                 item(id: r.id, L10n.t("الشجرة · \(action.arabicLabel)", "Tree · \(action.englishLabel)"),
                      action.iconName, DS.Color.palm, name: name(r.member), date: date(r.createdAt))
             }

@@ -1043,8 +1043,9 @@ struct MemberDetailsView: View {
             DSComposerSection(title: L10n.t("اختر نوع الطلب", "Choose Request Type"),
                               icon: "square.grid.2x2.fill",
                               tint: DS.Color.primary) {
-                // نفس بطاقات مربّع الإجراءات في شجرة النساء — اثنتان في السطر بلون النوع، و«حذف» بعرض كامل آخراً
-                let actions = availableEditActions.filter { $0 != .delete }
+                // نفس بطاقات مربّع الإجراءات في شجرة النساء — اثنتان في السطر بلون النوع، و«طلب حذف» خانة
+                // مثلها آخر الشبكة لا بعرض كامل (طلب المالك ٢٠٢٦-١١-١٧)
+                let actions = availableEditActions
                 DSActionTileGrid {
                     ForEach(Array(actions.enumerated()), id: \.element.rawValue) { i, action in
                         DSActionTile(editActionLabel(for: action), subtitle: editActionSubtitle(action),
@@ -1052,10 +1053,6 @@ struct MemberDetailsView: View {
                             .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
                                         y: DSMotion.rise, scale: DSMotion.riseScale)
                     }
-                }
-                if availableEditActions.contains(.delete) {
-                    DSActionTile(editActionLabel(for: .delete), subtitle: editActionSubtitle(.delete),
-                                 icon: TreeEditAction.delete.iconName, tint: DS.Color.error) { pick(.delete) }
                 }
             }
         }
@@ -1085,6 +1082,8 @@ struct MemberDetailsView: View {
         if let closing { closing() } else { showEditActions = false }
         // بعد خروج مربّع الاختيار (حركة الخروج ثم إغلاق نافذته) — نافذة واحدة في كل مرّة
         DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.panelOutDuration + 0.15) {
+            // ابنه هو: «طلب حذف» بمسار «عائلتي» (كان زرّ الشريط السفلي، صار خانة داخل «طلب تعديل» فقط)
+            if action == .delete && showsDeleteRequest && isOwnChild { confirmSelfRemoval = true; return }
             pendingEditAction = action
         }
     }
@@ -1115,7 +1114,7 @@ struct MemberDetailsView: View {
         case .deceased: return L10n.t("تسجيل وفاة", "Deceased")
         case .addDeathDate: return L10n.t("تاريخ وفاة", "Death Date")
         case .addPhoto: return L10n.t("إضافة صورة", "Add Photo")
-        case .delete: return L10n.t("حذف", "Delete")
+        case .delete: return L10n.t("طلب حذف", "Request deletion")
         case .other: return L10n.t("طلب آخر", "Other")
         }
     }
@@ -1287,19 +1286,10 @@ struct MemberDetailsView: View {
             if showsDeathAnnounce { deathAnnounceButton }
             // صفّ الأزرار بمواصفة `DSBox` الواحدة («طلب تعديل» بلون القسم، «إغلاق» رمادي، الأيقونات مربّعة بنفس
             // الارتفاع) — من «حجم النص» ٢× وأكبر «طلب تعديل» سطر كامل وحده فوقها (لا يُقصّ)
+            // «طلب حذف» داخل «طلب تعديل» فقط — لا زرّ منفصل هنا (طلب المالك ٢٠٢٦-١١-١٧ «ابى الترتيب القديم»)
             if dynamicTypeSize >= .xxLarge {
                 VStack(spacing: DSBox.buttonSpacing) {
                     requestEditButton
-                    deleteRequestButton
-                    HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
-                }
-            } else if showsDeleteRequest {
-                // «طلب حذف» بعد «طلب تعديل» في صفّهما، والأزرار الصغيرة و«إغلاق» تحتهما (§11)
-                VStack(spacing: DSBox.buttonSpacing) {
-                    HStack(spacing: DSBox.buttonSpacing) {
-                        requestEditButton
-                        deleteRequestButton
-                    }
                     HStack(spacing: DSBox.buttonSpacing) { panelSecondaryButtons }
                 }
             } else {

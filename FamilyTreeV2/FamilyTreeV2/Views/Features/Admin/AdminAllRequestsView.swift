@@ -203,6 +203,8 @@ struct AdminAllRequestsView: View {
     }
 
     @State private var selectedTab: RequestTab = .all
+    /// شرائح «من أين وصل» (العيّنة ١٥): الكل · شجرة العائلة · شجرة النساء · الملف الشخصي · التسجيل… — في «الكل» فقط
+    @State private var sourceFilter: AdminRequestSourceFilter = .all
 
     // MARK: «الوارد» (إعادة تصميم لوحة الإدارة — طلب المالك ٢٠٢٦-١٠-٢٠، الاتجاه «أ» + سحب «ب»؛ الدفعة ب من «نفّذ كل المقترح»)
     // طابور عمل بثلاثة مداخل: الطلبات · الرسائل (شريحتان، بلا مبدّل) · ⚙︎ إعدادات مسار الموافقات (بيتها الوحيد).
@@ -257,6 +259,8 @@ struct AdminAllRequestsView: View {
 
     // Join request states
     @State private var memberToLink: FamilyMember? = nil
+    /// مربّع «المطابقات المحتملة» لطلب انضمام (العيّنة ١٨)
+    @State private var joinMatchesFor: FamilyMember? = nil
     @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
     @State private var showMergeConfirm = false
     @State private var showMergeSuccess = false
@@ -280,7 +284,7 @@ struct AdminAllRequestsView: View {
     // حارس المكدس (الدفعة ب ٢٠٢٦-١٠-٢٠): الجسم ثلاث طبقات خلف `AnyView` — الصفحة، ثم تنبيهات العمليات الجماعية،
     // ثم المربّعات والتأكيدات — فلا يُحلّ نوع سلسلة المُعدِّلات كلها دفعة واحدة (كانت تفيض مكدساً بـ١٢٨ ك.ب)
     var body: some View {
-        AnyView(modalsLayer(AnyView(bulkAlertsLayer(AnyView(pageLayer)))))
+        AnyView(joinBoxLayer(AnyView(modalsLayer(AnyView(bulkAlertsLayer(AnyView(pageLayer)))))))
     }
 
     private var pageLayer: some View {
@@ -305,7 +309,7 @@ struct AdminAllRequestsView: View {
                 }
 
                 // البحث ← المجموعات ← الطلبات: قائمة واحدة تتمرّر (List لأجل أزرار السحب)
-                AnyView(requestsList)
+                AnyView(requestsList.dsRecordsTapOrigin())   // مربّع التفاصيل يكبر من مكان الضغط
                     // شريط العمليات الجماعية — مثبّت في الأسفل، وآخر صف في القائمة يبقى فوقه
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         if isSelectMode && !selectedIds.isEmpty {
@@ -407,6 +411,20 @@ struct AdminAllRequestsView: View {
     }
 
     /// تأكيدات العمليات الجماعية ونتائجها، وأخطاء الموافقة/الرفض
+    /// مربّع «المطابقات المحتملة» (العيّنة ١٨): الضغط على مرشّح يختاره ويُغلق، و«اختر من الشجرة» المنتقي الموجود
+    private func joinBoxLayer(_ content: AnyView) -> some View {
+        content.dsCenterBox(item: $joinMatchesFor) { member in
+            AnyView(JoinMatchesBox(info: joinCardInfo(for: member),
+                                   onPick: { id in joinPicks[member.id] = id; joinMatchesFor = nil },
+                                   onPickFromTree: {
+                                       joinMatchesFor = nil
+                                       // بعد إغلاق المربّع — مربّع واحد في المرة
+                                       DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { memberToLink = member }
+                                   },
+                                   onClose: { joinMatchesFor = nil }))
+        }
+    }
+
     private func bulkAlertsLayer(_ content: AnyView) -> some View {
         content
         .dsAlert(
@@ -836,8 +854,22 @@ struct AdminAllRequestsView: View {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// عناصر «الكل» كما تُعرض: مجموعة المختارة ثم البحث (الترتيب والمجال كما في `sortedAllItems`)
+    /// عناصر «الكل» كما تُعرض: مجموعة المختارة ثم البحث ثم شريحة المصدر (الترتيب والمجال كما في `sortedAllItems`)
     private var displayedAllItems: [AllItem] {
+        let items = searchedAllItems
+        guard sourceFilter != .all else { return items }
+        return items.filter { sourceFilter.matches(origin(for: requestDetail(for: $0))?.kind) }
+    }
+
+    /// شرائح المصدر بأعدادها (المجموعة والبحث مطبّقان) — nil حين لا يوجد مصدران فأكثر
+    private var sourceFilterOptions: [DSFilterOption<AdminRequestSourceFilter>]? {
+        guard selectedTab == .all else { return nil }
+        let kinds = searchedAllItems.map { origin(for: requestDetail(for: $0))?.kind }
+        return AdminRequestSourceFilter.options(kinds: kinds, selected: sourceFilter)
+    }
+
+    /// عناصر «الكل» بعد المجموعة والبحث (قبل شريحة المصدر)
+    private var searchedAllItems: [AllItem] {
         var items = sortedAllItems
         if let section = selectedSection {
             items = items.filter { allItemTab($0).section == section }
@@ -1213,8 +1245,9 @@ struct AdminAllRequestsView: View {
     private var requestsList: some View {
         List {
             if isInitialLoading {
-                DSPageLoader(L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"), fillsSpace: false)
-                    .padding(.top, DS.Spacing.xl)
+                // هيكل البطاقات بدل المجسّم (طلب المالك ٢٠٢٦-١١-١٧) — الطلبات تحلّ مكانه بلا قفزة
+                DSCardSkeleton(style: .request, label: L10n.t("جارٍ تحميل الطلبات…", "Loading requests…"))
+                    .padding(.top, DS.Spacing.sm)
                     .dsStaggerIn(1)
                     .reviewListRow()
             } else {
@@ -1225,6 +1258,11 @@ struct AdminAllRequestsView: View {
                         .reviewListRow(top: DS.Spacing.md, bottom: DS.Spacing.xs)
                     AdminInboxFilterRow(items: inboxFilterItems)
                         .reviewListRow(top: 0, bottom: 0)
+                    if let sources = sourceFilterOptions {
+                        DSFilterChips(options: sources, selection: $sourceFilter)
+                            .accessibilityLabel(L10n.t("مصدر الطلب", "Request source"))
+                            .reviewListRow(top: 0, bottom: DS.Spacing.xs)
+                    }
                     if selectedSection != nil {
                         subTypeChips
                             .reviewListRow(top: 0, bottom: DS.Spacing.xs)
@@ -1295,6 +1333,7 @@ struct AdminAllRequestsView: View {
                     accentColor: RequestTab.joinRequests.color,
                     approveLabel: joinApproveLabel(member),
                     approveIcon: "link.badge.plus",
+                    approveTint: DS.Color.success, softReject: true,
                     onApprove: { joinApprove(member) },
                     onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                     onTap: { selectedDetail = .join(member) }
@@ -1488,6 +1527,8 @@ struct AdminAllRequestsView: View {
         approveLabel: String? = nil,
         approveIcon: String = "checkmark",
         approveColor: Color = DS.Color.successFill,
+        approveTint: Color? = nil,
+        softReject: Bool = false,
         onApprove: (() -> Void)? = nil,
         onReject: (() -> Void)? = nil,
         onDelete: (() -> Void)? = nil,
@@ -1547,8 +1588,24 @@ struct AdminAllRequestsView: View {
                         }
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(DSCardPressStyle())
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
+
+                    // «من أين وصل» (العيّنة ١٥): مسار الطلب + الجهاز والنسخة + نوع التنفيذ — عرض فقط، والضغط كالبطاقة
+                    if let origin = rowOrigin(id) {
+                        Button {
+                            if isSelectMode {
+                                withAnimation(DS.Anim.snappy) {
+                                    if selectedIds.contains(id) { selectedIds.remove(id) } else { selectedIds.insert(id) }
+                                }
+                            } else {
+                                onTap()
+                            }
+                        } label: {
+                            AnyView(AdminRequestCardOrigin(origin: origin))
+                        }
+                        .buttonStyle(DSCardPressStyle())
+                    }
 
                     // «مسار الموافقات»: شريط المراحل الخمس + المرحلة ومن عنده + شارات الأولوية والمهلة
                     if let flow {
@@ -1560,6 +1617,7 @@ struct AdminAllRequestsView: View {
                         cardActions(flow: flow, waitingForMe: waitingForMe,
                                     allowsApprove: allowsApprove, allowsReject: allowsReject,
                                     approveLabel: approveLabel, approveIcon: approveIcon,
+                                    approveTint: approveTint, softReject: softReject,
                                     onApprove: approve, onReject: onReject, onTap: onTap)
                     }
                 }
@@ -1648,6 +1706,7 @@ struct AdminAllRequestsView: View {
     @ViewBuilder
     private func cardActions(flow: ApprovalSnapshot?, waitingForMe: Bool, allowsApprove: Bool, allowsReject: Bool,
                              approveLabel: String?, approveIcon: String,
+                             approveTint: Color? = nil, softReject: Bool = false,
                              onApprove: (() -> Void)?, onReject: (() -> Void)?,
                              onTap: @escaping () -> Void) -> some View {
         let canReject = allowsReject && onReject != nil
@@ -1663,13 +1722,14 @@ struct AdminAllRequestsView: View {
                 } else {
                     if canApprove, let onApprove {
                         items.append(DSDecisionItem(id: "approve", title: approveLabel ?? L10n.t("موافقة", "Approve"),
-                                                    kind: .primary, action: onApprove))
+                                                    kind: .primary, tint: approveTint, action: onApprove))
                     }
                     items.append(DSDecisionItem(id: "details", title: L10n.t("التفاصيل", "Details"), action: onTap))
                 }
                 if canReject, let onReject {
                     items.append(DSDecisionItem(id: "reject", title: L10n.t("رفض", "Reject"), icon: "xmark",
-                                                kind: .destructive, tint: DS.Color.reject, action: onReject))
+                                                kind: .destructive, tint: DS.Color.reject, soft: softReject,
+                                                action: onReject))
                 }
                 return items
             }(), size: .compact)
@@ -1932,6 +1992,29 @@ struct AdminAllRequestsView: View {
         return adminRequestVM.approvalMatches(flow, filter: approvalFilter)
     }
 
+    /// الأجزاء المختلفة بين اسمين (يُسقط المشترك من البداية والنهاية): «محمد اسامه … الصايغ» و«محمد اسامه … المحمدعلي»
+    /// ← («الصايغ»، «المحمدعلي»). nil إن لم يُعرف الاسم القديم أو لم يختلف شيء.
+    static func nameDiff(old: String?, new: String?) -> (old: String, new: String)? {
+        let a = (old ?? "").split(separator: " ").map(String.init)
+        let b = (new ?? "").split(separator: " ").map(String.init)
+        guard !a.isEmpty, !b.isEmpty, a != b else { return nil }
+        var head = 0
+        while head < a.count, head < b.count, a[head] == b[head] { head += 1 }
+        var tail = 0
+        while tail < a.count - head, tail < b.count - head, a[a.count - 1 - tail] == b[b.count - 1 - tail] { tail += 1 }
+        let oldPart = a[head..<(a.count - tail)].joined(separator: " ")
+        let newPart = b[head..<(b.count - tail)].joined(separator: " ")
+        return (oldPart.isEmpty ? "—" : oldPart, newPart.isEmpty ? "—" : newPart)
+    }
+
+    /// اسم المرأة المعنيّة في طلب شجرة النساء المنظّم (من ذاكرة شجرة النساء) — nil لغيره
+    static func womenSubjectName(_ payload: TreeEditPayload?) -> String? {
+        guard let id = payload?.womenNodeId,
+              let w = WomenStore.cache.first(where: { $0.id == id }) else { return nil }
+        let n = w.displayFullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : n
+    }
+
     /// القيمة الجديدة للعرض حسب نوع الإجراء.
     private func treeEditNewValue(payload: TreeEditPayload?, action: TreeEditAction) -> String? {
         guard let payload else { return nil }
@@ -1969,12 +2052,18 @@ struct AdminAllRequestsView: View {
     /// صف موحّد لطلبات الشجرة — الإجراء واسم العضو، ثم القيمة الجديدة والوقت.
     private func treeEditRow(request: AdminRequest, action: TreeEditAction, color: Color) -> some View {
         let payload = request.treeEditPayload
-        let newDisplay = treeEditNewValue(payload: payload, action: action)
+        // تعديل الاسم: الجزء الذي تغيّر فقط «الصايغ ← المحمدعلي» — الاسم الكامل مكتوب في العنوان الفرعي فوقه
+        // (طلب المالك ٢٠٢٦-١١-١٧ «في تكرار بالأسماء»)
+        let nameDiff = action == .editName
+            ? Self.nameDiff(old: request.member?.displayFullName ?? payload?.targetMemberName, new: payload?.newName) : nil
+        let newDisplay = nameDiff.map { "\($0.old) ← \($0.new)" } ?? treeEditNewValue(payload: payload, action: action)
         return VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
-            requestRowHeader(icon: action.iconName,
+            // شجرة النساء: العنوان من نوعها الحقيقي (`displayAction`) والاسم اسم المرأة المعنيّة لا السجلّ المرتبط
+            let shown = payload?.displayAction ?? action
+            requestRowHeader(icon: shown.iconName,
                              tint: color,
-                             title: L10n.t(action.arabicLabel, action.englishLabel),
-                             subtitle: request.member?.displayFullName ?? L10n.t("عضو", "Member"),
+                             title: L10n.t(shown.arabicLabel, shown.englishLabel),
+                             subtitle: Self.womenSubjectName(payload) ?? request.member?.displayFullName ?? L10n.t("عضو", "Member"),
                              kind: AdminRequestKind.of(request)) {
                 pendingChip(Self.requestDate(request.createdAt))
             }
@@ -1996,7 +2085,7 @@ struct AdminAllRequestsView: View {
                                 .dsGlyph(DS.Glyph.xs)
                                 .foregroundColor(DS.Color.primary)
                                 .accessibilityHidden(true)
-                            Text(L10n.t("القيمة الجديدة:", "New:"))
+                            Text(nameDiff != nil ? L10n.t("التغيير:", "Change:") : L10n.t("القيمة الجديدة:", "New:"))
                                 .dsFont(.footnote)
                                 .foregroundColor(DS.Color.textTertiary)
                             Text(newDisplay)
@@ -2145,6 +2234,12 @@ struct AdminAllRequestsView: View {
                         style: .card)
                 .padding(.top, DS.Spacing.xs)
                 .reviewListRow()
+        } else if items.isEmpty && sourceFilter != .all {
+            DSEmptyView(L10n.t("لا طلبات هنا", "Nothing here"),
+                        message: L10n.t("لا توجد طلبات من هذا المصدر حالياً.", "No request from this source right now."),
+                        style: .card)
+                .padding(.top, DS.Spacing.xs)
+                .reviewListRow()
         } else if items.isEmpty {
             emptyState
                 .padding(.top, DS.Spacing.xs)
@@ -2163,6 +2258,7 @@ struct AdminAllRequestsView: View {
             selectableRow(
                 id: member.id, forTab: .joinRequests, accentColor: RequestTab.joinRequests.color,
                 approveLabel: joinApproveLabel(member), approveIcon: "link.badge.plus",
+                approveTint: DS.Color.success, softReject: true,
                 onApprove: { joinApprove(member) },
                 onReject: { swipeRejectReason = ""; swipeRejectDetail = .join(member) },
                 onTap: { selectedDetail = .join(member) }
@@ -2411,71 +2507,79 @@ struct AdminAllRequestsView: View {
     /// الاسم عنواناً، سطر حالة هادئ (مطابقة/اسم جديد · من الموقع)، عمر الطلب نصاً خفيفاً،
     /// ثم الرقم وزر واتساب دائري، وأقرب تطابق فقط. التفاصيل الكاملة داخل الطلب.
     private func joinRequestRow(for member: FamilyMember) -> some View {
-        // كل المتغيرات خارج ViewBuilder لتفادي مشاكل @ViewBuilder مع let
-        let phone: String? = {
-            guard let p = member.phoneNumber, !p.isEmpty else { return nil }
-            return p
-        }()
+        // العيّنة ١٨ (موافقة المالك ٢٠٢٦-١١-١٨): الرأس · اتصال/واتساب · «الأرجح» بنسبته وسلسلته، أو «لا مطابقة» بالأب
+        // المحتمل، أو خطوات شجرة النساء — `JoinRequestCard.swift`. الأزرار (ربط · التفاصيل · ×) من `cardActions`
+        let info = joinCardInfo(for: member)
+        let ring = member.isFemale ? DS.Color.female : (info.pick != nil ? DS.Color.success : DS.Color.warning)
+        return AnyView(JoinRequestCard(
+            info: info,
+            avatar: AnyView(joinPersonAvatar(member, ring: ring, size: Self.joinAvatar)),
+            onSelect: { joinPicks[member.id] = $0 },
+            onToggleWeak: {
+                if expandedMatchMembers.contains(member.id) { expandedMatchMembers.remove(member.id) }
+                else { expandedMatchMembers.insert(member.id) }
+            },
+            onOpenMatches: { joinMatchesFor = member }))
+    }
+
+    /// كل ما تعرضه بطاقة الانضمام ومربّع مطابقاتها — من الشجرة المحمّلة فقط (بلا نداء سيرفر)
+    func joinCardInfo(for member: FamilyMember) -> JoinCardInfo {
         let tiers = joinTiers(for: member)
-        let hasMatches = tiers.strongCount > 0
-        let fromWeb = member.registrationPlatform == "web"
-        let age = Self.requestDate(member.createdAt).map { ageText(days: daysWaiting(since: $0)) }
+        var chains: [UUID: [String]] = [:]
+        for e in tiers.all { chains[e.id] = ancestorChain(e.member) }
+        let needsFather = member.isFemale || tiers.strongCount == 0
+        let father = needsFather ? probableFather(for: member) : nil
+        return JoinCardInfo(
+            member: member, tiers: tiers, selectedId: joinPickId(member, tiers),
+            showsWeak: expandedMatchMembers.contains(member.id),
+            requestAge: Self.requestDate(member.createdAt).map { ageText(days: daysWaiting(since: $0)) },
+            chains: chains,
+            probableFather: member.isFemale ? nil : father,
+            female: member.isFemale ? father.map { femaleSteps(for: member, father: $0) } : nil)
+    }
 
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            HStack(alignment: .center, spacing: DS.Spacing.md) {
-                joinPersonAvatar(member, ring: hasMatches ? DS.Color.success : DS.Color.warning, size: Self.joinAvatar)
-
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    // §10: «انضمام» قبل الاسم — مقدّم الطلب هو صاحبه (الاسم نفسه)
-                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
-                        AdminRequestKindChip(kind: .join)
-                        Text(member.displayFullName)
-                            .dsFieldFont(.adminRowTitle)
-                            .foregroundColor(DS.Color.fieldLabel)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    // الأنثى لا تُطابق بشجرة الرجال — سطرها «تُربط بشجرة النساء»
-                    if !member.isFemale { joinStatusLine(matches: tiers.strongCount, fromWeb: fromWeb) }
-                    if member.isFemale { Self.femaleJoinTag }
-                }
-
-                Spacer(minLength: DS.Spacing.xs)
-
-                if let age {
-                    Text(age)
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize()
-                }
-            }
-
-            if let phone {
-                // اختيار المالك ٢٠٢٦-١١-١٣ «ج»: الرقم نفسه رابط اتصال · «واتساب» رابط نصّي — بدل الدائرة
-                HStack(spacing: DS.Spacing.xs) {
-                    phoneCallLink(phone)
-                    if let wa = KuwaitPhone.whatsappURL(phone) {
-                        Text(verbatim: "·")
-                            .dsFont(.chip)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .accessibilityHidden(true)
-                        whatsAppLink(wa)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.leading, Self.joinAvatar + DS.Spacing.md)   // تحت الاسم (الصورة + المسافة)
-            }
-
-            if tiers.total > 0 {
-                AnyView(JoinMatchPanel(tiers: tiers, selectedId: joinPickId(member, tiers),
-                                       showsWeak: expandedMatchMembers.contains(member.id),
-                                       onSelect: { joinPicks[member.id] = $0 },
-                                       onToggleWeak: {
-                                           if expandedMatchMembers.contains(member.id) { expandedMatchMembers.remove(member.id) }
-                                           else { expandedMatchMembers.insert(member.id) }
-                                       }))
-            }
+    /// «عبدالله › حسن › خالد › يوسف»: جد الأب ← الجد ← الأب ← هو (الأسماء الأولى، من روابط الآباء)
+    private func ancestorChain(_ m: FamilyMember) -> [String] {
+        var names = [m.nameUnits.first ?? m.firstName]
+        var current = m
+        for _ in 0..<3 {
+            guard let fid = current.fatherId, let f = memberVM.member(byId: fid) else { break }
+            names.append(f.nameUnits.first ?? f.firstName)
+            current = f
         }
+        return names.reversed()
+    }
+
+    /// «الأب المحتمل»: رجل في الشجرة أسماؤه بالترتيب = أب المتقدّم ثم جده (اثنان على الأقل، بلا اختلاف قبل أن
+    /// ينتهي أحدهما) — الأعمق تطابقاً. نفس مفاتيح `NameMatcher` في المطابقة
+    private func probableFather(for member: FamilyMember) -> FamilyMember? {
+        let key = "\(memberVM.allMembers.count)-\(member.fullName)"
+        return joinTierCache.father(for: member.id, key: key) {
+            let noise = NameMatcher.linkNoise(member.familyName)
+            let target = Array(NameMatcher.linkChain(member.nameUnits, noise: noise).dropFirst())
+            guard target.count >= 2 else { return nil }
+            var best: (depth: Int, member: FamilyMember)? = nil
+            for m in memberVM.allMembers where !m.isFemale && m.role != .pending && m.id != member.id && m.hasName {
+                let chain = NameMatcher.linkChain(m.nameUnits,
+                                                  noise: m.familyName.map { noise.union([NameMatcher.linkKey($0)]) } ?? noise)
+                let n = min(target.count, chain.count)
+                guard n >= 2, Array(chain.prefix(n)) == Array(target.prefix(n)) else { continue }
+                if best == nil || n > best!.depth { best = (n, m) }
+            }
+            return best?.member
+        }
+    }
+
+    /// خطوات الأنثى: بنات الأب في شجرة النساء (`WomenStore.cache`) وهل هي بينهن باسمها الأول
+    private func femaleSteps(for member: FamilyMember, father: FamilyMember) -> JoinFemaleSteps {
+        let daughters = WomenStore.cache.filter { $0.isFemale && $0.fatherId == father.id }
+        let mine = NameMatcher.linkKey(member.nameUnits.first ?? member.firstName)
+        let index = daughters.firstIndex { NameMatcher.linkKey($0.nameUnits.first ?? $0.firstName) == mine }
+        let taken = index.map { i in
+            WomenStore.linkedUserByWoman[daughters[i].id].map { $0 != member.id } ?? false
+        } ?? false
+        return JoinFemaleSteps(father: father, daughters: daughters.map { $0.nameUnits.first ?? $0.firstName },
+                               herIndex: index, herTaken: taken, name: member.nameUnits.first ?? member.firstName)
     }
 
     // MARK: «الأرجح أولاً» (اختيار المالك ٢٠٢٦-١١-٠٦ — JoinMatchPanel.swift)
@@ -2519,9 +2623,7 @@ struct AdminAllRequestsView: View {
     }
 
     private func joinApproveLabel(_ member: FamilyMember) -> String {
-        if member.isFemale { return L10n.t("ربط", "Link") }
-        let tiers = joinTiers(for: member)
-        return joinPickId(member, tiers) == nil ? L10n.t("اختر من الشجرة", "Pick from the tree") : L10n.t("ربط", "Link")
+        joinCardInfo(for: member).approveLabel
     }
 
     /// صورة المنضم في صفّه (= مساحة الضغط) وفي بطاقة تفاصيله
@@ -3580,6 +3682,19 @@ struct AdminAllRequestsView: View {
     /// ← «في الشجرة» (المطابقات بزر «ربط» أو «اسم جديد») ← «الإجراءات». وقت الطلب في الرأس فقط.
     @ViewBuilder
     private func joinDetailContent(_ member: FamilyMember) -> some View {
+        // الحالة ونوع التنفيذ (العيّنة ١٦) — الانضمام يُربط يدوياً دائماً
+        let joinFlow = approvalSnapshot(for: RequestDetail.join(member))
+        AnyView(AdminRequestStatusStrip(state: joinFlow == nil ? L10n.t("بانتظار القرار", "Awaiting a decision") : nil,
+                                        sla: joinFlow.flatMap(AdminRequestStatusText.sla),
+                                        execution: .manual))
+        joinDetailBody(member)
+        // «من أين وصل»: مسار التسجيل والجهاز والوقت
+        AdminSenderSection(info: senderInfo(for: .join(member)), index: 4,
+                           title: L10n.t("من أين وصل", "Where it came from"), showsSender: false)
+    }
+
+    @ViewBuilder
+    private func joinDetailBody(_ member: FamilyMember) -> some View {
         // نفس ترتيب البطاقة «الأرجح أولاً»: مطابق ← قريب ← أضعف (JoinMatchPanel.swift)
         let tiersAll = joinTiers(for: member)
         let results: [JoinMatch] = tiersAll.all.map { e in
@@ -3736,6 +3851,11 @@ struct AdminAllRequestsView: View {
                 .dsStaggerIn(0)
         }
 
+        // التفاصيل المطوّرة (العيّنة ١٦) — للطلب المعلّق فقط: الحالة والمهلة والتنفيذ، «البيانات المطلوبة»، «فحص تلقائي»
+        if handled == nil {
+            decisionAids(for: detail, index: 1)
+        }
+
         DSComposerSection(title: detailInfoTitle(detail),
                           icon: detailInfoIcon(detail),
                           tint: AppSection.admin.ink,
@@ -3755,8 +3875,13 @@ struct AdminAllRequestsView: View {
                                      primary: handled == nil ? placePrimary(for: detail) : nil))
         }
 
-        // «المرسل»: مسار الإرسال خطواتٍ مرقّمة، ومن أرسله، والجهاز والوقت (طلب المالك ٢٠٢٦-١١-١١، التصميم المعتمد)
-        AdminSenderSection(info: senderInfo(for: detail), index: place == nil ? 2 : 3)
+        // «المرسل»: مسار الإرسال خطواتٍ مرقّمة، ومن أرسله، والجهاز والوقت (طلب المالك ٢٠٢٦-١١-١١، التصميم المعتمد).
+        // المعلّق (العيّنة ١٦): «المرسل» بأعداد طلباته ← «من أين وصل» ← «سجل الطلب» ← الملاحظات ← «طلبات مرتبطة»
+        if handled == nil {
+            contextPanel(for: detail, index: place == nil ? 3 : 4)
+        } else {
+            AdminSenderSection(info: senderInfo(for: detail), index: place == nil ? 2 : 3)
+        }
     }
 
     /// الصفوف الثلاثة (§10) — طلبات الأشخاص فقط (لا الأخبار والمحتوى والبلاغات والرسائل)
@@ -3791,7 +3916,7 @@ struct AdminAllRequestsView: View {
         case .nameChange(let r): return TreePlace.nameChange(r, kindLabel: label)
         case .deceased(let r): return TreePlace.deceasedReport(r, kindLabel: label)
         case .photo(let r): return TreePlace.photoSuggestion(r, kindLabel: label)
-        case .phone(let r): return TreePlace.subject(memberId: r.memberId, kindLabel: label, data: data)
+        case .phone: return nil   // تغيير الرقم لا يخصّ الشجرة (طلب المالك ٢٠٢٦-١١-١٧)
         case .news, .report, .diwaniya, .project, .archive: return nil
         }
     }
@@ -3827,6 +3952,110 @@ struct AdminAllRequestsView: View {
         case .news(let p): return (nil, nil, p.created_at, nil)
         case .diwaniya, .project, .archive: return nil
         }
+    }
+
+    // MARK: «من أين وصل» والتنفيذ (العيّنتان ١٥ و١٦)
+
+    /// مسار الطلب والجهاز ونوع التنفيذ — المسار المسجّل وإلا المستنتج
+    private func origin(for detail: RequestDetail) -> AdminRequestOrigin? {
+        let record = requestRecord(for: detail)
+        let steps = AdminTrailText.pathSteps(recorded: record?.from, inferred: requestSource(for: detail))
+        guard !steps.isEmpty || record?.via != nil else { return nil }
+        return AdminRequestOrigin(steps: steps, via: record?.via, execution: execution(for: detail))
+    }
+
+    /// هل يُنفَّذ الطلب عند قبوله — القاعدة الواحدة `AdminRequestExecution`
+    private func execution(for detail: RequestDetail) -> AdminRequestExecution? {
+        switch detail {
+        case .join: return .manual
+        case .phone(let r): return AdminRequestExecution.of(type: r.requestType, payload: nil)
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r), .treeEdit(let r, _):
+            return AdminRequestExecution.of(r)
+        case .news, .diwaniya, .project, .archive: return nil
+        }
+    }
+
+    /// تفصيل صفّ البطاقة من معرّفه (للانضمام: العضو المعلّق)
+    private func rowDetail(_ id: UUID) -> RequestDetail? {
+        if let r = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
+            return .treeEdit(r, r.treeEditPayload?.resolvedAction ?? .add)
+        }
+        if let r = adminRequestVM.nameChangeRequests.first(where: { $0.id == id }) { return .nameChange(r) }
+        if let r = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) { return .deceased(r) }
+        if let r = adminRequestVM.childAddRequests.first(where: { $0.id == id }) { return .child(r) }
+        if let r = adminRequestVM.photoSuggestionRequests.first(where: { $0.id == id }) { return .photo(r) }
+        if let r = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) { return .report(r) }
+        if let r = adminRequestVM.phoneChangeRequests.first(where: { $0.id == id }) { return .phone(r) }
+        if let m = pendingMembers.first(where: { $0.id == id }) { return .join(m) }
+        return nil
+    }
+
+    /// «من أين وصل» لبطاقة — طلبات `admin_requests` والانضمام فقط (المحتوى بلا شريط)
+    private func rowOrigin(_ id: UUID) -> AdminRequestOrigin? {
+        rowDetail(id).flatMap(origin(for:))
+    }
+
+    /// صفّ `admin_requests` وراء التفصيل — للأعداد والطلبات المرتبطة والملاحظات
+    private func adminRow(for detail: RequestDetail) -> (id: UUID, requester: UUID?, member: UUID)? {
+        switch detail {
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r): return (r.id, r.requesterId, r.memberId)
+        case .treeEdit(let r, _):
+            let target = r.treeEditPayload?.targetMemberId.flatMap(UUID.init(uuidString:)) ?? r.memberId
+            return (r.id, r.requesterId, target)
+        case .phone(let r): return (r.id, r.requesterId ?? r.memberId, r.memberId)
+        case .join, .news, .diwaniya, .project, .archive: return nil
+        }
+    }
+
+    /// الأقسام العلوية في التفاصيل: الحالة/المهلة/التنفيذ ← «البيانات المطلوبة» ← «فحص تلقائي»
+    private func decisionAids(for detail: RequestDetail, index: Int) -> some View {
+        let exec = execution(for: detail)
+        let flow = approvalSnapshot(for: detail).map { adminRequestVM.liveApprovalSnapshot(requestId: $0.requestId) ?? $0 }
+        let women = WomenStore.cache
+        return AnyView(AdminRequestDecisionAids(
+            state: flow == nil ? L10n.t("بانتظار القرار", "Awaiting a decision") : nil,
+            sla: flow.flatMap(AdminRequestStatusText.sla),
+            execution: exec,
+            changes: AdminRequestInsights.changes(detail, men: memberVM.allMembers, women: women),
+            checks: AdminRequestInsights.checks(detail, execution: exec, men: memberVM.allMembers, women: women),
+            index: index))
+    }
+
+    /// الأقسام السفلية: «المرسل» بأعداد طلباته ← «من أين وصل» ← «سجل الطلب» ← «ملاحظات الإدارة» ← «طلبات مرتبطة».
+    /// مع «مسار الموافقات» السجلّ والملاحظات في مربّع المسار نفسه فلا تتكرّر هنا
+    private func contextPanel(for detail: RequestDetail, index: Int) -> some View {
+        let row = adminRow(for: detail)
+        let inFlow = approvalSnapshot(for: detail) != nil
+        let sender = senderId(for: detail).flatMap { memberVM.member(byId: $0) }
+        let record = requestRecord(for: detail)
+        let isWomen: Bool = {
+            if record?.from?.steps.first == .womenTree { return true }
+            if case .treeEdit(let r, _) = detail {
+                return r.treeEditPayload?.women != nil || WomenTreeRequestLines(r.treeEditPayload?.notes ?? "") != nil
+            }
+            return false
+        }()
+        let subject = isWomen ? nil : record?.subject.flatMap { memberVM.member(byId: $0) }
+        let relation = sender.flatMap { s in subject.flatMap { AdminTrailText.relation(sender: s, subject: $0) } }
+        let log: [DSPathStep]? = (inFlow || row == nil) ? nil : AdminRequestLog.steps(
+            events: row.flatMap { handledStore.events[$0.id] }, requesterId: row?.requester,
+            createdAt: record?.created, lookup: { memberVM.member(byId: $0) })
+        let me = authVM.currentUser
+        let ownRequest = me.map { $0.role != .owner && (row?.requester == $0.id || row?.member == $0.id) } ?? false
+        let context = AdminRequestContext(requestId: row?.id, sender: sender, relation: relation, memberId: row?.member,
+                                          senderInfo: senderInfo(for: detail), log: log,
+                                          viewerCanModerate: authVM.canModerate, viewerId: me?.id)
+        return AnyView(AdminRequestContextPanel(context: context, index: index) {
+            // خارج المسار: ملاحظات الإدارة نفسها (`admin_request_notes`) — لا تظهر لصاحب الطلب أو المعني به (إلا المالك)
+            if !inFlow, let id = row?.id, !ownRequest {
+                ApprovalInternalNotes(adminRequestVM: adminRequestVM, memberVM: memberVM, requestId: id)
+            }
+        }
+        .task(id: row?.id) {
+            guard !inFlow, let id = row?.id else { return }
+            if !ownRequest { await adminRequestVM.fetchApprovalNotes(for: id) }
+            if handledStore.events[id] == nil { await handledStore.loadEvents(for: id) }
+        })
     }
 
     /// «المرسل»: الخطوات (المسجّلة وإلا المستنتجة)، «الاسم الرباعي · الدور · الصلة»، الجهاز، الوقت
@@ -3909,7 +4138,11 @@ struct AdminAllRequestsView: View {
             if let notes = p?.notes, let women = WomenTreeRequestLines(notes) {
                 // شجرة النساء: تفاصيل المرأة نفسها ← «طلب إضافة»
                 let whom = women.forWhom.map { L10n.t("تفاصيل ", "Details of ") + $0 } ?? L10n.t("تفاصيل العضو", "Member details")
-                return L10n.t("شجرة النساء", "Women's tree") + arrow + whom + arrow + L10n.t("طلب إضافة", "Add request")
+                // نوعه الحقيقي (تعديل اسم، حذف…) لا «إضافة» دائماً (٢٠٢٦-١١-١٨)
+                let shown = p?.displayAction ?? action
+                let what = shown == .add ? L10n.t("طلب إضافة", "Add request")
+                    : L10n.t("طلب ", "") + L10n.t(shown.arabicLabel, shown.englishLabel)
+                return L10n.t("شجرة النساء", "Women's tree") + arrow + whom + arrow + what
             }
             if let reason = p?.reason, reason.hasPrefix("profile_") {
                 return L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("تعديل البيانات", "Edit details")
@@ -4051,10 +4284,11 @@ struct AdminAllRequestsView: View {
                          timestamp: nil,
                          imageUrl: a.thumbnailUrl)
         case .treeEdit(let request, let action):
-            return .init(icon: action.iconName, color: treeEditColor(action),
+            let shown = request.treeEditPayload?.displayAction ?? action
+            return .init(icon: shown.iconName, color: treeEditColor(action),
                          // «طلب آخر» من تعديل الملف الشخصي يحمل عنوانه الحقيقي (تغيير الحالة الاجتماعية…)
                          title: Self.profileReasonTitle(request.treeEditPayload?.reason)
-                             ?? L10n.t(action.arabicLabel, action.englishLabel),
+                             ?? L10n.t(shown.arabicLabel, shown.englishLabel),
                          timestamp: request.createdAt.map { formatRegistrationDate($0) },
                          imageUrl: request.member?.avatarUrl)
         }
@@ -4582,7 +4816,9 @@ struct AdminAllRequestsView: View {
         case .join(let m):
             return m.isFemale ? L10n.t("ربط بشجرة النساء", "Link to Women's Tree") : L10n.t("ربط بالشجرة", "Link to Tree")
         case .child:   return L10n.t("تأكيد", "Confirm")
-        default:       return L10n.t("موافقة", "Approve")
+        default:
+            // «قبول وتنفيذ» حين ينفّذه السيرفر عند القبول (العيّنة ١٦) — والإجراء نفسه بلا تغيير
+            return execution(for: detail) == .auto ? L10n.t("قبول وتنفيذ", "Approve & apply") : L10n.t("موافقة", "Approve")
         }
     }
 

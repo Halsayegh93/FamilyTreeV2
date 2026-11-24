@@ -11,7 +11,12 @@ struct ContentView: View {
     var body: some View {
         #if DEBUG
         // معاينة «المرسل» و«تمت معالجتها» بلا سيرفر (`-uiPreviewRequestTrail <mode>`) — للتصوير فقط
-        if let mode = AdminTrailPreview.mode {
+        if let mode = JoinCardPreview.mode {
+            // بطاقة «طلب انضمام» (العيّنة ١٨): `-uiPreviewJoinCard match|nomatch|female|box`
+            JoinCardPreviewScreen(mode: mode)
+                .environment(\.layoutDirection, .rightToLeft)
+                .environment(\.locale, Locale(identifier: "ar"))
+        } else if let mode = AdminTrailPreview.mode {
             AdminTrailPreviewScreen(mode: mode)
                 .environment(\.layoutDirection, .rightToLeft)
                 .environment(\.locale, Locale(identifier: "ar"))

@@ -196,6 +196,8 @@ struct DSNoticePressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .environment(\.dsNoticePressed, configuration.isPressed)
+            // التعبئة تظهر وتختفي بتباطؤ سريع بدل القفز (٢٠٢٦-١١-١٧)
+            .animation(DSMotion.tap, value: configuration.isPressed)
     }
 }
 
@@ -302,5 +304,95 @@ struct DSNoticeMetaLabelStyle: LabelStyle {
             configuration.icon
             configuration.title
         }
+    }
+}
+
+// MARK: - هيكل التحميل (طلب المالك ٢٠٢٦-١١-١٧ «تحميل بهيكل البطاقة»)
+
+/// أثناء التحميل الأول: بطاقات بشكل ما سيظهر (أيقونة + أسطر + أزرار) بدل الانتظار الفارغ — فلا يقفز
+/// المحتوى حين يصل. ساكنة بلا لمعان متكرّر (قاعدة «لا حركة مستمرّة»)، ومخفية عن القارئ الصوتي مع إعلان واحد.
+struct DSCardSkeleton: View {
+    enum Style {
+        /// بطاقة طلب في «الوارد»: أيقونة، عنوان، سطران، شريط «وصل من»، زرّان
+        case request
+        /// صفوف الإشعارات داخل بطاقة اليوم الواحدة
+        case notice
+    }
+    var style: Style
+    var count: Int = 3
+    var label: String = L10n.t("جارٍ التحميل…", "Loading…")
+
+    private let fill = DS.Color.textTertiary.opacity(DS.Opacity.tintFill)
+
+    private func bar(_ width: CGFloat, _ height: CGFloat = 10) -> some View {
+        Capsule().fill(fill).frame(width: width, height: height)
+    }
+
+    var body: some View {
+        Group {
+            switch style {
+            case .request:
+                VStack(spacing: DS.Spacing.md) {
+                    ForEach(0..<count, id: \.self) { i in requestCard(i) }
+                }
+            case .notice:
+                VStack(alignment: .leading, spacing: DSNoticeMetrics.headerGap) {
+                    bar(60, 12).padding(.horizontal, DS.Spacing.xs)
+                    VStack(spacing: 0) {
+                        ForEach(0..<count, id: \.self) { i in
+                            noticeRow(i)
+                            if i < count - 1 { Divider().padding(.leading, DSNoticeMetrics.paddingH) }
+                        }
+                    }
+                    .background(RoundedRectangle(cornerRadius: DS.Hub.tileRadius, style: .continuous).fill(DS.Color.cardBackground))
+                    .overlay(RoundedRectangle(cornerRadius: DS.Hub.tileRadius, style: .continuous)
+                        .strokeBorder(DS.Color.cardBorder, lineWidth: DS.Border.width))
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+
+    private func requestCard(_ i: Int) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(alignment: .top, spacing: DS.Spacing.md) {
+                Circle().fill(fill).frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    bar(i == 1 ? 120 : 150, 14)
+                    bar(i == 2 ? 170 : 210)
+                    bar(130)
+                }
+                Spacer(minLength: 0)
+                bar(52, 22)
+            }
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(fill).frame(height: 30)
+            HStack(spacing: DS.Spacing.sm) {
+                Capsule().fill(fill).frame(height: DSBox.buttonHeight)
+                Capsule().fill(fill).frame(height: DSBox.buttonHeight)
+            }
+        }
+        .padding(DS.Hub.cardPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Hub.tileRadius, style: .continuous).fill(DS.Color.cardBackground))
+        .overlay(RoundedRectangle(cornerRadius: DS.Hub.tileRadius, style: .continuous)
+            .strokeBorder(DS.Color.cardBorder, lineWidth: DS.Border.width))
+    }
+
+    private func noticeRow(_ i: Int) -> some View {
+        HStack(alignment: .top, spacing: DSNoticeMetrics.gap) {
+            RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(fill)
+                .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                HStack {
+                    bar(i == 1 ? 110 : 150, 13)
+                    Spacer(minLength: DS.Spacing.sm)
+                    bar(48, 9)
+                }
+                bar(i == 2 ? 160 : 200)
+            }
+        }
+        .padding(.horizontal, DSNoticeMetrics.paddingH)
+        .padding(.vertical, DSNoticeMetrics.paddingV)
     }
 }

@@ -87,10 +87,28 @@ nonisolated struct TreeEditPayload: Codable {
     let reason: String?
     let notes: String?
     let isAdminDirectEdit: Bool?
+    /// طلب شجرة النساء المنظّم — يُنفَّذ تلقائياً عند القبول (`private.apply_women_request`، ٢٠٢٦-١١-١٧)
+    var women: WomenRequestData? = nil
 
     var resolvedAction: TreeEditAction? {
         TreeEditAction.from(rawValue: action)
     }
+
+    /// الإجراء كما يُعرض للإدارة وللعضو. طلب شجرة النساء المنظّم يُرسَل بـ`add` (لحارس السيرفر) ونوعه الحقيقي في
+    /// `women.kind` — فتعديل الاسم والميلاد والوفاة والحذف كانت تظهر «إضافة» (تصحيح ٢٠٢٦-١١-١٨). للعرض فقط:
+    /// التنفيذ ومكانه في الشجرة يبقيان على `resolvedAction`.
+    var displayAction: TreeEditAction? {
+        switch women?.kind {
+        case "edit_name": return .editName
+        case "edit_birth": return .editBirth
+        case "deceased": return .deceased
+        case "delete": return .delete
+        default: return resolvedAction
+        }
+    }
+
+    /// عقدة شجرة النساء المعنيّة بالطلب (المرأة نفسها أو أبوها/أمها للإضافة) — nil لغير طلبات شجرة النساء
+    var womenNodeId: UUID? { women.flatMap { UUID(uuidString: $0.nodeId) } }
 
     static func make(
         action: TreeEditAction,
@@ -106,7 +124,8 @@ nonisolated struct TreeEditPayload: Codable {
         newMemberName: String? = nil,
         reason: String? = nil,
         notes: String? = nil,
-        isAdminDirectEdit: Bool? = nil
+        isAdminDirectEdit: Bool? = nil,
+        women: WomenRequestData? = nil
     ) -> TreeEditPayload {
         TreeEditPayload(
             v: 3,
@@ -123,9 +142,25 @@ nonisolated struct TreeEditPayload: Codable {
             newMemberName: newMemberName,
             reason: reason,
             notes: notes,
-            isAdminDirectEdit: isAdminDirectEdit
+            isAdminDirectEdit: isAdminDirectEdit,
+            women: women
         )
     }
+}
+
+/// بيانات طلب شجرة النساء كما ينفّذها السيرفر عند القبول:
+/// `kind` child/sister/edit_name/edit_birth/deceased/delete، و`nodeId` عقدة شجرة النساء
+/// (الأب أو الأم للإضافة، المستهدفة للتعديل)، والاسم الأول، والجنس، والتواريخ YYYY-MM-DD
+nonisolated struct WomenRequestData: Codable, Sendable {
+    var kind: String
+    var nodeId: String
+    var name: String? = nil
+    var gender: String? = nil
+    var birth: String? = nil
+    var deceased: Bool? = nil
+    var death: String? = nil
+    /// «set_mother»: الأم المختارة من زوجات الأب
+    var motherId: String? = nil
 }
 
 nonisolated struct AdminRequest: Identifiable, Codable, Sendable {

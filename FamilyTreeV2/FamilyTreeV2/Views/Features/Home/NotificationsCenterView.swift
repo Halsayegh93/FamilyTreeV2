@@ -164,6 +164,7 @@ struct NotificationsCenterView: View {
     enum NotifTab: Hashable {
         case notifications // إشعاراتي — ما يخصّني شخصياً
         case activity      // المستجدات — تحديثات التطبيق والإعلانات العامة
+        case sent          // الطلبات المرسلة — طلبات العضو المعلّقة وسحبها (كانت «طلباتي» في الملف)
     }
 
     /// تغييرات بيانات الأعضاء من السيرفر (للإدارة — مكانها «إشعارات الإدارة» فقط) وتعديل الإدارة على بياناتي (للعضو)
@@ -215,28 +216,38 @@ struct NotificationsCenterView: View {
                 // صفحتان — إشعاراتي + المستجدات (تحديثات وإعلانات) للجميع
                 do {
                     let visible = visibleNotifications
-                    let notifUnread = visible.filter { belongsToNotificationsTab($0) && !$0.read }.count
+                    let notifUnread = visible.filter { (belongsToNotificationsTab($0) || belongsToActivityTab($0)) && !$0.read }.count
                     let activityUnread = visible.filter { belongsToActivityTab($0) && !$0.read }.count
 
-                    segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread)
+                    segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread,
+                                    sentCount: adminRequestVM.myPendingRequests.count)
                         .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 }
 
-                // شريط الأدوات الموحد
-                actionBar
+                // شريط الأدوات الموحد (لا تحديد ولا «قراءة الكل» في «الطلبات المرسلة»)
+                if selectedTab != .sent { actionBar }
                 }
 
-                if notificationVM.isLoading && filteredNotifications.isEmpty {
-                    // التحميل الموحّد: مجسّم الجرس يتنفّس بلون القسم
-                    DSPageLoader(section: pageSection, icon: "bell.fill")
-                        .dsStaggerIn(0)
+                if selectedTab == .sent {
+                    MySentRequestsList(section: pageSection)
+                } else if notificationVM.isLoading && filteredNotifications.isEmpty {
+                    // هيكل صفوف الإشعارات بدل المجسّم (طلب المالك ٢٠٢٦-١١-١٧)
+                    ScrollView {
+                        DSCardSkeleton(style: .notice, count: 5,
+                                       label: L10n.t("جارٍ تحميل الإشعارات…", "Loading notifications…"))
+                            .dsPageMargin()
+                            .padding(.vertical, DS.Spacing.sm)
+                    }
+                    .scrollDisabled(true)
+                    .dsStaggerIn(0)
                 } else if filteredNotifications.isEmpty {
                     emptyState
                         .frame(maxHeight: .infinity)
                 } else {
                     notificationsList
+                        .dsRecordsTapOrigin()   // مربّع الإشعار يكبر من مكان الضغط
                 }
             }
 
@@ -565,15 +576,15 @@ struct NotificationsCenterView: View {
     // MARK: - التبويبان — المبدّل الكبير المرتّب (DSSegmentedSwitch)
 
     /// «إشعاراتي» · «المستجدات» للجميع («تغييرات الأعضاء» للإدارة في «إشعارات الإدارة» — طلب المالك ٢٠٢٦-١١-٠١)
-    private func segmentedTabBar(notifCount: Int, activityCount: Int) -> some View {
+    private func segmentedTabBar(notifCount: Int, activityCount: Int, sentCount: Int) -> some View {
         DSSegmentedSwitch(
             options: [
                 DSSegmentOption(id: NotifTab.notifications,
-                                title: L10n.t("الإشعارات الخاصة", "My notifications"),
+                                title: L10n.t("الإشعارات", "Notifications"),
                                 icon: "bell.badge.fill", count: notifCount),
-                DSSegmentOption(id: NotifTab.activity,
-                                title: L10n.t("المستجدات", "Activity"),
-                                icon: "sparkles", count: activityCount)
+                DSSegmentOption(id: NotifTab.sent,
+                                title: L10n.t("الطلبات المرسلة", "Sent requests"),
+                                icon: "paperplane.fill", count: sentCount)
             ],
             selection: $selectedTab
         )
@@ -693,8 +704,10 @@ struct NotificationsCenterView: View {
     private var filteredNotifications: [AppNotification] {
         let visible = visibleNotifications
         switch selectedTab {
-        case .notifications: return visible.filter(belongsToNotificationsTab)
+        // «المستجدات» حُذفت (طلب المالك ٢٠٢٦-١١-١٧ «شيل المستجدات») — ما كان فيها يظهر في «الإشعارات»
+        case .notifications: return visible.filter { belongsToNotificationsTab($0) || belongsToActivityTab($0) }
         case .activity:      return visible.filter(belongsToActivityTab)
+        case .sent:          return []
         }
     }
 

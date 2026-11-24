@@ -235,6 +235,34 @@ enum DSCenterPanelDim {
 
 /// لوح كبير بمنتصف الشاشة — لمحتوى طويل (نموذج) بدل الورقة السفلية.
 /// نفس روح `DSCenterCard` لكنه أوسع وأطول، ومحتواه يتمرّر داخله.
+/// «يظهر من مكان الضغط» (طلب المالك ٢٠٢٦-١١-١٧، قواعد Emil Kowalski): الشاشة التي تفتح مربّعاً تسجّل مكان
+/// آخر ضغطة (`dsRecordsTapOrigin()`)، و`DSCenterPanel` يكبر منه — المربّع يبقى في المنتصف، الذي يتغيّر هو نقطة
+/// بدء التكبير فقط. الضغطة صالحة ثانية واحدة، وتُستهلك مرة واحدة.
+enum DSTapOrigin {
+    private static var point: UnitPoint?
+    private static var at = Date.distantPast
+
+    static func record(_ location: CGPoint) {
+        let bounds = UIScreen.main.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        point = UnitPoint(x: min(max(location.x / bounds.width, 0), 1), y: min(max(location.y / bounds.height, 0), 1))
+        at = Date()
+    }
+
+    static func take() -> UnitPoint? {
+        defer { point = nil }
+        guard let point, Date().timeIntervalSince(at) < 1 else { return nil }
+        return point
+    }
+}
+
+extension View {
+    /// يسجّل مكان كل ضغطة في هذه الشاشة دون أن يعطّل أزرارها أو سحبها
+    func dsRecordsTapOrigin() -> some View {
+        simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { DSTapOrigin.record($0.location) })
+    }
+}
+
 struct DSCenterPanel<Content: View>: View {
     /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -247,6 +275,8 @@ struct DSCenterPanel<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     @State private var contentHeight: CGFloat = 0
+    /// نقطة الضغط التي فتحت المربّع (`DSTapOrigin`) — يكبر منها بدل المنتصف، ويصغر نحوها عند الإغلاق
+    @State private var origin: UnitPoint = DSTapOrigin.take() ?? .center
     /// لون القسم داخل المربّع — من الواجهة التي فتحته، واحتياطاً القسم المختار
     @Environment(\.dsSection) private var section
     /// وضع العرض: المربّع أعرض ويأخذ الارتفاع كله تقريباً (الشاشة ~٤٠٠ نقطة)
@@ -287,7 +317,8 @@ struct DSCenterPanel<Content: View>: View {
                     .dsBoxChrome(strong: true)
                     // يكبر من ٠٫٩٤ صاعداً قليلاً مع تلاشٍ — ثم يبدأ تسلسل محتواه (DSMotion)؛
                     // وعند الإغلاق يصغر وينزل قليلاً
-                    .scaleEffect(appeared || reduceMotion ? 1 : (dismissing ? DSMotion.panelOutScale : DSMotion.panelScale))
+                    .scaleEffect(appeared || reduceMotion ? 1 : (dismissing ? DSMotion.panelOutScale : DSMotion.panelScale),
+                                 anchor: origin)
                     .offset(y: appeared || reduceMotion ? 0 : (dismissing ? DSMotion.panelOutDrop : DSMotion.panelRise))
                     .opacity(appeared ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

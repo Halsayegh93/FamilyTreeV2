@@ -22,6 +22,8 @@ import SwiftUI
 struct AppGuideBox: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// أسماء «عن التطبيق» من السيرفر
+    @ObservedObject private var config = AppConfigValues.shared
     /// ارتفاع شريحة النقطة يكبر مع خط الجهاز (نص النقطة بمقاس Apple — ٢٠٢٦-١٠-٠٨) فلا يُقصّ سطرها الثالث
     @ScaledMetric(relativeTo: .body) private var slideHeight: CGFloat = GuideMetrics.slideHeight
     @State private var page = 0
@@ -34,8 +36,11 @@ struct AppGuideBox: View {
     /// القسم الذي يفتح عليه — علامة المعلومات في الرئيسية على «عن التطبيق»، ومربّع
     /// «دليل الاستخدام» في الإعدادات على الدليل (٢٠٢٦-١٠-٠٧)
     init(startOn: InfoSection = .about) {
-        _section = State(initialValue: startOn)
+        _section = State(initialValue: Self.showsGuide ? startOn : .about)
     }
+
+    /// ظهور «دليل الاستخدام» (مبدّل القسمين) — مخفي حتى الفكرة الجديدة
+    static let showsGuide = false
 
     /// شرائح الفصل: نقاطه ← «أنهيت الفصل»
     private enum Slide: Hashable { case step(Int), done }
@@ -94,7 +99,9 @@ struct AppGuideBox: View {
             onSubmit: { advance() },
             onCancel: { dismiss() }
         ) {
-            sectionSwitch
+            // «دليل الاستخدام» مخفي (طلب المالك ٢٠٢٦-١١-١٤ «شيل دليل الاستخدام بعدين بنسوي فكرة جديدة») —
+            // المربّع «عن التطبيق» وحده؛ كود الدليل باقٍ للفكرة الجديدة. للإرجاع: `Self.showsGuide = true`
+            if Self.showsGuide { sectionSwitch }
 
             if isGuide {
                 guideContent
@@ -217,63 +224,72 @@ struct AppGuideBox: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
-    /// بطاقتان بلغة أقسام المربّعات: التطبيق (أيقونته الحقيقية + الاسم + الإصدار) ثم «عمل هذا التطبيق»
+    /// النموذج «ج» (اختيار المالك ٢٠٢٦-١١-١٤): لوحة كحلية في المنتصف (أيقونة التطبيق + الاسم + الإصدار بالذهبي) ثم
+    /// بطاقة شكر: الصفة بالذهبي فوق الاسم، وبين الأسماء خطّ ذهبي قصير. الأسماء من السيرفر (`about_credits`).
     private var aboutContent: some View {
         VStack(spacing: DSBox.sectionSpacing) {
-            HStack(spacing: DS.Spacing.md) {
-                // أيقونة التطبيق الأساسية (كريمي على كحلي — طلب المالك ٢٠٢٦-١٠-٣١)
+            VStack(spacing: DS.Spacing.sm) {
+                // أيقونة التطبيق الأساسية (كريمي على كحلي — طلب المالك ٢٠٢٦-١٠-٣١) بإطار ذهبي رفيع
                 Image("AppIconImage")
                     .resizable()
                     .scaledToFit()
                     .frame(width: DSBox.logoSide, height: DSBox.logoSide)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                    .dsCardShadow()
+                    .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                        .stroke(DS.Color.accentLight, lineWidth: DS.Border.width))
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali family app"))
-                        .font(DSBox.titleFont)
-                        .foregroundColor(DS.Color.fieldLabel)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
-                    HStack(spacing: DS.Spacing.xsm) {
-                        // اللمسة الذهبية الواحدة
-                        DSGoldDot(size: DS.Icon.legendDotCompact)
-                        Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
-                            .dsFieldFont(.calloutMedium)
-                            .foregroundColor(DS.Color.fieldValue)
-                            .monospacedDigit()
-                    }
-                }
-                Spacer(minLength: 0)
+                Text(L10n.t("تطبيق عائلة المحمدعلي", "Al-Mohammad Ali family app"))
+                    .font(DSBox.titleFont)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                Text(L10n.t("الإصدار \(appVersion)", "Version \(appVersion)"))
+                    .dsFieldFont(.calloutMedium)
+                    .foregroundColor(DS.Color.accentLight)
+                    .monospacedDigit()
             }
-            .padding(DS.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .dsCard(padding: nil)
+            .padding(.vertical, DS.Spacing.lg)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(maxWidth: .infinity)
+            .background(DS.Color.gradientBand,
+                        in: RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
             .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
             .dsStaggerIn(1)
 
-            DSComposerSection(title: "عمل هذا التطبيق", icon: "hammer.fill", index: 2) {
-                HStack(spacing: DS.Spacing.sm) {
-                    DSFieldIcon(name: "person.fill")
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: DS.Spacing.xxs / 2) {
-                        Text("حسن الصايغ")
+            VStack(spacing: DS.Spacing.sm) {
+                ForEach(Array(config.aboutCredits.enumerated()), id: \.offset) { i, credit in
+                    if i > 0 {
+                        Rectangle()
+                            .fill(DS.Color.accentLight)
+                            .frame(width: DSBox.logoSide, height: DS.Border.width)
+                            .accessibilityHidden(true)
+                    }
+                    VStack(spacing: DS.Spacing.xxs) {
+                        if !credit.role.isEmpty {
+                            Text(credit.role)
+                                .dsFont(.caption)
+                                .foregroundColor(DS.Color.accent)
+                        }
+                        Text(credit.name)
                             .dsFieldFont(.headline)
                             .foregroundColor(DS.Color.fieldLabel)
-                        Text("Made by Hasan Al-Sayegh")
-                            .dsFieldFont(.calloutCompactMedium)
-                            .foregroundColor(DS.Color.fieldValue)
-                            .environment(\.layoutDirection, .leftToRight)
                     }
-                    Spacer(minLength: 0)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .combine)
                 }
-                .frame(minHeight: DSBox.fieldMinHeight)
-                .dsRowBox()
-                .accessibilityElement(children: .combine)
             }
+            .padding(.vertical, DS.Spacing.lg)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(maxWidth: .infinity)
+            .dsCard(padding: nil)
+            .dsStaggerIn(2)
         }
         .padding(.bottom, DS.Spacing.xs)
+        .task { await config.refresh() }
     }
 }
 

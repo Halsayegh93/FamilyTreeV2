@@ -642,8 +642,9 @@ class MemberViewModel: ObservableObject {
         } catch {
             // نعرض سبب الخادم الحقيقي — النص العام كان يخفي علّة الفشل
             let detail = error.localizedDescription
-            self.errorMessage = L10n.t("تعذّر تعديل الابنة. \(detail)",
-                                       "Failed to update daughter. \(detail)")
+            self.errorMessage = "\(error)".contains("has_account")
+                ? Self.childHasAccountMessage(female: true)
+                : L10n.t("تعذّر تعديل الابنة. \(detail)", "Failed to update daughter. \(detail)")
             Log.error("[Women] updateSelfWomanChild: \(detail)"); return false
         }
     }
@@ -715,6 +716,15 @@ class MemberViewModel: ObservableObject {
         default:
             return L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.", "Couldn't add the son. Try again.")
         }
+    }
+
+    /// الابن/الابنة لها حساب في التطبيق — لا يعدّلها الأب من «عائلتي» (طلب المالك ٢٠٢٦-١١-١٧ «نطوّر صيغة الجملة»)
+    static func childHasAccountMessage(female: Bool) -> String {
+        female
+            ? L10n.t("لابنتك حساب خاص في التطبيق، لذلك تُعدَّل بياناتها من حسابها هي، أو بإرسال «طلب تعديل» إلى الإدارة من صفحتها في الشجرة.",
+                     "Your daughter has her own account, so her details are edited from her account, or by sending an edit request to the administration from her page in the tree.")
+            : L10n.t("لابنك حساب خاص في التطبيق، لذلك تُعدَّل بياناته من حسابه هو، أو بإرسال «طلب تعديل» إلى الإدارة من صفحته في الشجرة.",
+                     "Your son has his own account, so his details are edited from his account, or by sending an edit request to the administration from his page in the tree.")
     }
 
     /// رسائل رفض remove_self_child بالعربي حسب `hint` — حماية الروابط برسالة السيرفر نفسها (تسمّي الابن والعدد)
@@ -2753,6 +2763,9 @@ class MemberViewModel: ObservableObject {
                 .execute()
         } catch {
             Log.error("خطأ تعديل بيانات الابن: \(error.localizedDescription)")
+            // له حساب دخول (`descendant_has_account`) — الرسالة الموحّدة، وغيره الرسالة العامة في المربّع
+            self.errorMessage = "\(error)".contains("descendant_has_account")
+                ? Self.childHasAccountMessage(female: false) : nil
             self.isLoading = false
             return false
         }

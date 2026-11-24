@@ -838,7 +838,12 @@ extension TreePlace {
             return TreePlace(tree: tree, change: .photo(target, newPhotoUrl: p?.newPhotoUrl), kindLabel: kindLabel)
         case .delete:
             return TreePlace(tree: tree, change: .delete(target), kindLabel: kindLabel)
-        case .editPhone, .other:
+        case .editPhone:
+            // الرقم لا يغيّر شيئاً في الشجرة — بلا «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٧)
+            return nil
+        case .other:
+            // تعديلات الملف الشخصي (profile_*: الحالة الاجتماعية، السيرة، إظهار الرقم) لا تخصّ الشجرة
+            if (p?.reason ?? "").hasPrefix("profile_") { return nil }
             return TreePlace(tree: tree, change: .subject(target), kindLabel: kindLabel)
         }
     }
@@ -960,7 +965,9 @@ extension TreePlace {
             base = deceasedReport(r, kindLabel: label)
         case RequestType.photoSuggestion.rawValue:
             base = photoSuggestion(r, kindLabel: label)
-        case RequestType.phoneChange.rawValue, RequestType.accountDelete.rawValue, RequestType.privacyRequest.rawValue:
+        case RequestType.phoneChange.rawValue:
+            base = nil   // الرقم لا يخصّ الشجرة (طلب المالك ٢٠٢٦-١١-١٧)
+        case RequestType.accountDelete.rawValue, RequestType.privacyRequest.rawValue:
             base = subject(memberId: r.memberId, kindLabel: label, data: data)
         case RequestType.relativeAdd.rawValue:
             base = relativeAdd(r, kindLabel: label)

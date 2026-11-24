@@ -195,6 +195,7 @@ struct NewsCardKicker: View {
                 .dsFont(.newsKicker)
                 .foregroundColor(NewsTypeHelper.color(for: type))
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             if isPending {
                 DSStatusChip(text: L10n.t("بانتظار المراجعة", "Pending review"), icon: "hourglass",
@@ -237,8 +238,11 @@ struct NewsCardMenu: View {
                 .dsGlyph(DS.Glyph.md, weight: .semibold)
                 .foregroundColor(tint)
                 .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
+                // مساحة لمس ٤٤ والشكل والرأس بحجمهما (٣٦)
+                .padding((DS.Icon.tapTarget - DS.Icon.rowLarge) / 2)
                 .contentShape(Rectangle())
         }
+        .padding(-(DS.Icon.tapTarget - DS.Icon.rowLarge) / 2)
         .accessibilityLabel(L10n.t("خيارات الخبر", "Post options"))
     }
 }
@@ -619,6 +623,7 @@ struct NewsBylineView: View {
                 .dsFont(.newsByline)
                 .foregroundColor(isAdmin ? DS.Color.accent : DS.Color.textSecondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
             ReviewVerifiedMark(authorId)
             Text("·")
                 .dsFont(.footnote)

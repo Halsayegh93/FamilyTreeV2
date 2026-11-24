@@ -240,6 +240,7 @@ struct HomeNewsPreviewRow: View {
                             .dsFont(.caption)
                             .foregroundColor(DS.Color.textSecondary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         ReviewVerifiedMark(news.author_id)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -309,6 +310,7 @@ struct HomeNewsMetaLine: View {
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             // بانتظار موافقة الإدارة
             if news.approval_status == "pending" {
@@ -351,6 +353,7 @@ struct HomeOccasionRow: View {
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Text(news.content)
                     .dsFont(.calloutMedium)

@@ -181,6 +181,11 @@ private struct AdminAppSettingsGroups: View {
                         subtitle: named ? L10n.t("\(branchNamesCount) فرع باسم", "\(branchNamesCount) named")
                                         : L10n.t("يختار منها العضو عائلته، وأسماء قائمة الفروع", "Members pick their family; branch list names"),
                         tap: .page { AnyView(AdminFamilyNamesView()) })
+            // أسماء مربّع «عن التطبيق» (طلب المالك ٢٠٢٦-١١-١٤)
+            AdminTapRow(icon: "info.circle.fill", tint: DS.Color.primary,
+                        title: L10n.t("أسماء عن التطبيق", "About box names"),
+                        subtitle: L10n.t("الأسماء وصفاتها في مربّع «عن التطبيق»", "Names and roles in the About box"),
+                        tap: .page { AnyView(AdminAboutCreditsView()) })
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminCard()

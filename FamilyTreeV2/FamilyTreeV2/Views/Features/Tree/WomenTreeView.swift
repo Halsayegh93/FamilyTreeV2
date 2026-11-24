@@ -603,7 +603,10 @@ struct WomanDetailSheet: View {
                     missingTitle: canAddMother && !fatherWives.isEmpty
                         ? L10n.t("ليست في القائمة؟ إضافة أم جديدة", "Not listed? Add a new mother") : nil,
                     onMissing: canAddMother ? { _ in motherPickerToAdd() } : nil,
-                    onPick: { setMother($0.id) },
+                    // العضو: الاختيار طلب للإدارة (يُنفَّذ تلقائياً عند القبول)، والإدارة و«عائلتي» كتابة مباشرة
+                    onPick: { m in
+                        if mode == .request { sendMotherRequest(m) } else { setMother(m.id) }
+                    },
                     onCancel: { draft.showMother = false; wifeSearch = "" })
             }
             // حذف
@@ -1292,8 +1295,11 @@ struct WomanDetailSheet: View {
                                     icon: "heart.fill") { openHusbandSource() })
         }
         if mother == nil {
+            // اختيار الأم من زوجات الأب (طلب المالك ٢٠٢٦-١١-١٧ «ليش مافي اختيار الام») — وإلا «إضافة أم جديدة»
             list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
-                                    icon: "figure.and.child.holdinghands") { openMotherFlow() })
+                                    icon: "figure.2.arms.open") {
+                if fatherWives.isEmpty { openMotherFlow() } else { openMotherPicker() }
+            })
         }
         if isMyFatherNode {
             list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
@@ -1304,10 +1310,33 @@ struct WomanDetailSheet: View {
         edits += [.other, .delete]
         for kind in edits {
             list.append(AdminAction(id: "req." + kind.rawValue, title: kind.title, icon: kind.icon) {
-                editRequest = kind
+                // بنته أو زوجته: «طلب حذف» بمسار «عائلتي» (`remove_self_woman_child`) كما كان زرّ الشريط
+                if kind == .delete && showsDeleteRequest {
+                    handOff(from: { showAdminBox = false }) { confirmSelfRemoval = true }
+                } else {
+                    editRequest = kind
+                }
             })
         }
         return list
+    }
+
+    /// السطر الفرعي تحت كل دائرة (طلب المالك ٢٠٢٦-١١-١٧): لمن الطلب
+    private func requestSubtitle(_ id: String) -> String? {
+        let who = "«" + shortName(woman) + "»"
+        switch id {
+        case "child": return L10n.t("لـ ", "For ") + who
+        case "husband": return L10n.t("زوج ", "Husband of ") + who
+        case "wife": return L10n.t("زوجة ", "Wife of ") + who
+        case "addMother": return L10n.t("أم ", "Mother of ") + who
+        case "sister": return L10n.t("بنت ", "Daughter of ") + who
+        case "req.editName": return L10n.t("اسم ", "Name of ") + who
+        case "req.editBirth": return L10n.t("ميلاد ", "Birth of ") + who
+        case "req.deceased": return L10n.t("وفاة ", "Death of ") + who
+        case "req.other": return L10n.t("عن ", "About ") + who
+        case "req.delete": return L10n.t("حذف ", "Delete ") + who
+        default: return nil
+        }
     }
 
     /// لون الخانة الدائرية: الإضافة أخضر، تعديل البيانات كحلي، الوفاة رمادي، الحذف أحمر
@@ -1323,17 +1352,33 @@ struct WomanDetailSheet: View {
     /// إرسال طلب تعديل للإدارة — بصيغة طلبات شجرة النساء اليدوية نفسها (`add` بلا اسم جديد، معلّق على العقدة أو
     /// أبيها/زوجها وإلا مقدّم الطلب): حارس السيرفر يرفض `other` من العضو، و`add` بلا اسم لا يكتب شيئاً عند القبول —
     /// الإدارة تنفّذه من شجرة النساء ثم تقبله، والسطر الأول من الملاحظات يقول نوع الطلب الحقيقي
-    private func sendEditRequest(_ kind: WomanEditRequest, _ fields: [String]) {
+    private func sendEditRequest(_ kind: WomanEditRequest, _ fields: [String], _ value: WomanEditValue) {
         guard let anchor = requestAnchor(preferHusband: false) else { return }
         var lines = ["شجرة النساء — " + kind.sourceTitle, "لـ: " + displayName(woman)]
         lines += fields
-        lines.append("التنفيذ يدوي: يُنفَّذ من شجرة النساء (تفاصيل العضو ← الإدارة) ثم يُقبل الطلب.")
+        // تنفيذ تلقائي عند القبول لكل ما عدا «طلب آخر» (`private.apply_women_request`)
+        let women: WomenRequestData?
+        switch kind {
+        case .editName:
+            women = value.name.map { WomenRequestData(kind: "edit_name", nodeId: woman.id.uuidString, name: $0) }
+        case .editBirth:
+            women = value.date.map { WomenRequestData(kind: "edit_birth", nodeId: woman.id.uuidString, birth: $0) }
+        case .deceased:
+            women = WomenRequestData(kind: "deceased", nodeId: woman.id.uuidString, death: value.date)
+        case .delete:
+            women = WomenRequestData(kind: "delete", nodeId: woman.id.uuidString)
+        case .other:
+            women = nil
+        }
+        lines.append(women != nil ? "يُنفَّذ تلقائياً عند القبول."
+                                  : "التنفيذ يدوي: يُنفَّذ من شجرة النساء (تفاصيل العضو ← الإدارة) ثم يُقبل الطلب.")
         let payload = TreeEditPayload.make(action: .add,
                                            targetMemberId: anchor.uuidString,
                                            targetMemberName: displayName(woman),
                                            parentMemberId: anchor.uuidString,
                                            parentMemberName: displayName(woman),
-                                           notes: lines.joined(separator: "\n"))
+                                           notes: lines.joined(separator: "\n"),
+                                           women: women)
         editRequest = nil
         sendRequest(payload, sourceTitle: kind.sourceTitle, icon: kind.icon)
     }
@@ -1468,7 +1513,7 @@ struct WomanDetailSheet: View {
         switch mode {
         case .direct: return L10n.t("الإدارة", "Manage")
         case .selfFamily: return L10n.t("الأسرة", "My family")
-        case .request, .viewOnly: return L10n.t("الطلبات", "Requests")
+        case .request, .viewOnly: return L10n.t("طلب تعديل", "Request a change")
         }
     }
     private var actionsBoxIcon: String {
@@ -1495,8 +1540,7 @@ struct WomanDetailSheet: View {
             return L10n.t("تُضاف لعائلتك فوراً — والابن ينتظر اعتماد الإدارة.",
                           "Added to your family right away — a son awaits approval.")
         case .request:
-            return L10n.t("تصل طلباتك للإدارة لمراجعتها قبل الإضافة.",
-                          "Your requests go to the administration for review.")
+            return L10n.t("يُرسل الطلب إلى الإدارة للمراجعة", "The request goes to the admins for review")
         }
     }
 
@@ -1533,16 +1577,16 @@ struct WomanDetailSheet: View {
                         < (order.firstIndex(of: $1.element.id) ?? order.count, $1.offset)
                 }.map(\.element)
                 if mode == .request {
-                    // الشكل «أ»: قسم واحد بخانات دائرية خفيفة، ثلاث في السطر والناقص في الوسط
-                    DSComposerSection(title: L10n.t("الطلبات", "Requests"), icon: "paperplane.fill",
-                                      tint: DS.Color.actionNavy, index: 0) {
-                        WomenRequestCircleGrid {
-                            ForEach(Array(actions.enumerated()), id: \.element.id) { i, action in
-                                WomenRequestCircle(title: action.title, icon: action.icon,
-                                                   tint: requestTint(action.id),
-                                                   isNew: action.id.hasPrefix("req."),
-                                                   hint: tileSubtitle(action.id),
-                                                   action: action.run)
+                    // «طلب تعديل» بنفس مربّع شجرة العائلة (طلب المالك ٢٠٢٦-١١-١٧ «نوحد التصميم بنفس شكل السابق»):
+                    // بطاقات `DSActionTile` اثنتان في السطر بلون النوع وسطرها الفرعي، و«طلب حذف» بعرض كامل آخراً
+                    let tilesReq = actions   // «طلب حذف» خانة مثل البقية آخر الشبكة (طلب المالك ٢٠٢٦-١١-١٧)
+                    DSComposerSection(title: L10n.t("اختر نوع الطلب", "Choose Request Type"),
+                                      icon: "square.grid.2x2.fill", tint: DS.Color.primary, index: 0) {
+                        DSActionTileGrid {
+                            ForEach(Array(tilesReq.enumerated()), id: \.element.id) { i, action in
+                                DSActionTile(action.title, subtitle: requestSubtitle(action.id),
+                                             icon: action.icon, tint: requestTint(action.id).color,
+                                             action: action.run)
                                     .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
                                                 y: DSMotion.rise, scale: DSMotion.riseScale)
                             }
@@ -1574,7 +1618,7 @@ struct WomanDetailSheet: View {
                                 womanName: displayName(woman),
                                 currentFirstName: woman.firstName,
                                 isBusy: draft.busy,
-                                onSend: { sendEditRequest(kind, $0) },
+                                onSend: { sendEditRequest(kind, $0, $1) },
                                 onCancel: { editRequest = nil })
         })
     }
@@ -2112,11 +2156,8 @@ struct WomanDetailSheet: View {
 
     /// شريط ثابت أسفل المربّع: زرّ الدور يمين (يفتح مربّع الإجراءات)، «إغلاق» يسار — بمقاس واحد
     private var panelFooter: some View {
+        // «طلب حذف» داخل «طلب تعديل» فقط (طلب المالك ٢٠٢٦-١١-١٧) — لا زرّ منفصل في الشريط
         VStack(spacing: DSBox.buttonSpacing) {
-            if showsDeleteRequest {
-                DSDeleteRequestButton(pending: deletionPending) { confirmSelfRemoval = true }
-                    .disabled(draft.busy)
-            }
             panelFooterRow
         }
         // نفس شريط أزرار مربّعات العمل (`DSComposer`) وتفاصيل العضو: هوامشه من `DSBox`
@@ -2830,14 +2871,17 @@ struct WomanDetailSheet: View {
     }
 
     private func requestPayload(title: String, name: String, details: [String],
-                                createsSon: Bool, anchor: UUID) -> TreeEditPayload {
+                                createsSon: Bool, anchor: UUID,
+                                women: WomenRequestData? = nil) -> TreeEditPayload {
         var lines = [L10n.t("شجرة النساء — ", "Women's tree — ") + title,
                      L10n.t("الاسم: ", "Name: ") + name,
                      L10n.t("لـ: ", "For: ") + displayName(woman)]
         lines += details
         let note = draft.addNotes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !note.isEmpty { lines.append(L10n.t("ملاحظات: ", "Notes: ") + note) }
-        if !createsSon {
+        if women != nil {
+            lines.append(L10n.t("يُنفَّذ تلقائياً عند القبول.", "Applied automatically on approval."))
+        } else if !createsSon {
             lines.append(L10n.t("التنفيذ يدوي: تُضاف من شجرة النساء (تفاصيل العضو ← الإدارة) ثم يُقبل الطلب.",
                                 "Manual: add it from the women's tree (member details → Manage), then approve."))
         }
@@ -2847,7 +2891,27 @@ struct WomanDetailSheet: View {
                                     parentMemberId: anchor.uuidString,
                                     parentMemberName: displayName(woman),
                                     newMemberName: createsSon ? name : nil,
-                                    notes: lines.joined(separator: "\n"))
+                                    notes: lines.joined(separator: "\n"),
+                                    women: women)
+    }
+
+    /// بيانات التنفيذ التلقائي لإضافة ابنة/ابن أو أخت (السيرفر يضيفها عند القبول) — nil حين تبقى يدوية:
+    /// ابن ذكر لرجل أو لزوج من العائلة مكانه الشجرة العامة، والمرأة بلا زوج مسجّل، والزوجة والأم والزوج
+    private func autoAddData(_ kind: AddKind, _ e: DSAddEntry) -> WomenRequestData? {
+        guard kind == .child || kind == .sister else { return nil }
+        let fem = kind == .sister || e.isFemale
+        if woman.isFemale {
+            guard kind == .child, let h = woman.husbandId else { return nil }
+            if !fem && profileIds.contains(h) { return nil }
+        } else if !fem {
+            return nil
+        }
+        return WomenRequestData(kind: kind == .sister ? "sister" : "child",
+                                nodeId: woman.id.uuidString,
+                                name: e.trimmedName,
+                                gender: fem ? "female" : "male",
+                                birth: e.hasBirth ? Self.dayKey(e.birth) : nil,
+                                deceased: e.deceased ? true : nil)
     }
 
     /// طلب «إضافة» لاسم واحد: الجنس والميلاد و«متوفّى/متوفّاة» بوضوح في الملاحظات — القبول لا يكتب الوفاة، فالابن
@@ -2886,7 +2950,8 @@ struct WomanDetailSheet: View {
         let title = kind == .sister ? L10n.t("بنت (أخت مقدّم الطلب)", "Daughter (the requester's sister)")
                                     : kind.requestTitle
         return requestPayload(title: title, name: e.trimmedName, details: details,
-                              createsSon: createsSon, anchor: anchor)
+                              createsSon: createsSon, anchor: anchor,
+                              women: createsSon ? nil : autoAddData(kind, e))
     }
 
     /// طلب لكل اسم (يُراجَع كلٌّ وحده)
@@ -3037,6 +3102,19 @@ struct WomanDetailSheet: View {
     }
 
     /// تعيين أمّ العضو (من زوجات الأب) أو إزالتها — العضو لنفسه بدالته الذاتية (set_self_mother)
+    /// طلب «اختيار الأم» من زوجات الأب — `set_mother` في `private.apply_women_request`
+    private func sendMotherRequest(_ m: FamilyMember) {
+        guard let anchor = requestAnchor(preferHusband: false) else { return }
+        draft.showMother = false; wifeSearch = ""
+        let payload = requestPayload(title: L10n.t("طلب اختيار الأم", "Request setting the mother"),
+                                     name: displayName(m),
+                                     details: [L10n.t("الأم من زوجات الأب: ", "Mother from the father's wives: ") + displayName(m)],
+                                     createsSon: false, anchor: anchor,
+                                     women: WomenRequestData(kind: "set_mother", nodeId: woman.id.uuidString,
+                                                             motherId: m.id.uuidString))
+        sendRequest(payload, sourceTitle: "طلب اختيار الأم", icon: "figure.2.arms.open")
+    }
+
     private func setMother(_ motherId: UUID?) {
         let selfService = mode == .selfFamily
         let childId = woman.id

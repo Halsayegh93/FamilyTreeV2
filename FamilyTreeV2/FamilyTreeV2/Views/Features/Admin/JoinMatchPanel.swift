@@ -342,4 +342,14 @@ final class JoinTierCache {
         store[id] = (key, t)
         return t
     }
+
+    /// «الأب المحتمل» لطلب بلا مطابقة (العيّنة ١٨) — بحث في كل الأعضاء، فيُحفظ بالمفتاح نفسه
+    private var fathers: [UUID: (key: String, father: FamilyMember?)] = [:]
+
+    func father(for id: UUID, key: String, build: () -> FamilyMember?) -> FamilyMember? {
+        if let hit = fathers[id], hit.key == key { return hit.father }
+        let f = build()
+        fathers[id] = (key, f)
+        return f
+    }
 }

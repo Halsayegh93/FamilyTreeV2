@@ -399,14 +399,46 @@ struct DSActionTile: View {
     var subtitle: String? = nil
     let icon: String
     let tint: Color
+    /// النصّ في المنتصف والقرص فوقه (طلب المالك ٢٠٢٦-١١-١٧ «نص الحقول في المنتصف في طلب تعديل»)
+    var centered: Bool = false
     let action: () -> Void
 
-    init(_ title: String, subtitle: String? = nil, icon: String, tint: Color, action: @escaping () -> Void) {
+    init(_ title: String, subtitle: String? = nil, icon: String, tint: Color, centered: Bool = false,
+         action: @escaping () -> Void) {
         self.title = title
         self.subtitle = subtitle
         self.icon = icon
         self.tint = tint
+        self.centered = centered
         self.action = action
+    }
+
+    private var disc: some View {
+        // قرص ممتلئ بلون النوع ورمز أبيض — التعبئة الثابتة (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
+        Image(dsSymbol: icon)
+            .dsGlyph(DS.Glyph.sm)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: DSMemberKit.chipDisc, height: DSMemberKit.chipDisc)
+            .background(Circle().fill(tint.dsSolidFill))
+            .accessibilityHidden(true)
+    }
+
+    private var texts: some View {
+        VStack(alignment: centered ? .center : .leading, spacing: DS.Spacing.xxs) {
+            Text(title)
+                .dsFieldFont(.chip)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            if let subtitle {
+                Text(subtitle)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            }
+        }
+        .multilineTextAlignment(centered ? .center : .leading)
     }
 
     var body: some View {
@@ -416,30 +448,19 @@ struct DSActionTile: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                // قرص ممتلئ بلون النوع ورمز أبيض — التعبئة الثابتة (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
-                Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.sm)
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: DSMemberKit.chipDisc, height: DSMemberKit.chipDisc)
-                    .background(Circle().fill(tint.dsSolidFill))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title)
-                        .dsFieldFont(.chip)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(DSBox.buttonLabelMinScale)
-                    if let subtitle {
-                        Text(subtitle)
-                            .dsFont(.caption)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            Group {
+                if centered {
+                    VStack(spacing: DS.Spacing.xs) {
+                        disc
+                        texts
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    HStack(spacing: DS.Spacing.sm) {
+                        disc
+                        texts.frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xsm)
@@ -805,12 +826,17 @@ struct DSDeleteCircleFace: ViewModifier {
     var muted: Bool = false
     /// لون معنى بدل الأحمر الافتراضي — «رفض/إلغاء» (✕) بلون `DS.Color.reject`
     var tint: Color? = nil
+    /// خفيفة: تعبئة اللون بشفافية `tintFill` والرمز بلونه (بدل الأبيض على الممتلئ)
+    var soft: Bool = false
 
     func body(content: Content) -> some View {
+        let ink = tint ?? DS.Color.error
         content
-            .foregroundColor(muted ? DS.Color.textPrimary : .white)
+            .foregroundColor(muted ? DS.Color.textPrimary : soft ? ink.dsReadableGlyph : .white)
             .frame(width: size.height, height: size.height)
-            .background(Circle().fill(muted ? DS.Color.fieldFill : (tint?.dsSolidFill ?? DS.Color.errorFill)))
+            .background(Circle().fill(muted ? DS.Color.fieldFill
+                                      : soft ? ink.opacity(DS.Opacity.tintFill)
+                                      : (tint?.dsSolidFill ?? DS.Color.errorFill)))
             // المدمج: مساحة لمس ٤٤ رغم القطر الأصغر
             .padding(size.hitInset)
             .contentShape(Rectangle())
@@ -833,6 +859,8 @@ struct DSDecisionItem: Identifiable {
     var kind: Kind = .secondary
     /// لون معنى صلب للأساسي (نجاح…) — nil = تعبئة القسم
     var tint: Color? = nil
+    /// الدائرة الهدّامة خفيفة: تعبئة اللون الخفيفة ورمزه بلونه (بطاقة طلب الانضمام — العيّنة ١٨)
+    var soft: Bool = false
     var isEnabled: Bool = true
     let action: () -> Void
 }
@@ -884,7 +912,7 @@ struct DSDecisionRow: View {
             Image(dsSymbol: item.icon ?? "xmark")
                 .dsGlyph(size.glyph, weight: .bold)
                 .modifier(DSDeleteCircleFace(enabled: item.isEnabled, size: size, muted: item.kind == .dismiss,
-                                             tint: item.tint))
+                                             tint: item.tint, soft: item.soft))
         }
         .disabled(!item.isEnabled)
         .accessibilityLabel(item.title)

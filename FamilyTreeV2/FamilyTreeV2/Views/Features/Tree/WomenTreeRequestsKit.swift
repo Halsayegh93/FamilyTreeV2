@@ -17,7 +17,7 @@ enum WomanEditRequest: String, Identifiable {
         case .editBirth: return L10n.t("تعديل ميلاد", "Edit birth")
         case .deceased: return L10n.t("تسجيل وفاة", "Record death")
         case .other: return L10n.t("طلب آخر", "Other request")
-        case .delete: return L10n.t("حذف", "Delete")
+        case .delete: return L10n.t("طلب حذف", "Request deletion")
         }
     }
     /// عنوان مربّع الطلب وسطره في «الوارد» (بالعربية دائماً — بيانات تقرؤها الإدارة)
@@ -39,13 +39,14 @@ enum WomanEditRequest: String, Identifiable {
         case .delete: return L10n.t("طلب حذف", "Request deletion")
         }
     }
+    /// أيقونات طلبات شجرة العائلة نفسها (`TreeEditAction.iconName`) — تصميم واحد في الشجرتين
     var icon: String {
         switch self {
-        case .editName: return "character.cursor.ibeam"
-        case .editBirth: return "calendar"
-        case .deceased: return "leaf.fill"
-        case .other: return "ellipsis.bubble.fill"
-        case .delete: return "trash.fill"
+        case .editName: return TreeEditAction.editName.iconName
+        case .editBirth: return TreeEditAction.editBirth.iconName
+        case .deceased: return TreeEditAction.deceased.iconName
+        case .other: return TreeEditAction.other.iconName
+        case .delete: return TreeEditAction.delete.iconName
         }
     }
 }
@@ -68,6 +69,8 @@ struct WomenRequestCircle: View {
     let title: String
     let icon: String
     let tint: WomenRequestTint
+    /// السطر الفرعي تحت الاسم — لمن الطلب
+    var subtitle: String? = nil
     var isNew: Bool = false
     var hint: String? = nil
     let action: () -> Void
@@ -101,6 +104,14 @@ struct WomenRequestCircle: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(subtitle)
+                        .dsFont(.micro)
+                        .foregroundStyle(DS.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, DS.Spacing.xs)
@@ -152,13 +163,19 @@ struct WomenRequestCircleGrid: Layout {
     }
 }
 
+/// القيمة المنظّمة لطلب التعديل (للتنفيذ التلقائي): الاسم الجديد، أو التاريخ YYYY-MM-DD
+struct WomanEditValue {
+    var name: String? = nil
+    var date: String? = nil
+}
+
 /// مربّع طلب تعديل واحد — الحقل حسب النوع، ثم ملاحظة اختيارية؛ يُرسل أسطر الطلب للإدارة
 struct WomanEditRequestBox: View {
     let kind: WomanEditRequest
     let womanName: String
     let currentFirstName: String
     let isBusy: Bool
-    let onSend: (_ lines: [String]) -> Void
+    let onSend: (_ lines: [String], _ value: WomanEditValue) -> Void
     let onCancel: () -> Void
 
     @State private var text = ""
@@ -205,7 +222,7 @@ struct WomanEditRequestBox: View {
             isBusy: isBusy,
             note: L10n.t("يُرسل للإدارة للمراجعة", "Sent to the administration for review"),
             hasUnsavedChanges: !trimmed.isEmpty || !trimmedNotes.isEmpty || hasDate,
-            onSubmit: { if canSend { onSend(lines) } },
+            onSubmit: { if canSend { onSend(lines, value) } },
             onCancel: onCancel
         ) {
             DSComposerSection(title: kind.title, icon: kind.icon, tint: tint, index: 0) {
@@ -252,6 +269,16 @@ struct WomanEditRequestBox: View {
                     .datePickerStyle(.compact)
                     .environment(\.calendar, Calendar(identifier: .gregorian))
             }
+        }
+    }
+
+    /// القيمة المنظّمة: الاسم لتعديل الاسم، والتاريخ لتعديل الميلاد والوفاة
+    private var value: WomanEditValue {
+        let day = hasDate ? Self.dayFormatter.string(from: date) : nil
+        switch kind {
+        case .editName: return WomanEditValue(name: trimmed.isEmpty ? nil : trimmed)
+        case .editBirth, .deceased: return WomanEditValue(date: day)
+        case .other, .delete: return WomanEditValue()
         }
     }
 
