@@ -435,10 +435,12 @@ struct DSWifeFlowBox: View {
             DSComposerSection(title: L10n.t("أبوها في الشجرة", "Her father in the tree"), icon: "tree.fill",
                               tint: DS.Color.male, index: 0) {
                 VStack(spacing: DS.Spacing.sm) {
+                    // الخانة تنزل سطراً ثانياً وثالثاً مع الاسم الطويل بدل ما يختفي أوله — الاسم المكتوب كله ظاهر
+                    // (طلب المالك ٢٠٢٦-١١-٢٤ «بعد الاسم الثالث ما ظهر الاسم كامل»)
                     DSComposerField(icon: "magnifyingglass",
                                     label: L10n.t("اسم الأب", "Father's name"),
                                     placeholder: L10n.t("اكتب اسم أبيها", "Type her father's name"),
-                                    text: $search)
+                                    text: $search, multiline: true, lines: 1...3)
                     fatherResults
                     if onFatherMissing != nil && !isLoading {
                         Button {
@@ -512,10 +514,10 @@ struct DSWifeFlowBox: View {
                 HStack(spacing: DS.Spacing.sm) {
                     DSFieldIcon(name: "person.fill", tint: DS.Color.male)
                     VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        // الاسم كاملاً بلا قصّ — كان سطرين فينقطع بعد الاسم الثالث أو الرابع
                         Text(shownName(f))
                             .dsFieldFont(.memberName)
                             .foregroundColor(DS.Color.fieldValue)
-                            .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(L10n.t("بناته المتاحات · \(list.eligible.count)", "Available daughters · \(list.eligible.count)"))
                             .dsFont(.caption)
@@ -587,7 +589,7 @@ struct DSWifeFlowBox: View {
                     DSComposerField(icon: "person.text.rectangle",
                                     label: L10n.t("الاسم الرباعي للأب", "Father's four-part name"),
                                     placeholder: L10n.t("مثل: علي حسين محمد حسن", "e.g. Ali Hussain Mohammad Hasan"),
-                                    text: $newName)
+                                    text: $newName, multiline: true, lines: 1...3)
                     Text(fatherNameIsFull || trimmedName.isEmpty
                          ? L10n.t("اكتب اسمه الرباعي كاملاً — أربعة أسماء على الأقل.", "Write his full four-part name.")
                          : L10n.t("الاسم ناقص — يلزم أربعة أسماء.", "Incomplete — four names needed."))
