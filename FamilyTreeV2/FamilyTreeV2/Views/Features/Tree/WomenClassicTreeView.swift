@@ -44,7 +44,7 @@ private struct WomenTreeMetrics: Equatable {
     /// الزوج من خارج العائلة جنب البنت — شكل «ب: دائرة صغيرة جنبها» (اختيار المالك ٢٠٢٦-١١-٢٤، بدل «ح٤» الحلقتين
     /// المتشابكتين): دائرة بمقاس مربّع الزوجة يمين البنت مكان الزوجة الأولى، على مستوى وسط شكلها، وخط ذهبي قصير
     /// بينهما، وتحت دائرته بطاقة اسمه الأول والعائلة — مثل الزوجات جنب الرجال. خط الأبناء من البنت نفسها
-    var husbandSquare: CGFloat { wifeSquare }            // قطر دائرته = مربّع الزوجة
+    var husbandSquare: CGFloat { 92 * k }                // قطر دائرته — قريب من دائرتها (١٠٥): «كبر الصورة زيادة» ثم «كبّره أكثر» ٢٠٢٦-١١-٢٤
     var husbandCellW: CGFloat { wifeCellW }              // عرض خليته وبطاقة اسمه
     var husbandCellX: CGFloat { wivesCenterX(1) }        // مركز خليته عن مركز العقدة — مكان الزوجة الأولى
     var husbandOverhang: CGFloat { wivesOverhang(1) }
@@ -1434,7 +1434,7 @@ struct WomenClassicTreeView: View {
                             .saturation(deceased ? 0 : 1)
                     } else {
                         Text(name.isEmpty ? L10n.t("زوج", "H") : String(name.prefix(1)))
-                            .dsTreeFont(.callout, k)
+                            .dsTreeFont(.title3Tree, k)
                             .foregroundColor(tint)
                     }
                 }
