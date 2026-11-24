@@ -14,6 +14,9 @@ final class OccasionComposerViewModel: ObservableObject {
     @Published var form = OccasionForm()
     /// العضو المختار من شجرة العائلة (رجال)
     @Published private(set) var member: FamilyMember?
+    /// الاسم بعد تعديله يدوياً فوق اختيار الشجرة — nil = اسم الشجرة كما هو (طلب المالك ٢٠٢٦-١١-٢٤ «ابى احرر الاسم بعد
+    /// الاختيار»). الصورة وصلة القرابة تبقى من العضو المختار
+    @Published var nameEdited: String?
     /// الصيغة المطلوبة لكل عنصر اسم (عدد الأسماء) — الافتراضي الأطول؛ اللي ما يدخل بسطر يختصر تلقائياً
     @Published var nameCounts: [String: Int] = [:]
     /// نموذج ١ (صورة دائرية فوق)، نموذج ٢ (صورة سداسية جانبية)، أو نموذج ٣ (صورة بقوس فوق بطاقة) —
@@ -80,14 +83,36 @@ final class OccasionComposerViewModel: ObservableObject {
 
     /// الاسم كامل: من الشجرة (مع العائلة) أو المكتوب — الصيغة تنختار بعدين حسب السطر (OccasionNames)
     var name: String {
-        if let member { return member.nameUnitsWithFamily.joined(separator: " ") }
+        if let member {
+            if let e = nameEdited?.trimmingCharacters(in: .whitespacesAndNewlines), !e.isEmpty { return e }
+            return member.nameUnitsWithFamily.joined(separator: " ")
+        }
         return form.txt("nameTyped")
+    }
+
+    /// الاسم المعدّل فيه نص (الفاضي = اسم الشجرة)
+    var hasEditedName: Bool {
+        !(nameEdited?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+    }
+
+    /// يبدأ تعديل الاسم المختار من الشجرة بالصيغة الظاهرة الحين (ثلاثي/رباعي…) — بعدها يُكتب كما يريد
+    func beginEditingName() {
+        let shown = nameResolution("name")?.option.name ?? name
+        nameCounts["name"] = nil
+        nameEdited = shown
+    }
+
+    /// يرجع لاسم الشجرة كما هو
+    func resetEditedName() {
+        nameCounts["name"] = nil
+        nameEdited = nil
     }
 
     /// وحدات الأسماء من الشجرة (PersonName القاعدة ٢): العضو المختار واسم أبوه في «ابن …» —
     /// «محمد باقر» يبقى اسماً واحداً لما ينختصر الاسم. النص المكتوب يتقسّم بالقاعدة ٣.
     var nameHints: OccasionNames.Hints {
-        guard let member else { return [:] }
+        // الاسم المعدّل يدوياً يتقسّم مثل المكتوب (القاعدة ٣) — وحدات الشجرة ما تطابقه
+        guard let member, !hasEditedName else { return [:] }
         var lists = [member.nameUnitsWithFamily]
         if let fid = member.fatherId, let father = family.byId[fid] { lists.append(father.shortNameUnits) }
         return OccasionNames.hints(lists)
@@ -221,6 +246,7 @@ final class OccasionComposerViewModel: ObservableObject {
 
     func pickMember(_ m: FamilyMember) {
         member = m
+        nameEdited = nil
         // عضو جديد: الاسم يرجع لأطول صيغة تدخل
         nameCounts["name"] = nil
         let sons = family.sonsLine(m)
@@ -254,6 +280,7 @@ final class OccasionComposerViewModel: ObservableObject {
 
     func clearMember() {
         member = nil
+        nameEdited = nil
         for key in Self.relationKeys {
             if let auto = autoRelations[key], !auto.isEmpty, form.txt(key) == auto { form.texts[key] = "" }
         }

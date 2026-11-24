@@ -525,6 +525,34 @@ struct OccasionComposerView: View {
         OccasionFormCard(title: title, hint: L10n.t("سطر واحد — إذا طال ينختصر تلقائياً", "One line — shortened automatically if long")) {
             if let m = vm.member {
                 selectedMember(m)
+                // تعديل الاسم بعد اختياره من الشجرة (طلب المالك ٢٠٢٦-١١-٢٤ «ابى احرر الاسم بعد الاختيار»):
+                // يبدأ بالصيغة الظاهرة، والصورة وصلة القرابة تبقى من العضو
+                if vm.nameEdited != nil {
+                    OccasionTextInput(
+                        text: Binding(get: { vm.nameEdited ?? "" }, set: { vm.nameEdited = $0 }),
+                        placeholder: L10n.t("اكتب الاسم كما تبيه يطلع", "Type the name as it should appear")
+                    )
+                    Button {
+                        withAnimation(DS.Anim.quick) { vm.resetEditedName() }
+                    } label: {
+                        Label(L10n.t("رجوع لاسم الشجرة", "Back to the tree name"), systemImage: "arrow.uturn.backward")
+                            .dsFont(.label)
+                            .foregroundColor(DS.Color.primary)
+                            .frame(minHeight: DS.Icon.tapTarget)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        withAnimation(DS.Anim.quick) { vm.beginEditingName() }
+                    } label: {
+                        Label(L10n.t("تعديل الاسم", "Edit the name"), systemImage: "pencil")
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.primary)
+                            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                            .background(Capsule().stroke(DS.Color.primary.opacity(DS.Opacity.tintStroke), lineWidth: 1))
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                }
             } else {
                 if vm.gender == .male && !vm.family.isEmpty {
                     Button {
@@ -575,6 +603,9 @@ struct OccasionComposerView: View {
                     Text(m.isDeceased == true
                          ? L10n.t("من شجرة العائلة · متوفى", "From the family tree · deceased")
                          : L10n.t("من شجرة العائلة", "From the family tree"))
+                    if vm.hasEditedName {
+                        Text(L10n.t("· الاسم معدّل", "· name edited"))
+                    }
                     if vm.isLoadingMemberPhoto {
                         ProgressView().controlSize(.mini)
                     }
