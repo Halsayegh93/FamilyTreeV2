@@ -1078,8 +1078,12 @@ class NotificationViewModel: ObservableObject {
 
     /// - targetMemberIds: `nil` = إعلان للجميع. قائمة فارغة = لا أحد — لا يُرسل شيء أبداً
     ///   (فحص الثغرات ب-٩: شريحة فاضية، مثل دولة بلا أعضاء، كانت تتحوّل إرسالاً للجميع).
+    /// - imagePath: «صورة الإشعار» (موافقة المالك ٢٠٢٦-١١-٢٥، الخيار ب) — مسار داخل مستودع `news` (`push/<uuid>.jpg`)
+    ///   يُحفظ في `details.image_path`، ومشغّل الدفع يمرّره لـ`push-on-notification` فتظهر الصورة على شاشة القفل.
+    ///   nil = الإدراج كما كان حرفياً (بلا `details`).
     @discardableResult
-    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async -> Bool {
+    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin",
+                          imagePath: String? = nil) async -> Bool {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
         guard notificationsFeatureAvailable else { return false }
         if let ids = targetMemberIds, ids.isEmpty {
@@ -1096,26 +1100,32 @@ class NotificationViewModel: ObservableObject {
         self.isLoading = true
         var ok = false
 
+        // صورة الإشعار — تُضاف فقط حين توجد، فالإشعار بلا صورة يُدرج بالحقول نفسها كما كان
+        let imageDetails: [String: String]? = imagePath.map { ["image_path": $0] }
+
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
                 let payloads = ids.map { memberId in
-                    [
+                    var row: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(memberId.uuidString),
                         "title": AnyEncodable(title),
                         "body": AnyEncodable(body),
                         "kind": AnyEncodable(kind),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
+                    if let imageDetails { row["details"] = AnyEncodable(imageDetails) }
+                    return row
                 }
                 try await supabase.from("notifications").insert(payloads).execute()
             } else {
-                let payload: [String: AnyEncodable] = [
+                var payload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(Optional<String>.none),
                     "title": AnyEncodable(title),
                     "body": AnyEncodable(body),
                     "kind": AnyEncodable(kind),
                     "created_by": AnyEncodable(creator.uuidString)
                 ]
+                if let imageDetails { payload["details"] = AnyEncodable(imageDetails) }
                 try await supabase.from("notifications").insert(payload).execute()
             }
 
@@ -1212,7 +1222,8 @@ class NotificationViewModel: ObservableObject {
         body: String,
         targetMemberIds: [UUID]?,
         scheduledFor: Date,
-        kind: String = "admin_broadcast"
+        kind: String = "admin_broadcast",
+        imagePath: String? = nil
     ) async -> Bool {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
         // قائمة فارغة = لا أحد، لا «الجميع» (ب-٩) — NULL في الجدول يعني إعلاناً عاماً
@@ -1236,12 +1247,28 @@ class NotificationViewModel: ObservableObject {
         if let ids = targetMemberIds, !ids.isEmpty {
             payload["target_member_ids"] = AnyEncodable(ids.map { $0.uuidString })
         }
+        // صورة الإشعار — `details` تُنسخ لصفوف الإشعارات عند موعدها (`dispatch_due_scheduled_notifications`)
+        if let imagePath {
+            payload["details"] = AnyEncodable(["image_path": imagePath])
+        }
 
         do {
             try await supabase.from("scheduled_notifications").insert(payload).execute()
             Log.info("[SCHEDULE] تمت جدولة إشعار لـ \(iso)")
             return true
         } catch {
+            if imagePath != nil, ErrorHelper.isMissingColumn(error, column: "details") {
+                // ترحيل صورة الإشعار لم يُطبَّق بعد — يُجدول الإشعار بلا صورة بدل أن يفشل
+                Log.warning("[SCHEDULE] عمود details غير موجود في scheduled_notifications — جدولة بلا صورة")
+                payload.removeValue(forKey: "details")
+                do {
+                    try await supabase.from("scheduled_notifications").insert(payload).execute()
+                    return true
+                } catch {
+                    Log.error("[SCHEDULE] تعذّر جدولة الإشعار: \(error.localizedDescription)")
+                    return false
+                }
+            }
             if ErrorHelper.isMissingTable(error, table: "scheduled_notifications") {
                 Log.warning("[SCHEDULE] جدول scheduled_notifications غير موجود — تجاهُل")
             } else {

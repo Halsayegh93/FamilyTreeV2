@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import Supabase
 
 // MARK: - «إعلان» — أول أنواع المنشئ الواحد «إنشاء» (`AdminCreateComposer.swift`)
@@ -219,6 +220,11 @@ struct AdminAnnounceComposer: View {
     @State private var launch = AdminLaunchChoice(duration: .twoDays,
                                                   untilDay: Date().addingTimeInterval(7 * 24 * 3600),
                                                   button: .update, link: "")
+    /// «صورة للإشعار» (موافقة المالك ٢٠٢٦-١١-٢٥، الخيار ب): صورة اختيارية تظهر داخل إشعار الجوال —
+    /// منفصلة عن صورة «يظهر عند فتح التطبيق»، وليست في تعديل المجدول
+    @State private var pushImage: UIImage? = nil
+    @State private var pushImageItem: PhotosPickerItem? = nil
+    @State private var loadingPushImage = false
 
     init(chooser: AnyView? = nil, draft: AdminAnnounceDraft = AdminAnnounceDraft(), onClose: @escaping () -> Void) {
         self.chooser = chooser
@@ -408,7 +414,7 @@ struct AdminAnnounceComposer: View {
             canSubmit: blocker == nil && !isSending,
             isBusy: isSending,
             note: blocker,
-            hasUnsavedChanges: !isEditing && (!trimmed(text).isEmpty || launchImage != nil),
+            hasUnsavedChanges: !isEditing && (!trimmed(text).isEmpty || launchImage != nil || pushImage != nil),
             // «إرسال» و«إلغاء» جنب بعض (المالك ٢٠٢٦-١٠-٢٣) — ومع إعلان الفتح الزرّ بعرض الشريط (نصّه أطول)
             actionFullRow: wantsLaunch,
             onSubmit: submit,
@@ -482,7 +488,100 @@ struct AdminAnnounceComposer: View {
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإشعار…", "Write the message…"),
                             text: $text, tint: tint, multiline: true, lines: 2...4, limit: 500)
+            if !isEditing { AnyView(pushImageBlock) }
             AnyView(toWhenBlock(active))
+        }
+    }
+
+    // MARK: صورة للإشعار (اختيارية)
+
+    /// فارغة: شريحة «+ صورة للإشعار» المتقطّعة (وجه `DSExtraChip`)؛ مختارة: مصغّرة + سطر + «تغيير» و«إزالة»
+    private var pushImageBlock: some View {
+        Group {
+            if let pushImage {
+                HStack(spacing: DS.Spacing.md) {
+                    pushThumbnail(pushImage)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(L10n.t("صورة الإشعار", "Push photo"))
+                            .dsFieldFont(.rowTitle)
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text(L10n.t("تظهر داخل الإشعار على شاشة القفل", "Shows inside the push on the lock screen"))
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: DS.Spacing.sm)
+                    PhotosPicker(selection: $pushImageItem, matching: .images) {
+                        Image(dsSymbol: "arrow.triangle.2.circlepath")
+                            .dsGlyph(DS.Glyph.md)
+                            .foregroundColor(tint.dsReadableGlyph)
+                            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    }
+                    .disabled(loadingPushImage || isSending)
+                    .accessibilityLabel(L10n.t("تغيير صورة الإشعار", "Change the push photo"))
+                    Button {
+                        UISelectionFeedbackGenerator().selectionChanged()
+                        withAnimation(DS.Anim.snappy) { self.pushImage = nil; pushImageItem = nil }
+                    } label: {
+                        Image(dsSymbol: "trash")
+                            .dsGlyph(DS.Glyph.md)
+                            .foregroundColor(DS.Color.error)
+                            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    }
+                    .buttonStyle(DSPressStyle())
+                    .disabled(isSending)
+                    .accessibilityLabel(L10n.t("إزالة صورة الإشعار", "Remove the push photo"))
+                }
+                .dsRowBox()
+                .transition(.opacity)
+            } else {
+                HStack(spacing: 0) {
+                    PhotosPicker(selection: $pushImageItem, matching: .images) {
+                        DSAddChipLabel(icon: "photo", title: L10n.t("صورة للإشعار", "Photo for the push"),
+                                       isLoading: loadingPushImage)
+                    }
+                    .disabled(loadingPushImage || isSending)
+                    .accessibilityLabel(L10n.t("إضافة صورة للإشعار", "Add a photo to the push"))
+                    .accessibilityHint(L10n.t("اختيارية — تظهر داخل الإشعار على شاشة القفل",
+                                              "Optional — shows inside the push on the lock screen"))
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .onChange(of: pushImageItem) { item in
+            guard let item else { return }
+            loadPushImage(item)
+        }
+    }
+
+    /// مصغّرة مربّعة بزوايا مدوّرة — كما تظهر صورة الإشعار المصغّرة في الشريط
+    private func pushThumbnail(_ image: UIImage) -> some View {
+        let side = DS.Icon.sizeLg
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        return Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: side, height: side)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+            .accessibilityElement()
+            .accessibilityLabel(L10n.t("صورة الإشعار", "Push photo"))
+            .accessibilityAddTraits(.isImage)
+    }
+
+    private func loadPushImage(_ item: PhotosPickerItem) {
+        loadingPushImage = true
+        Task {
+            // فكّ مصغّر خارج الخيط الرئيسي (مثل صور الأخبار وصورة إعلان الفتح)
+            var loaded: UIImage? = nil
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                loaded = await Task.detached(priority: .userInitiated) { ImageProcessor.downsampled(data) }.value
+            }
+            loadingPushImage = false
+            if let loaded {
+                UISelectionFeedbackGenerator().selectionChanged()
+                withAnimation(DS.Anim.snappy) { pushImage = loaded }
+            }
         }
     }
 
@@ -833,9 +932,19 @@ struct AdminAnnounceComposer: View {
             return
         }
 
+        // صورة الإشعار تُرفع قبل أي حفظ — إن تعذّر رفعها لا يُرسل شيء فتُعاد المحاولة نظيفة
+        let pushToo = wantsPush
+        var pushImagePath: String? = nil
+        if pushToo, let image = pushImage {
+            guard let path = await PushImageService.upload(image) else {
+                failure = L10n.t("تعذّر رفع صورة الإشعار. حاول مرة أخرى.", "Couldn't upload the push photo. Try again.")
+                return
+            }
+            pushImagePath = path
+        }
+
         // إعلان الفتح أولاً (الرفع أكثر ما يفشل) — إن تعذّر لا يُرسل شيء فتُعاد المحاولة نظيفة
         var launchDone: String? = nil
-        let pushToo = wantsPush
         if wantsLaunch, let image = launchImage {
             let start = sendDate ?? Date()
             guard let path = await LaunchAnnouncementsService.uploadImage(image) else {
@@ -861,11 +970,12 @@ struct AdminAnnounceComposer: View {
         let ok: Bool
         if let date = sendDate {
             ok = await notificationVM.scheduleNotification(title: noticeTitle, body: noticeBody, targetMemberIds: ids,
-                                                           scheduledFor: date, kind: "admin_broadcast")
+                                                           scheduledFor: date, kind: "admin_broadcast",
+                                                           imagePath: pushImagePath)
             if ok { await notificationVM.fetchScheduledNotifications() }
         } else {
             ok = await notificationVM.sendNotification(title: noticeTitle, body: noticeBody, targetMemberIds: ids,
-                                                       kind: "admin_broadcast")
+                                                       kind: "admin_broadcast", imagePath: pushImagePath)
         }
         guard ok else {
             failure = launchDone == nil

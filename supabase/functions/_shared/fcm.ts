@@ -78,6 +78,8 @@ export async function getFcmAccessToken(sa: ServiceAccount): Promise<string> {
 }
 
 /// يرسل إشعاراً لجهاز أندرويد واحد. unregistered = الرمز لم يعد صالحاً (يُحذف).
+/// imageUrl: «صورة الإشعار» (رابط موقّع) — تظهر في الإشعار نفسه (`notification.image`) وتصل للتطبيق في
+/// `data.image_url`؛ بلا صورة تبقى الرسالة كما كانت حرفياً.
 export async function sendFcm(
   sa: ServiceAccount,
   accessToken: string,
@@ -85,6 +87,7 @@ export async function sendFcm(
   title: string,
   body: string,
   kind: string,
+  imageUrl?: string | null,
 ): Promise<{ ok: boolean; status: number; reason?: string; unregistered?: boolean }> {
   const res = await fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {
     method: "POST",
@@ -95,8 +98,8 @@ export async function sendFcm(
     body: JSON.stringify({
       message: {
         token,
-        notification: { title, body },
-        data: { kind },
+        notification: { title, body, ...(imageUrl ? { image: imageUrl } : {}) },
+        data: { kind, ...(imageUrl ? { image_url: imageUrl } : {}) },
         android: {
           priority: "HIGH",
           // نفس القناة التي ينشئها التطبيق (push_service.dart _kChannelId)

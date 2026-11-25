@@ -4,6 +4,12 @@ import { createServiceClient } from "../_shared/auth.ts";
 import { createApnsJwt, getApnsConfig, apnsHostFor } from "../_shared/apns.ts";
 import { getFcmServiceAccount, getFcmAccessToken, sendFcm } from "../_shared/fcm.ts";
 
+// «صورة الإشعار» (موافقة المالك ٢٠٢٦-١١-٢٥، الخيار ب): مسار رفع الإدارة في مستودع الأخبار فقط — نفس فحص مشغّل الدفع
+const PUSH_IMAGE_PATH = /^push\/[0-9a-f-]{36}\.(jpg|jpeg|png)$/;
+const PUSH_IMAGE_BUCKET = "news";
+/// الرابط الموقّع صالح ٧ أيام — يكفي لإشعار يُفتح متأخراً (المستودع خاص)
+const PUSH_IMAGE_URL_SECONDS = 7 * 24 * 3600;
+
 serve(async (req) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -28,6 +34,20 @@ serve(async (req) => {
 
     const supabase = createServiceClient();
     const { teamId, keyId, bundleId, privateKey } = getApnsConfig();
+
+    // صورة الإشعار: رابط موقّع من مستودع الأخبار الخاص. تعذّر التوقيع ← الإشعار يخرج نصّاً كما كان
+    let imageUrl: string | null = null;
+    const imagePath = typeof record.image_path === "string" ? record.image_path : "";
+    if (PUSH_IMAGE_PATH.test(imagePath)) {
+      const { data: signed, error: signErr } = await supabase.storage
+        .from(PUSH_IMAGE_BUCKET)
+        .createSignedUrl(imagePath, PUSH_IMAGE_URL_SECONDS);
+      if (signErr || !signed?.signedUrl) {
+        console.warn(`[push-on-notification] image sign failed: ${signErr?.message ?? "no url"}`);
+      } else {
+        imageUrl = signed.signedUrl;
+      }
+    }
 
     // جلب tokens: إما لعضو محدد أو broadcast للجميع (مع environment)
     let query = supabase
@@ -80,7 +100,7 @@ serve(async (req) => {
         try {
           const accessToken = await getFcmAccessToken(sa);
           for (const token of androidTokens) {
-            const r = await sendFcm(sa, accessToken, token, title, notifBody, kind);
+            const r = await sendFcm(sa, accessToken, token, title, notifBody, kind, imageUrl);
             if (r.ok) {
               androidSent++;
             } else {
@@ -121,11 +141,14 @@ serve(async (req) => {
           aps: {
             alert: { title, body: notifBody }, sound: "default",
             ...(isJoinRequest ? { category: "JOIN_REQUEST" } : {}),
+            // صورة الإشعار: امتداد NotificationService في الآيفون ينزّل image_url ويرفقها — بلا صورة لا شيء يتغيّر
+            ...(imageUrl ? { "mutable-content": 1 } : {}),
           },
           kind,
           ...(typeof record.request_id === "string" ? { request_id: record.request_id } : {}),
           ...(typeof record.request_type === "string" ? { request_type: record.request_type } : {}),
           ...(typeof record.notification_id === "string" ? { notification_id: record.notification_id } : {}),
+          ...(imageUrl ? { image_url: imageUrl } : {}),
         }),
       });
       let res = await sendApns(apnsHostFor(env));
