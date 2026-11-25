@@ -7,7 +7,8 @@ import SwiftUI
 // تحتها) · متوفيات · فرع خارج العائلة ← القائمة. «الأحدث» بعد «الكل» (طلب المالك ٢٠٢٦-١١-١٣): المضافات أو المربوطات بحساب خلال
 // ٣٠ يوماً، الأحدث أولاً. للمالك والمدير وحدهما (طلب المالك ٢٠٢٦-١١-٠٨). الضغط على امرأة يفتح مربّع تفاصيلها نفسه في شجرة النساء
 // (`WomanDetailSheet`). «فرع خارج العائلة» = أبناء البنات (`DaughterSonsIndex`، يفتح ورقة حسابه) وأزواج البنات من خارج
-// العائلة (`WomenStore.outsideFamilyIds`) — لا يُعدّون في أي رقم للعائلة. «شجرة العائلة» بلا أي امرأة (`AdminMembersIndex`).
+// العائلة والنساء من خارجها (زوجات من عوائل ثانية وبنات البنات — ٢٠٢٦-١١-٢٦) (`WomenStore.outsideFamilyIds`) — لا يُعدّون
+// في أي رقم للعائلة ولا يظهرن في شرائح النساء. «شجرة العائلة» بلا أي امرأة (`AdminMembersIndex`).
 
 enum AdminWomenChip: String, CaseIterable, Identifiable {
     case all, recent, accounts, married, deceased, outside
@@ -102,7 +103,27 @@ struct AdminWomenPanel: View {
         let cutoff = Calendar.current.date(byAdding: .day, value: -AdminWomenChip.recentDays, to: Date()) ?? .distantPast
         var recent: [(date: Date, entry: AdminWomenEntry)] = []
         let females = AdminGrouping.alphabetical(women.filter { $0.isFemale && !name($0).trimmingCharacters(in: .whitespaces).isEmpty })
+        // النساء من خارج العائلة (`is_outside_family`، طلب المالك ٢٠٢٦-١١-٢٦): زوجات من عوائل ثانية وبنات البنات —
+        // في «فرع خارج العائلة» وحده، لا في شرائح النساء (مثل حلقة «النساء» التي لا تعدّهن)
+        var outsideWomen: [AdminWomenEntry] = []
         for w in females {
+            if outside.contains(w.id) {
+                let sub: String? = {
+                    if let hid = w.husbandId, let h = map[hid] ?? memberVM.member(byId: hid) {
+                        return L10n.t("زوجة: \(name(h))", "Wife of \(name(h))")
+                    }
+                    if let mom = w.motherId.flatMap({ map[$0] }) {
+                        return L10n.t("بنت بنت · أمّها: \(name(mom))", "Daughter's daughter · mother: \(name(mom))")
+                    }
+                    return nil
+                }()
+                let status: (String, Color)? = w.isDeceased == true
+                    ? (L10n.t("متوفاة", "Deceased"), DS.Color.textTertiary)
+                    : (linked[w.id] != nil ? (L10n.t("مسجّلة", "Registered"), DS.Color.success) : nil)
+                outsideWomen.append(AdminWomenEntry(kind: .woman(w), title: name(w), subtitle: sub, status: status,
+                                                    needle: ArabicTextNormalizer.normalizeForSearch(name(w))))
+                continue
+            }
             let husband = w.husbandId.flatMap { map[$0] }
             let sub: String? = {
                 // تحت اسمها (طلب المالك ٢٠٢٦-١١-٠٨): اسم الزوج · «متزوجة: غير مسجّل الزوج» · «غير متزوجة» — بلا «بنت فلان»
@@ -151,14 +172,14 @@ struct AdminWomenPanel: View {
             outsideRows.append(AdminWomenEntry(kind: .son(s), title: s.fullName, subtitle: sub, status: status,
                                                needle: ArabicTextNormalizer.normalizeForSearch(s.fullName)))
         }
-        for h in AdminGrouping.alphabetical(women.filter { outside.contains($0.id) }) {
+        for h in AdminGrouping.alphabetical(women.filter { outside.contains($0.id) && !$0.isFemale }) {
             let wife = women.first { $0.husbandId == h.id }
             outsideRows.append(AdminWomenEntry(kind: .outsideHusband(h), title: name(h),
                                                subtitle: wife.map { L10n.t("زوج: \(name($0))", "Husband of \(name($0))") },
                                                status: h.isDeceased == true ? (L10n.t("متوفى", "Deceased"), DS.Color.textTertiary) : nil,
                                                needle: ArabicTextNormalizer.normalizeForSearch(name(h))))
         }
-        out[.outside] = outsideRows
+        out[.outside] = outsideRows + outsideWomen
         return out
     }
 

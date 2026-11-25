@@ -1446,9 +1446,10 @@ struct WomanDetailSheet: View {
 
     // MARK: - «تغيير الأب» (الإدارة، طلب المالك ٢٠٢٦-١١-١٣ «ابى تغيير الاب للنساء المربوطة»)
 
-    /// للأنثى وحدها (الذكر نسخة من الشجرة العامة وأبوه من `profiles`)، ولا لمن هي «من خارج العائلة» — وللإدارة فقط
+    /// للأنثى وحدها (الذكر نسخة من الشجرة العامة وأبوه من `profiles`) — وللإدارة فقط. ومنهن «من خارج العائلة»
+    /// (٢٠٢٦-١١-٢٦): إن تبيّن أنها من العائلة فربطها بأبيها يلغي العلامة على السيرفر (`trg_women_outside_flag`)
     private var canChangeFather: Bool {
-        mode == .direct && woman.isFemale && !WomenStore.outsideFamilyIds.contains(woman.id)
+        mode == .direct && woman.isFemale
     }
 
     /// رجال العائلة بشروط قائمة الآباء نفسها (أحياء ومتوفّون)، بلا أبيها الحالي — محسوبة مرة (`WifeCandidateRules`)
