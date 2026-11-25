@@ -245,8 +245,9 @@ struct HomeNewsPreviewRow: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // نص الخبر أصغر درجة (١٥ ← ١٣) — طلب المالك ٢٠٢٦-١١-٢٥ «خط الخبر جنه شوي كبير بالرئيسية»
                 Text(previewText)
-                    .dsFont(.callout)
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -356,7 +357,7 @@ struct HomeOccasionRow: View {
                         .minimumScaleFactor(0.8)
                 }
                 Text(news.content)
-                    .dsFont(.calloutMedium)
+                    .dsFont(.chip)   // بنفس درجة نص الخبر تحته في المربّع نفسه
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
