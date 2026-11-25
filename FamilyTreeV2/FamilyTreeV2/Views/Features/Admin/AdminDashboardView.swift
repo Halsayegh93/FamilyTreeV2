@@ -145,7 +145,8 @@ struct AdminDashboardView: View {
             // من الإشعار: «الوارد» نفسه (على الطلب إن عُرف)، أو طلبات الشجرة، أو صفحة رسائل الدخول (ومحاولات الدخول فوقها)
             let requestId = (note.userInfo?["request_id"] as? String).flatMap(UUID.init(uuidString:))
             let destinations: [AdminReviewDestination]
-            if kind == NotificationKind.treeEdit.rawValue {
+            // طلب شجرة معروف ← الطلب نفسه في «الوارد» (عينة «أ» ٢٠٢٦-١١-٢٥ «قاعد أضيع»)؛ بلا معرّف ← طلبات الشجرة
+            if kind == NotificationKind.treeEdit.rawValue && requestId == nil {
                 destinations = [.treeEditRequests]
             } else if kind == AdminNotices.smsSuspicious {
                 destinations = [.sms, .smsAttempts]

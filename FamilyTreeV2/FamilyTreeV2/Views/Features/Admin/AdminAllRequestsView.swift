@@ -17,6 +17,8 @@ struct AdminAllRequestsView: View {
     @State private var editedNameStart: String = ""
     @State private var editedPhoneStart: String = ""
     @State private var selectedDetail: RequestDetail? = nil
+    /// الطلب المطلوب من الإشعار لم يعد في القائمة — سطر توضيح أعلى «الوارد»
+    @State private var focusMissing = false
     // إدخال سبب الرفض — يُرسل كرسالة لمقدّم الطلب
     @State private var showRejectReason = false
     @State private var rejectReasonText: String = ""
@@ -909,7 +911,11 @@ struct AdminAllRequestsView: View {
         focusHandled = true
         // طلب انضمام بمعرّف صفّه في admin_requests ← صفّه في القائمة بمعرّف العضو المعلّق
         let rowId = adminRequestVM.joinApprovalRequests.first(where: { $0.id == focusId })?.memberId ?? focusId
-        guard let item = sortedAllItems.first(where: { selectableId($0) == rowId }) else { return }
+        guard let item = sortedAllItems.first(where: { selectableId($0) == rowId }) else {
+            // ما عاد بانتظار قرار (عولج أو سُحب) — يُقال بوضوح بدل فتح القائمة بصمت («قاعد أضيع»)
+            focusMissing = true
+            return
+        }
         selectedDetail = requestDetail(for: item)
     }
 
@@ -1267,6 +1273,13 @@ struct AdminAllRequestsView: View {
                         subTypeChips
                             .reviewListRow(top: 0, bottom: DS.Spacing.xs)
                     }
+                }
+
+                if focusMissing {
+                    DSNoteCard(L10n.t("الطلب اللي فتحته من الإشعار ما عاد ينتظر قرار — تمت معالجته أو سحبه صاحبه.",
+                                      "The request from the notification no longer awaits a decision — it was handled or withdrawn."),
+                               icon: "info.circle.fill", tint: DS.Color.info)
+                        .reviewListRow(top: DS.Spacing.sm, bottom: 0)
                 }
 
                 // «بانتظار المراجعة» (مراجعة بعد الموافقة، ٢٠٢٦-١١-٢٥) — يظهر لمن يراجع وحين يوجد ما يُراجَع
@@ -2252,11 +2265,37 @@ struct AdminAllRequestsView: View {
             emptyState
                 .padding(.top, DS.Spacing.xs)
                 .reviewListRow()
-        } else {
+        } else if isSearching || sourceFilter != .all || approvalFilter != .all {
             ForEach(items) { item in
                 allItemRow(item)
             }
+        } else {
+            // عينة «ب» (المالك ٢٠٢٦-١١-٢٥ «ترتب وضع الطلبات»): «جديد» (وصل خلال يوم ولم يُفتح) ثم «بانتظار قرارك»
+            let fresh = items.filter { InboxSeenStore.shared.isNew(requestDetail(for: $0).id, created: allItemDate($0)) }
+            let freshIds = Set(fresh.map { requestDetail(for: $0).id })
+            let rest = items.filter { !freshIds.contains(requestDetail(for: $0).id) }
+            if !fresh.isEmpty {
+                inboxSectionHeader(L10n.t("جديد", "New"), count: fresh.count, tint: DS.Color.info)
+                ForEach(fresh) { item in allItemRow(item) }
+            }
+            if !rest.isEmpty {
+                inboxSectionHeader(L10n.t("بانتظار قرارك", "Awaiting you"), count: rest.count, tint: DS.Color.warning)
+                ForEach(rest) { item in allItemRow(item) }
+            }
         }
+    }
+
+    /// عنوان قسم في «الكل»: الاسم والعدد بلون معناه
+    private func inboxSectionHeader(_ title: String, count: Int, tint: Color) -> some View {
+        HStack(spacing: DS.Spacing.xs) {
+            Circle().fill(tint).frame(width: DS.Spacing.sm, height: DS.Spacing.sm).accessibilityHidden(true)
+            Text(verbatim: "\(title) · \(count)")
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .accessibilityAddTraits(.isHeader)
+        .reviewListRow(top: DS.Spacing.sm, bottom: 0)
     }
 
     @ViewBuilder
@@ -3680,11 +3719,61 @@ struct AdminAllRequestsView: View {
     /// محتوى المربّع: الصورة (إن وُجدت) ← «بيانات الطلب» (الإجراءات في شريط أزرار المربّع)
     @ViewBuilder
     private func detailBoxContent(_ detail: RequestDetail, meta: DetailMeta) -> some View {
+        // «وين هذا الطلب» أول المربّع (عينة «أ» اعتمدها المالك ٢٠٢٦-١١-٢٥: «لمن يوصل الطلب يكون واضح مكان الطلب»)
+        requestPlaceLine(detail, title: meta.title)
         if case .join(let member) = detail {
             joinDetailContent(member)
         } else {
             genericDetailBoxContent(detail, meta: meta)
         }
+    }
+
+    /// تاب الطلب المفتوح — لسطر «الوارد ‹ القسم ‹ النوع»
+    private func detailTab(_ detail: RequestDetail) -> RequestTab {
+        switch detail {
+        case .join: return .joinRequests
+        case .news: return .news
+        case .report: return .reports
+        case .phone: return .phone
+        case .nameChange: return .nameChange
+        case .diwaniya: return .diwaniya
+        case .deceased: return .deceased
+        case .child: return .children
+        case .photo: return .photos
+        case .project: return .projects
+        case .archive: return .archive
+        case .treeEdit: return .treeOther
+        }
+    }
+
+    /// «الوارد ‹ الشجرة ‹ طلب تغيير الاسم» + «جديد» إن لم يُفتح قبل
+    private func requestPlaceLine(_ detail: RequestDetail, title: String) -> some View {
+        let tab = detailTab(detail)
+        let parts = [L10n.t("الوارد", "Inbox"), tab.section?.title, title].compactMap { $0 }
+        let sep = L10n.isArabic ? " ‹ " : " › "
+        return HStack(spacing: DS.Spacing.xs) {
+            Image(systemName: "mappin.and.ellipse")
+                .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                .foregroundColor(tab.section?.color ?? DS.Color.textTertiary)
+                .accessibilityHidden(true)
+            Text(verbatim: parts.joined(separator: sep))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if InboxSeenStore.shared.isNew(detail.id, created: detailCreated(detail)) {
+                DSStatusChip(text: L10n.t("جديد", "New"), tint: DS.Color.info, size: .mini)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .onAppear { InboxSeenStore.shared.markSeen(detail.id) }
+    }
+
+    /// وقت وصول الطلب المفتوح (لـ«جديد»)
+    private func detailCreated(_ detail: RequestDetail) -> Date {
+        guard let item = sortedAllItems.first(where: { requestDetail(for: $0).id == detail.id }) else { return .distantPast }
+        return allItemDate(item)
     }
 
     /// تفاصيل طلب الانضمام — مرتّبة ومحترمة (طلب المالك ٢٠٢٦-١٠-٠١):
