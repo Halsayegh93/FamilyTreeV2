@@ -103,7 +103,12 @@ struct MemberDetailsView: View {
         cachedChildren = memberVM.allMembers
             .filter { $0.fatherId == m.id && $0.isCountable }
             .sorted(by: { $0.sortOrder < $1.sortOrder })
-        cachedPendingRequests = adminRequestVM.treeEditRequests.filter { $0.memberId == m.id }
+        // طلبات شجرة النساء عن عقدة أخرى (بنته مثلاً) تظهر في تفاصيلها هي لا هنا
+        cachedPendingRequests = adminRequestVM.treeEditRequests.filter { r in
+            guard r.memberId == m.id else { return false }
+            let node = r.treeEditPayload?.womenNodeId
+            return node == nil || node == m.id
+        }
         cachedBasicInfoRows = computeBasicInfoRows(for: m)
     }
 
@@ -919,60 +924,18 @@ struct MemberDetailsView: View {
 
     // MARK: - Pending Requests Card
 
+    /// «طلبات معلّقة» — شكلها القديم، وكل طلب يفتح في «الوارد» لمن يقرّر طلبات الشجرة (`MemberPendingRequestsCard`)
     @ViewBuilder
     private var pendingRequestsCard: some View {
         if canSeePendingRequests && !cachedPendingRequests.isEmpty {
-            DSComposerSection(
-                title: L10n.t("طلبات معلّقة", "Pending Requests"),
-                icon: "clock.badge.exclamationmark.fill",
-                tint: DS.Color.warning,
-                trailing: "\(cachedPendingRequests.count)"
-            ) {
-                VStack(spacing: DS.Spacing.sm) {
-                    ForEach(cachedPendingRequests.indices, id: \.self) { index in
-                        pendingRequestRow(cachedPendingRequests[index])
-                    }
-                }
-            }
+            MemberPendingRequestsCard(
+                requests: cachedPendingRequests,
+                onOpen: authVM.canModerateTree ? { request in
+                    MemberPendingRequestsLink.open(request) { dismiss() }
+                } : nil,
+                ink: chromeInk
+            )
         }
-    }
-
-    private func pendingRequestRow(_ request: AdminRequest) -> some View {
-        let action = request.treeEditPayload?.resolvedAction
-        let actionLabelAr = action?.arabicLabel ?? "—"
-        let actionLabelEn = action?.englishLabel ?? "—"
-        let icon = action?.iconName ?? "questionmark.circle"
-        let color: Color = {
-            switch action {
-            case .add: return DS.Color.palm
-            case .editName: return DS.Color.info
-            case .editPhone: return chromeInk
-            case .editBirth: return DS.Color.palm
-            case .deceased: return DS.Color.textTertiary
-            case .addDeathDate: return DS.Color.textTertiary
-            case .addPhoto: return chromeInk
-            case .delete: return DS.Color.error
-            case .other: return DS.Color.accent
-            case .none: return DS.Color.warning
-            }
-        }()
-
-        return HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: icon, tint: color)
-                .accessibilityHidden(true)   // زخرفة
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(L10n.t(actionLabelAr, actionLabelEn))
-                    .dsFieldFont(.label)
-                    .foregroundColor(DS.Color.fieldLabel)
-                Text(L10n.t("قيد المراجعة", "Under review"))
-                    .dsFieldFont(.fieldValue)
-                    .foregroundColor(DS.Color.fieldValue)
-            }
-            Spacer(minLength: 0)
-            DSStatusChip(text: L10n.t("معلّق", "Pending"), tint: DS.Color.warning, size: .mini)
-        }
-        .dsRowBox()
-        .accessibilityElement(children: .combine)   // الطلب وحالته عنصراً واحداً
     }
 
     // MARK: - Action Buttons (bottom)

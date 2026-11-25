@@ -777,8 +777,29 @@ struct WomanDetailSheet: View {
         return VStack(spacing: DS.Spacing.md) {
             familySection
                 .dsStaggerWhen(0, active: open)
+
+            pendingRequestsCard
+                .dsStaggerWhen(1, active: open)
         }
         .padding(.horizontal, DS.Spacing.lg)
+    }
+
+    // MARK: - «طلبات معلّقة» (طلب المالك ٢٠٢٦-١١-٢٦ «ارتباط واضح بالوارد»)
+
+    /// طلبات شجرة النساء عنها هي (`women.nodeId`) — نفس بطاقة تفاصيل العضو في شجرة العائلة: للإدارة ولصاحب الطلب،
+    /// وكل طلب يفتح في «الوارد» لمن يقرّر طلبات الشجرة (`canEdit` = `canModerateTree`)
+    @ViewBuilder
+    private var pendingRequestsCard: some View {
+        let requests = adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.womenNodeId == woman.id }
+        if !requests.isEmpty, canModerate || requests.contains(where: { $0.requesterId == me?.id }) {
+            MemberPendingRequestsCard(
+                requests: requests,
+                onOpen: canEdit ? { request in
+                    MemberPendingRequestsLink.open(request) { dismiss() }
+                } : nil,
+                ink: DS.Color.actionNavy
+            )
+        }
     }
 
     // MARK: - Compact Hero
