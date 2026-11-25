@@ -1269,6 +1269,12 @@ struct AdminAllRequestsView: View {
                     }
                 }
 
+                // «بانتظار المراجعة» (مراجعة بعد الموافقة، ٢٠٢٦-١١-٢٥) — يظهر لمن يراجع وحين يوجد ما يُراجَع
+                if !isSelectMode && !isSearching {
+                    AnyView(PostReviewInboxEntry())
+                        .reviewListRow(top: DS.Spacing.xs, bottom: DS.Spacing.xs)
+                }
+
                 // طلبات حذف الحساب والخصوصية — بطاقات مستقلّة في «الكل» و«الأعضاء»
                 if showsPolicyRequests {
                     AdminPolicyRequestsSection(adminRequestVM: adminRequestVM, focusId: focusId)
@@ -1298,6 +1304,8 @@ struct AdminAllRequestsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        // موافقة أو رفض هنا يغيّر عدد الوارد ← «بانتظار المراجعة» يتحدّث (مراجعة بعد الموافقة)
+        .onChange(of: totalCount) { _ in Task { await PostReviewStore.shared.refresh() } }
         .scrollDismissesKeyboard(.interactively)
         .environment(\.defaultMinListRowHeight, 0)
         .animation(reduceMotion ? Animation.easeInOut(duration: 0.15) : Animation.snappy(duration: 0.2),

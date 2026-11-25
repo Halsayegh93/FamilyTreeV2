@@ -201,6 +201,11 @@ nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
     /// (الطلبات القديمة والسيرفر قبل الترحيل بلا قيمة)، ويُقرآن بتسامح فلا يكسران فكّ الطلب
     var sentFrom: RequestSource? = nil
     var sentVia: RequestSentVia? = nil
+    /// «مراجعة بعد الموافقة» (طلب المالك ٢٠٢٦-١١-٢٥، 20261125130000): nil = لا يخضع · pending · ok · flagged — يكتبها السيرفر
+    var reviewStatus: String? = nil
+    var reviewedBy: UUID? = nil
+    var reviewedAt: String? = nil
+    var reviewNote: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, status, details, member, stage, recommendation
@@ -230,6 +235,10 @@ nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
         case fastTrack = "fast_track"
         case sentFrom = "sent_from"
         case sentVia = "sent_via"
+        case reviewStatus = "review_status"
+        case reviewedBy = "reviewed_by"
+        case reviewedAt = "reviewed_at"
+        case reviewNote = "review_note"
     }
 
     /// Parses structured JSON payload (v2 or v3) from details column for tree_edit requests.
