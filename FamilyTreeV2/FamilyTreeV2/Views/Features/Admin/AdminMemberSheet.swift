@@ -603,51 +603,223 @@ struct AdminMemberDataSection: View {
         return member.avatarUnavailable == true ? L10n.t("لا توجد صورة لهذا العضو", "No photo exists") : L10n.t("لا توجد صورة", "No photo")
     }
 
-    private var deathText: String {
-        if member.deathDateUnknown == true { return L10n.t("غير معروف", "Unknown") }
-        if AdminMemberFacts.deathIncomplete(member) {
-            let raw = AdminMemberSheetFacts.dayText(member.deathDate)
-            return [raw, AdminMemberGap.deathIncomplete.title].compactMap { $0 }.joined(separator: " · ")
-        }
-        return AdminMemberSheetFacts.dayText(member.deathDate) ?? "—"
+    /// «40 سنة» / «سنتان» — العمر بالكلمات
+    private static func yearsText(_ n: Int) -> String {
+        L10n.isArabic
+            ? AdminTodayText.arabicCount(n, one: "سنة واحدة", two: "سنتان", few: "سنوات", many: "سنة", single: "سنة")
+            : (n == 1 ? "1 year" : "\(n) years")
     }
 
+    /// «العمر 40 سنة» للحيّ — من تاريخ الميلاد
+    private var ageLine: String? {
+        guard member.isDeceased != true, let years = WifeCandidateRules.age(member), years >= 0 else { return nil }
+        return L10n.t("العمر \(Self.yearsText(years))", "Age \(years)")
+    }
+
+    /// «عن 72 سنة» للمتوفى — حين يُعرف اليومان كاملين
+    private var ageAtDeathLine: String? {
+        guard member.isDeceased == true, member.deathDateUnknown != true, !AdminMemberFacts.deathIncomplete(member),
+              let raw = member.deathDate, raw.count >= 10 else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let died = f.date(from: String(raw.prefix(10))),
+              let years = WifeCandidateRules.age(member, now: died), years >= 0 else { return nil }
+        return L10n.t("عن \(Self.yearsText(years))", "Aged \(years)")
+    }
+
+    /// «3 أحداث» / «حدث واحد»
+    private func bioCountText(_ n: Int) -> String {
+        if n == 0 { return L10n.t("لا أحداث", "No entries") }
+        return L10n.isArabic
+            ? AdminTodayText.arabicCount(n, one: "حدث واحد", two: "حدثان", few: "أحداث", many: "حدثاً", single: "حدث")
+            : (n == 1 ? "1 entry" : "\(n) entries")
+    }
+
+    /// «آخرها: زواج 2012» — الحدث بأكبر سنة، وإلا آخر المضاف
+    private var latestBioLine: String? {
+        guard let list = member.bio, !list.isEmpty else { return nil }
+        func year(_ s: FamilyMember.BioStation) -> Int? {
+            guard let y = s.year, let r = y.range(of: "\\d{4}", options: .regularExpression) else { return nil }
+            return Int(y[r])
+        }
+        let latest = list.filter { year($0) != nil }.max { (year($0) ?? 0) < (year($1) ?? 0) } ?? list.last
+        guard let latest else { return nil }
+        let title = latest.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        let text = [title, year(latest).map(String.init)].compactMap { $0 }.joined(separator: " ")
+        return L10n.t("آخرها: \(text)", "Latest: \(text)")
+    }
+
+    /// المربّعات بالترتيب: الميلاد · (الوفاة) · الجنس · الصورة · السيرة — الفرد الأخير بعرض البطاقة
+    private var tiles: [AdminDataTile] {
+        let m = member
+        let birth = AdminMemberSheetFacts.dayText(m.birthDate)
+        var list: [AdminDataTile] = []
+        list.append(AdminDataTile(
+            id: "birth", icon: "calendar", tint: DS.Color.palm, title: L10n.t("الميلاد", "Birth"),
+            value: birth ?? L10n.t("غير مسجّل", "Not recorded"), detail: ageLine,
+            action: canEdit ? (birth == nil ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"), { open(.birth(m)) }) : nil))
+        if m.isDeceased == true {
+            let incomplete = AdminMemberFacts.deathIncomplete(m)
+            let value: String = m.deathDateUnknown == true
+                ? L10n.t("غير معروف", "Unknown")
+                : (AdminMemberSheetFacts.dayText(m.deathDate) ?? L10n.t("غير مسجّل", "Not recorded"))
+            list.append(AdminDataTile(
+                id: "death", icon: "calendar.badge.clock", tint: DS.Color.deceased, title: L10n.t("الوفاة", "Death"),
+                value: value, detail: incomplete ? AdminMemberGap.deathIncomplete.title : ageAtDeathLine,
+                action: canEdit ? (incomplete ? L10n.t("استكمال", "Complete") : L10n.t("تعديل", "Edit"),
+                                   { open(AdminMemberFacts.isBlank(m.deathDate) || m.deathDateUnknown == true
+                                          ? .death(m) : .deathDate(m)) }) : nil))
+        }
+        // جنس محدّد: تغييره نقل بين الشجرتين — في «بيانات العضو» (`move_child_gender` بتأكيد)؛ بلا جنس: «تحديد»
+        list.append(AdminDataTile(
+            id: "gender", icon: m.isFemale ? "figure.stand.dress" : "person.fill",
+            tint: m.isFemale ? DS.Color.female : DS.Color.male, title: L10n.t("الجنس", "Gender"),
+            value: genderText, action: genderAction))
+        let hasPhoto = !AdminMemberFacts.isBlank(m.avatarUrl)
+        list.append(AdminDataTile(
+            id: "photo", icon: "photo.fill", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"),
+            value: photoText,
+            // لا صور للإناث في التطبيق (طلب المالك ٢٠٢٦-١١-٢٤) — المصغّرة للذكور فقط
+            thumbnail: hasPhoto && !m.isFemale ? m.avatarUrl : nil,
+            action: canEdit ? (hasPhoto ? L10n.t("تغيير", "Change") : L10n.t("إضافة", "Add"), { open(.photo(m)) }) : nil))
+        let bio = m.bio?.count ?? 0
+        list.append(AdminDataTile(
+            id: "bio", icon: "book.pages.fill", tint: DS.Color.accent, title: L10n.t("السيرة", "Biography"),
+            value: bioCountText(bio), detail: latestBioLine,
+            action: canEdit ? (bio == 0 ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"), { openTall(.editAll(m)) }) : nil))
+        return list
+    }
+
+    /// العينة «ب — مربّعات» (اختيار المالك ٢٠٢٦-١١-٢٥ للطلب ٧ «نخليها شوي متطورة»): الاسم صفّاً كما كان، وتحته
+    /// مربّعات بعمودين — كل مربّع يُضغط فيفتح نفس مربّع التعديل السابق، والأوامر والصلاحيات كما هي
     var body: some View {
-        let birth = AdminMemberSheetFacts.dayText(member.birthDate)
-        let bio = member.bio?.count ?? 0
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminSectionLabel(title: L10n.t("البيانات", "Details"))
             AdminRowsCard {
                 AdminSheetRow(icon: "person.text.rectangle.fill", tint: DS.Color.primary, title: L10n.t("الاسم", "Name"),
                               value: member.displayFullName, multiline: true,
                               action: canEdit ? (L10n.t("تعديل", "Edit"), { openTall(.editAll(member)) }) : nil)
-                AdminSheetRow(icon: "calendar", tint: DS.Color.palm, title: L10n.t("تاريخ الميلاد", "Birth date"),
-                              value: birth ?? L10n.t("غير مسجّل", "Not recorded"),
-                              action: canEdit ? (birth == nil ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"), { open(.birth(member)) }) : nil)
-                // جنس محدّد: تغييره نقل بين الشجرتين — في «بيانات العضو» (`move_child_gender` بتأكيد)؛
-                // بلا جنس: «تحديد» كما كان
-                AdminSheetRow(icon: "person.fill.questionmark", tint: DS.Color.male, title: L10n.t("الجنس", "Gender"),
-                              value: genderText,
-                              action: genderAction)
-                AdminSheetRow(icon: "photo.fill", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"), value: photoText,
-                              action: canEdit ? (AdminMemberFacts.isBlank(member.avatarUrl) ? L10n.t("إضافة", "Add") : L10n.t("تغيير", "Change"),
-                                                 { open(.photo(member)) }) : nil)
+                AdminDataTileGrid(tiles: tiles)
+                    .padding(.vertical, DS.Spacing.smd)
                 if canEdit && PhotoChangeRequestSheetRow.isVisible(member: member, canRequest: canRequestPhotoChange) {
                     PhotoChangeRequestSheetRow(member: member, canRequest: canRequestPhotoChange,
                                                onRequest: { open(.photoRequest(member)) })
                 }
-                if member.isDeceased == true {
-                    AdminSheetRow(icon: "calendar.badge.clock", tint: DS.Color.deceased, title: L10n.t("تاريخ الوفاة", "Death date"),
-                                  value: deathText,
-                                  action: canEdit ? (AdminMemberFacts.deathIncomplete(member) ? L10n.t("استكمال", "Complete") : L10n.t("تعديل", "Edit"),
-                                                     { open(AdminMemberFacts.isBlank(member.deathDate) || member.deathDateUnknown == true
-                                                            ? .death(member) : .deathDate(member)) }) : nil)
-                }
-                AdminSheetRow(icon: "book.pages.fill", tint: DS.Color.accent, title: L10n.t("السيرة الذاتية", "Biography"),
-                              value: bio == 0 ? L10n.t("لا أحداث", "No entries") : L10n.t("\(bio) أحداث", "\(bio) entries"),
-                              action: canEdit ? (bio == 0 ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"), { openTall(.editAll(member)) }) : nil)
             }
         }
+    }
+}
+
+// MARK: - مربّعات «البيانات»
+
+/// مربّع معلومة واحدة في «البيانات»: رمز + عنوان صغير، القيمة واضحة، وسطر ثانٍ اختياري (العمر، آخر حدث)
+struct AdminDataTile: Identifiable {
+    let id: String
+    let icon: String
+    let tint: Color
+    let title: String
+    let value: String
+    var detail: String? = nil
+    /// صورة العضو المصغّرة بجانب القيمة (مربّع «الصورة»)
+    var thumbnail: String? = nil
+    /// «تعديل» / «تغيير» / «إضافة» — nil = للاطلاع (المربّع لا يُضغط)
+    var action: (String, () -> Void)? = nil
+}
+
+/// المربّعات بعمودين، كل صفّين بطول واحد، والفرد الأخير بعرض البطاقة؛ عمود واحد من أحجام إمكانية الوصول
+struct AdminDataTileGrid: View {
+    let tiles: [AdminDataTile]
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private var rows: [[AdminDataTile]] {
+        let perRow = typeSize.isAccessibilitySize ? 1 : 2
+        return stride(from: 0, to: tiles.count, by: perRow).map { Array(tiles[$0..<min($0 + perRow, tiles.count)]) }
+    }
+
+    var body: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            ForEach(rows, id: \.first?.id) { row in
+                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                    ForEach(row) { tile in
+                        AdminDataTileView(tile: tile)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+struct AdminDataTileView: View {
+    let tile: AdminDataTile
+
+    var body: some View {
+        if let action = tile.action {
+            Button(action: action.1) { face(actionTitle: action.0) }
+                .buttonStyle(DSPressStyle())
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: [tile.title, tile.value, tile.detail].compactMap { $0 }.joined(separator: "، ")))
+                .accessibilityHint(Text(verbatim: action.0))
+                .accessibilityAddTraits(.isButton)
+        } else {
+            face(actionTitle: nil)
+                .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func face(actionTitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(spacing: DS.Spacing.xs) {
+                Image(dsSymbol: tile.icon)
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(tile.tint.dsReadableGlyph)
+                    .accessibilityHidden(true)
+                Text(verbatim: tile.title)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+                Spacer(minLength: DS.Spacing.xs)
+                if let actionTitle {
+                    Text(verbatim: actionTitle)
+                        .dsFont(.chip)
+                        .foregroundColor(DS.Color.accent)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+            }
+            HStack(spacing: DS.Spacing.xsm) {
+                if let thumb = tile.thumbnail, let url = URL(string: thumb) {
+                    CachedAsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Circle().fill(tile.tint.opacity(DS.Opacity.tintFill))
+                    }
+                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .clipShape(Circle())
+                    .accessibilityHidden(true)
+                }
+                Text(verbatim: tile.value)
+                    .dsFont(.rowTitle)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let detail = tile.detail {
+                Text(verbatim: detail)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.smd)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.cardBackgroundSoft))
+        .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
     }
 }
 
