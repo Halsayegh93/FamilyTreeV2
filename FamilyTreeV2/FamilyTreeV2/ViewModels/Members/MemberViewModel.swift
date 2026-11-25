@@ -376,8 +376,10 @@ class MemberViewModel: ObservableObject {
         let uid = userId.uuidString
         do {
             // العقدة والأقارب يُجلبان معاً — كانا متسلسلين فيتضاعف الانتظار
+            // عقدته: بنفس معرّف ملفه، أو — لابن البنت — عقدة جديدة مربوطة بحسابه (`linked_user_id`)؛
+            // كانت تُطلب بالمعرّف وحده فلا تظهر أمّه المعتمدة ويُسأل عنها مرة ثانية (٢٠٢٦-١١-٢٥)
             async let selfTask: [WomanMember] = supabase.from("women_members")
-                .select().eq("id", value: uid).limit(1).execute().value
+                .select().or("id.eq.\(uid),linked_user_id.eq.\(uid)").limit(2).execute().value
             // بلا استبعاد المخفيّين: الإخفاء يخصّ الشجرة العامة فقط — «عائلتي»
             // هي سجلّ صاحبها، والزوجة المخفية لازم تبقى ظاهرة له ليعدّلها.
             async let relatedTask: [WomanMember] = supabase.from("women_members")
@@ -388,8 +390,21 @@ class MemberViewModel: ObservableObject {
                 .execute().value
 
             let selfRows = try await selfTask
-            let related = try await relatedTask
-            let motherId = selfRows.first?.motherId
+            var related = try await relatedTask
+            let node = selfRows.first { $0.id == userId } ?? selfRows.first
+            var nodeIds: Set<UUID> = [userId]
+            if let node, node.id != userId {
+                nodeIds.insert(node.id)
+                let more: [WomanMember] = try await supabase.from("women_members")
+                    .select()
+                    .or("parent_id.eq.\(node.id.uuidString),husband_id.eq.\(node.id.uuidString)")
+                    .eq("is_web_only", value: false)
+                    .order("sort_order", ascending: true)
+                    .execute().value
+                let known = Set(related.map(\.id))
+                related += more.filter { !known.contains($0.id) }
+            }
+            let motherId = node?.motherId
 
             func named(_ m: WomanMember) -> Bool {
                 !m.firstName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -406,11 +421,11 @@ class MemberViewModel: ObservableObject {
                 }
             }
             // 4) الزوجة/الزوجات
-            for w in related where w.husbandId == userId && named(w) {
+            for w in related where w.husbandId.map(nodeIds.contains) == true && named(w) {
                 entries.append(WomenFamilyEntry(member: w, role: .wife))
             }
             // 5) الأبناء
-            for c in related where c.parentId == userId && named(c) {
+            for c in related where c.parentId.map(nodeIds.contains) == true && named(c) {
                 entries.append(WomenFamilyEntry(member: c, role: .child))
             }
             self.currentMemberWomenFamily = entries
@@ -823,9 +838,10 @@ class MemberViewModel: ObservableObject {
     func fetchFatherWives() async -> [WomanMember] {
         guard let uid = currentUser?.id else { return [] }
         do {
+            // عقدته بمعرّفه أو مربوطة بحسابه (ابن البنت) — نفس `fetchWomenFamily`
             let selfRows: [WomanMember] = try await supabase.from("women_members")
-                .select().eq("id", value: uid.uuidString).limit(1).execute().value
-            guard let fatherNodeId = selfRows.first?.parentId else { return [] }
+                .select().or("id.eq.\(uid.uuidString),linked_user_id.eq.\(uid.uuidString)").limit(2).execute().value
+            guard let fatherNodeId = (selfRows.first { $0.id == uid } ?? selfRows.first)?.parentId else { return [] }
             let wives: [WomanMember] = try await supabase.from("women_members")
                 .select().eq("husband_id", value: fatherNodeId.uuidString)
                 .eq("is_web_only", value: false).execute().value

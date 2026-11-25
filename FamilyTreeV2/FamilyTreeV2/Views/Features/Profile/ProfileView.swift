@@ -1134,7 +1134,15 @@ struct ProfileView: View {
                         // إضافة/اختيار الأم متاحة لأي عضو (set_self_mother/add_self_mother مقيّدة على النفس)
                         addFamilyActionCell(title: L10n.t("إضافة الأم أو اختيارها", "Add/Pick Mother"),
                                             icon: "person.fill", color: DS.Color.accent) {
-                            Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
+                            // ابن البنت (عينة «٢ و٣»، ٢٠٢٦-١١-٢٥): حسابه لم يكتمل ← «أكمل حسابك» نفسها (أمه تُختار هناك)؛
+                            // اكتمل ولا أم ← مربّع «أمك من العائلة» مباشرة بلا خيارات (زوجات الأب وخارج العائلة لا تخصّه)
+                            if LineageGateStore.shared.isRestricted {
+                                LineageGateStore.shared.openPage()
+                            } else if let me = user, DaughterSonsIndex.shared.contains(me.id) {
+                                showMotherFamily = true
+                            } else {
+                                Task { fatherWives = await memberVM.fetchFatherWives(); showMotherOptions = true }
+                            }
                         }
                         // الاختيار/الإضافة في مربّع عند الخانة نفسها (طلب المالك)
                         .dsCenterBox(isPresented: $showMotherOptions) {
@@ -2263,8 +2271,16 @@ private struct ProfileWifeFamilyBox: View {
     @State private var busy = false
     @State private var error: String?
 
+    /// أبو صاحب المربّع: أبوه في الشجرة العامة، أو — لابن البنت — أبوه في شجرة النساء (زوج أمه من خارج العائلة)،
+    /// حتى لا تُخفى أمه «المتزوجة بغير أبيه» من قائمة بنات أبيها (كان يُدفع لإضافة أم مكرّرة)
+    private var personFatherId: UUID? {
+        if let f = me.fatherId { return f }
+        guard let node = WomenStore.womanByLinkedUser[me.id] else { return nil }
+        return WomenStore.cache.first { $0.id == node }?.fatherId
+    }
+
     var body: some View {
-        DSWifeFlowBox(mode: .selfFamily, relation: relation, husbandId: me.id, personFatherId: me.fatherId,
+        DSWifeFlowBox(mode: .selfFamily, relation: relation, husbandId: me.id, personFatherId: personFatherId,
                       husbandName: me.firstName.isEmpty ? me.fullName : me.firstName,
                       subtitle: relation == .mother ? L10n.t("أمك من العائلة", "Your mother from the family")
                                                     : L10n.t("زوجتك من العائلة", "Your wife from the family"),

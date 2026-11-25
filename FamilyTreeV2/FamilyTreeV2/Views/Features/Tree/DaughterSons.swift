@@ -550,8 +550,9 @@ struct LineagePage: View {
         self.status = status
         self.onSent = onSent
         self.onLater = onLater
-        // أُرسل وينتظر الإدارة ← «حسابك قيد المراجعة» مباشرة
-        _step = State(initialValue: status?.pending == true ? .sent : .intro)
+        // أُرسل وينتظر الإدارة ← «حسابك قيد المراجعة» مباشرة؛ وإلا البحث عن الأم مباشرة بلا مقدّمة
+        // (عينة «٢ و٣» اعتمدها المالك ٢٠٢٦-١١-٢٥: شاشة وحدة بدل ثلاث)
+        _step = State(initialValue: status?.pending == true ? .sent : .pick)
     }
 
     /// كتب الاسم الثلاثي (أو ما يطلبه السيرفر) — قبله لا قائمة
@@ -620,7 +621,7 @@ struct LineagePage: View {
         case .pick:
             DSSubPageHeader(title: DaughterSons.text("page_title", "أكمل حسابك", "Complete your account"),
                             subtitle: DaughterSons.text("page_subtitle", "أمك وأبوك", "Your mother and father"),
-                            section: .tree, nav: .back, onBack: { step = .intro })
+                            section: .tree, nav: .none)
         }
     }
 
@@ -636,6 +637,9 @@ struct LineagePage: View {
                 DSButton(DaughterSons.text("send_button", "إرسال للإدارة", "Send to the admins"), icon: "paperplane.fill",
                          size: .large, isLoading: busy) { send() }
                     .disabled(!canSend || busy)
+                if let onLater {
+                    DSButton(L10n.t("لاحقاً", "Later"), role: .cancel, size: .regular) { onLater() }
+                }
             case .sent:
                 DSButton(L10n.t("تم", "Done"), icon: "checkmark", size: .large) { onSent() }
             }
@@ -696,6 +700,12 @@ struct LineagePage: View {
 
     private var pickContent: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            if status?.wasRejected == true {
+                DSNoteCard(status?.rejectedReason.map { L10n.t("السبب: ", "Reason: ") + $0 }
+                           ?? L10n.t("راجع اختيارك وأرسله من جديد.", "Review your choice and send it again."),
+                           title: DaughterSons.text("rejected_title", "راجع بياناتك وأرسلها من جديد", "Review your details and send them again"),
+                           icon: "arrow.uturn.backward.circle.fill", tint: DS.Color.warning)
+            }
             DSBoxSectionTitle(title: DaughterSons.text("mother_title", "اسم الأم", "Mother's name"), icon: "person.fill", tint: DS.Color.female)
             if let m = mother {
                 motherRow(m, selected: true) {
@@ -705,46 +715,35 @@ struct LineagePage: View {
             } else if newMotherMode {
                 newMotherContent
             } else {
-                DSSearchField(text: $search, placeholder: DaughterSons.text("mother_placeholder", "اكتب الاسم الثلاثي",
-                                                                             "Type the three-part name"))
+                DSSearchField(text: $search, placeholder: DaughterSons.text("mother_placeholder", "اسم أمك واسم أبوها",
+                                                                             "Your mother's name and her father's"))
                 // لا تصفّح لبنات العائلة قبل الاسم الثلاثي — بلا ملاحظة تحت الحقل (طلب المالك ٢٠٢٦-١١-٠٨)
                 if !queryLongEnough {
                     EmptyView()
                 } else if searching && results.isEmpty {
                     DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
                 } else if results.isEmpty {
-                    DSEmptyView(L10n.t("لم يُعثر على الاسم", "No match"),
-                                message: L10n.t("تأكد من اسمها واسم أبيها وجدها، أو تواصل مع الإدارة.",
-                                                "Check her, her father's and grandfather's names, or contact the admins."),
-                                style: .compact)
+                    if DaughterSons.newMotherAvailable {
+                        notFoundContent
+                    } else {
+                        DSEmptyView(L10n.t("لم يُعثر على الاسم", "No match"),
+                                    message: L10n.t("تأكد من اسمها واسم أبيها وجدها، أو تواصل مع الإدارة.",
+                                                    "Check her, her father's and grandfather's names, or contact the admins."),
+                                    style: .compact)
+                    }
                 } else {
                     VStack(spacing: 0) {
                         ForEach(results) { d in
                             motherRow(d, selected: false) {
                                 mother = d
-                                fatherChoice = nil
+                                // زوجها المسجّل من خارج العائلة هو الأب — يُختار تلقائياً بلا ضغطة
+                                fatherChoice = (d.husbandId != nil && !d.husbandInFamily) ? d.husbandId.map { .registered($0) } : nil
                                 search = ""
                             }
                             if d.id != results.last?.id { Divider() }
                         }
                     }
                     .dsCard(padding: DS.Spacing.sm)
-                }
-                // ما لقاها؟ يكتب اسمها ويختار أبوها (بعد البحث، والسيرفر جاهز)
-                if queryLongEnough && !searching && DaughterSons.newMotherAvailable {
-                    Button {
-                        newMotherMode = true
-                        newMotherName = search.trimmingCharacters(in: .whitespaces)
-                        search = ""
-                        fatherChoice = nil
-                    } label: {
-                        Label(DaughterSons.text("new_mother_title", "ما لقيت أمي؟", "Can't find my mother?"),
-                              systemImage: "questionmark.circle")
-                            .dsFont(.rowTitle)
-                            .foregroundColor(DS.Color.primary)
-                            .frame(minHeight: DS.Icon.tapTarget)
-                    }
-                    .buttonStyle(.plain)
                 }
             }
 
@@ -761,10 +760,10 @@ struct LineagePage: View {
                 DSBoxSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
                 if let hid = m.husbandId {
                     VStack(spacing: 0) {
-                        choiceRow(icon: "person.2.fill", title: shortName(m.husbandName ?? ""),
+                        choiceRow(icon: "person.2.fill", title: m.husbandName ?? "",
                                   subtitle: husbandInFamily
                                     ? L10n.t("من العائلة — تواصل مع الإدارة لربطك بالشجرة", "From the family — ask the admins to link you")
-                                    : L10n.t("زوج \(shortName(m.fullName)) · من خارج العائلة", "Husband of \(shortName(m.fullName)) · outside the family"),
+                                    : L10n.t("زوج \(m.firstName) · من خارج العائلة — اختير تلقائياً", "Husband of \(m.firstName) · outside the family — picked for you"),
                                   selected: fatherChoice == .registered(hid)) {
                             fatherChoice = .registered(hid)
                         }
@@ -788,10 +787,12 @@ struct LineagePage: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSMemberAvatar(name: m.firstName, avatarUrl: nil, size: DS.Icon.row, roleColor: DS.Color.female)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(shortName(m.fullName)).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary).lineLimit(1)
+                    Text(verbatim: m.fullName).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     if let f = m.fatherName, !f.isEmpty {
-                        Text(L10n.t("بنت \(shortName(f))", "Daughter of \(shortName(f))"))
-                            .dsFont(.caption).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                        Text(L10n.t("بنت \(f)", "Daughter of \(f)"))
+                            .dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)
@@ -830,13 +831,74 @@ struct LineagePage: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    // MARK: ٢أ) ما لقيناها — «هي بنت مين؟» من باقي الاسم المكتوب (عينة «٢ و٣»)
+
+    /// الكلمة الأولى = اسمها، والباقي = اسم أبوها يُبحث عنه تلقائياً (كان يكتبه مرة ثانية في نموذج مستقل)
+    private var typedParts: [String] { search.split(whereSeparator: \.isWhitespace).map(String.init) }
+    private var typedMotherFirstName: String { typedParts.first ?? "" }
+    private var typedFatherQuery: String { typedParts.dropFirst().joined(separator: " ") }
+
+    private var notFoundContent: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            Text(L10n.t("ما لقينا \(typedMotherFirstName) بين بنات العائلة. هي بنت مين؟",
+                        "We couldn't find \(typedMotherFirstName) among the family's daughters. Whose daughter is she?"))
+                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            // باقي المكتوب أقل من حد البحث — يزيد اسم جدها في نفس المكان (الحقل مملوء بما كتبه)
+            if NameSearch.words(menSearch).count < DaughterSons.motherMinParts {
+                DSSearchField(text: $menSearch, placeholder: L10n.t("اسم أبوها وجدها", "Her father's and grandfather's names"))
+                Text(L10n.t("زد اسم جدها", "Add her grandfather's name"))
+                    .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
+            } else if menSearching && menResults.isEmpty {
+                DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
+            } else if menResults.isEmpty {
+                DSEmptyView(L10n.t("لم يُعثر على أبوها", "Her father wasn't found"),
+                            message: L10n.t("زد اسماً من أسماء أجدادها، أو تواصل مع الإدارة.",
+                                            "Add one more of her grandfathers' names, or contact the admins."),
+                            style: .compact)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(menResults) { f in
+                        Button {
+                            // ضغطة وحدة: اسمها (الكلمة الأولى) + أبوها ← «أم جديدة» جاهزة
+                            newMotherName = typedMotherFirstName
+                            newMotherFather = f
+                            newMotherMode = true
+                            fatherChoice = nil
+                            search = ""
+                        } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                DSFieldIcon(name: "person.fill", tint: DS.Color.female)
+                                Text(verbatim: L10n.t("\(typedMotherFirstName) بنت \(f.fullName)؟", "\(typedMotherFirstName), daughter of \(f.fullName)?"))
+                                    .dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                                Text(L10n.t("نعم", "Yes")).dsFont(.chip).foregroundColor(DS.Color.primary)
+                            }
+                            .frame(minHeight: DS.Icon.tapTarget)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if f.id != menResults.last?.id { Divider() }
+                    }
+                }
+                .dsCard(padding: DS.Spacing.sm)
+            }
+        }
+        // باقي الاسم المكتوب يبحث عن أبوها بنفسه — بلا حقل ثانٍ
+        .task(id: typedFatherQuery) {
+            guard menSearch != typedFatherQuery else { return }
+            menSearch = typedFatherQuery
+        }
+    }
+
     // MARK: ٢ب) «ما لقيت أمي؟»
 
     private var newMotherContent: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSComposerField(icon: "person.fill",
-                            label: DaughterSons.text("new_mother_name_title", "اسم الأم الكامل", "Mother's full name"),
-                            placeholder: L10n.t("مثلاً: منيرة سعود", "e.g. Munira Saud"),
+                            label: DaughterSons.text("new_mother_name_title", "اسم الأم", "Mother's name"),
+                            placeholder: L10n.t("مثلاً: منيرة", "e.g. Munira"),
                             text: $newMotherName, limit: 120, required: true)
             DSBoxSectionTitle(title: DaughterSons.text("new_mother_father_title", "أبوها", "Her father") + " *",
                            icon: "person.fill", tint: DS.Color.male)
@@ -888,7 +950,8 @@ struct LineagePage: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "person.fill", tint: DS.Color.male)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(shortName(f.fullName)).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary).lineLimit(1)
+                    Text(verbatim: f.fullName).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                     if f.isDeceased {
                         Text(L10n.t("متوفى", "Deceased")).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
                     }
