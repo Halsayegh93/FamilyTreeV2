@@ -610,10 +610,10 @@ struct AdminMemberDataSection: View {
             : (n == 1 ? "1 year" : "\(n) years")
     }
 
-    /// «العمر 40 سنة» للحيّ — من تاريخ الميلاد
+    /// «40 سنة» للحيّ — من تاريخ الميلاد (يُلصق بالتاريخ: «12 مارس 1985 · 40 سنة»)
     private var ageLine: String? {
         guard member.isDeceased != true, let years = WifeCandidateRules.age(member), years >= 0 else { return nil }
-        return L10n.t("العمر \(Self.yearsText(years))", "Age \(years)")
+        return L10n.t(Self.yearsText(years), "Age \(years)")
     }
 
     /// «عن 72 سنة» للمتوفى — حين يُعرف اليومان كاملين
@@ -651,11 +651,15 @@ struct AdminMemberDataSection: View {
         return L10n.t("آخرها: \(text)", "Latest: \(text)")
     }
 
-    /// المربّعات بالترتيب: الميلاد · (الوفاة) · الجنس · الصورة · السيرة — الفرد الأخير بعرض البطاقة
+    /// المربّعات بالترتيب: الاسم (بعرض البطاقة) · الميلاد · (الوفاة) · الجنس · الصورة · السيرة — الفرد الأخير بعرض البطاقة
     private var tiles: [AdminDataTile] {
         let m = member
         let birth = AdminMemberSheetFacts.dayText(m.birthDate)
         var list: [AdminDataTile] = []
+        list.append(AdminDataTile(
+            id: "name", icon: "person.text.rectangle.fill", tint: DS.Color.primary, title: L10n.t("الاسم", "Name"),
+            value: m.displayFullName, wide: true,
+            action: canEdit ? (L10n.t("تعديل", "Edit"), { openTall(.editAll(m)) }) : nil))
         list.append(AdminDataTile(
             id: "birth", icon: "calendar", tint: DS.Color.palm, title: L10n.t("الميلاد", "Birth"),
             value: birth ?? L10n.t("غير مسجّل", "Not recorded"), detail: ageLine,
@@ -692,18 +696,17 @@ struct AdminMemberDataSection: View {
         return list
     }
 
-    /// العينة «ب — مربّعات» (اختيار المالك ٢٠٢٦-١١-٢٥ للطلب ٧ «نخليها شوي متطورة»): الاسم صفّاً كما كان، وتحته
-    /// مربّعات بعمودين — كل مربّع يُضغط فيفتح نفس مربّع التعديل السابق، والأوامر والصلاحيات كما هي
+    /// العينة «ب — مربّعات» (اختيار المالك ٢٠٢٦-١١-٢٥ للطلب ٧ «نخليها شوي متطورة»)، ثم «ابيه كثر ما تقدر ان يصغر»:
+    /// الاسم مربّعاً بعرض البطاقة وتحته مربّعات بعمودين، حشوة ضيّقة، والعمر/آخر حدث في سطر القيمة نفسه —
+    /// كل مربّع يُضغط فيفتح نفس مربّع التعديل السابق، والأوامر والصلاحيات كما هي
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        let photoRequest = canEdit && PhotoChangeRequestSheetRow.isVisible(member: member, canRequest: canRequestPhotoChange)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminSectionLabel(title: L10n.t("البيانات", "Details"))
             AdminRowsCard {
-                AdminSheetRow(icon: "person.text.rectangle.fill", tint: DS.Color.primary, title: L10n.t("الاسم", "Name"),
-                              value: member.displayFullName, multiline: true,
-                              action: canEdit ? (L10n.t("تعديل", "Edit"), { openTall(.editAll(member)) }) : nil)
                 AdminDataTileGrid(tiles: tiles)
-                    .padding(.vertical, DS.Spacing.smd)
-                if canEdit && PhotoChangeRequestSheetRow.isVisible(member: member, canRequest: canRequestPhotoChange) {
+                    .padding(.bottom, photoRequest ? DS.Spacing.sm : 0)
+                if photoRequest {
                     PhotoChangeRequestSheetRow(member: member, canRequest: canRequestPhotoChange,
                                                onRequest: { open(.photoRequest(member)) })
                 }
@@ -724,24 +727,38 @@ struct AdminDataTile: Identifiable {
     var detail: String? = nil
     /// صورة العضو المصغّرة بجانب القيمة (مربّع «الصورة»)
     var thumbnail: String? = nil
+    /// بعرض البطاقة في صفّ وحده (الاسم)
+    var wide: Bool = false
     /// «تعديل» / «تغيير» / «إضافة» — nil = للاطلاع (المربّع لا يُضغط)
     var action: (String, () -> Void)? = nil
 }
 
-/// المربّعات بعمودين، كل صفّين بطول واحد، والفرد الأخير بعرض البطاقة؛ عمود واحد من أحجام إمكانية الوصول
+/// المربّعات بعمودين، كل صفّين بطول واحد، والعريض والفرد الأخير بعرض البطاقة؛ عمود واحد من أحجام إمكانية الوصول
 struct AdminDataTileGrid: View {
     let tiles: [AdminDataTile]
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var rows: [[AdminDataTile]] {
         let perRow = typeSize.isAccessibilitySize ? 1 : 2
-        return stride(from: 0, to: tiles.count, by: perRow).map { Array(tiles[$0..<min($0 + perRow, tiles.count)]) }
+        var out: [[AdminDataTile]] = []
+        var current: [AdminDataTile] = []
+        for tile in tiles {
+            if tile.wide {
+                if !current.isEmpty { out.append(current); current = [] }
+                out.append([tile])
+                continue
+            }
+            current.append(tile)
+            if current.count == perRow { out.append(current); current = [] }
+        }
+        if !current.isEmpty { out.append(current) }
+        return out
     }
 
     var body: some View {
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DS.Spacing.xsm) {
             ForEach(rows, id: \.first?.id) { row in
-                HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                HStack(alignment: .top, spacing: DS.Spacing.xsm) {
                     ForEach(row) { tile in
                         AdminDataTileView(tile: tile)
                     }
@@ -770,7 +787,7 @@ struct AdminDataTileView: View {
     }
 
     private func face(actionTitle: String?) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             HStack(spacing: DS.Spacing.xs) {
                 Image(dsSymbol: tile.icon)
                     .dsGlyph(DS.Glyph.sm, weight: .semibold)
@@ -796,27 +813,25 @@ struct AdminDataTileView: View {
                     } placeholder: {
                         Circle().fill(tile.tint.opacity(DS.Opacity.tintFill))
                     }
-                    .frame(width: DS.Icon.row, height: DS.Icon.row)
+                    .frame(width: DS.Icon.section, height: DS.Icon.section)
                     .clipShape(Circle())
                     .accessibilityHidden(true)
                 }
-                Text(verbatim: tile.value)
-                    .dsFont(.rowTitle)
-                    .monospacedDigit()
+                // القيمة والسطر الثاني (العمر، آخر حدث) في نص واحد — يلتفّ بدل سطر مستقل
+                (Text(verbatim: tile.value)
+                    .font(DS.Font.role(.rowTitle))
                     .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let detail = tile.detail {
-                Text(verbatim: detail)
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .lineLimit(2)
+                 + Text(verbatim: tile.detail.map { " · \($0)" } ?? "")
+                    .font(DS.Font.role(.caption))
+                    .foregroundColor(DS.Color.textTertiary))
+                    .monospacedDigit()
+                    .lineLimit(tile.wide ? 3 : 2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.smd)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xsm)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.cardBackgroundSoft))
         .contentShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
