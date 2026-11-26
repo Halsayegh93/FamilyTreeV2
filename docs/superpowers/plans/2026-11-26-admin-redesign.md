@@ -330,3 +330,5 @@ Phase coverage (run `worktree-agent-ab51b54c94dd599d0-autoplan-20261126-025709`)
 <!-- /autoplan-accepted:eng -->
 
 - 2026-11-26 (cont.): lanes = git worktrees `lane1`/`lane2` (branches redesign-lane1/2) reset to this branch after each merge; manager commits per unit in the lane and cherry-picks here. Done: U1 fecad874, U2 9181028e, U5 3ab8f2f1, T0 cfcf5c1d+44a5055f, U3 4c82a480. Running: U4 (lane2), U10 (lane1).
+- 2026-11-26 (stop, usage limit): merged into this branch (c52baace): U1–U16 except U17/U18/U19, + T0. Not built yet after the last merge (U7+U14 merge) — run the gate build first.
+  Remaining: U18 «إشعارات الإدارة» (executor was stopped mid-edit in lane2: discard lane2's uncommitted edits to AdminNotificationsPage/AdminNoticeTimeline/AdminNoticeDetailBox/AdminSelfChildNotice and relaunch), U17 «التطبيق», U19 catalog/search/role texts, U21 cleanup, U20 whole-flow QA, install on the owner's iPhone. Owner forbade `git reset --hard`: sync lanes with `git merge --ff-only`.
