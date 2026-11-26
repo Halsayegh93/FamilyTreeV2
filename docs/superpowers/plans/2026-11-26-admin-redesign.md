@@ -215,8 +215,8 @@ If an executor dies mid-edit:
 ### Batches
 
 - [x] **B0:** U1 Tokens (committed `fecad874`)
-- [ ] **T0:** debug tools by the manager, before B1 measures anything
-- [ ] **B1:** U2 Hub kit + `AdminContracts.swift` ‖ U5 Filter kit + `DSAdminPage.swift`
+- [x] **T0:** debug tools by the manager, before B1 measures anything (cfcf5c1d + 44a5055f)
+- [x] **B1:** U2 Hub kit + `AdminContracts.swift` ‖ U5 Filter kit + `DSAdminPage.swift`
 - [ ] **B2:** U3 Page kit ‖ U4 Tile kit
 - [ ] **B3:** U6 Census rings ‖ U10 Messages page
 - [ ] **B4:** U8 «الوارد» root + done page ‖ U16 «الفريق والأمان»
@@ -328,3 +328,5 @@ Phase coverage (run `worktree-agent-ab51b54c94dd599d0-autoplan-20261126-025709`)
 <!-- autoplan-accepted:eng -->
 - Batch order B0–B11 and the file lists above; compat rule; frozen APIs; U8→U9 serial; `AdminTrailPreview` kept; landings keyed by hop and cleared; inbox push destinations gated; `adminCanEdit`; `focusMissing` only after a good load; manager moves `AdminFamilyStatsPage` helpers at end of B6; explicit `style:` on `DSFilterChips`/`DSSearchField`; swiftc logic tests per unit.
 <!-- /autoplan-accepted:eng -->
+
+- 2026-11-26 (cont.): lanes = git worktrees `lane1`/`lane2` (branches redesign-lane1/2) reset to this branch after each merge; manager commits per unit in the lane and cherry-picks here. Done: U1 fecad874, U2 9181028e, U5 3ab8f2f1, T0 cfcf5c1d+44a5055f, U3 4c82a480. Running: U4 (lane2), U10 (lane1).
