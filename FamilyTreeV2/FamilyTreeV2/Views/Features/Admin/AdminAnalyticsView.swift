@@ -7,10 +7,13 @@ import SwiftUI
 // ← شبكات أرقام `DSStatTile` ← «نمو الأعضاء» بالأعمدة ← الأخبار.
 // بشكل «اليوم» (٢٠٢٦-١٠-٢٠، `AdminPageKit`): الأرقام في الرأس الكحلي، الأقسام بطاقات بيضاء، والشبكات
 // تحت عناوين أقسام مثل «نبض العائلة».
-// كل رقم من البيانات المحمّلة أصلاً (الأعضاء، شجرة النساء، الأخبار) وبنفس الحسابات السابقة.
+// كل رقم من البيانات المحمّلة أصلاً (الأعضاء، شجرة النساء) وبنفس الحسابات السابقة.
+// الترتيب «أ» (اختيار المالك ٢٠٢٦-١١-٢٦ «ابى ارتب احصائيات العائلة»): أعداد «العائلة» نفسها (`AdminFamilyCensus`) ←
+// «خارج العائلة» (الأحياء) ← «الأحياء والراحلون» (الرجال والنساء) ← التطبيق (المسجّلون، الأدوار) ← تركيبة العائلة
+// (الأعمار، نظرة على الشجرة) ← النمو. حُذفت: «تفاصيل» المطوية، الجنس (مكرّر في الحلقات)، شجرة النساء (داخل الأعداد)،
+// الحالة الاجتماعية (قلّة من سُجّل زواجه)، إحصائيات الوفيات (داخل «الأحياء والراحلون»)، والأخبار (ليست من العائلة).
 struct AdminAnalyticsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
-    @EnvironmentObject var newsVM: NewsViewModel
     @EnvironmentObject var authVM: AuthViewModel
     /// المسجّلون مقابل المقيّدين في الشجرة (`app_usage_stats` — نفس أرقام «اليوم»)
     @State private var usage: AppUsageStats? = AppUsageStats.cached
@@ -25,8 +28,6 @@ struct AdminAnalyticsView: View {
     @State private var womenFailed = false
     /// انتهت محاولة جلب (أو الكاش جاهز من البداية)
     @State private var womenAttempted = !WomenStore.cache.isEmpty
-    /// «تفاصيل» مطوية: الأدوار والجنس والحالة الاجتماعية والفئات العمرية (الأرقام نفسها تظهر عند الفتح)
-    @State private var showsDetails = false
 
     /// لون بلاطة «إحصائيات متقدمة» في لوحة الإدارة — مجال «الشجرة والأعضاء»
     private let pageTint = DS.Color.composerProject
@@ -44,20 +45,17 @@ struct AdminAnalyticsView: View {
     }
     private var totalMembers: Int { countableMembers.count }
 
-    /// أرقام شجرة النساء معروفة: محمّلة، أو انتهى جلبها بلا خطأ
-    private var womenKnown: Bool {
-        !womenData.isEmpty || (womenAttempted && !womenFailed && !womenLoading)
-    }
-
     var body: some View {
         // نمو الأعضاء يُحسب مرة واحدة — لبطاقة الرأس («جديد هذا الشهر») ولقسم النمو
         let growth = monthlyGrowth()
+        // أعداد «العائلة» نفسها (الرجال، نساء العائلة بلا «خارج العائلة»، وخارج العائلة الأحياء) — مرة واحدة
+        let census = AdminFamilyCensus.make(members: memberVM.allMembers, women: womenData)
 
         // بشكل «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠، `AdminPageKit`): رأس كحلي بالأرقام ← «ملخص عام» يصعد فوقه ←
         // البطاقات والشبكات (عمودان أفقياً)
-        return AdminPage(header: header(newThisMonth: growth.last?.count ?? 0),
-                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(censusCard)),
-                         content: AnyView(sections(growth)))
+        return AdminPage(header: header(census, newThisMonth: growth.last?.count ?? 0),
+                         lead: AnyView(totalMembers == 0 ? AnyView(membersStateCard) : AnyView(censusCard(census))),
+                         content: AnyView(sections(growth, census: census)))
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .task {
             // جلب بيانات شجرة النساء إن لم تكن محمّلة (كاش التبويب يغني عن الجلب غالباً)
@@ -85,63 +83,52 @@ struct AdminAnalyticsView: View {
 
     /// ٣ أرقام حيّة من البيانات المحمّلة أصلاً: أفراد العائلة (نفس «إجمالي» الملخص)، نسبة الأحياء،
     /// ومن أُضيف هذا الشهر (آخر عمود في «نمو الأعضاء») — «—» قبل تحميل الأعضاء.
-    private func header(newThisMonth: Int) -> AdminPageHeader {
-        let ready = totalMembers > 0
-        let alivePct = AnalyticsPercent.value(activeMembers.count, of: totalMembers)
+    private func header(_ census: AdminFamilyCensus, newThisMonth: Int) -> AdminPageHeader {
+        // «أفراد العائلة» = الرجال + نساء العائلة (كان الرجال وحدهم) — نفس «الإجمالي» في الحلقات وفي «العائلة»
+        let total = census.counts.total ?? 0
+        let alive = census.counts.totalAlive ?? 0
+        let ready = total > 0
+        let alivePct = AnalyticsPercent.value(alive, of: total)
         return AdminPageHeader(
             title: L10n.t("إحصاءات العائلة", "Family statistics"),
-            subtitle: countsOnly ? L10n.t("أعداد الأفراد والأحياء والمسجّلين", "Members, living and registered counts")
-                                 : L10n.t("الأفراد والأحياء، المسجّلون، الأدوار والأعمار والنمو",
-                                          "Members and living, registered, roles, ages and growth"),
+            subtitle: countsOnly ? L10n.t("الأعداد · الأحياء والراحلون · المسجّلون", "Counts · living and deceased · registered")
+                                 : L10n.t("الأعداد · الأحياء والراحلون · التطبيق · التركيبة · النمو",
+                                          "Counts · living and deceased · app · makeup · growth"),
             glyph: "chart.bar.xaxis",
             kpis: [
-                AdminPageKPI(ready ? totalMembers.formatted() : "—", L10n.t("أفراد العائلة", "Members"),
+                AdminPageKPI(ready ? total.formatted() : "—", L10n.t("أفراد العائلة", "Members"),
                              icon: "person.3.fill"),
                 AdminPageKPI(ready ? L10n.t("\(alivePct)٪", "\(alivePct)%") : "—", L10n.t("أحياء", "Alive"),
                              icon: "heart.fill", tint: DS.Hub.kpiMine,
-                             ring: ready ? Double(activeMembers.count) / Double(totalMembers) : nil),
+                             ring: ready ? Double(alive) / Double(total) : nil),
                 AdminPageKPI(ready ? signed(newThisMonth) : "—", L10n.t("جديد هذا الشهر", "New this month"),
                              icon: "chart.line.uptrend.xyaxis", tint: DS.Hub.kpiLate)
             ])
     }
 
-    /// صف «تفاصيل» المطوي: يفتح الأدوار والجنس والحالة الاجتماعية والفئات العمرية تحته
-    private var detailsToggle: some View {
-        AdminSectionCard(title: L10n.t("تفاصيل", "Details"), isOpen: $showsDetails,
-                         summary: L10n.t("الأدوار · الجنس · الحالة الاجتماعية · الفئات العمرية",
-                                         "Roles · Gender · Marital status · Age groups")) {
-            EmptyView()
-        }
-    }
-
-    /// البطاقات بعد الحلقة الرئيسية — (عمودان أفقياً)
-    private func sections(_ growth: [(label: String, count: Int)]) -> AnyView {
+    /// البطاقات بعد الحلقات — بالترتيب «أ» (عمودان أفقياً)
+    private func sections(_ growth: [(label: String, count: Int)], census: AdminFamilyCensus) -> AnyView {
         guard totalMembers > 0 else { return AnyView(EmptyView()) }
         if countsOnly {
             return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+                AnyView(outsideCard(census))
+                AnyView(aliveDeadSection(census))
                 AnyView(registeredSection)
-                AnyView(genderSection)
-                AnyView(womenSection)
             })
         }
         return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
+            // ١ الأعداد: الحلقات فوق، ثم «خارج العائلة»
+            AnyView(outsideCard(census))
+            // ٢ الأحياء والراحلون
+            AnyView(aliveDeadSection(census))
+            // ٣ التطبيق
             AnyView(registeredSection)
-            AnyView(detailsToggle)
-            if showsDetails {
-                AnyView(rolesSection)
-                AnyView(genderSection)
-                AnyView(maritalSection)
-                AnyView(ageGroupsSection)
-            }
-            AnyView(womenSection)
-            // نظرة على الشجرة (متوسط الأبناء، أكبر عائلة)
+            AnyView(rolesSection)
+            // ٤ تركيبة العائلة
+            AnyView(ageGroupsSection)
             AnyView(treeInsightsSection)
-            // إحصائيات الوفيات (متوسط العمر عند الوفاة)
-            if deceasedMembers.count > 0 {
-                AnyView(deceasedInsightsSection)
-            }
+            // ٥ النمو
             AnyView(monthlyGrowthSection(growth))
-            AnyView(newsSection)
         })
     }
 
@@ -154,12 +141,101 @@ struct AdminAnalyticsView: View {
 
     /// الحلقات الثلاث (الإجمالي · الرجال · النساء) + المسجّلون — انتقلت من مربّع «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٢) فبيتها
     /// هنا وحده. نفس الأعداد من البيانات المحمّلة في الصفحة (الأعضاء، شجرة النساء، «استخدام التطبيق») بلا جلب جديد
-    private var censusCard: some View {
-        var counts = AdminMemberCounts()
-        counts.setMen(from: memberVM.allMembers)
-        counts.setWomen(womenData)
+    private func censusCard(_ census: AdminFamilyCensus) -> some View {
+        // نساء العائلة بلا «خارج العائلة» (كانت تعدّهن هنا وحدها — ٢٠٢٦-١١-٢٦)
+        var counts = census.counts
         counts.setUsage(usage)
         return AdminMemberCountsCard(counts: counts)
+    }
+
+    // MARK: - «خارج العائلة» (الأحياء فقط — نفس حلقتها في «العائلة»)
+
+    /// إناث من خارج العائلة (زوجات من عوائل ثانية، بنات البنات) · أزواج البنات · أبناء البنات — الأحياء فقط
+    /// (طلب المالك ٢٠٢٦-١١-٢٦)، ولا يدخلون أي رقم فوق. المتوفون في «فرع خارج العائلة» بقسمهم
+    @ViewBuilder
+    private func outsideCard(_ census: AdminFamilyCensus) -> some View {
+        if womenData.isEmpty {
+            womenStateCard
+        } else {
+            let outside = WomenStore.outsideFamilyIds
+            let rows = womenData.filter { outside.contains($0.id) && $0.hasName }
+            let living = rows.filter { $0.isDeceased != true }
+            let females = living.filter(\.isFemale).count
+            let husbands = living.count - females
+            let sons = max((census.outsideMale ?? husbands) - husbands, 0)
+            let deceased = rows.count - living.count
+            AdminSectionCard(title: L10n.t("خارج العائلة", "Outside the family"),
+                             tag: L10n.t("\((females + husbands + sons).formatted()) حي", "\((females + husbands + sons).formatted()) living")) {
+                valueLine(icon: "figure.stand.dress", tint: DS.Color.female,
+                          label: L10n.t("إناث (زوجات وبنات بنات)", "Women (wives, daughters' daughters)"), value: females)
+                valueLine(icon: "figure.stand", tint: DS.Color.slate,
+                          label: L10n.t("أزواج البنات", "Daughters' husbands"), value: husbands)
+                valueLine(icon: "figure.and.child.holdinghands", tint: DS.Color.slate,
+                          label: L10n.t("أبناء البنات", "Daughters' sons"), value: sons)
+                Text(L10n.t("لا يُعدّون في أرقام العائلة فوق · المتوفون (\(deceased.formatted())) في «فرع خارج العائلة»",
+                            "Not counted in the family numbers above · deceased (\(deceased.formatted())) are in «Outside branch»"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - «الأحياء والراحلون» (الرجال ونساء العائلة)
+
+    /// أحياء · متوفون (من الحلقات نفسها)، ثم متوسط العمر عند الوفاة وأطول عمر ومن بلا تاريخ وفاة — كان «إحصائيات
+    /// الوفيات» للرجال وحدهم
+    private func aliveDeadSection(_ census: AdminFamilyCensus) -> some View {
+        let c = census.counts
+        let total = c.total ?? 0
+        let alive = c.totalAlive ?? 0
+        let dead = c.totalDeceased ?? 0
+        let outside = WomenStore.outsideFamilyIds
+        let deadWomen = womenData.filter { $0.isFemale && $0.hasName && !outside.contains($0.id) && $0.isDeceased == true }
+        let deadPeople = deceasedMembers + deadWomen
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        let calendar = Calendar.current
+        let lifespans: [Int] = deadPeople.compactMap { m in
+            guard let bStr = m.birthDate, let dStr = m.deathDate,
+                  let b = formatter.date(from: String(bStr.prefix(10))),
+                  let d = formatter.date(from: String(dStr.prefix(10))),
+                  d >= b else { return nil }
+            return calendar.dateComponents([.year], from: b, to: d).year
+        }
+        let avgLifespan = lifespans.isEmpty ? 0 : lifespans.reduce(0, +) / lifespans.count
+        let oldest = lifespans.max() ?? 0
+        let noDate = deadPeople.filter { ($0.deathDate ?? "").trimmingCharacters(in: .whitespaces).isEmpty }.count
+
+        return AdminSectionCard(title: L10n.t("الأحياء والراحلون", "Living and deceased"),
+                                tag: total > 0 ? L10n.t("\(total.formatted()) فرد", "\(total.formatted()) members") : nil) {
+            valueLine(icon: "heart.fill", tint: DS.Color.success, label: L10n.t("أحياء", "Living"), value: alive,
+                      share: total > 0 ? AnalyticsPercent.text(alive, of: total) : nil)
+            valueLine(icon: "leaf.fill", tint: DS.Color.deceased, label: L10n.t("متوفون", "Deceased"), value: dead,
+                      share: total > 0 ? AnalyticsPercent.text(dead, of: total) : nil)
+            LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
+                DSStatTile(value: avgLifespan > 0 ? "\(avgLifespan)" : "—",
+                           label: L10n.t("متوسط العمر عند الوفاة", "Avg. age at death"),
+                           icon: "hourglass.bottomhalf.filled", tint: DS.Color.warning)
+                DSStatTile(value: oldest > 0 ? "\(oldest)" : "—",
+                           label: L10n.t("أطول عمر", "Longest life"),
+                           icon: "star.fill", tint: DS.Color.success)
+                DSStatTile(value: noDate.formatted(),
+                           label: L10n.t("بلا تاريخ وفاة", "No death date"),
+                           icon: "calendar.badge.exclamationmark", tint: DS.Color.textSecondary)
+            }
+            if !lifespans.isEmpty && lifespans.count < deadPeople.count {
+                Text(L10n.t("العمر محسوب من \(lifespans.count.formatted()) متوفى لديهم تاريخ ميلاد ووفاة",
+                            "Ages from \(lifespans.count.formatted()) deceased with both birth & death dates"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .monospacedDigit()
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     // MARK: - حالة الأعضاء (قبل الأقسام)
@@ -241,97 +317,6 @@ struct AdminAnalyticsView: View {
         }
     }
 
-    // MARK: - Gender Distribution
-    private var genderSection: some View {
-        // الرجال: أحياء شجرة الرجال؛ النساء: أحياء شجرة النساء (منفصلة في جدول آخر)
-        let males = activeMembers.count
-        let females = womenData.filter { $0.isFemale && $0.isDeceased != true }.count
-        let total = max(males + females, 1)
-        let known = womenKnown
-
-        return AdminSectionCard(title: L10n.t("توزيع الجنس (الأحياء)", "Gender (alive)"),
-                                tag: known ? L10n.t("\((males + females).formatted()) حي",
-                                                    "\((males + females).formatted()) alive") : nil) {
-            // الحلقة الموحّدة (الدفعة ١٠) بين العددين: الذكور والإناث بلونيهما والمجموع في الوسط — بعد معرفة أرقام شجرة
-            // النساء (قبلها تبدو ١٠٠٪ ذكوراً، فمسار فارغ و«—»)
-            HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                // عدد الذكور معروف دائماً (من الأعضاء) — النسبة فقط تنتظر شجرة النساء
-                genderBlock(title: L10n.t("ذكور", "Males"), count: males, total: total,
-                            color: DS.Color.male, alignment: .leading,
-                            countKnown: true, shareKnown: known)
-                Spacer(minLength: 0)
-                DSRingGauge(parts: known ? DSGaugePart.counts([("male", males, DS.Color.male),
-                                                               ("female", females, DS.Color.female)]) : nil,
-                            size: DS.Ring.medium, track: DS.Ring.emptyTrack,
-                            center: .count(known ? males + females : nil), caption: L10n.t("أحياء", "Alive"))
-                Spacer(minLength: 0)
-                genderBlock(title: L10n.t("إناث", "Females"), count: females, total: total,
-                            color: DS.Color.female, alignment: .trailing,
-                            countKnown: known, shareKnown: known)
-            }
-        }
-    }
-
-    /// عدد جنس واحد: نقطة اللون + العنوان، الرقم كبيراً، والنسبة تحته
-    private func genderBlock(title: String, count: Int, total: Int, color: Color,
-                             alignment: HorizontalAlignment, countKnown: Bool, shareKnown: Bool) -> some View {
-        let value = countKnown ? count.formatted() : "—"
-        let share = shareKnown ? AnalyticsPercent.text(count, of: total) : "—"
-        return VStack(alignment: alignment, spacing: DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.xs) {
-                Circle().fill(color).frame(width: DS.Icon.legendDotCompact, height: DS.Icon.legendDotCompact)
-                Text(title)
-                    .dsFieldFont(.chip)
-                    .foregroundColor(DS.Color.fieldLabel)
-            }
-            Text(value)
-                .dsFont(.statValue)
-                .foregroundColor(DS.Color.fieldLabel)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(share)
-                .dsFieldFont(.caption)
-                .foregroundColor(DS.Color.fieldValue)
-                .monospacedDigit()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("\(title): \(value)، \(share)", "\(title): \(value), \(share)"))
-    }
-
-    // MARK: - Women Tree — شجرة النساء
-    private var womenSection: some View {
-        let women = womenData.filter { $0.isFemale }
-        let wives = women.filter { $0.husbandId != nil }.count
-        let daughters = women.filter { $0.husbandId == nil }.count
-        let deceasedW = women.filter { $0.isDeceased == true }.count
-        let aliveW = women.count - deceasedW
-        let linked = women.filter { WomenStore.linkedUserByWoman[$0.id] != nil }.count
-
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminSectionLabel(title: L10n.t("شجرة النساء", "Women Tree"))
-
-            if women.isEmpty {
-                womenStateCard
-            } else {
-                LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
-                    DSStatTile(value: women.count.formatted(), label: L10n.t("إجمالي النساء", "Total women"),
-                               icon: "person.fill", tint: DS.Color.female)
-                    DSStatTile(value: daughters.formatted(), label: L10n.t("بنات العائلة", "Daughters"),
-                               icon: "figure.and.child.holdinghands", tint: DS.Color.info)
-                    DSStatTile(value: wives.formatted(), label: L10n.t("زوجات", "Wives"),
-                               icon: "heart.fill", tint: DS.Color.accent)
-                    DSStatTile(value: aliveW.formatted(), label: L10n.t("على قيد الحياة", "Alive"),
-                               icon: "heart.circle.fill", tint: DS.Color.success)
-                    DSStatTile(value: deceasedW.formatted(), label: L10n.t("متوفيات", "Deceased"),
-                               icon: "leaf.fill", tint: DS.Color.femaleDeceased)
-                    DSStatTile(value: linked.formatted(), label: L10n.t("مرتبطة بحساب", "Linked accounts"),
-                               icon: "link.circle.fill", tint: DS.Color.warning)
-                }
-            }
-        }
-    }
-
     /// شجرة النساء بلا أرقام بعد: خطأ (مع إعادة نفس الجلب) · تحميل · لا بيانات
     @ViewBuilder
     private var womenStateCard: some View {
@@ -345,40 +330,6 @@ struct AdminAnalyticsView: View {
             AdminPageStateCard(.empty(L10n.t("لا توجد بيانات بعد", "No data yet"),
                                       message: L10n.t("تظهر هنا أرقام شجرة النساء بعد إضافتهن",
                                                       "Women tree numbers appear here once they're added")))
-        }
-    }
-
-    // MARK: - Marital Status — الحالة الاجتماعية
-    private var maritalSection: some View {
-        let pool = activeMembers
-        let married = pool.filter { $0.isMarried == true }.count
-        let single = pool.filter { $0.isMarried == false }.count
-        let unknown = pool.count - married - single
-        let total = max(pool.count, 1)
-        let pct = AnalyticsPercent.value(married, of: total)
-
-        return AdminSectionCard(title: L10n.t("الحالة الاجتماعية", "Marital Status"),
-                                tag: L10n.t("الأحياء", "Alive")) {
-            HStack(spacing: DS.Spacing.md) {
-                DSRingGauge(progress: Double(married) / Double(total), tint: DS.Color.success, size: DS.Ring.medium,
-                            center: .percent(pct), caption: L10n.t("متزوج", "Married"),
-                            spoken: L10n.t("متزوج \(pct)٪", "Married \(pct)%"))
-
-                VStack(spacing: DS.Spacing.xsm) {
-                    valueLine(icon: "heart.fill", tint: DS.Color.success,
-                              label: L10n.t("متزوج", "Married"), value: married,
-                              share: AnalyticsPercent.text(married, of: total))
-                    // is_married افتراضياً false — فأغلبهم لم يحدّدوا حالتهم
-                    valueLine(icon: "person.fill", tint: DS.Color.info,
-                              label: L10n.t("أعزب / غير محدد", "Single / not set"), value: single,
-                              share: AnalyticsPercent.text(single, of: total))
-                    if unknown > 0 {
-                        valueLine(icon: "questionmark.circle.fill", tint: DS.Color.textTertiary,
-                                  label: L10n.t("غير محدد", "Unspecified"), value: unknown,
-                                  share: AnalyticsPercent.text(unknown, of: total))
-                    }
-                }
-            }
         }
     }
 
@@ -414,59 +365,6 @@ struct AdminAnalyticsView: View {
                            icon: "leaf.fill", tint: DS.Color.success)
                 DSStatTile(value: totalChildren.formatted(), label: L10n.t("روابط نسب", "Parent links"),
                            icon: "arrow.triangle.branch", tint: AppSection.admin.ink)
-            }
-        }
-    }
-
-    // MARK: - Deceased Insights — إحصائيات الوفيات
-    private var deceasedInsightsSection: some View {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let calendar = Calendar.current
-        let deceased = deceasedMembers
-
-        // الأعمار عند الوفاة (لمن عنده تاريخ ميلاد ووفاة).
-        let lifespans: [Int] = deceased.compactMap { m in
-            guard let bStr = m.birthDate, let dStr = m.deathDate,
-                  let b = formatter.date(from: String(bStr.prefix(10))),
-                  let d = formatter.date(from: String(dStr.prefix(10))),
-                  d >= b else { return nil }
-            return calendar.dateComponents([.year], from: b, to: d).year
-        }
-        let avgLifespan = lifespans.isEmpty ? 0 : lifespans.reduce(0, +) / lifespans.count
-        let oldest = lifespans.max() ?? 0
-        let ratio = totalMembers > 0
-            ? Int((Double(deceased.count) / Double(totalMembers) * 100).rounded())
-            : 0
-
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminSectionLabel(title: L10n.t("إحصائيات الوفيات", "Deceased Insights"),
-                              trailing: L10n.t("\(deceased.count.formatted()) متوفى",
-                                               "\(deceased.count.formatted()) deceased"))
-
-            LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
-                DSStatTile(value: avgLifespan > 0 ? "\(avgLifespan)" : "—",
-                           label: L10n.t("متوسط العمر", "Avg. lifespan"),
-                           icon: "hourglass.bottomhalf.filled", tint: DS.Color.warning)
-                DSStatTile(value: oldest > 0 ? "\(oldest)" : "—",
-                           label: L10n.t("أطول عمر", "Longest life"),
-                           icon: "star.fill", tint: DS.Color.success)
-                DSStatTile(value: L10n.t("\(ratio)٪", "\(ratio)%"),
-                           label: L10n.t("نسبة المتوفين", "Deceased %"),
-                           icon: "leaf.fill", tint: DS.Color.textSecondary,
-                           ring: totalMembers > 0 ? Double(deceased.count) / Double(totalMembers) : nil)
-            }
-
-            if lifespans.count < deceased.count {
-                Text(L10n.t(
-                    "محسوبة من \(lifespans.count) متوفى لديهم تاريخ ميلاد ووفاة",
-                    "Based on \(lifespans.count) deceased with both birth & death dates"
-                ))
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .monospacedDigit()
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, DS.Spacing.xxs)
             }
         }
     }
@@ -560,37 +458,6 @@ struct AdminAnalyticsView: View {
                 .foregroundColor(DS.Color.textTertiary)
                 .monospacedDigit()
                 .padding(.horizontal, DS.Spacing.xxs)
-        }
-    }
-
-    // MARK: - News Stats
-    private var newsSection: some View {
-        // الإجمالي من السيرفر — المحمَّل وحده ٢٥ منشوراً فقط
-        let totalNews = max(newsVM.totalNewsCount, newsVM.allNews.count)
-        let approvedNews = newsVM.allNews.filter { $0.approval_status == "approved" }.count
-        let pendingNews = newsVM.pendingNewsRequests.count
-        let withImages = newsVM.allNews.filter { !($0.image_urls ?? []).isEmpty }.count
-        let withPolls = newsVM.allNews.filter { $0.hasPoll }.count
-
-        // الأخبار من مجال «المحتوى والبلاغات» — عنوانها بلونه
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminSectionLabel(title: L10n.t("إحصائيات الأخبار", "News Statistics"))
-
-            LazyVGrid(columns: tileColumns(3), spacing: DS.Spacing.sm) {
-                DSStatTile(value: totalNews.formatted(), label: L10n.t("إجمالي", "Total"),
-                           icon: "newspaper.fill", tint: AppSection.admin.ink)
-                DSStatTile(value: approvedNews.formatted(), label: L10n.t("منشور", "Published"),
-                           icon: "checkmark.seal.fill", tint: DS.Color.success)
-                DSStatTile(value: pendingNews.formatted(), label: L10n.t("معلق", "Pending"),
-                           icon: "clock.fill", tint: DS.Color.warning)
-            }
-
-            LazyVGrid(columns: tileColumns(2), spacing: DS.Spacing.sm) {
-                DSStatTile(value: withImages.formatted(), label: L10n.t("بصور", "With Images"),
-                           icon: "photo.fill.on.rectangle.fill", tint: DS.Color.info)
-                DSStatTile(value: withPolls.formatted(), label: L10n.t("باستطلاع", "With Polls"),
-                           icon: "checklist", tint: DS.Color.accent)
-            }
         }
     }
 

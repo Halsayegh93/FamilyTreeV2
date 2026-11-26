@@ -274,7 +274,8 @@ struct AdminMemberCounts: Equatable {
     static func seeded(members: [FamilyMember]) -> AdminMemberCounts {
         var c = AdminMemberCounts()
         c.setMen(from: members)
-        c.setWomen(WomenStore.cache)
+        // نساء العائلة بلا «خارج العائلة» — نفس `AdminFamilyCensus.make` (٢٠٢٦-١١-٢٦)
+        c.setWomen(WomenStore.cache, excluding: WomenStore.outsideFamilyIds)
         c.setUsage(AppUsageStats.cached)
         return c
     }
