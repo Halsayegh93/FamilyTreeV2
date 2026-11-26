@@ -29,13 +29,14 @@ import SwiftUI
 //  | الرقم                     | «اليوم» (U7)                                            | «الإحصاءات» (U15)                 | يساوي                |
 //  |---------------------------|---------------------------------------------------------|-----------------------------------|----------------------|
 //  | الإجمالي 2,991            | `.area(.metrics)` + `.stats(.family)` (الحلقات أول ما يُرى) | لا شيء — بيته الصفحة نفسها، بلا سهم | `total`              |
-//  | الرجال 2,729              | `.area(.family)` + `.members(account .all, life .all)`  | نفسه                              | `men` (الفلاتر ممسوحة) |
-//  | النساء 262                | المالك والمدير: «نساء العائلة» + `.women(status .all, branch .all)`؛ المراقب: `.openWomenTree` | نفسه | `women` (بلا خارج العائلة) |
+//  | الرجال 2,729              | `.area(.family)` + `.members(account .all, life .all, population {رجال})` (F5) | نفسه      | `men` (الفلاتر ممسوحة) |
+//  | النساء 262                | المالك والمدير: «العائلة» + `.members(… population {نساء})` (F5)؛ المراقب: `.openWomenTree` | نفسه | `women` (بلا خارج العائلة) |
 //  | في التطبيق 170            | `.area(.metrics)` + `.stats(.inApp)` (عنوانه «170 لهم حساب») | لا يُعرض هناك                    | `inApp` (123 + 47)   |
-//  | خارج العائلة 50           | `.area(.metrics)` + `.stats(.outside)` (عنوانه 50)       | لا يُعرض هناك                    | `outsideLiving`      |
+//  | خارج العائلة 50           | المالك والمدير: «العائلة» + `.members(… population {خارج العائلة})` (F5)؛ المراقب: `.stats(.outside)` | لا يُعرض هناك | `outsideLiving` |
 //  | «≈ نسبة الأحياء تقديرية» | «العائلة» + `.members(review: .living)` («هل ما زالوا أحياء؟») | نفسه                     | من لم يُراجَع        |
 //  | أحياء 2,489 · متوفون 502 | —                                                       | بلا سهم (رجال ونساء مختلطون)      | —                    |
-//  170 و50 يخلطان الرجال والنساء فلا قائمة واحدة تحملهما — يفتحان قسم «الإحصاءات» الذي يقسمهما (Autoplan note 3).
+//  170 يخلط الرجال والنساء فلا قائمة واحدة تحمله — يفتح قسم «الإحصاءات» الذي يقسمه (Autoplan note 3). 50 صار فئة «خارج
+//  العائلة» في «العائلة» (F5) — قائمة واحدة بعدده.
 //
 // الاستعمال:
 //   AdminSectionLabel(title: L10n.t("العائلة", "Family"), link: …«الإحصاءات ‹»…)
@@ -183,20 +184,24 @@ nonisolated enum AdminCensusDestination: Hashable {
 
 nonisolated enum AdminCensusRoutes {
     /// وجهة كل رقم (spec C.1/C.12 وAutoplan note 3): المجموع يفتح القائمة بفلاترها ممسوحة («الحالة» = الكل صراحةً)، والمختلط
-    /// (170 · 50) يفتح قسم «الإحصاءات» الذي يقسمه. `seesWomenPage` = المالك والمدير
+    /// (170) يفتح قسم «الإحصاءات» الذي يقسمه. `seesWomenPage` = المالك والمدير.
+    /// F5: الرجال والنساء و«خارج العائلة» فئات «مَن» في «العائلة» نفسها — كل رقم يفتحها على شريحة فئته وحدها (عدد القائمة
+    /// = الرقم). من لا يرى «مَن» (المراقب) يبقى كما كان: النساء ← شجرة النساء، «خارج العائلة» ← قسمه في «الإحصاءات»
     static func destination(_ number: AdminCensusNumber, on screen: AdminCensusScreen,
                             seesWomenPage: Bool) -> AdminCensusDestination {
         switch number {
         case .total:
             return screen == .today ? .stats(.family) : .none
         case .men:
-            return .members(AdminMembersLanding(account: .all, life: .all))
+            return .members(AdminMembersLanding(account: .all, life: .all, population: [.men]))
         case .women:
-            return seesWomenPage ? .women(AdminWomenLanding(status: .all, branch: .all)) : .womenTree
+            return seesWomenPage ? .members(AdminMembersLanding(account: .all, life: .all, population: [.women]))
+                                 : .womenTree
         case .inApp:
             return .stats(.inApp)
         case .outside:
-            return .stats(.outside)
+            return seesWomenPage ? .members(AdminMembersLanding(account: .all, life: .all, population: [.outside]))
+                                 : .stats(.outside)
         case .estimate:
             return .members(AdminMembersLanding(review: .living))
         }

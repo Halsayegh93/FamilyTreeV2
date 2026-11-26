@@ -194,9 +194,12 @@ struct AdminWomenEntry: Identifiable {
     let date: Date?
     /// «أُضيفت 12 نوفمبر» / «رُبطت بحساب 12 نوفمبر» — السطر الثاني في ترتيب «الأحدث»
     let dateLine: String?
+    /// من يقرّر «الفرع» في «العائلة» (F5): أبو المرأة، وللخارجي قريبه من العائلة (الزوج، أو أبو الأم/الزوجة) — nil = لا يُعرف
+    let anchor: UUID?
 
     init(kind: Kind, title: String, subtitle: String?, status: (text: String, tint: Color)?, needle: String,
-         fact: AdminWomenLogic.Fact = AdminWomenLogic.Fact(), date: Date? = nil, dateLine: String? = nil) {
+         fact: AdminWomenLogic.Fact = AdminWomenLogic.Fact(), date: Date? = nil, dateLine: String? = nil,
+         anchor: UUID? = nil) {
         self.kind = kind
         self.title = title
         self.subtitle = subtitle
@@ -206,6 +209,7 @@ struct AdminWomenEntry: Identifiable {
         self.fact = fact
         self.date = date
         self.dateLine = dateLine
+        self.anchor = anchor
     }
 
     var id: UUID { member.id }
@@ -576,15 +580,31 @@ struct AdminWomenPanel: View {
     private func rebuild(_ fresh: [FamilyMember]? = nil) {
         let source = fresh ?? women
         guard !source.isEmpty else { return }
-        rows = buildRows(source)
+        let members = memberVM
+        rows = AdminWomenRows.build(women: source, members: members.allMembers, sons: sons.ids,
+                                    member: { members.member(byId: $0) })
         built = true
     }
 
-    private func name(_ m: FamilyMember) -> String { m.fullName.isEmpty ? m.firstName : m.fullName }
+    /// البحث الدقيق الواحد (`NameSearch`) — الأقرب أولاً، وبترتيب القائمة عند التساوي
+    private func search(_ base: [AdminWomenEntry], _ q: String) -> [AdminWomenEntry] {
+        AdminWomenRows.search(base, q)
+    }
+}
+
+// MARK: - الصفوف (مكان واحد لصفحة «نساء العائلة» ولفئتي «نساء» و«خارج العائلة» في «العائلة» — F5)
+
+@MainActor
+enum AdminWomenRows {
+    private typealias L = AdminWomenLogic
+
+    private static func name(_ m: FamilyMember) -> String { m.fullName.isEmpty ? m.firstName : m.fullName }
 
     /// نساء العائلة أبجدياً، ثم «فرع خارج العائلة»: أبناء البنات · أزواج البنات من خارجها · النساء من خارجها — المسمّون فقط
-    /// (`hasName`)، كقاعدة `AdminFamilyCensus.make` (T2)
-    private func buildRows(_ women: [FamilyMember]) -> [AdminWomenEntry] {
+    /// (`hasName`)، كقاعدة `AdminFamilyCensus.make` (T2). `members` = رجال الشجرة (`memberVM.allMembers`)، `sons` =
+    /// أبناء البنات (`DaughterSonsIndex`)
+    static func build(women: [FamilyMember], members: [FamilyMember], sons: Set<UUID>,
+                      member: (UUID) -> FamilyMember?) -> [AdminWomenEntry] {
         let map = Dictionary(women.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let linked = WomenStore.linkedUserByWoman
         let outside = WomenStore.outsideFamilyIds
@@ -593,7 +613,7 @@ struct AdminWomenPanel: View {
         /// «الأحدث»: تاريخ إضافة العقدة أو إنشاء حسابها المربوط (الأحدث منهما)
         func dated(_ w: FamilyMember) -> (date: Date?, line: String?) {
             let added = ApprovalWorkflow.date(w.createdAt)
-            let linkedAt = linked[w.id].flatMap { memberVM.member(byId: $0) }.flatMap { ApprovalWorkflow.date($0.createdAt) }
+            let linkedAt = linked[w.id].flatMap { member($0) }.flatMap { ApprovalWorkflow.date($0.createdAt) }
             let byLink = linkedAt.map { l in added.map { l > $0 } ?? true } ?? false
             guard let latest = byLink ? linkedAt : added else { return (nil, nil) }
             let day = AdminOccasionsText.shortDate(latest)
@@ -624,12 +644,12 @@ struct AdminWomenPanel: View {
                                        needle: ArabicTextNormalizer.normalizeForSearch(name(w)),
                                        fact: L.Fact(deceased: w.isDeceased == true, registered: linked[w.id] != nil,
                                                     married: w.husbandId != nil || w.isMarried == true),
-                                       date: when.date, dateLine: when.line))
+                                       date: when.date, dateLine: when.line, anchor: w.fatherId))
         }
 
         // فرع خارج العائلة ١: أبناء البنات (حساباتهم) — حساب مراجعة أبل ليس فرداً
         let review = AppConfigValues.shared.reviewAccountIds
-        let sonMembers = AdminGrouping.alphabetical(memberVM.allMembers.filter {
+        let sonMembers = AdminGrouping.alphabetical(members.filter {
             sons.contains($0.id) && $0.hasName && !review.contains($0.id)
         })
         for s in sonMembers {
@@ -643,7 +663,8 @@ struct AdminWomenPanel: View {
                                : (L10n.t("في الشجرة", "In the tree"), DS.Color.success))
             out.append(AdminWomenEntry(kind: .son(s), title: s.fullName, subtitle: sub, status: status,
                                        needle: ArabicTextNormalizer.normalizeForSearch(s.fullName),
-                                       fact: L.Fact(deceased: s.isDeceased == true, registered: true, outside: true)))
+                                       fact: L.Fact(deceased: s.isDeceased == true, registered: true, outside: true),
+                                       anchor: mother?.fatherId))
         }
 
         // فرع خارج العائلة ٢: أزواج البنات من خارج العائلة
@@ -654,14 +675,15 @@ struct AdminWomenPanel: View {
                                        status: h.isDeceased == true ? (L10n.t("متوفى", "Deceased"), DS.Color.textTertiary) : nil,
                                        needle: ArabicTextNormalizer.normalizeForSearch(name(h)),
                                        fact: L.Fact(deceased: h.isDeceased == true, registered: linked[h.id] != nil,
-                                                    married: true, outside: true)))
+                                                    married: true, outside: true),
+                                       anchor: wife?.fatherId))
         }
 
         // فرع خارج العائلة ٣: النساء من خارج العائلة (`is_outside_family`، طلب المالك ٢٠٢٦-١١-٢٦): زوجات من عوائل ثانية
         // وبنات البنات — هنا وحده، لا في نساء العائلة (مثل حلقة «النساء» التي لا تعدّهن)
         for w in AdminGrouping.alphabetical(women.filter { $0.isFemale && $0.hasName && outside.contains($0.id) }) {
             let sub: String? = {
-                if let hid = w.husbandId, let h = map[hid] ?? memberVM.member(byId: hid) {
+                if let hid = w.husbandId, let h = map[hid] ?? member(hid) {
                     return L10n.t("زوجة: \(name(h))", "Wife of \(name(h))")
                 }
                 if let mom = w.motherId.flatMap({ map[$0] }) {
@@ -669,18 +691,21 @@ struct AdminWomenPanel: View {
                 }
                 return nil
             }()
+            // الفرع: الزوج إن كان من رجال الشجرة، وإلا أبو الأم (بنت البنت)
+            let husbandInTree = w.husbandId.flatMap { map[$0] == nil ? member($0)?.id : nil }
+            let anchor = husbandInTree ?? w.motherId.flatMap { map[$0] }?.fatherId
             let when = dated(w)
             out.append(AdminWomenEntry(kind: .woman(w), title: name(w), subtitle: sub, status: womanStatus(w),
                                        needle: ArabicTextNormalizer.normalizeForSearch(name(w)),
                                        fact: L.Fact(deceased: w.isDeceased == true, registered: linked[w.id] != nil,
                                                     married: w.husbandId != nil || w.isMarried == true, outside: true),
-                                       date: when.date, dateLine: when.line))
+                                       date: when.date, dateLine: when.line, anchor: anchor))
         }
         return out
     }
 
     /// البحث الدقيق الواحد (`NameSearch`) — الأقرب أولاً، وبترتيب القائمة عند التساوي
-    private func search(_ base: [AdminWomenEntry], _ q: String) -> [AdminWomenEntry] {
+    static func search(_ base: [AdminWomenEntry], _ q: String) -> [AdminWomenEntry] {
         guard !q.isEmpty else { return base }
         let words = NameSearch.words(q)
         var hits: [(order: Int, score: Int, entry: AdminWomenEntry)] = []

@@ -1,23 +1,24 @@
 import SwiftUI
 
-// MARK: - «العائلة» = صفحة الأعضاء الواحدة (U11، ثم admin v2 اتجاه «أ» — الوحدة V2-2، ٢٠٢٦-١١-٢٦)
+// MARK: - «العائلة» = صفحة الأعضاء الواحدة (U11، ثم admin v2 اتجاه «أ» — V2-2، ثم F5 «مَن» داخل «تصفية»، ٢٠٢٦-١١-٢٦)
 //
-// الرأس الكحلي (`AdminMembersHeader.swift`): «‹ الإدارة» · «العائلة ⌄» · «＋» · «⋯ التقارير (PDF)» ← «كل العائلة» (أو اسم
-// الفرع) ← مربّعات «2,729 رجل · 262 امرأة ‹ · 46 حياً خارج العائلة ‹» ← حقل البحث بالاسم أو الرقم + «تصفية (n)» (فلاتر
-// المالك «ب»: حقل واحد + زرّ واحد). ورقة التصفية (طقم U5، F3 اختيار متعدّد يُطبَّق فوراً): «الحساب» (الكل · لهم حساب ·
-// بلا حساب) ← «الحالة» (الكل · الأحياء · المتوفون) ← «الفرع» (الكل، أو صفّ يفتح قائمة الفروع داخل الورقة — اختيار واحد)،
-// والأعداد تتبع بقية الاختيارات (`AdminMembersLogic.Tally`). تحت الرأس على الأبيض:
-//  ١) شريحة لكل اختيار بـ✕ (`AdminActiveFilterChips` — كل شريحة تزيل اختيارها وحده، F3) وسطر «123 رجل · أبجدياً» مع
-//     التصفية أو البحث فقط.
-//  ٢) بطاقة «يحتاج مراجعتك» («363 تواريخ وفاة ناقصة» / «هل ما زالوا أحياء؟» · «5 قوائم») ← صفحة «يحتاج مراجعتك»
-//     (`AdminReviewHubPage`، U12). تختفي حين تصل كل القوائم صفراً.
-//  ٣) القائمة: بلا تصفية ولا بحث بالفروع («▍فرع جاسم (214)»)، وإلا أبجدياً (والبحث بالأقرب). الصفّ: الصورة · الاسم (أول
-//     كلمتين عريضتان، سطر يُقصّ في آخره) · الحالة الرسمية («عضو مسجّل · آخر دخول اليوم»…) · ‹ — يفتح ورقة العضو
-//     (`AdminMemberSheet(ids:start:)`، U13) بالسابق والتالي في القائمة نفسها. «عرض المزيد» كل ٤٠.
-// مفتاح «شجرة العائلة | شجرة النساء» وبطاقة المربّعات والشرائح المسطّحة حُذفت (spec E.9–E.12).
+// الرأس الكحلي (`AdminMembersHeader.swift`): «‹ الإدارة» · «العائلة ⌄» · «＋» · «⋯» (التقارير PDF · نساء العائلة · شجرة
+// النساء) ← سطر ذهبي بما تعرضه القائمة («كل العائلة»، أو «رجال · نساء»، والفرع) ← حقل البحث بالاسم أو الرقم + «تصفية (n)».
+// ورقة التصفية (طقم U5، F3 اختيار متعدّد يُطبَّق فوراً، F5): «مَن» (رجال · نساء · خارج العائلة — للمالك والمدير) ←
+// «الحساب» ← «الحالة» ← «الفرع» (منتقٍ، اختيار واحد) ← «القائمة» (رابط قديم)، والأعداد تتبع بقية الاختيارات
+// (`AdminPeopleLogic` — المنطق الخالص، والأعداد والقائمة من النطاق نفسه). تحت الرأس على الأبيض:
+//  ١) شريحة لكل اختيار بـ✕ (`AdminActiveFilterChips` — الافتراضي «رجال» شريحة عادية) وسطر «2,729 رجل · بالفروع» دائماً
+//     (العدد الذي كان في مربّعات الرأس).
+//  ٢) بطاقة «يحتاج مراجعتك» ← صفحة «يحتاج مراجعتك» (`AdminReviewHubPage`، U12). تختفي حين تصل كل القوائم صفراً.
+//  ٣) القائمة: فئة واحدة = قائمتها؛ أكثر = أقسام «الرجال · N» · «النساء · N» · «خارج العائلة · N». الرجال بلا تصفية ولا
+//     بحث بالفروع («▍فرع جاسم (214)»)، وإلا أبجدياً (والبحث بالأقرب) — صفّ العضو يفتح ورقة العضو
+//     (`AdminMemberSheet(ids:start:)`، U13) بالسابق والتالي في قسمه. النساء وخارج العائلة بصفّ «نساء العائلة»
+//     (`AdminWomenRow`) ويفتحان ما يفتحانه هناك: مربّع المرأة (`WomanDetailSheet`) أو ورقة ابن البنت. «عرض المزيد» كل ٤٠
+//     لكل قسم.
 // المعاملات القديمة `chip:`/`sub:`/`womenOutside:` تبقى (روابط «اليوم» والإشعارات و`AdminUsageDevicesKit`): كل قيمة فلتر
-// أو قائمتها تُدفع فوق الجذر (`AdminMembersLogic.opening`)؛ والهبوط `AdminMembersLanding` من `AdminAreaRouter.take` حين
-// تُفتح بلا معاملات. الصلاحيات كما كانت: التسجيل `canRegisterMembers` (× «يعدّل» في الجدول)، التقارير `isAdmin`.
+// أو قائمتها تُدفع فوق الجذر (`AdminMembersLogic.opening`)؛ والهبوط `AdminMembersLanding` (ومنه «مَن») من
+// `AdminAreaRouter.take` حين تُفتح بلا معاملات. الصلاحيات كما كانت: التسجيل `canRegisterMembers` (× «يعدّل» في الجدول)،
+// التقارير `isAdmin`، النساء وخارج العائلة للمالك والمدير (المراقب: الرجال كما كانوا، و«شجرة النساء» من «⋯»).
 
 /// ورقة العضو مفتوحة على قائمة (السابق/التالي يتنقّلان فيها)
 struct AdminMemberSheetContext: Identifiable {
@@ -26,38 +27,12 @@ struct AdminMemberSheetContext: Identifiable {
     let start: Int
 }
 
-/// تصفية «العائلة» (spec C.7، F3): «الحساب» و«الحالة» اختيار متعدّد (فارغة = «الكل»)، و«الفرع» اختيار واحد (منتقٍ شجري)،
-/// و«القائمة» تصفية إضافية من رابط قديم وحده
-struct AdminMembersFilters: Equatable {
-    /// لهم حساب · بلا حساب (بلا `.all`)
-    var accounts: Set<AdminAccountFilter> = []
-    /// الأحياء · المتوفون (بلا `.all`)
-    var lives: Set<AdminLifeFilter> = []
-    /// رأس الفرع (بأي مستوى) — nil = كل الفروع
-    var branch: UUID? = nil
-    /// شريحة فرعية قديمة لا تقابلها قائمة مراجعة («لا تصله الإشعارات»…) — شريحة تُزال
-    var sub: AdminMemberSub? = nil
+/// تصفية «العائلة» (spec C.7، F3، F5) — الحالة الخالصة نفسها التي يفحصها tests/admin-redesign/F5
+typealias AdminMembersFilters = AdminPeopleLogic.Filters
 
-    var isEmpty: Bool { self == AdminMembersFilters() }
-
-    /// اختيار واحد لكل مجموعة — «الكل» = لا اختيار
-    init(account: AdminAccountFilter = .all, life: AdminLifeFilter = .all, branch: UUID? = nil, sub: AdminMemberSub? = nil) {
-        self.accounts = account == .all ? [] : [account]
-        self.lives = life == .all ? [] : [life]
-        self.branch = branch
-        self.sub = sub
-    }
-
-    /// الروابط القديمة والهبوط: كل اختيار فيها شريحة تحت الشريط تُزال (`AdminMembersLogic.picks`)
-    init(_ o: AdminMembersLogic.Opening) {
-        self.accounts = Set(AdminMembersLogic.picks(o.account).map { AdminAccountFilter($0) })
-        self.lives = Set(AdminMembersLogic.picks(o.life).map { AdminLifeFilter($0) })
-        self.branch = o.branch
-        self.sub = o.sub.flatMap(AdminMemberSub.init(rawValue:))
-    }
-
-    var accountLogic: Set<AdminMembersLanding.Account> { Set(accounts.map(\.logic)) }
-    var lifeLogic: Set<AdminMembersLanding.Life> { Set(lives.map(\.logic)) }
+extension AdminPeopleLogic.Filters {
+    /// «القائمة» من رابط قديم بنوعها
+    var subList: AdminMemberSub? { sub.flatMap(AdminMemberSub.init(rawValue:)) }
 }
 
 /// ما يُدفع فوق جذر «العائلة» (وجهة واحدة)
@@ -76,25 +51,19 @@ enum AdminMembersPush {
     }
 }
 
-/// القائمة بعد البحث والفرع و«القائمة» (قبل «الحساب» و«الحالة») وعدّها ٢×٢
-struct AdminMembersScope {
-    let rows: [Int]
-    let tally: AdminMembersLogic.Tally
-}
-
-/// ذاكرة القوائم المحسوبة لكل (نسخة الفهرس، الفرع، «القائمة»، البحث) — الورقة والشرائح والملخّص يسألون عنها مراراً في الرسم
-/// الواحد. مرجع لا حالة: الكتابة فيه لا تعيد الرسم
+/// ذاكرة النطاقات المحسوبة لكل (نسخة البيانات، الفرع، «القائمة»، البحث) — الورقة والشرائح والملخّص يسألون عنها مراراً في
+/// الرسم الواحد. مرجع لا حالة: الكتابة فيه لا تعيد الرسم
 final class AdminMembersScopeMemo {
     struct Key: Hashable {
         let version: Int
         let branch: UUID?
-        let sub: AdminMemberSub?
+        let sub: String?
         let query: String
     }
 
-    private var cache: [Key: AdminMembersScope] = [:]
+    private var cache: [Key: AdminPeopleLogic.Scope] = [:]
 
-    func value(_ key: Key, make: () -> AdminMembersScope) -> AdminMembersScope {
+    func value(_ key: Key, make: () -> AdminPeopleLogic.Scope) -> AdminPeopleLogic.Scope {
         if let hit = cache[key] { return hit }
         if cache.count > 12 { cache.removeAll(keepingCapacity: true) }
         let made = make()
@@ -104,11 +73,14 @@ final class AdminMembersScopeMemo {
 }
 
 struct AdminMembersPage: View {
+    private typealias P = AdminPeopleLogic
+    private typealias Population = AdminMembersLanding.Population
+
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var accounts = AdminAccountsStore.shared
-    /// أبناء البنات — بيتهم «نساء العائلة» (يُستبعدون من القائمة)
+    /// أبناء البنات — فئة «خارج العائلة» (يُستبعدون من الرجال)
     @ObservedObject private var sons = DaughterSonsIndex.shared
     /// «حي ✓» المحلية لهذا المستخدم (عدد «هل ما زالوا أحياء؟»)
     @ObservedObject private var verified = AdminLivingVerifiedStore.shared
@@ -118,10 +90,11 @@ struct AdminMembersPage: View {
     /// عدّاد الانتقال (`.area(.family, hop)`) — مفتاح الهبوط
     @Environment(\.adminAreaHop) private var hop
 
-    // أرقام الرأس
-    @State private var census = AdminFamilyCensus()
+    // «نساء» و«خارج العائلة» (F5): شجرة النساء وصفوفها — بناء «نساء العائلة» نفسه (`AdminWomenRows`)
     @State private var womenRows: [FamilyMember] = WomenStore.cache
     @State private var womenHealth: AdminStoreHealth = WomenStore.cache.isEmpty ? .idle : .loaded(at: Date())
+    @State private var people: [AdminWomenEntry] = []
+    @State private var peopleBuilt = false
 
     // الرأس المطويّ
     @State private var collapsed = false
@@ -133,9 +106,12 @@ struct AdminMembersPage: View {
     // القائمة
     @State private var filters: AdminMembersFilters
     @State private var query = ""
-    @State private var limit = Self.pageSize
+    /// «عرض المزيد» لكل قسم (الغائب = `pageSize`)
+    @State private var limits: [Population: Int] = [:]
     @State private var index = AdminMembersIndex.empty
     @State private var tree = AdminFamilyTree.empty
+    /// صفوف الفلتر: الرجال بمواضع الفهرس، ثم النساء وخارج العائلة بعدها (`people` بإزاحة `index.entries.count`)
+    @State private var persons: [AdminPeopleLogic.Person] = []
     @State private var version = 0
     @State private var memo = AdminMembersScopeMemo()
     /// أعداد قوائم «يحتاج مراجعتك» (المفتاح الغائب = لم يصل) — نفس صفحتها (U12)
@@ -144,6 +120,8 @@ struct AdminMembersPage: View {
 
     // ما يُفتح
     @State private var sheet: AdminMemberSheetContext?
+    /// مربّع المرأة (أو الزوج من خارج العائلة) كما في «نساء العائلة»
+    @State private var selectedWoman: FamilyMember?
     /// صورة العضو مكبّرة بالضغط عليها في الصفّ (طلب المالك ٢٠٢٦-١١-١١)
     @State private var photoURL: AdminPhotoURL?
     @State private var push: AdminMembersPush?
@@ -160,7 +138,7 @@ struct AdminMembersPage: View {
     private static let searchAnchor = "adminMembersSearch"
 
     /// - chip/sub: روابط قديمة («اليوم»، الإشعارات، `AdminUsageDevicesKit`) — كل قيمة فلتر أو قائمة تُدفع فوق الجذر
-    /// - womenOutside: «نساء العائلة» على «فرع خارج العائلة» فوق الجذر
+    /// - womenOutside: «العائلة» على {خارج العائلة} (F5)
     /// - landing: هبوط صريح (يغلب المخزَّن في `AdminAreaRouter`) — يُطبَّق حين تكون المعاملات القديمة على افتراضها
     init(chip: AdminMemberChip = .all, sub: AdminMemberSub = .all, womenOutside: Bool = false,
          landing: AdminMembersLanding? = nil) {
@@ -177,18 +155,21 @@ struct AdminMembersPage: View {
         _pendingPush = State(initialValue: opening.push)
     }
 
+    /// النساء وخارج العائلة («مَن») للمالك والمدير — نفس صفحة «نساء العائلة» (طلب المالك ٢٠٢٦-١١-٠٨)
+    private var seesOthers: Bool { authVM.isAdmin }
+
     // حارس المكدس: الرأس والمحتوى والطبقة المثبّتة خلف `AnyView`
     var body: some View {
         let model = makeModel()
         return ScrollViewReader { proxy in
             AdminHubPage(pinned: collapsed && index.built ? AnyView(compactBar(model).transition(.opacity)) : nil) {
                 AdminBandHeader(title: AdminArea.family.title,
-                                subtitle: AdminMembersLogic.caption(branch: filters.branch.map(branchTitle)),
+                                subtitle: P.caption(filters, seesOthers: seesOthers, branch: filters.branch.map(branchTitle)),
                                 badge: authVM.adminCanEdit(.family) ? nil : AdminPageHeader.readOnlyText,
                                 bottomPadding: DS.Spacing.md, isAreaRoot: true) {
                     AnyView(headerButtons(model))
                 } accessory: {
-                    // حارس المكدس: المربّعات والحقل نوعان مستقلان خلف `AnyView`
+                    // حارس المكدس: الحقل نوع مستقل خلف `AnyView`
                     AnyView(bandAccessory(model))
                 }
             } content: {
@@ -207,6 +188,11 @@ struct AdminMembersPage: View {
         .dsTallBox(item: $sheet) { context in
             AdminMemberSheet(ids: context.ids, start: context.start)
         }
+        .modifier(AdminWomanDetailCover(woman: $selectedWoman, women: womenRows, me: authVM.currentUser,
+                                        canEdit: authVM.canEditMembers && authVM.adminCanEdit(.family),
+                                        canDelete: authVM.canDeleteMembers && authVM.adminCanEdit(.family),
+                                        canAnnounceDeath: authVM.isAdmin, canModerate: authVM.canModerate,
+                                        onChanged: { await loadWomen(force: true) }))
         .fullScreenCover(item: $photoURL) { p in
             ProjectPhotoViewer(urls: [p.url], startIndex: 0, section: .admin)
         }
@@ -219,8 +205,8 @@ struct AdminMembersPage: View {
         .onChange(of: accounts.loaded) { _ in rebuild() }
         .onChange(of: sons.ids) { _ in rebuild() }
         .onChange(of: verified.ids) { _ in refreshReviews() }
-        .onChange(of: query) { _ in limit = Self.pageSize }
-        .onChange(of: filters) { _ in limit = Self.pageSize }
+        .onChange(of: query) { _ in limits = [:] }
+        .onChange(of: filters) { _ in limits = [:] }
         .debugStackProbe("AdminMembersPage", limitKB: DebugStackLimit.page)
     }
 
@@ -237,6 +223,10 @@ struct AdminMembersPage: View {
                 filters = AdminMembersFilters(o)
                 if let p = o.push { pendingPush = p }
             }
+            // مجموعة لا تنطبق على الفئات المفتوح عليها لا تُبقي اختياراً (لا شريحة بلا مجموعة تزيلها)
+            var fixed = filters
+            P.normalize(&fixed, seesOthers: seesOthers)
+            if fixed != filters { filters = fixed }
             if let p = pendingPush {
                 pendingPush = nil
                 // فوق الجذر بعد ظهوره — الرجوع يعود للجذر
@@ -248,7 +238,7 @@ struct AdminMembersPage: View {
         rebuild()
         await sons.refresh()
         await accounts.refresh()
-        await loadWomen(force: false)
+        if seesOthers { await loadWomen(force: false) }
     }
 
     private func reload(force: Bool) async {
@@ -256,13 +246,13 @@ struct AdminMembersPage: View {
         rebuild()
         await sons.refresh()
         await accounts.refresh(force: force)
-        await loadWomen(force: force)
+        if seesOthers { await loadWomen(force: force) }
     }
 
-    /// شجرة النساء لأرقام «امرأة» و«خارج العائلة» — الكاش أولاً، وجلب للقراءة إن لم تُحمَّل
+    /// شجرة النساء لفئتي «نساء» و«خارج العائلة» — الكاش أولاً، وجلب للقراءة إن لم تُحمَّل
     private func loadWomen(force: Bool) async {
         if !force, !womenRows.isEmpty {
-            refreshCensus()
+            if !peopleBuilt { refreshPeople() }
             return
         }
         let before = womenHealth
@@ -271,7 +261,7 @@ struct AdminMembersPage: View {
             let fresh = try await WomenStore.fetch()
             womenRows = fresh
             womenHealth = womenHealth.ending(success: true)
-            refreshCensus()
+            refreshPeople()
         } catch {
             if Log.isCancellation(error) {
                 womenHealth = before
@@ -288,14 +278,41 @@ struct AdminMembersPage: View {
                                         accountsReady: accounts.loaded, daughterSons: sons.ids,
                                         branchName: { names.branchName(for: $0) })
         tree = AdminFamilyTree(memberVM.allMembers)
+        buildPeople()
+        buildPersons()
         version += 1
         refreshReviews()
-        refreshCensus()
     }
 
-    /// أرقام الرأس — مع كل بناء للفهرس، وبعد وصول شجرة النساء
-    private func refreshCensus() {
-        census = AdminFamilyCensus.make(members: memberVM.allMembers, women: womenRows)
+    /// بعد وصول شجرة النساء: صفوف الفئتين، ثم صفوف الفلتر
+    private func refreshPeople() {
+        buildPeople()
+        buildPersons()
+        version += 1
+    }
+
+    /// صفوف «نساء» و«خارج العائلة» — بناء صفحة «نساء العائلة» نفسه (أعدادها = أرقامها، T2)
+    private func buildPeople() {
+        guard seesOthers, !womenRows.isEmpty || womenHealth.hasData else { return }
+        let members = memberVM
+        people = AdminWomenRows.build(women: womenRows, members: members.allMembers, sons: sons.ids,
+                                      member: { members.member(byId: $0) })
+        peopleBuilt = true
+    }
+
+    /// ما يحتاجه الفلتر من كل صفّ: الرجال (حساب الدخول، المرساة نفسه)، ثم النساء وخارج العائلة (الربط بحساب، مرساة الفرع)
+    private func buildPersons() {
+        var list = index.entries.map { e in
+            P.Person(population: .men, deceased: e.member.isDeceased == true, hasAccount: AdminMembersIndex.hasLogin(e),
+                     anchor: e.id)
+        }
+        if peopleBuilt {
+            list += people.map { e in
+                P.Person(population: e.fact.outside ? .outside : .women, deceased: e.fact.deceased,
+                         hasAccount: e.fact.registered, anchor: e.anchor)
+            }
+        }
+        persons = list
     }
 
     /// أعداد قوائم «يحتاج مراجعتك» — المصدر الواحد مع صفحتها (`AdminReviewHubCounts`)
@@ -324,60 +341,52 @@ struct AdminMembersPage: View {
 
     // MARK: الرأس
 
-    private var headerItems: [AdminHeaderItem] {
-        let men: AdminStoreHealth? = memberVM.membersLoadFailed && memberVM.allMembers.isEmpty ? .failed(lastGood: nil) : nil
-        let admin = authVM.isAdmin
-        return AdminMembersHeaderItems.make(
-            census: census, menHealth: men, womenHealth: womenHealth,
-            retryMen: { Task { await reload(force: true) } },
-            retryWomen: { Task { await loadWomen(force: true) } },
-            // «نساء العائلة» للمالك والمدير (طلب المالك ٢٠٢٦-١١-٠٨)؛ المراقب ← شجرة النساء في تبويب الشجرة
-            openWomen: admin ? { open(.women(AdminWomenLanding(status: .all))) } : { Self.openWomenTree() },
-            openOutside: admin ? { open(.women(AdminWomenLanding(status: .all, branch: .outside))) } : nil)
-    }
-
     private static func openWomenTree() {
         TreeTabContainer.openWomenOnAppear = true
         NotificationCenter.default.post(name: .openWomenTree, object: nil)
     }
 
-    /// ما تحت العنوان في الكحلي: مربّعات الأرقام ثم الحقل و«تصفية». الحقل مرساة زرّ البحث في السطر المطويّ، ومنه يُقاس الطيّ
+    /// ما تحت العنوان في الكحلي: الحقل و«تصفية». الحقل مرساة زرّ البحث في السطر المطويّ، ومنه يُقاس الطيّ
     private func bandAccessory(_ model: AdminMembersListModel) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            AdminMembersKPIRow(kpis: AdminMembersHeaderItems.kpis(headerItems))
-                .padding(.top, DS.Spacing.xsm)
-            AdminMembersFilterBar(query: $query, focusToken: searchFocus, activeCount: model.snapshot.items.count) {
-                showFilters = true
-            }
-            .id(Self.searchAnchor)
-            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(AdminHubScroll.space)).minY } action: { barMoved($0) }
-            .padding(.top, DS.Spacing.md)
+        AdminMembersFilterBar(query: $query, focusToken: searchFocus, activeCount: model.snapshot.items.count) {
+            showFilters = true
         }
+        .id(Self.searchAnchor)
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(AdminHubScroll.space)).minY } action: { barMoved($0) }
+        .padding(.top, DS.Spacing.md)
     }
 
     private func headerButtons(_ model: AdminMembersListModel) -> some View {
         let canRegister = authVM.canRegisterMembers && authVM.adminCanEdit(.family)
+        let admin = authVM.isAdmin
         return AdminMembersHeaderButtons(
             register: canRegister ? { Self.registerPage } : nil,
-            // التقارير بالفلاتر والفرع والبحث الحاليين — الصفّ نفسه الذي في القائمة
-            reports: authVM.isAdmin ? { open(.reports(exportScope(model))) } : nil)
+            // التقارير بالفلاتر والفرع والبحث الحاليين — رجال القائمة نفسها
+            reports: admin ? { open(.reports(exportScope(model))) } : nil,
+            // صفحة «نساء العائلة» كما هي (المالك والمدير)، وشجرة النساء لكل من يرى «العائلة»
+            womenPage: admin ? { open(.women(AdminWomenLanding())) } : nil,
+            womenTree: { Self.openWomenTree() })
     }
 
     private static var registerPage: AnyView {
         AnyView(AdminRegisterMemberView().adminBackTitle(AdminArea.family.title).adminArea(.family))
     }
 
-    /// التصدير: الفلاتر والفرع والبحث — بلا شيء = كل العائلة
+    /// التصدير (تقرير الأعضاء = رجال الشجرة): الفلاتر والفرع والبحث على رجال القائمة — بلا شيء، أو بلا «رجال» في القائمة،
+    /// = كل العائلة
     private func exportScope(_ model: AdminMembersListModel) -> AdminReportScope? {
         let q = trimmedQuery
-        guard !filters.isEmpty || !q.isEmpty else { return nil }
+        let s = filters
+        guard let men = model.sections.first(where: { $0.population == .men }) else { return nil }
+        let filtered = !s.accounts.isEmpty || !s.lives.isEmpty || s.branch != nil || s.sub != nil
+        guard filtered || !q.isEmpty else { return nil }
         var parts: [String] = []
-        parts += AdminAccountFilter.allCases.filter(filters.accounts.contains).map(\.title)
-        parts += AdminLifeFilter.allCases.filter(filters.lives.contains).map(\.title)
-        if let sub = filters.sub { parts.append(sub.title) }
-        if let b = filters.branch { parts.append(branchTitle(b)) }
+        parts += AdminMembersLanding.Account.allCases.filter(s.accounts.contains).map { P.title($0) }
+        parts += AdminMembersLanding.Life.allCases.filter(s.lives.contains).map { P.title($0) }
+        if let sub = s.subList { parts.append(sub.title) }
+        if let b = s.branch { parts.append(branchTitle(b)) }
         if !q.isEmpty { parts.append("«\(q)»") }
-        return AdminReportScope(ids: Set(model.rows.map { index.entries[$0].id }), title: parts.joined(separator: " · "))
+        return AdminReportScope(ids: Set(men.rows.map { index.entries[$0].id }), title: parts.joined(separator: " · "))
     }
 
     // MARK: الطيّ عند التمرير
@@ -395,7 +404,8 @@ struct AdminMembersPage: View {
 
     private func compactBar(_ model: AdminMembersListModel) -> some View {
         AdminMembersCompactBar(
-            total: census.counts.men,
+            // «العائلة ⌄ · N» = عدد النتيجة الحالية (F5)
+            total: model.snapshot.result,
             backTitle: outerBack ?? AdminArea.homeTitle,
             back: { dismiss() },
             search: {
@@ -415,38 +425,44 @@ struct AdminMembersPage: View {
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private func makeModel() -> AdminMembersListModel {
-        let base = scope(branch: filters.branch, sub: filters.sub)
-        let accounts = filters.accounts, lives = filters.lives
-        let rows = base.rows.filter { index.matches($0, accounts: accounts, lives: lives) }
-        let set = filterSet(base: base)
-        let searching = !trimmedQuery.isEmpty
-        let order = AdminMembersLogic.Order.make(filtered: !filters.isEmpty, searching: searching)
-        return AdminMembersListModel(rows: rows, set: set, snapshot: set.snapshot(filters), order: order,
-                                     searching: searching)
+    /// الفئات التي وصلت بياناتها — غيرها «—» لا صفر
+    private var ready: Set<Population> {
+        var out: Set<Population> = []
+        if index.built { out.insert(.men) }
+        if peopleBuilt { out.formUnion([.women, .outside]) }
+        return out
     }
 
-    /// القائمة بعد «القائمة» الإضافية والفرع والبحث، وعدّها ٢×٢ — من الذاكرة إن حُسبت لهذه القيم
-    private func scope(branch: UUID?, sub: AdminMemberSub?) -> AdminMembersScope {
+    private func makeModel() -> AdminMembersListModel {
+        let s = filters
+        let sees = seesOthers
+        let searching = !trimmedQuery.isEmpty
+        let sections = index.built
+            ? P.sections(scope(branch: s.branch, sub: s.sub), persons: persons, s, seesOthers: sees,
+                         accountsReady: index.accountsReady)
+            : []
+        let set = filterSet(current: s)
+        return AdminMembersListModel(sections: sections, set: set, snapshot: set.snapshot(s),
+                                     order: P.order(s, seesOthers: sees, searching: searching), searching: searching,
+                                     showsHeaders: P.showsSections(s.people, seesOthers: sees))
+    }
+
+    /// النطاق بعد «القائمة» (للرجال) والبحث والفرع لكل فئة، وعدّها ٢×٢ — من الذاكرة إن حُسب لهذه القيم
+    private func scope(branch: UUID?, sub: String?) -> AdminPeopleLogic.Scope {
         let q = trimmedQuery
         let key = AdminMembersScopeMemo.Key(version: version, branch: branch, sub: sub, query: q)
         return memo.value(key) {
-            var rows = index.rows(.all, .all)
-            if let sub {
-                let members = Set(index.rows(sub.homeChip, sub))
-                rows = rows.filter { members.contains($0) }
+            var men = index.rows(.all, .all)
+            if let list = sub.flatMap(AdminMemberSub.init(rawValue:)) {
+                let members = Set(index.rows(list.homeChip, list))
+                men = men.filter { members.contains($0) }
             }
-            if let branch {
-                let members = tree.subtree(of: branch)
-                rows = rows.filter { members.contains(index.entries[$0].id) }
+            var candidates = searched(men, q)
+            if peopleBuilt {
+                let offset = index.entries.count
+                candidates += searchedPeople(q).map { $0 + offset }
             }
-            rows = searched(rows, q)
-            var tally = AdminMembersLogic.Tally()
-            for i in rows {
-                let e = index.entries[i]
-                tally.add(deceased: e.member.isDeceased == true, hasLogin: AdminMembersIndex.hasLogin(e))
-            }
-            return AdminMembersScope(rows: rows, tally: tally)
+            return P.scope(persons, candidates: candidates, branch: branch.map { tree.subtree(of: $0) })
         }
     }
 
@@ -468,11 +484,24 @@ struct AdminMembersPage: View {
         return hits.map(\.row)
     }
 
-    /// العدد لحالة تصفية (يشمل البحث — نفس ما يُرى) — nil قبل وصول الحسابات لخيار «الحساب»
+    /// النساء وخارج العائلة بالبحث نفسه (الاسم فقط — لا أرقام هاتف في شجرة النساء) — مواضع `people`
+    private func searchedPeople(_ q: String) -> [Int] {
+        guard !q.isEmpty else { return Array(people.indices) }
+        guard !NameSearch.isPhoneQuery(q) else { return [] }
+        let words = NameSearch.words(q)
+        var hits: [(score: Int, row: Int)] = []
+        for (i, e) in people.enumerated() {
+            if let score = NameSearch.score(queryWords: words, candidateWords: e.words) { hits.append((score, i)) }
+        }
+        hits.sort { $0.score != $1.score ? $0.score < $1.score : $0.row < $1.row }
+        return hits.map(\.row)
+    }
+
+    /// العدد لحالة تصفية (يشمل البحث — نفس ما يُرى) — nil قبل وصول ما يلزمه
     private func resultCount(_ s: AdminMembersFilters) -> Int? {
         guard index.built else { return nil }
-        return scope(branch: s.branch, sub: s.sub).tally
-            .shown(accounts: s.accountLogic, lives: s.lifeLogic, accountsReady: index.accountsReady)
+        return P.count(scope(branch: s.branch, sub: s.sub), s, seesOthers: seesOthers, ready: ready,
+                       accountsReady: index.accountsReady)
     }
 
     /// اسم الفرع في صفّ «الفرع» وشريحته: الاسم المخصّص من «أسماء العوائل والفروع» إن وُجد، وإلا الاسم المختصر لرأسه
@@ -483,49 +512,17 @@ struct AdminMembersPage: View {
         return m.map { $0.shortFullName.isEmpty ? $0.fullName : $0.shortFullName } ?? L10n.t("فرع", "Branch")
     }
 
-    /// ورقة التصفية (spec C.7، mock 5، F3): الحساب ← الحالة (اختيار متعدّد) ← الفرع (منتقٍ، اختيار واحد) — و«القائمة» حين
-    /// جاءت من رابط. عدد كل خيار = النتيجة لو اختير وحده في مجموعته مع بقية الاختيارات
-    private func filterSet(base: AdminMembersScope) -> AdminFilterSet<AdminMembersFilters> {
-        let ready = index.accountsReady
+    /// ورقة التصفية (spec C.7، mock 5، F3، F5): مَن ← الحساب ← الحالة ← الفرع ← «القائمة» حين جاءت من رابط. عدد كل
+    /// خيار = النتيجة لو اختير وحده في مجموعته مع بقية الاختيارات (`AdminPeopleLogic.filterSet`)
+    private func filterSet(current: AdminMembersFilters) -> AdminFilterSet<AdminMembersFilters> {
         let members = memberVM.allMembers
-        return AdminFilterSet(
-            noun: { _ in L10n.t("رجل", "men") },
-            resultCount: { s in resultCount(s) },
-            groups: { s in
-                let tally = index.built ? scope(branch: s.branch, sub: s.sub).tally : AdminMembersLogic.Tally()
-                func count(_ a: Set<AdminAccountFilter>, _ l: Set<AdminLifeFilter>) -> Int? {
-                    index.built ? tally.shown(accounts: Set(a.map(\.logic)), lives: Set(l.map(\.logic)),
-                                              accountsReady: ready) : nil
-                }
-                let accounts = AdminAccountFilter.allCases.filter { $0 != .all }
-                let lives = AdminLifeFilter.allCases.filter { $0 != .all }
-                var groups: [AdminFilterGroup<AdminMembersFilters>] = [
-                    .choices("account", title: L10n.t("الحساب", "Account"), values: \.accounts,
-                             options: accounts.map { AdminFilterOption($0, $0.title, count: count([$0], s.lives)) }),
-                    .choices("life", title: L10n.t("الحالة", "Status"), values: \.lives,
-                             options: lives.map { AdminFilterOption($0, $0.title, count: count(s.accounts, [$0])) }),
-                    .picker("branch", title: L10n.t("الفرع", "Branch"), value: \.branch, all: nil,
-                            allTitle: L10n.t("كل الفروع", "All branches"), valueTitle: s.branch.map(branchTitle),
-                            chooseTitle: L10n.t("اختر فرعاً", "Pick a branch"),
-                            count: s.branch == nil ? nil : count(s.accounts, s.lives), ownsHeader: true) { current, pick in
-                        AnyView(BranchPickerSheet(allMembers: members, selectedId: current, allLevels: true,
-                                                  onSelect: { pick($0) }))
-                    },
-                ]
-                if let sub = s.sub {
-                    groups.append(.single("list", title: L10n.t("القائمة", "List"), value: \.sub, neutral: nil, options: [
-                        AdminFilterOption<AdminMemberSub?>(nil, AdminFilterText.all, count: resultCount(cleared(s))),
-                        AdminFilterOption<AdminMemberSub?>(sub, sub.title, count: count(s.accounts, s.lives)),
-                    ]))
-                }
-                return groups
-            })
-    }
-
-    private func cleared(_ s: AdminMembersFilters) -> AdminMembersFilters {
-        var next = s
-        next.sub = nil
-        return next
+        return P.filterSet(current: current, seesOthers: seesOthers, result: { resultCount($0) },
+                           branchTitle: { branchTitle($0) },
+                           subTitle: { AdminMemberSub(rawValue: $0)?.title ?? $0 },
+                           branchPicker: { current, pick in
+                               AnyView(BranchPickerSheet(allMembers: members, selectedId: current, allLevels: true,
+                                                         onSelect: { pick($0) }))
+                           })
     }
 
     // MARK: المحتوى
@@ -541,10 +538,9 @@ struct AdminMembersPage: View {
                     AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), rows: 8))
                 }
             } else {
-                if AdminMembersLogic.showsResultLine(filtered: !model.snapshot.items.isEmpty, searching: model.searching) {
-                    AnyView(filterStatus(model))
-                        .padding(.bottom, DS.Spacing.md)
-                }
+                // العدد دائماً هنا (كان في مربّعات الرأس — F5)، والشرائح فوقه حين تكون
+                AnyView(filterStatus(model))
+                    .padding(.bottom, DS.Spacing.md)
                 if let row = reviewRow {
                     row.padding(.bottom, DS.Spacing.lg)
                 }
@@ -573,47 +569,89 @@ struct AdminMembersPage: View {
 
     // MARK: التصفية المفعّلة
 
-    /// شرائح التصفية المفعّلة (طقم U5 — كل ✕ تلغي فلترها وحده) ثم «123 رجل · أبجدياً». مع التصفية أو البحث فقط
+    /// شرائح التصفية المفعّلة (طقم U5 — كل ✕ تلغي فلترها وحده؛ «رجال» الافتراضية شريحة) ثم «2,729 رجل · بالفروع»
     private func filterStatus(_ model: AdminMembersListModel) -> some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            AdminActiveFilterChips(set: model.set, selection: $filters, snapshot: model.snapshot)
+            if !model.snapshot.items.isEmpty {
+                AdminActiveFilterChips(set: model.set, selection: $filters, snapshot: model.snapshot)
+            }
             AdminMembersResultLine(result: model.snapshot.result, set: model.set, order: model.order.title)
         }
     }
 
     // MARK: القائمة
 
+    /// قسم ينتظر بياناته: الرجال بفلتر «الحساب» قبل قوائم الحسابات، والنساء وخارج العائلة قبل شجرة النساء
+    private func waiting(_ p: Population) -> Bool {
+        p == .men ? !filters.accounts.isEmpty && !index.accountsReady : !peopleBuilt
+    }
+
+    private func limit(_ p: Population) -> Int { limits[p] ?? Self.pageSize }
+
     @ViewBuilder
     private func listSection(_ model: AdminMembersListModel) -> some View {
-        if !filters.accounts.isEmpty && !index.accountsReady {
-            // «لهم حساب/بلا حساب» قبل وصول قوائم الحسابات: لا قائمة فارغة مضلِّلة
-            if accounts.health.look == .unknown {
-                AdminPageStateCard(.error(L10n.t("تعذّر تحميل الحسابات", "Couldn't load the accounts"),
-                                          message: L10n.t("تصفية «الحساب» تحتاجها", "The «Account» filter needs them"),
-                                          retry: { Task { await accounts.refresh(force: true) } }))
-            } else {
-                AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…"), rows: 4))
-            }
-        } else if model.rows.isEmpty {
+        let shown = model.sections.filter { !$0.rows.isEmpty || waiting($0.population) }
+        if shown.isEmpty {
             if model.searching {
                 AdminPageStateCard(.empty(L10n.t("لا أحد بهذا الاسم أو الرقم", "Nobody with this name or number"),
                                           actionTitle: L10n.t("مسح البحث", "Clear search"), action: { query = "" }))
-            } else if !filters.isEmpty {
+            } else if !model.snapshot.items.isEmpty {
                 AdminFilterEmptyCard(title: AdminMembersText.noResults, editFilters: { showFilters = true })
             } else {
                 AdminPageStateCard(.empty(L10n.t("لا أحد هنا الآن", "Nobody here right now")))
             }
-        } else if model.order == .branches {
-            AnyView(groupedList(model.rows))
         } else {
-            AnyView(flatList(model.rows))
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(shown.enumerated()), id: \.element.population) { n, section in
+                    if model.showsHeaders {
+                        AdminMembersPopulationHeader(population: section.population,
+                                                     count: waiting(section.population) ? nil : section.rows.count)
+                            .padding(.top, n == 0 ? 0 : DS.Spacing.xxl)
+                            .padding(.bottom, DS.Spacing.xs)
+                    }
+                    AnyView(sectionBody(section, order: model.order))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sectionBody(_ section: AdminPeopleLogic.Section, order: AdminMembersLogic.Order) -> some View {
+        switch section.population {
+        case .men:
+            if waiting(.men) {
+                // «لهم حساب/بلا حساب» قبل وصول قوائم الحسابات: لا قائمة فارغة مضلِّلة
+                if accounts.health.look == .unknown {
+                    AdminPageStateCard(.error(L10n.t("تعذّر تحميل الحسابات", "Couldn't load the accounts"),
+                                              message: L10n.t("تصفية «الحساب» تحتاجها", "The «Account» filter needs them"),
+                                              retry: { Task { await accounts.refresh(force: true) } }))
+                } else {
+                    AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…"), rows: 4))
+                }
+            } else if order == .branches {
+                AnyView(groupedList(section.rows))
+            } else {
+                AnyView(flatList(section.rows))
+            }
+        case .women, .outside:
+            if !peopleBuilt {
+                if womenHealth.canRetry {
+                    AdminPageStateCard(.error(L10n.t("تعذّر تحميل شجرة النساء", "Couldn't load the women's tree"),
+                                              message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                              retry: { Task { await loadWomen(force: true) } }))
+                } else {
+                    AdminPageStateCard(.loading(L10n.t("جارٍ تحميل شجرة النساء…", "Loading the women's tree…"), rows: 4))
+                }
+            } else {
+                AnyView(peopleList(section.rows, population: section.population))
+            }
         }
     }
 
     /// أبجدياً (أو بالأقرب للبحث): صفوف مسطّحة بخط رفيع يبدأ من النص (mock 4)
     private func flatList(_ rows: [Int]) -> some View {
         let ids = rows.map { index.entries[$0].id }
-        let visible = Array(rows.prefix(limit))
+        let visible = Array(rows.prefix(limit(.men)))
         return VStack(alignment: .leading, spacing: 0) {
             AdminMembersListTopRule()
             LazyVStack(spacing: 0) {
@@ -621,17 +659,18 @@ struct AdminMembersPage: View {
                     row(i, ids: ids, position: pos, divider: pos > 0)
                 }
             }
-            moreButton(total: rows.count)
+            moreButton(total: rows.count, population: .men)
         }
     }
 
-    /// بالفروع («فرع جاسم · 214»، `BranchPickerSheet.familyRoot` والأسماء المخصّصة) — «عرض المزيد» يمرّ على الفروع بالترتيب
+    /// بالفروع («فرع جاسم · 214»، `BranchPickerSheet.familyRoot` والأسماء المخصّصة) — «عرض المزيد» يمرّ على الفروع بالترتيب.
+    /// بلا تصفية ولا بحث فقط: صفوف القسم = كل الرجال
     private func groupedList(_ rows: [Int]) -> some View {
         let groups = index.branches
         let ids = groups.flatMap { $0.rows.map { index.entries[$0].id } }
         var sections: [(branch: AdminMembersIndex.Branch, shown: [Int], offset: Int)] = []
         var offset = 0
-        var budget = limit
+        var budget = limit(.men)
         for g in groups where budget > 0 {
             let shown = Array(g.rows.prefix(budget))
             sections.append((g, shown, offset))
@@ -649,17 +688,52 @@ struct AdminMembersPage: View {
                     }
                 }
             }
-            moreButton(total: ids.count)
+            moreButton(total: ids.count, population: .men)
+        }
+    }
+
+    /// النساء أو خارج العائلة: صفّ «نساء العائلة» نفسه (`AdminWomenRow`)، ويفتح ما يفتحه هناك
+    private func peopleList(_ rows: [Int], population: Population) -> some View {
+        let offset = index.entries.count
+        let valid = rows.filter { people.indices.contains($0 - offset) }
+        let sonIds = valid.compactMap { i -> UUID? in
+            if case .son(let m) = people[i - offset].kind { return m.id } else { return nil }
+        }
+        let visible = Array(valid.prefix(limit(population)))
+        return VStack(alignment: .leading, spacing: 0) {
+            AdminMembersListTopRule()
+            LazyVStack(spacing: 0) {
+                ForEach(Array(visible.enumerated()), id: \.element) { pos, i in
+                    let entry = people[i - offset]
+                    Button { openPerson(entry, sonIds: sonIds) } label: { AdminWomenRow(entry: entry) }
+                        .buttonStyle(AdminRowPressStyle(bleed: DS.Spacing.lg))
+                        .overlay(alignment: .top) {
+                            if pos > 0 { AdminRowDivider(inset: DS.Icon.avatar + DS.Spacing.md) }
+                        }
+                }
+            }
+            moreButton(total: valid.count, population: population)
+        }
+    }
+
+    /// كما في «نساء العائلة»: المرأة والزوج من خارج العائلة ← مربّع شجرة النساء، وابن البنت ← ورقة حسابه بين أبناء القسم
+    private func openPerson(_ e: AdminWomenEntry, sonIds: [UUID]) {
+        switch e.kind {
+        case .woman(let m), .outsideHusband(let m):
+            selectedWoman = m
+        case .son(let m):
+            sheet = AdminMemberSheetContext(ids: sonIds, start: sonIds.firstIndex(of: m.id) ?? 0)
         }
     }
 
     @ViewBuilder
-    private func moreButton(total: Int) -> some View {
-        if total > limit {
-            AdminPillButton(title: L10n.t("عرض المزيد (\(DSNumber.grouped(total - limit)))",
-                                          "Show more (\(DSNumber.grouped(total - limit)))"),
+    private func moreButton(total: Int, population: Population) -> some View {
+        let shown = limit(population)
+        if total > shown {
+            AdminPillButton(title: L10n.t("عرض المزيد (\(DSNumber.grouped(total - shown)))",
+                                          "Show more (\(DSNumber.grouped(total - shown)))"),
                             icon: "chevron.down", style: .soft, height: DS.Hub.pillHeightCard) {
-                limit += Self.pageSize
+                limits[population] = shown + Self.pageSize
             }
             .frame(maxWidth: .infinity)
             .padding(.top, DS.Spacing.md)
@@ -727,12 +801,48 @@ struct AdminMembersPage: View {
 
 /// ما يرسمه المحتوى في الرسم الواحد
 struct AdminMembersListModel {
-    /// صفوف القائمة الظاهرة (مواضع الفهرس) بترتيبها
-    let rows: [Int]
+    /// الأقسام بترتيبها («الرجال» · «النساء» · «خارج العائلة») وصفوف كلٍّ (مواضع `persons`) — فئة واحدة = قسم واحد
+    let sections: [AdminPeopleLogic.Section]
     let set: AdminFilterSet<AdminMembersFilters>
     let snapshot: AdminFilterSnapshot<AdminMembersFilters>
     let order: AdminMembersLogic.Order
     let searching: Bool
+    /// أكثر من فئة: عنوان لكل قسم
+    let showsHeaders: Bool
+}
+
+/// مربّع المرأة (أو الزوج من خارج العائلة) — نفسه في «نساء العائلة» بصلاحياته (في نوعه المستقل — حارس المكدس)
+struct AdminWomanDetailCover: ViewModifier {
+    @Binding var woman: FamilyMember?
+    let women: [FamilyMember]
+    let me: FamilyMember?
+    let canEdit: Bool
+    let canDelete: Bool
+    let canAnnounceDeath: Bool
+    let canModerate: Bool
+    let onChanged: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .fullScreenCover(item: $woman) { w in
+                AnyView(WomanDetailSheet(
+                    woman: w,
+                    allWomen: women,
+                    me: me,
+                    canEdit: canEdit,
+                    canDelete: canDelete,
+                    canAnnounceDeath: canAnnounceDeath,
+                    canModerate: canModerate,
+                    onChanged: onChanged,
+                    onOpenMember: { id in
+                        woman = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { woman = women.first { $0.id == id } }
+                    }
+                )
+                .background(ClearPresentationBackground()))
+            }
+            .transaction { t in if woman != nil { t.disablesAnimations = true } }
+    }
 }
 
 // MARK: - الحقل + «تصفية» في الرأس الكحلي (فلاتر المالك «ب»، بحقل يقبل المؤشر من الرأس المطويّ)
@@ -972,6 +1082,54 @@ struct AdminMemberListRow: View {
         return lead + Text(verbatim: " \(parts.rest)")
             .font(DS.Font.role(.body))
             .foregroundColor(DS.Color.textSecondary)
+    }
+}
+
+/// عنوان قسم فئة (F5) فوق صفوفها حين تُختار أكثر من فئة: مربّع رمز بلون سلسلتها في «اليوم» (`DS.Chart.men/women/outside`
+/// — اللون نفسه بجانب الاسم نفسه في الحلقات) · «الرجال» ١٧ شبه عريض · العدد رمادياً («—» قبل وصول بياناته). فوق عناوين
+/// الفروع داخل «الرجال»، فشكله غير شكلها (مربّع الرمز لا الشريط الأخضر، والعدد بلا كبسولة)
+struct AdminMembersPopulationHeader: View {
+    let population: AdminMembersLanding.Population
+    /// nil = لم تصل بيانات الفئة
+    let count: Int?
+
+    private var symbol: String {
+        switch population {
+        case .men:     return "figure.stand"
+        case .women:   return "figure.stand.dress"
+        case .outside: return "person.2.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch population {
+        case .men:     return DS.Chart.men
+        case .women:   return DS.Chart.women
+        case .outside: return DS.Chart.outside
+        }
+    }
+
+    var body: some View {
+        let title = AdminPeopleLogic.sectionTitle(population)
+        let number = count.map { DSNumber.grouped($0) } ?? AdminStoreHealthText.placeholder
+        HStack(alignment: .center, spacing: DS.Spacing.smd) {
+            AdminIconSquare(symbol: symbol, tint: tint, glyph: DS.Glyph.lg)
+            Text(verbatim: title)
+                .dsFont(DS.Hub.familyBranchTitle)
+                .foregroundColor(DS.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(verbatim: number)
+                .dsFont(.subtitle)
+                .monospacedDigit()
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(1)
+                .fixedSize()
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: DS.Icon.tapTarget)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "\(title)\(L10n.isArabic ? "،" : ",") \(count == nil ? AdminStoreHealthText.loading : number)"))
+        .accessibilityAddTraits(.isHeader)
     }
 }
 

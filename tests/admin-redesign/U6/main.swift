@@ -85,13 +85,16 @@ check(AdminCensusText.estimateSpoken(unverified: 41, opens: true).contains("≈"
 // MARK: T2 — الوجهات والرقم الذي تساويه القائمة
 check(AdminCensusRoutes.destination(.total, on: .today, seesWomenPage: true), .stats(.family), "today total → stats family")
 check(AdminCensusRoutes.destination(.total, on: .stats, seesWomenPage: true), .none, "stats total → its own home")
+// F5: الرجال والنساء و«خارج العائلة» فئات «مَن» في «العائلة» — كل رقم يفتحها على شريحة فئته
 check(AdminCensusRoutes.destination(.men, on: .today, seesWomenPage: true),
-      .members(AdminMembersLanding(account: .all, life: .all)), "men → family root, filters cleared")
+      .members(AdminMembersLanding(account: .all, life: .all, population: [.men])), "men → family root {رجال}, filters cleared")
 check(AdminCensusRoutes.destination(.women, on: .today, seesWomenPage: true),
-      .women(AdminWomenLanding(status: .all, branch: .all)), "women → family women, status all")
+      .members(AdminMembersLanding(account: .all, life: .all, population: [.women])), "women → family {نساء}, status all")
 check(AdminCensusRoutes.destination(.women, on: .today, seesWomenPage: false), .womenTree, "monitor → women tree")
 check(AdminCensusRoutes.destination(.inApp, on: .today, seesWomenPage: true), .stats(.inApp), "170 → stats in-app")
-check(AdminCensusRoutes.destination(.outside, on: .today, seesWomenPage: true), .stats(.outside), "50 → stats outside")
+check(AdminCensusRoutes.destination(.outside, on: .today, seesWomenPage: true),
+      .members(AdminMembersLanding(account: .all, life: .all, population: [.outside])), "50 → family {خارج العائلة} (F5)")
+check(AdminCensusRoutes.destination(.outside, on: .today, seesWomenPage: false), .stats(.outside), "50 (monitor) → stats outside")
 check(AdminCensusRoutes.destination(.estimate, on: .today, seesWomenPage: true),
       .members(AdminMembersLanding(review: .living)), "≈ → «هل ما زالوا أحياء؟»")
 check(today.value(of: .men), 2_729, "men list must hold 2,729")

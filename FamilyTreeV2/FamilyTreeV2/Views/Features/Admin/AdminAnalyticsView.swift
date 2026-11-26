@@ -236,6 +236,9 @@ struct AdminAnalyticsView: View {
         switch destination {
         case .none:
             return
+        case .members(let landing) where landing.population != nil:
+            // F5: الحلقات و«خارج العائلة» تفتح «العائلة» على فئتها («مَن») — الهبوط الصريح يحملها كاملة
+            push(.family) { AnyView(AdminMembersPage(landing: landing)) }
         case .members(let landing):
             let chip = Self.chip(for: landing)
             push(.family) { AnyView(AdminMembersPage(chip: chip)) }

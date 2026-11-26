@@ -5,8 +5,8 @@ import Foundation
 // ما تقرّره صفحة «العائلة» بلا واجهة، في مكان واحد يُفحص بلا محاكي:
 //  ١) فلترا «الحساب» و«الحالة» على عضو (T2): «لهم حساب» = له حساب دخول فقط — الموقوف بلا حساب كان يُعدّ هنا فيختلف
 //     الرقم عن «المسجّلين» (رجال الشجرة الأحياء لهم حساب). والعدّ لكل خيار من جدول ٢×٢ واحد (`Tally`).
-//  ٢) ما تُفتح عليه الصفحة: معاملات `init` القديمة (`chip:`/`sub:`/`womenOutside:`) والهبوط (`AdminMembersLanding`) ←
-//     فلاتر الصفحة، أو قائمة تُدفع فوق الجذر (الرجوع يعود للجذر).
+//  ٢) ما تُفتح عليه الصفحة: معاملات `init` القديمة (`chip:`/`sub:`/`womenOutside:`) والهبوط (`AdminMembersLanding`، ومنه
+//     «مَن» F5) ← فلاتر الصفحة (`AdminPeopleLogic.Filters`)، أو قائمة تُدفع فوق الجذر (الرجوع يعود للجذر).
 //  ٣) سطر «آخر دخول» في صفّ العضو.
 //
 //   xcrun swiftc -D ADMIN_LOGIC_TEST -o /tmp/u11-logic \
@@ -112,7 +112,7 @@ nonisolated enum AdminMembersLogic {
         case review(Review)
         /// «تواريخ وفاة ناقصة» — بيتها الواحد `DeathDatesCampaignPage` (spec E.19)
         case deathDates
-        /// «نساء العائلة» بهبوطه (رقم «خارج العائلة»)
+        /// «نساء العائلة» بهبوطه — لا رابط يضعها منذ F5 («خارج العائلة» فئة في «العائلة» نفسها)؛ باقية لمن يدفع الصفحة
         case women(AdminWomenLanding)
     }
 
@@ -124,13 +124,17 @@ nonisolated enum AdminMembersLogic {
         /// فلتر إضافي من رابط قديم لا تقابله قائمة مراجعة (القيمة الخام لـ`AdminMemberSub`) — يظهر شريحةً تُلغى
         var sub: String? = nil
         var push: Push? = nil
+        /// «مَن» (F5) — nil = افتراض الصفحة {رجال}، والفارغة = الثلاث
+        var people: Set<AdminMembersLanding.Population>? = nil
 
-        init(account: Account = .all, life: Life = .all, branch: UUID? = nil, sub: String? = nil, push: Push? = nil) {
+        init(account: Account = .all, life: Life = .all, branch: UUID? = nil, sub: String? = nil, push: Push? = nil,
+             people: Set<AdminMembersLanding.Population>? = nil) {
             self.account = account
             self.life = life
             self.branch = branch
             self.sub = sub
             self.push = push
+            self.people = people
         }
     }
 
@@ -145,8 +149,8 @@ nonisolated enum AdminMembersLogic {
     /// تواريخ الوفاة. الشرائح الفرعية الباقية فلتر إضافي وحده (بلا «الحساب»/«الحالة» — قائمتها كاملة بذاتها).
     static func opening(chip: String, sub: String, womenOutside: Bool) -> Opening {
         if womenOutside {
-            // من مجموع («خارج العائلة» في «اليوم») ← «الحالة» = الكل (Autoplan note 3)
-            return Opening(push: .women(AdminWomenLanding(status: .all, branch: .outside)))
+            // F5: «خارج العائلة» فئة داخل «العائلة» نفسها (لا صفحة فوقها) — من مجموع، فلا فلتر غيرها
+            return Opening(people: [.outside])
         }
         switch chip {
         case "registered":
@@ -179,7 +183,8 @@ nonisolated enum AdminMembersLogic {
 
     /// الهبوط (`AdminMembersLanding`): الحقل الغائب = افتراض الصفحة (بلا فلتر)؛ «تواريخ الوفاة» صفحتها الواحدة
     static func opening(landing: AdminMembersLanding) -> Opening {
-        var o = Opening(account: landing.account ?? .all, life: landing.life ?? .all, branch: landing.branch)
+        var o = Opening(account: landing.account ?? .all, life: landing.life ?? .all, branch: landing.branch,
+                        people: landing.population)
         switch landing.review {
         case .death?:  o.push = .deathDates
         case let r?:   o.push = .review(r)
@@ -238,13 +243,16 @@ nonisolated enum AdminMembersLogic {
         return name.isEmpty ? L10n.t("كل العائلة", "The whole family") : name
     }
 
-    /// سطر النتيجة تحت الرأس («783 رجل · أبجدياً») يظهر مع التصفية أو البحث فقط — بلاهما الرقم نفسه في مربّع «رجل» بالرأس
+    /// سطر النتيجة تحت الرأس («783 رجل · أبجدياً») يظهر مع التصفية أو البحث فقط — بلاهما الرقم نفسه في مربّع «رجل» بالرأس.
+    /// F5: مربّعات الرأس حُذفت، فالسطر يظهر دائماً (العدد بيته هناك)
+    @available(*, deprecated, message: "F5: the result line always shows (the header has no count); U21 removes")
     static func showsResultLine(filtered: Bool, searching: Bool) -> Bool {
         filtered || searching
     }
 
-    /// كلمة «حياً» الصغيرة بعد رقم «خارج العائلة» (الأحياء وحدهم — طلب المالك ٢٠٢٦-١١-٢٦). ثابتة — يقرؤها مربّع الرأس
-    /// الذي تنقله F5 إلى «تصفية»؛ الصحيح بالعدد `livingUnit(_:)`
+    /// كلمة «حياً» الصغيرة بعد رقم «خارج العائلة» (الأحياء وحدهم — طلب المالك ٢٠٢٦-١١-٢٦). ثابتة — كان يقرؤها مربّع الرأس
+    /// الذي نقلته F5 إلى «تصفية»؛ الصحيح بالعدد `livingUnit(_:)`
+    @available(*, deprecated, message: "F5 removed the header box; use livingUnit(_:); U21 removes")
     static var livingUnit: String { L10n.t("حياً", "living") }
 
     /// F4 (V21): المعدود بعد رقم الأحياء — «حيّ واحد» · «حيّان» · «5 أحياء» · «50 حياً» · «100 حيّ» (نفس «اليوم»

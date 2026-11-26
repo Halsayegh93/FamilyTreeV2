@@ -69,8 +69,8 @@ check(M.opening(chip: "deceased", sub: "deathIncomplete", womenOutside: false).p
       "deathIncomplete → the death-dates page (its one home)")
 check(M.opening(chip: "all", sub: "newThisWeek", womenOutside: false), M.Opening(sub: "newThisWeek"), "newThisWeek → filter")
 check(M.opening(chip: "unknown", sub: "x", womenOutside: false), M.Opening(), "unknown chip → root, no filter")
-check(M.opening(chip: "registered", sub: "all", womenOutside: true).push,
-      .women(AdminWomenLanding(status: .all, branch: .outside)), "womenOutside → «نساء العائلة» on «فرع خارج العائلة»")
+check(M.opening(chip: "registered", sub: "all", womenOutside: true), M.Opening(people: [.outside]),
+      "womenOutside → «العائلة» on {خارج العائلة} (F5 — no page pushed)")
 
 // MARK: - الهبوط
 

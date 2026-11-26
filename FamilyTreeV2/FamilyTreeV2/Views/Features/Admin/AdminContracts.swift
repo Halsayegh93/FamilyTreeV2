@@ -76,17 +76,23 @@ nonisolated struct AdminMembersLanding: Hashable {
     /// قائمة مراجعة تُدفع فوق الجذر (الرجوع يعود للجذر) — نفس قيم `AdminMemberReview`
     /// («4 مشكلات في الشجرة» في «اليوم» ← «العائلة» ثم «مشكلات» فوقها)
     nonisolated enum Review: String, CaseIterable, Hashable { case living, death, gaps, problems, notOpened, inactive }
+    /// «مَن» في «تصفية» العائلة (F5): رجال الشجرة · نساء العائلة (شجرة النساء) · خارج العائلة الأحياء — بترتيب الأقسام
+    nonisolated enum Population: String, CaseIterable, Hashable { case men, women, outside }
 
     var account: Account? = nil
     var life: Life? = nil
     /// رأس الفرع (`BranchPickerSheet.familyRoot`) — nil = كل الفروع
     var branch: UUID? = nil
     var review: Review? = nil
+    /// «مَن» (F5): nil = افتراض الصفحة {رجال}، والفارغة = الثلاث («الكل»). حلقة «النساء» ← {نساء}، «خارج العائلة» ←
+    /// {خارج العائلة}، حلقة «الرجال» ← {رجال}
+    var population: Set<Population>? = nil
 
     /// الحقول الصريحة (من `init` الصفحة) تغلب الهبوط
     func overridden(by explicit: AdminMembersLanding) -> AdminMembersLanding {
         AdminMembersLanding(account: explicit.account ?? account, life: explicit.life ?? life,
-                            branch: explicit.branch ?? branch, review: explicit.review ?? review)
+                            branch: explicit.branch ?? branch, review: explicit.review ?? review,
+                            population: explicit.population ?? population)
     }
 }
 

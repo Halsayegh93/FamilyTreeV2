@@ -1,16 +1,16 @@
 import SwiftUI
 
-// MARK: - رأس «العائلة» (admin v2، اتجاه «أ» «بطاقات العائلة الملوّنة» — الوحدة V2-2، ٢٠٢٦-١١-٢٦)
+// MARK: - رأس «العائلة» (admin v2، اتجاه «أ» — الوحدة V2-2، ثم F5 «أبسط» ٢٠٢٦-١١-٢٦)
 //
 // الرأس الكحلي المسطّح (`AdminBandHeader`) مثل كل صفحات الإدارة: «‹ الإدارة» بالذهبي ← العنوان قائمة الأقسام «العائلة ⌄»
 // وفي طرفه دائرتان زجاجيتان ٤٤: «＋» (تسجيل عضو جديد، `canRegisterMembers` × «يعدّل») و«⋯» («التقارير (PDF)» بالتصفية
-// والفرع والبحث الحاليين، `isAdmin`) ← سطر ذهبي «كل العائلة» أو اسم الفرع المختار ← ثلاثة مربّعات أرقام زجاجية
-// (`AdminMembersKPIRow`): «2,729 رجل» (هذه القائمة — بلا سهم) · «262 امرأة ‹» (← «نساء العائلة»؛ المراقب ← شجرة النساء)
-// · «46 حياً خارج العائلة ‹» (← «نساء العائلة» على «فرع خارج العائلة»؛ الأحياء وحدهم). الرقم أبيض والاسم ذهبي والسهم حيث
-// يفتح الرقم شيئاً (T2: أول رقم في ما يفتحه = الرقم نفسه) ← حقل البحث الأبيض بعرض الرأس + زرّ «تصفية» الكريمي بعدده
-// (`AdminMembersFilterBar`). الأخضر لمسة فقط (عدد «تصفية»، شريط الفرع) — الرأس كحلي.
-// مطويّاً (حين يصعد الحقل تحت سطر الرأس): سطر واحد مثبّت فوق التمرير (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ ·
-// 2,729» · بحث (يرجع للحقل ويضع المؤشر فيه) · «تصفية» بعدده — والشرائح المفعّلة تحته على الأبيض.
+// والفرع والبحث الحاليين `isAdmin` · «نساء العائلة» صفحتها `isAdmin` · «شجرة النساء» تبويب الشجرة) ← سطر ذهبي صغير بما
+// تعرضه القائمة («كل العائلة»، أو الفئات المختارة «رجال · نساء»، والفرع) ← حقل البحث الأبيض بعرض الرأس + زرّ «تصفية»
+// الكريمي بعدده (`AdminMembersFilterBar`).
+// F5 (المالك: «المربعات العلوية … خلهم اسبط و خلهم داخل التصفية»): مربّعات «رجل · امرأة · خارج العائلة» حُذفت — صارت «مَن»
+// أول مجموعة في «تصفية» (`AdminPeopleLogic`)، والعدد في سطر النتيجة تحت الرأس.
+// مطويّاً (حين يصعد الحقل تحت سطر الرأس): سطر واحد مثبّت فوق التمرير (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ · N»
+// (N = عدد النتيجة الحالية) · بحث (يرجع للحقل ويضع المؤشر فيه) · «تصفية» بعدده — والشرائح المفعّلة تحته على الأبيض.
 
 /// نصوص «العائلة» — «تصفية» (كلمة الآيفون العربية، طلب المالك ٢٠٢٦-١١-٢٦) من مكان الطقم الواحد (`AdminFilterText`، F3)
 enum AdminMembersText {
@@ -20,8 +20,9 @@ enum AdminMembersText {
     static var noResults: String { AdminFilterText.noResults }
 }
 
-/// أرقام رأس «العائلة» — نفس تعريفات «إحصاء الأفراد» (`AdminMemberCounts`): الرجال = الشجرة بلا طلبات الانضمام، النساء =
-/// إناث شجرة النساء
+/// أرقام «العائلة» (حلقات «اليوم» و«الإحصاءات» ورأس شجرة النساء؛ كانت مربّعات رأس الصفحة حتى F5 — صارت فئات «مَن» بالقاعدة
+/// نفسها في `AdminWomenRows`/`AdminPeopleLogic`) — نفس تعريفات «إحصاء الأفراد» (`AdminMemberCounts`): الرجال = الشجرة بلا
+/// طلبات الانضمام، النساء = إناث شجرة النساء
 struct AdminFamilyCensus: Equatable {
     var counts = AdminMemberCounts()
     /// «خارج العائلة» (طلب المالك ٢٠٢٦-١١-٠٨): ذكور = أبناء البنات (`DaughterSonsIndex`) + أزواج البنات من خارج العائلة؛
@@ -65,182 +66,19 @@ struct AdminFamilyCensus: Equatable {
     }
 }
 
-// MARK: - سطر الأرقام
-
-/// عناصر سطر الرأس — الصفر والتحميل والفشل لا تظهر رقماً عادياً (`AdminHeaderItemLook`)
-enum AdminMembersHeaderItems {
-    /// - menHealth: حال قائمة الأعضاء (nil = من القيمة)
-    /// - womenHealth: حال شجرة النساء (منها «امرأة» و«خارج العائلة»)
-    /// - openWomen/openOutside: nil = رقم بلا سهم
-    static func make(census: AdminFamilyCensus, menHealth: AdminStoreHealth?, womenHealth: AdminStoreHealth,
-                     retryMen: @escaping () -> Void, retryWomen: @escaping () -> Void,
-                     openWomen: (() -> Void)?, openOutside: (() -> Void)?) -> [AdminHeaderItem] {
-        let c = census.counts
-        let men = c.men
-        let women = c.women
-        let outside = census.outsideTotal
-        // شجرة النساء وصلت (من الكاش أو الجلب) — الأرقام تُعرض ولو فشل تحديث لاحق
-        let womenState: AdminStoreHealth = women != nil && !womenHealth.hasData ? .loaded(at: .distantPast) : womenHealth
-        return [
-            AdminHeaderItem(id: "men", value: men, label: L10n.t("رجل", "men"), health: menHealth, tap: .none,
-                            retry: retryMen,
-                            spoken: men.map { L10n.t("\(DSNumber.grouped($0)) رجل في هذه القائمة",
-                                                     "\(DSNumber.grouped($0)) men in this list") }),
-            AdminHeaderItem(id: "women", value: women, label: L10n.t("امرأة", "women"), health: womenState,
-                            tap: openWomen.map { AdminPageTap.action($0) } ?? .none, retry: retryWomen,
-                            spoken: women.map { L10n.t("\(DSNumber.grouped($0)) امرأة", "\(DSNumber.grouped($0)) women") }),
-            AdminHeaderItem(id: "outside", value: outside, label: L10n.t("خارج العائلة", "outside the family"),
-                            health: womenState, tap: openOutside.map { AdminPageTap.action($0) } ?? .none,
-                            retry: retryWomen,
-                            spoken: outside.map { L10n.t("\(DSNumber.grouped($0)) خارج العائلة، أحياء",
-                                                         "\(DSNumber.grouped($0)) outside the family, living") }),
-        ]
-    }
-}
-
-// MARK: - مربّعات الأرقام الزجاجية (V2-2)
-
-/// رقم من أرقام الرأس + كلمة صغيرة بعده اختيارية («46 حياً»)
-struct AdminMembersKPI: Identifiable {
-    let item: AdminHeaderItem
-    /// بالذهبي بعد الرقم — nil = بلا
-    var unit: String? = nil
-    var id: String { item.id }
-}
-
-extension AdminMembersHeaderItems {
-    /// عناصر الرأس نفسها (`make`) مربّعاتٍ: «خارج العائلة» بكلمة «حياً» بعد رقمه
-    static func kpis(_ items: [AdminHeaderItem]) -> [AdminMembersKPI] {
-        items.map { AdminMembersKPI(item: $0, unit: $0.id == "outside" ? AdminMembersLogic.livingUnit : nil) }
-    }
-}
-
-/// ثلاثة مربّعات زجاجية بعرض واحد وطول واحد على الكحلي (عمود واحد من أحجام إمكانية الوصول). الشكل والضغطة والحال من
-/// `AdminHeaderItemLook` نفسه (الصفر والتحميل باهتان بلا ضغطة، الفشل «—» برمز إعادة المحاولة، المرفوض مخفي)، و«آخر تحديث
-/// 9:12» تحتها بعد فشل لاحق
-struct AdminMembersKPIRow: View {
-    let kpis: [AdminMembersKPI]
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    private struct Row: Identifiable {
-        let kpi: AdminMembersKPI
-        let look: AdminHeaderItemLook
-        var id: String { kpi.id }
-    }
-
-    var body: some View {
-        let rows = kpis.map { Row(kpi: $0, look: $0.item.look) }.filter { !$0.look.hidden }
-        let stale = rows.compactMap(\.look.staleSince).min()
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            if typeSize.isAccessibilitySize {
-                VStack(spacing: DS.Spacing.sm) {
-                    ForEach(rows) { AdminMembersKPIBox(kpi: $0.kpi, look: $0.look) }
-                }
-            } else {
-                HStack(spacing: DS.Spacing.sm) {
-                    ForEach(rows) { AdminMembersKPIBox(kpi: $0.kpi, look: $0.look) }
-                }
-                // المربّعات الثلاثة بطول أطولها
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            if let stale {
-                Text(AdminStoreHealthText.updated(stale))
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Hub.lineZero)
-            }
-        }
-        .accessibilityElement(children: .contain)
-    }
-}
-
-/// مربّع رقم واحد: الرقم ١٧ أبيض (والكلمة الصغيرة والسهم بالذهبي) وتحته الاسم ذهبي ١٢
-struct AdminMembersKPIBox: View {
-    let kpi: AdminMembersKPI
-    let look: AdminHeaderItemLook
-
-    private var item: AdminHeaderItem { kpi.item }
-
-    var body: some View {
-        if look.retry, let retry = item.retry {
-            Button(action: retry) { face }
-                .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t("\(item.label): \(AdminStoreHealthText.failed)",
-                                           "\(item.label): \(AdminStoreHealthText.failed)"))
-                .accessibilityHint(AdminStoreHealthText.retry)
-        } else if look.opens {
-            AdminTapWrap(tap: item.tap, feel: .scale, label: AnyView(face), accessibilityLabel: spoken)
-                .accessibilityHint(L10n.t("يفتح القائمة", "Opens the list"))
-        } else {
-            face
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken)
-        }
-    }
-
-    /// «262 امرأة» — أو حال التحميل/الفشل بالكلمات (نفس سطر الرأس `AdminHeaderLine`)
-    private var spoken: String {
-        if look.retry {
-            return L10n.t("\(item.label): \(AdminStoreHealthText.failed)", "\(item.label): \(AdminStoreHealthText.failed)")
-        }
-        if look.text == AdminStoreHealthText.placeholder {
-            return L10n.t("\(item.label): \(AdminStoreHealthText.loading)", "\(item.label): \(AdminStoreHealthText.loading)")
-        }
-        let base = item.spoken ?? "\(look.text) \(item.label)"
-        guard let since = look.staleSince else { return base }
-        let stamp = AdminStoreHealthText.updated(since)
-        return L10n.t("\(base)، \(stamp)", "\(base), \(stamp)")
-    }
-
-    private var face: some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Hub.familyControlRadius, style: .continuous)
-        let ink = look.dim ? DS.Hub.lineZero : DS.Color.accentLight
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
-                Text(verbatim: look.text)
-                    .dsFont(.statValue)
-                    .monospacedDigit()
-                    .foregroundColor(look.dim ? DS.Hub.lineZero : DS.Color.headerTitle)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if let unit = kpi.unit, !look.dim {
-                    Text(unit)
-                        .dsFont(.caption)
-                        .foregroundColor(ink)
-                        .lineLimit(1)
-                }
-                if look.retry {
-                    Image(systemName: "arrow.clockwise")
-                        .dsGlyph(DS.Glyph.sm, weight: .semibold)
-                        .foregroundColor(ink)
-                } else if look.opens {
-                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                        .dsGlyph(DS.Glyph.sm, weight: .semibold)
-                        .foregroundColor(ink)
-                }
-            }
-            Text(item.label)
-                .dsFont(.caption)
-                .foregroundColor(ink)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, DS.Hub.kpiPadding)
-        .padding(.vertical, DS.Spacing.xsm)
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.familyKPIMinHeight, maxHeight: .infinity, alignment: .leading)
-        .background(shape.fill(DS.Hub.glass))
-        .overlay(shape.strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
-        .contentShape(shape)
-    }
-}
-
 // MARK: - أزرار الرأس
 
-/// «＋» و«⋯» في طرف العنوان: دائرتان زجاجيتان ٤٤ مرسومتين (زرّان على الأكثر — spec A.3). المراقب بلا شيء
+/// «＋» و«⋯» في طرف العنوان: دائرتان زجاجيتان ٤٤ مرسومتين (زرّان على الأكثر — spec A.3). «⋯» قائمة أصلية: «التقارير
+/// (PDF)» · «نساء العائلة» · «شجرة النساء» — كلٌّ بصلاحيته، والدائرة تختفي بلا عنصر
 struct AdminMembersHeaderButtons: View {
     /// صفحة «تسجيل عضو جديد» — nil = بلا «＋»
     let register: (() -> AnyView)?
-    /// «التقارير (PDF)» بالتصفية الحالية — nil = بلا «⋯»
+    /// «التقارير (PDF)» بالتصفية الحالية — nil = بلا
     let reports: (() -> Void)?
+    /// صفحة «نساء العائلة» (`AdminWomenPanel`، المالك والمدير) — nil = بلا
+    var womenPage: (() -> Void)? = nil
+    /// تبويب الشجرة على شجرة النساء — nil = بلا
+    var womenTree: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: DS.Spacing.xsm) {
@@ -252,16 +90,29 @@ struct AdminMembersHeaderButtons: View {
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
             }
-            if let reports {
+            if reports != nil || womenPage != nil || womenTree != nil {
                 Menu {
-                    Button(action: reports) {
-                        Label(L10n.t("التقارير (PDF)", "Reports (PDF)"), systemImage: "doc.richtext")
+                    if let reports {
+                        Button(action: reports) {
+                            Label(L10n.t("التقارير (PDF)", "Reports (PDF)"), systemImage: "doc.richtext")
+                        }
+                    }
+                    if let womenPage {
+                        Button(action: womenPage) {
+                            Label(AdminWomenPanel.title, systemImage: "person.2")
+                        }
+                    }
+                    if let womenTree {
+                        Button(action: womenTree) {
+                            Label(L10n.t("شجرة النساء", "Women's tree"), systemImage: "tree")
+                        }
                     }
                 } label: {
                     AdminMembersBandCircle(symbol: "ellipsis")
                 }
                 .accessibilityLabel(L10n.t("المزيد", "More"))
-                .accessibilityHint(L10n.t("التقارير بالتصفية الحالية", "Reports with the current filter"))
+                .accessibilityHint(reports != nil ? L10n.t("التقارير وصفحة النساء", "Reports and the women's pages")
+                                                  : L10n.t("شجرة النساء", "The women's tree"))
             }
         }
     }

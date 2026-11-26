@@ -314,7 +314,8 @@ nonisolated enum AdminStatsLogic {
         case .missingData:
             return .missingData
         case .outsideLiving:
-            return viewer.womenPage ? .women(AdminWomenLanding(status: .living, branch: .outside)) : .none
+            // F5: «خارج العائلة» (الأحياء) فئة في «العائلة» نفسها — عددها = هذا الرقم
+            return viewer.womenPage ? .members(AdminMembersLanding(account: .all, life: .all, population: [.outside])) : .none
         case .outsideDeceased:
             return viewer.womenPage ? .women(AdminWomenLanding(status: .deceased, branch: .outside)) : .none
         // مختلطة أو بلا قائمة بعددها (أحياء/متوفون رجالاً ونساءً، «بلا حساب»، أجزاء «خارج العائلة»، الأدوار — صفحة الفريق

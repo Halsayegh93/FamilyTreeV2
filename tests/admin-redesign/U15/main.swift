@@ -44,8 +44,11 @@ check(L.scrollTarget(explicit: nil, stored: nil, shown: all), nil, "no landing")
 let oa = L.Viewer(family: true, womenPage: true, editMembers: true)
 let m = L.Viewer(family: true, womenPage: false, editMembers: true)
 check(L.destination(.ringTotal, viewer: oa), .none, "ring total: its home is this page (no chevron)")
-check(L.destination(.ringMen, viewer: oa), .members(AdminMembersLanding(account: .all, life: .all)), "ring men → family, filters cleared")
-check(L.destination(.ringWomen, viewer: oa), .women(AdminWomenLanding(status: .all, branch: .all)), "ring women (O/A) → women page, status all")
+// F5: فئات «مَن» في «العائلة»
+check(L.destination(.ringMen, viewer: oa), .members(AdminMembersLanding(account: .all, life: .all, population: [.men])),
+      "ring men → family {رجال}, filters cleared")
+check(L.destination(.ringWomen, viewer: oa), .members(AdminMembersLanding(account: .all, life: .all, population: [.women])),
+      "ring women (O/A) → family {نساء}, status all")
 check(L.destination(.ringWomen, viewer: m), .womenTree, "ring women (M) → women tree")
 check(L.destination(.estimate, viewer: m), .members(AdminMembersLanding(review: .living)), "≈ → still alive?")
 check(L.destination(.living, viewer: oa), .none, "living: mixed, no chevron")
@@ -64,8 +67,8 @@ for n in [L.Number.owners, .admins, .members, .monitors, .supervisors, .fathers,
           .knownAges, .averageAge, .longestLife, .outsideWomen, .husbands, .daughtersSons, .approvals, .accountsTotal] {
     check(L.destination(n, viewer: oa), .none, "\(n.rawValue): no list with that count → no chevron")
 }
-check(L.destination(.outsideLiving, viewer: oa), .women(AdminWomenLanding(status: .living, branch: .outside)),
-      "50 outside (O/A) → outside branch, living")
+check(L.destination(.outsideLiving, viewer: oa), .members(AdminMembersLanding(account: .all, life: .all, population: [.outside])),
+      "50 outside (O/A) → family {خارج العائلة} (living only, F5)")
 check(L.destination(.outsideDeceased, viewer: oa), .women(AdminWomenLanding(status: .deceased, branch: .outside)),
       "87 deceased outside (O/A) → outside branch, deceased")
 check(L.destination(.outsideLiving, viewer: m), .none, "50 outside (M) → no chevron")
