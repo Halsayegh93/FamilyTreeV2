@@ -1,14 +1,14 @@
 import SwiftUI
 
-// MARK: - رأس «العائلة» (اختيار المالك ٢٠٢٦-١١-٠٢: النموذج «ب» + «ج»، `samples/family-header`)
+// MARK: - رأس «العائلة» (إعادة تصميم الإدارة U11 — spec C.6، mock 4، اختيار المالك «ب»)
 //
-// مفتوحاً (ب): تحت العنوان ثلاث حلقات (السطر الذهبي «5 فروع · 47 مسجّلاً» حُذف في التبسيط ٢٠٢٦-١١-٠٢) بشكل «إحصاء الأفراد» (`DSRingGauge`
-// بمسار الكحلي `DS.Ring.bandTrack`): الإجمالي ذهبي · الرجال · النساء — الحلقة نسبة الأحياء، والعدد في وسطها، وتحتها الاسم
-// بلونها و«2351 حياً · 368 متوفى». الإجمالي ← «المؤشرات ← العائلة»، الرجال ← شريحة «الكل» في الصفحة نفسها، النساء ← شجرة
-// النساء (كما في «إحصاء الأفراد»). من أحجام إمكانية الوصول كل حلقة كتلة (حلقة صغيرة بجانب الاسم والأعداد).
-// مطويّاً (ج): حين تصعد الشرائح تحت سطر الرأس يظهر فوق التمرير سطر واحد مثبّت (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ · 2719»
-// · بحث (يرجع لأعلى ويضع المؤشر في الحقل) · ＋ تسجيل — والشرائح مثبّتة تحته في موضعها نفسه، فالتبديل بلا قفزة. العودة لأعلى
-// تعيد الرأس الكامل. «تقليل الحركة» = تبديل بلا حركة.
+// الرأس الكحلي المسطّح (`AdminBandHeader`): «‹ الإدارة» ← العنوان قائمة الأقسام «العائلة ⌄» وفي طرفه «＋» (تسجيل عضو
+// جديد، `canRegisterMembers`) و«⋯» («التقارير (PDF)» بالفلاتر والفرع والبحث الحاليين، `isAdmin`) ← سطر الأرقام
+// (`AdminHeaderLine`): «2,729 رجل» (هذه القائمة — بلا سهم) · «262 امرأة ‹» (← «نساء العائلة»؛ المراقب ← شجرة النساء) ·
+// «50 خارج العائلة ‹» (← «نساء العائلة» على «فرع خارج العائلة»). كل رقم = أول رقم في ما يفتحه (T2). حلقات الرأس ومفتاح
+// «شجرة العائلة | شجرة النساء» حُذفا (spec E.9/E.10) — الحلقات باقية في «اليوم» و«الإحصاءات».
+// مطويّاً (حين يصعد شريط البحث تحت سطر الرأس): سطر واحد مثبّت فوق التمرير (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ ·
+// 2,729» · بحث (يرجع للحقل ويضع المؤشر فيه) · «الفلاتر» بعدده — والشرائح المفعّلة تحته على الأبيض.
 
 /// أرقام رأس «العائلة» — نفس تعريفات «إحصاء الأفراد» (`AdminMemberCounts`): الرجال = الشجرة بلا طلبات الانضمام، النساء =
 /// إناث شجرة النساء
@@ -60,259 +60,154 @@ struct AdminFamilyCensus: Equatable {
     }
 }
 
-/// الحلقات الثلاث فوق الرأس الكحلي
-struct AdminFamilyCensusBand: View {
-    let census: AdminFamilyCensus
-    /// «الرجال» ← شريحة «الكل» في صفحة الأعضاء نفسها
-    let openMen: () -> Void
-    /// «النساء» ← «شجرة النساء» في الصفحة نفسها (nil = تبويب الشجرة كما كان، لمن لا يرى قائمة النساء)
-    var openWomen: (() -> Void)? = nil
-    /// «خارج العائلة» ← «شجرة النساء ← فرع خارج العائلة» في الصفحة نفسها
-    var openOutside: (() -> Void)? = nil
-    @EnvironmentObject private var authVM: AuthViewModel
-    @ObservedObject private var verified = AdminLivingVerifiedStore.shared
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.dsLandscape) private var landscape
+// MARK: - سطر الأرقام
 
-    private enum Target { case overview, men, women, outside }
-
-    private struct Gauge: Identifiable {
-        let id: String
-        let title: String
-        let tint: Color
-        let total: Int?
-        let alive: Int?
-        let deceased: Int?
-        let target: Target
-        /// الأحياء تقديريون («تحقق من الأحياء» فيها من لم يُراجَع — الرجال والإجمالي)
-        var estimated = false
-        /// «خارج العائلة»: سطرا «N ذكور · M إناث» بدل الأحياء والمتوفين
-        var lines: (String, String)? = nil
-        /// «N لهم حساب» — الرجال والنساء وخارج العائلة
-        var accounts: String? = nil
-    }
-
-    private var estimated: Bool {
-        (census.counts.oldLiving.map { $0.subtracting(verified.ids).count } ?? 0) > 0
-    }
-
-    private var gauges: [Gauge] {
+/// عناصر سطر الرأس — الصفر والتحميل والفشل لا تظهر رقماً عادياً (`AdminHeaderItemLook`)
+enum AdminMembersHeaderItems {
+    /// - menHealth: حال قائمة الأعضاء (nil = من القيمة)
+    /// - womenHealth: حال شجرة النساء (منها «امرأة» و«خارج العائلة»)
+    /// - openWomen/openOutside: nil = رقم بلا سهم
+    static func make(census: AdminFamilyCensus, menHealth: AdminStoreHealth?, womenHealth: AdminStoreHealth,
+                     retryMen: @escaping () -> Void, retryWomen: @escaping () -> Void,
+                     openWomen: (() -> Void)?, openOutside: (() -> Void)?) -> [AdminHeaderItem] {
         let c = census.counts
+        let men = c.men
+        let women = c.women
+        let outside = census.outsideTotal
+        // شجرة النساء وصلت (من الكاش أو الجلب) — الأرقام تُعرض ولو فشل تحديث لاحق
+        let womenState: AdminStoreHealth = women != nil && !womenHealth.hasData ? .loaded(at: .distantPast) : womenHealth
         return [
-            Gauge(id: "total", title: L10n.t("الإجمالي", "Total"), tint: DS.Color.accentLight,
-                  total: c.total, alive: c.totalAlive, deceased: c.totalDeceased, target: .overview, estimated: estimated),
-            Gauge(id: "men", title: L10n.t("الرجال", "Men"), tint: DS.Hub.censusMale,
-                  total: c.men, alive: c.menAlive, deceased: c.menDeceased, target: .men, estimated: estimated,
-                  accounts: Self.accountsText(census.menAccounts)),
-            Gauge(id: "women", title: L10n.t("النساء", "Women"), tint: DS.Hub.censusFemale,
-                  total: c.women, alive: c.womenAlive, deceased: c.womenDeceased, target: .women,
-                  accounts: Self.accountsText(census.womenAccounts)),
-            Gauge(id: "outside", title: L10n.t("خارج العائلة", "Outside"), tint: DS.Hub.censusOutside,
-                  total: census.outsideTotal, alive: census.outsideMale, deceased: nil, target: .outside,
-                  lines: (census.outsideMale.map { L10n.t("\($0) ذكور", "\($0) male") } ?? L10n.t("— ذكور", "— male"),
-                          census.outsideFemale.map { L10n.t("\($0) إناث", "\($0) female") } ?? L10n.t("— إناث", "— female")),
-                  accounts: Self.accountsText(census.outsideAccounts))
+            AdminHeaderItem(id: "men", value: men, label: L10n.t("رجل", "men"), health: menHealth, tap: .none,
+                            retry: retryMen,
+                            spoken: men.map { L10n.t("\(DSNumber.grouped($0)) رجل في هذه القائمة",
+                                                     "\(DSNumber.grouped($0)) men in this list") }),
+            AdminHeaderItem(id: "women", value: women, label: L10n.t("امرأة", "women"), health: womenState,
+                            tap: openWomen.map { AdminPageTap.action($0) } ?? .none, retry: retryWomen,
+                            spoken: women.map { L10n.t("\(DSNumber.grouped($0)) امرأة", "\(DSNumber.grouped($0)) women") }),
+            AdminHeaderItem(id: "outside", value: outside, label: L10n.t("خارج العائلة", "outside the family"),
+                            health: womenState, tap: openOutside.map { AdminPageTap.action($0) } ?? .none,
+                            retry: retryWomen,
+                            spoken: outside.map { L10n.t("\(DSNumber.grouped($0)) خارج العائلة، أحياء",
+                                                         "\(DSNumber.grouped($0)) outside the family, living") }),
         ]
-    }
-
-    /// كتل عمودية من أحجام إمكانية الوصول (كـ«إحصاء الأفراد»)
-    private var stacked: Bool { typeSize.isAccessibilitySize }
-    /// أربع حلقات في صفّ (الدفعة ٢٠٢٦-١١-٠٨ «نضبط التصميم شوي»): المتوسطة لتتّسع الأربع في عرض ٣٩٣
-    private var ringSize: DS.Ring.Size { DS.Ring.medium }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            if stacked {
-                AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    ForEach(gauges) { block($0) }
-                })
-            } else {
-                // صفّ واحد — في الوضع الأفقي بعرض عمود القراءة في الوسط
-                AnyView(HStack(alignment: .top, spacing: DS.Spacing.md) {
-                    ForEach(gauges) { column($0) }
-                }
-                .frame(maxWidth: landscape ? DS.Landscape.maxContentWidth : .infinity)
-                .frame(maxWidth: .infinity))
-            }
-        }
-    }
-
-    // MARK: الحلقة
-
-    /// الأحياء بلون الحلقة فوق مسار الكحلي، والعدد الكلي في الوسط يعدّ من الصفر («—» ومسار فارغ قبل وصول الأعداد)
-    private func ring(_ g: Gauge, size: DS.Ring.Size) -> DSRingGauge {
-        let total = g.total ?? 0
-        let known = g.alive != nil && total > 0
-        return DSRingGauge(progress: known ? Double(g.alive ?? 0) / Double(total) : nil, tint: g.tint, size: size,
-                           track: DS.Ring.bandTrack, center: .count(g.total), ink: DS.Color.textOnPrimary)
-    }
-
-    /// عمود: الحلقة، ثم الاسم بلونها، ثم «2351 حياً · 368 متوفى» (سطران إن ضاق) — رابط واحد
-    private func column(_ g: Gauge) -> some View {
-        let face = VStack(spacing: DS.Spacing.xs) {
-            // الاسم أصغر وفوق الحلقة (طلب المالك ٢٠٢٦-١١-٠٨ «نصغرهم» + «خل عنوان الحلقة فوق الحلقة»)
-            Text(g.title)
-                .dsFont(.hubLabel)
-                .foregroundColor(g.tint)
-                .multilineTextAlignment(.center)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                // مسافة بين العنوان والحلقة (طلب المالك ٢٠٢٦-١١-٠٨)
-                .padding(.bottom, DS.Spacing.xsm)
-            ring(g, size: ringSize)
-                // مسافة تحت الحلقة أيضاً (طلب المالك ٢٠٢٦-١١-٠٨)
-                .padding(.bottom, DS.Spacing.xsm)
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: DS.Spacing.xs) { aliveText(g); dot; deceasedText(g) }
-                VStack(spacing: 0) { aliveText(g); deceasedText(g) }
-            }
-            // سطر محجوز في كل الأعمدة (الحلقات بطول واحد)
-            accountsText(g)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(g))
-        return link(g, face: AnyView(face))
-    }
-
-    /// كتلة (أحجام إمكانية الوصول): حلقة صغيرة بجانب الاسم والعدد، ثم الأحياء والمتوفون
-    private func block(_ g: Gauge) -> some View {
-        let face = HStack(spacing: DS.Spacing.md) {
-            ring(g, size: DS.Ring.mediumStacked)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(verbatim: "\(g.title) \(Self.number(g.total))")
-                    .dsFont(.hubRow)
-                    .foregroundColor(g.tint)
-                    .fixedSize(horizontal: false, vertical: true)
-                aliveText(g)
-                deceasedText(g)
-                if g.accounts != nil { accountsText(g) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken(g))
-        return link(g, face: AnyView(face))
-    }
-
-    private func aliveText(_ g: Gauge) -> some View {
-        Text(verbatim: g.lines?.0 ?? AdminFamilyStatsPage.aliveText(g.alive, estimated: g.estimated))
-            .dsFont(.caption)
-            .monospacedDigit()
-            .foregroundColor(g.tint)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func deceasedText(_ g: Gauge) -> some View {
-        Text(verbatim: g.lines?.1 ?? AdminFamilyStatsPage.deceasedText(g.deceased))
-            .dsFont(.caption)
-            .monospacedDigit()
-            .foregroundColor(DS.Hub.onBandMuted)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func accountsText(_ g: Gauge) -> some View {
-        Text(verbatim: g.accounts ?? " ")
-            .dsFont(.caption)
-            .monospacedDigit()
-            .foregroundColor(DS.Color.accentLight)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-    }
-
-    static func accountsText(_ n: Int?) -> String {
-        n.map { L10n.t("\($0) لهم حساب", "\($0) with accounts") } ?? L10n.t("— لهم حساب", "— with accounts")
-    }
-
-    private var dot: some View {
-        Text(verbatim: "·")
-            .dsFont(.caption)
-            .foregroundColor(DS.Hub.onBandMuted)
-    }
-
-    // MARK: الروابط (كـ«إحصاء الأفراد»)
-
-    @ViewBuilder
-    private func link(_ g: Gauge, face: AnyView) -> some View {
-        switch g.target {
-        case .overview:
-            // «المؤشرات ← العائلة» لمن يرى «المؤشرات» فقط — وإلا رقم بلا رابط
-            if AdminArea.metrics.isVisible(for: authVM) {
-                NavigationLink {
-                    AdminLazyPage {
-                        AnyView(AdminAreaGate(area: .metrics) { AnyView(AdminAnalyticsView()) }
-                            .adminArea(.metrics).adminBackTitle(AdminArea.family.title))
-                    }
-                } label: { face }
-                .buttonStyle(DSPressStyle())
-                .accessibilityHint(L10n.t("يفتح المؤشرات ← العائلة", "Opens Insights → Family"))
-            } else {
-                face
-            }
-        case .men:
-            Button(action: openMen) { face }
-                .buttonStyle(DSPressStyle())
-                .accessibilityHint(L10n.t("يعرض كل الأعضاء", "Shows all members"))
-        case .women:
-            if let openWomen {
-                Button(action: openWomen) { face }
-                    .buttonStyle(DSPressStyle())
-                    .accessibilityHint(L10n.t("يعرض قائمة النساء", "Shows the women's list"))
-            } else {
-                womenTreeLink(face)
-            }
-        case .outside:
-            if let openOutside {
-                Button(action: openOutside) { face }
-                    .buttonStyle(DSPressStyle())
-                    .accessibilityHint(L10n.t("يعرض فرع خارج العائلة", "Shows the outside branch"))
-            } else {
-                face
-            }
-        }
-    }
-
-    /// شجرة النساء في تبويب الشجرة (كحلقة «النساء» في «إحصاء الأفراد») — لمن لا يرى قائمة النساء هنا
-    private func womenTreeLink(_ face: AnyView) -> some View {
-        Button {
-            TreeTabContainer.openWomenOnAppear = true
-            NotificationCenter.default.post(name: .openWomenTree, object: nil)
-        } label: { face }
-        .buttonStyle(DSPressStyle())
-        .accessibilityHint(L10n.t("يفتح شجرة النساء", "Opens the women's tree"))
-    }
-
-    // MARK: النصوص
-
-    private static func number(_ n: Int?) -> String { n.map { "\($0)" } ?? "—" }
-
-    /// «الإجمالي 2719، 2351 حياً، 368 متوفى»
-    private func spoken(_ g: Gauge) -> String {
-        if let lines = g.lines {
-            return "\(g.title) \(Self.number(g.total))" + L10n.t("، ", ", ") + lines.0 + L10n.t("، ", ", ") + lines.1
-                + L10n.t("، لا يدخلون الإجمالي", ", not in the total")
-        }
-        return "\(g.title) \(Self.number(g.total))" + L10n.t("، ", ", ")
-            + AdminFamilyStatsPage.aliveText(g.alive, estimated: false)
-            + (g.estimated ? L10n.t(" (تقديري)", " (estimate)") : "")
-            + L10n.t("، ", ", ") + AdminFamilyStatsPage.deceasedText(g.deceased)
     }
 }
 
-/// الرأس المطويّ (ج): سطر واحد مثبّت فوق التمرير — ‹ · «العائلة ⌄ · 2719» · بحث · ＋ — والشرائح تحته
+// MARK: - أزرار الرأس
+
+/// «＋» و«⋯» في طرف العنوان (زرّان على الأكثر — spec A.3). المراقب بلا شيء
+struct AdminMembersHeaderButtons: View {
+    /// صفحة «تسجيل عضو جديد» — nil = بلا «＋»
+    let register: (() -> AnyView)?
+    /// «التقارير (PDF)» بالفلاتر الحالية — nil = بلا «⋯»
+    let reports: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if let register {
+                // بيته الوحيد (المالك والمدير)
+                NavigationLink { AdminLazyPage { register() } } label: {
+                    AdminGlassCircle(symbol: "plus")
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
+            }
+            if let reports {
+                Menu {
+                    Button(action: reports) {
+                        Label(L10n.t("التقارير (PDF)", "Reports (PDF)"), systemImage: "doc.richtext")
+                    }
+                } label: {
+                    AdminGlassCircle(symbol: "ellipsis")
+                }
+                .accessibilityLabel(L10n.t("المزيد", "More"))
+                .accessibilityHint(L10n.t("التقارير بالفلاتر الحالية", "Reports with the current filters"))
+            }
+        }
+    }
+}
+
+// MARK: - «يحتاج مراجعتك» (spec C.6 البند ١ — صفّ واحد بدل بطاقة المربّعات، E.12)
+
+/// صفّ بإطار يُرى ورمز تنبيه: «يحتاج مراجعتك» وتحته أول قائمتين فيهما أحد و«و4 قوائم» (`AdminReviewHubLogic.summary`)
+/// ← صفحة «يحتاج مراجعتك» (`AdminReviewHubPage`). يُخفيه من يضعه حين تصل كل القوائم صفراً
+struct AdminMembersReviewRow: View {
+    /// nil = لم تصل الأرقام بعد (هيكل)
+    let summary: String?
+
+    static var title: String { L10n.t("يحتاج مراجعتك", "Needs your review") }
+    /// شكل السطر أثناء التحميل (يُرسم مموّهاً)
+    private static var placeholder: String { L10n.t("هل ما زالوا أحياء؟ · بيانات ناقصة", "Still alive? · Missing data") }
+
+    var body: some View {
+        NavigationLink {
+            AdminLazyPage {
+                AnyView(AdminReviewHubPage().adminBackTitle(AdminArea.family.title).adminArea(.family))
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.smd) {
+                Image(systemName: "exclamationmark.triangle")
+                    .dsGlyph(DS.Glyph.lg, weight: .medium)
+                    .foregroundColor(DS.Color.warning)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(Self.title)
+                        .dsFont(.hubSection)
+                        .foregroundColor(DS.Color.textPrimary)
+                    Text(verbatim: summary ?? Self.placeholder)
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .redacted(reason: summary == nil ? .placeholder : [])
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, DS.Hub.cardPadding)
+            .padding(.vertical, DS.Spacing.xsm)
+            .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeightTwoLines, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(AdminMembersFramePressStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(summary.map { L10n.t("\(Self.title): \($0)", "\(Self.title): \($0)") }
+                            ?? L10n.t("\(Self.title): \(AdminStoreHealthText.loading)", "\(Self.title): \(AdminStoreHealthText.loading)"))
+        .accessibilityHint(L10n.t("يفتح قوائم المراجعة", "Opens the review lists"))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// صفّ بإطار يُرى (`DS.Hub.frameStroke`، زاوية ١٢): الضغط تظليل داخل الشكل لا تصغير (spec A.6/A.16)
+struct AdminMembersFramePressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous)
+        return configuration.label
+            .background(shape.fill(configuration.isPressed ? DS.Hub.rowPress : DS.Color.cardBackground))
+            .overlay(shape.strokeBorder(DS.Hub.frameStroke, lineWidth: DS.Border.width))
+            .contentShape(shape)
+            .animation(DS.Hub.rowPressAnimation, value: configuration.isPressed)
+    }
+}
+
+// MARK: - الرأس المطويّ
+
+/// سطر واحد مثبّت فوق التمرير حين يصعد شريط البحث تحت سطر الرأس: ‹ · «العائلة ⌄ · 2,729» · بحث · «الفلاتر» بعدده —
+/// والشرائح المفعّلة تحته على الأبيض (تُلغى من هنا أيضاً)
 struct AdminMembersCompactBar: View {
     let total: Int?
     let backTitle: String
     let back: () -> Void
     let search: () -> Void
-    /// صفحة «تسجيل عضو جديد» (`canRegisterMembers`) — nil = بلا زرّ
-    let register: (() -> AnyView)?
-    let chips: AnyView
-    /// ارتفاع سطر الرأس — الشرائح تُثبَّت تحته حين تصل إليه
+    /// عدد الفلاتر المفعّلة (رقم زرّ «الفلاتر»)
+    let filterCount: Int
+    let openFilters: () -> Void
+    /// الشرائح المفعّلة — nil = بلا فلاتر
+    let chips: AnyView?
+    /// ارتفاع السطر الكحلي — شريط البحث يُطوى تحته حين يصل إليه
     @Binding var lineHeight: CGFloat
     @Environment(\.dsLandscape) private var landscape
 
@@ -320,27 +215,77 @@ struct AdminMembersCompactBar: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: DS.Spacing.sm) {
                 AdminBackLink(title: backTitle, showsTitle: false, action: back)
-                AnyView(AdminAreaTitleMenu(title: AdminArea.family.title, count: total.map { "\($0)" }, compact: true))
+                AnyView(AdminAreaTitleMenu(title: AdminArea.family.title, count: total.map { DSNumber.grouped($0) },
+                                           compact: true))
                 Spacer(minLength: DS.Spacing.xs)
-                AdminGlassButton(symbol: "magnifyingglass", label: L10n.t("بحث بالاسم أو رقم الهاتف", "Search by name or phone"),
+                AdminGlassButton(symbol: "magnifyingglass", label: L10n.t("بحث بالاسم أو الرقم", "Search by name or number"),
                                  action: search)
-                if let register {
-                    NavigationLink { AdminLazyPage { register() } } label: {
-                        AdminGlassCircle(symbol: "plus")
-                    }
-                    .buttonStyle(DSPressStyle())
-                    .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
-                }
+                AdminMembersBandFilterButton(count: filterCount, action: openFilters)
             }
             .frame(minHeight: DS.Hub.compactBar)
+            .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
+            .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Spacing.lg)
+            .padding(.bottom, DS.Spacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Hub.band.ignoresSafeArea(edges: landscape ? .horizontal : []))
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { lineHeight = $0 }
-            chips
+            if let chips {
+                chips
+                    .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
+                    .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Spacing.lg)
+                    .padding(.vertical, DS.Spacing.xxs)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DS.Hub.background)
+                    .overlay(alignment: .bottom) {
+                        Rectangle()
+                            .fill(DS.Hub.cardStroke)
+                            .frame(height: DS.Border.width)
+                            .accessibilityHidden(true)
+                    }
+            }
         }
-        .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
-        .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Spacing.lg)
-        .padding(.bottom, DS.Spacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Hub.band.ignoresSafeArea(edges: landscape ? .horizontal : []))
-        .dsSubtleShadow()
+    }
+}
+
+/// «الفلاتر» فوق الكحلي: كبسولة زجاجية ٣٦ (لمسها ٤٤)، الرمز والاسم أبيض، والعدد كبسولة ذهبية حين يكون فلتر مفعّل
+/// (الذهبي على الكحلي فقط — لا عدد أحمر لفلتر)
+struct AdminMembersBandFilterButton: View {
+    let count: Int
+    let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xsm) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .dsGlyph(DS.Glyph.md, weight: .medium)
+                    .accessibilityHidden(true)
+                // من أحجام إمكانية الوصول الرمز والعدد فقط — السطر المطويّ لا يتّسع للاسم مع العنوان (الاسم للقارئ الصوتي)
+                if !typeSize.isAccessibilitySize {
+                    Text(AdminFilterText.filters)
+                        .dsFont(.chip)
+                        .lineLimit(1)
+                }
+                if count > 0 {
+                    Text(verbatim: "\(count)")
+                        .dsFont(.badge)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Hub.onGold)
+                        .padding(.horizontal, DS.Spacing.xsm)
+                        .frame(minWidth: DS.Hub.bellBadge, minHeight: DS.Hub.bellBadge)
+                        .background(Capsule().fill(DS.Color.accentLight))
+                }
+            }
+            .foregroundColor(DS.Color.headerGlyph)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: DS.Hub.glassButton)
+            .background(Capsule().fill(DS.Hub.glass))
+            .overlay(Capsule().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.glassButton)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .fixedSize()
+        .accessibilityLabel(count > 0 ? L10n.t("الفلاتر، \(count) مفعّلة", "Filters, \(count) on") : AdminFilterText.filters)
+        .accessibilityHint(L10n.t("يفتح لوحة الفلاتر", "Opens the filters"))
     }
 }

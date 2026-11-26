@@ -205,30 +205,40 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
 }
 
 /// فلتر «الحساب» في «العائلة» — قبل فلتر «الحالة» (طلب المالك ٢٠٢٦-١١-٢٦ «فلتر لديهم حساب و ليس لديهم حساب قبل
-/// فلتر المتوفين و الاحياء علشان نراقب التطبيق و الاعضاء بشكل افضل»). بدل شرائح «مسجّلون · غير مسجّلين · متوفون»
+/// فلتر المتوفين و الاحياء علشان نراقب التطبيق و الاعضاء بشكل افضل»). في ورقة «الفلاتر» (U11، mock 5): الكل · لهم حساب ·
+/// بلا حساب — «لهم حساب» = له حساب دخول فقط (T2، `AdminMembersLogic.matches`)
 enum AdminAccountFilter: String, CaseIterable, Identifiable {
     case all, with, without
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .all:     return L10n.t("كل الحسابات", "All accounts")
-        case .with:    return L10n.t("لديهم حساب", "Have an account")
-        case .without: return L10n.t("ليس لديهم حساب", "No account")
+        case .all:     return L10n.t("الكل", "All")
+        case .with:    return L10n.t("لهم حساب", "Have an account")
+        case .without: return L10n.t("بلا حساب", "No account")
         }
     }
+
+    /// نفس القيم في المنطق الخالص والهبوط
+    var logic: AdminMembersLanding.Account { AdminMembersLanding.Account(rawValue: rawValue) ?? .all }
+
+    init(_ landing: AdminMembersLanding.Account) { self = AdminAccountFilter(rawValue: landing.rawValue) ?? .all }
 }
 
-/// فلتر «الحالة» في «العائلة»: الأحياء والمتوفون معاً · الأحياء فقط · المتوفون فقط (طلب المالك ٢٠٢٦-١١-٢٦)
+/// فلتر «الحالة» في «العائلة» (طلب المالك ٢٠٢٦-١١-٢٦): الكل · الأحياء · المتوفون (mock 5)
 enum AdminLifeFilter: String, CaseIterable, Identifiable {
     case all, alive, deceased
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .all:      return L10n.t("الأحياء والمتوفون", "Living and deceased")
-        case .alive:    return L10n.t("الأحياء فقط", "Living only")
-        case .deceased: return L10n.t("المتوفون فقط", "Deceased only")
+        case .all:      return L10n.t("الكل", "All")
+        case .alive:    return L10n.t("الأحياء", "Living")
+        case .deceased: return L10n.t("المتوفون", "Deceased")
         }
     }
+
+    var logic: AdminMembersLanding.Life { AdminMembersLanding.Life(rawValue: rawValue) ?? .all }
+
+    init(_ landing: AdminMembersLanding.Life) { self = AdminLifeFilter(rawValue: landing.rawValue) ?? .all }
 }
 
 extension AdminMemberChip {
@@ -555,6 +565,21 @@ enum AdminMemberSub: String, Identifiable {
     }
 }
 
+extension AdminMemberSub {
+    /// الشريحة التي تحمل قائمة هذه الفرعية في الفهرس (`AdminMembersIndex.rows(homeChip, self)`) — فلتر «القائمة» الإضافي
+    /// في «العائلة» من رابط قديم (U11)
+    var homeChip: AdminMemberChip {
+        switch self {
+        case .all, .newThisWeek:                         return .all
+        case .usingApp, .inactive, .noPush, .frozen:     return .registered
+        case .notSignedIn, .noPhone:                     return .treeOnly
+        case .deathComplete, .deathIncomplete:           return .deceased
+        case .noBirth, .noGender, .noPhoto:              return .gaps
+        case .orphan, .noName, .brokenParent, .hidden, .dupPhone: return .problems
+        }
+    }
+}
+
 // MARK: - حسابات الدخول (من `app_usage_members` الموجودة — للإدارة الأربعة `is_moderator()`)
 
 /// حساب دخول عضو: فئة استخدامه وآخر ظهور وتاريخ إنشاء الحساب
@@ -564,7 +589,9 @@ struct AdminAccountInfo: Equatable {
     let created: Date?
 }
 
-/// من له حساب دخول — ثلاث قوائم من `app_usage_members` (active · idle · login_no_device). الفشل يُبقي آخر قيمة
+/// من له حساب دخول — ثلاث قوائم من `app_usage_members` (active · idle · login_no_device). الفشل يُبقي آخر قيمة،
+/// ويُسجَّل (`Log.error`)، ويقوله `health` (`AdminStoreHealth`، U11): أعداد «لهم حساب/بلا حساب» «—» أو «تعذّر التحميل»
+/// لا صفر. `-tmpFailStores accounts` (T0) يصطنع الفشل.
 @MainActor
 final class AdminAccountsStore: ObservableObject {
     static let shared = AdminAccountsStore()
@@ -572,6 +599,8 @@ final class AdminAccountsStore: ObservableObject {
     @Published private(set) var accounts: [UUID: AdminAccountInfo] = [:]
     /// وصلت القوائم مرة على الأقل (قبلها لا تُعرض حالة «مسجّل/مقيّد»)
     @Published private(set) var loaded = false
+    /// حال المخزن لما يقرأ منه عدداً أو كلمة (spec A.12، Autoplan note 2)
+    @Published private(set) var health: AdminStoreHealth = .idle
     /// سجلّات بلا اسم (رقم دخول بلا اسم) في كل فئة — تُطرح من أرقام `app_usage_stats` (`AppUsageStats.excludingNameless`)
     /// لأنها ليست أفراداً في العائلة. بعد أن يستبعدها السيرفر نفسه تصير أصفاراً فلا يتغيّر شيء
     private(set) var namelessByCategory: [AppUsageCategory: Int] = [:]
@@ -583,13 +612,29 @@ final class AdminAccountsStore: ObservableObject {
 
     func refresh(force: Bool = false) async {
         if !force, let lastFetch, Date().timeIntervalSince(lastFetch) < 60 { return }
-        async let active = Self.fetch(.active)
-        async let idle = Self.fetch(.idle)
-        async let noDevice = Self.fetch(.loginNoDevice)
-        let lists = await (active, idle, noDevice)
-        guard let a = lists.0, let i = lists.1, let n = lists.2 else { return }
-        apply([.active: a, .idle: i, .loginNoDevice: n])
-        lastFetch = Date()
+        let before = health
+        health = health.beginning()
+        do {
+            try DebugAdminProbe.failIfAsked(.accounts, hasLoaded: loaded)   // `-tmpFailStores accounts`
+            async let active = Self.fetch(.active)
+            async let idle = Self.fetch(.idle)
+            async let noDevice = Self.fetch(.loginNoDevice)
+            let lists = try await (active, idle, noDevice)
+            apply([.active: lists.0, .idle: lists.1, .loginNoDevice: lists.2])
+            lastFetch = Date()
+        } catch {
+            // إلغاء (الصفحة أُغلقت، جلب أحدث) ليس فشلاً — يرجع الحال كما كان
+            if Log.isCancellation(error) {
+                health = before
+                return
+            }
+            if DebugAdminProbe.isInjected(error) {
+                Log.warning("[AdminAccountsStore] load failed: \(error.localizedDescription)")
+            } else {
+                Log.error("[AdminAccountsStore] load failed: \(error.localizedDescription)")
+            }
+            health = health.ending(success: false)
+        }
     }
 
     /// يبني الخريطة من القوائم (يستعملها التحميل)
@@ -607,18 +652,14 @@ final class AdminAccountsStore: ObservableObject {
         namelessByCategory = nameless
         if map != accounts { accounts = map }
         loaded = true
+        health = .loaded(at: Date())
     }
 
-    private static func fetch(_ category: AppUsageCategory) async -> [AppUsageMember]? {
-        do {
-            return try await SupabaseConfig.client
-                .rpc("app_usage_members", params: ["p_category": category.rawValue])
-                .execute()
-                .value
-        } catch {
-            Log.fetchError("تعذر جلب حسابات الدخول (\(category.rawValue))", error)
-            return nil
-        }
+    private static func fetch(_ category: AppUsageCategory) async throws -> [AppUsageMember] {
+        try await SupabaseConfig.client
+            .rpc("app_usage_members", params: ["p_category": category.rawValue])
+            .execute()
+            .value
     }
 }
 
@@ -754,26 +795,18 @@ struct AdminMembersIndex {
 
     func rows(_ chip: AdminMemberChip, _ sub: AdminMemberSub) -> [Int] { lists[Key(chip: chip, sub: sub)] ?? [] }
 
-    /// فلترا «الحساب» و«الحالة» معاً على صفّ من «الكل» — الحساب لا يُعرف قبل وصول قوائم الحسابات
+    /// فلترا «الحساب» و«الحالة» معاً على صفّ من «الكل» — الحساب لا يُعرف قبل وصول قوائم الحسابات.
+    /// T2 (U11): «لهم حساب» = له حساب دخول فقط (`hasLogin`)، فعددها = «المسجّلون» من الرجال؛ الموقوف بلا حساب كان يُعدّ هنا
+    /// وصار في «بلا حساب». `status == .registered` يبقى لحساب المرأة وابن البنت (مسجّلان بطبيعتهما — خارج هذه القائمة أصلاً)
     func matches(_ i: Int, account: AdminAccountFilter, life: AdminLifeFilter) -> Bool {
+        if account != .all && !accountsReady { return false }
         let e = entries[i]
-        let dead = e.member.isDeceased == true
-        switch life {
-        case .all: break
-        case .alive: if dead { return false }
-        case .deceased: if !dead { return false }
-        }
-        switch account {
-        case .all:
-            return true
-        case .with:
-            guard accountsReady else { return false }
-            return e.status == .registered || e.status == .frozen || e.hasLogin
-        case .without:
-            guard accountsReady else { return false }
-            return e.status == .treeOnly || (e.status == .deceased && !e.hasLogin)
-        }
+        return AdminMembersLogic.matches(deceased: e.member.isDeceased == true, hasLogin: Self.hasLogin(e),
+                                         account: account.logic, life: life.logic)
     }
+
+    /// له حساب دخول لفلتر «الحساب» (وحساب المرأة وابن البنت مسجّلان بطبيعتهما)
+    static func hasLogin(_ e: Entry) -> Bool { e.hasLogin || e.status == .registered }
     func count(_ chip: AdminMemberChip, _ sub: AdminMemberSub = .all) -> Int { rows(chip, sub).count }
 
     /// العدد للعرض — nil قبل وصول ما يلزمه (الحسابات لشرائح المسجّلين والمقيّدين)

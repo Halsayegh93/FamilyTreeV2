@@ -2,9 +2,11 @@ import SwiftUI
 
 // MARK: - التقسيم والشجرة (طلب المالك ٢٠٢٦-١١-٠٢)
 //
-// بعد التبسيط (٢٠٢٦-١١-٠٢، `samples/simplify`) صفحتا «العائلة» و«إدارة الوفيات» قائمة واحدة أبجدياً (`AdminGrouping.alphabetical`)
-// بشريحة «الفرع: الكل ⌄» (`AdminBranchPickerBox` — فرع بأي مستوى) بلا «التقسيم» ولا بطاقات. خيارات التقسيم والتجميع هنا باقية
-// لتقارير PDF (`AdminReportsBook`، `AdminReportFilterPage`). لا مفهوم «الجيل»: العمق مفتاح داخلي فقط.
+// صفحتا «العائلة» و«تواريخ الوفاة» قائمة واحدة أبجدياً (`AdminGrouping.alphabetical`)، و«العائلة» بلا فلتر ولا بحث بالفروع
+// (`AdminMembersIndex.branches`). الفرع (بأي مستوى) صفّ «الفرع» في ورقة «الفلاتر» يفتح `BranchPickerSheet` داخلها (إعادة
+// التصميم U11، spec C.7 — شريحة «الفرع: الكل ⌄» ومربّعها حُذفا، E.11)، والفرع المختار ذرّيته من `AdminFamilyTree.subtree`.
+// خيارات التقسيم والتجميع هنا باقية لتقارير PDF (`AdminReportsBook`، `AdminReportFilterPage`). لا مفهوم «الجيل»: العمق
+// مفتاح داخلي فقط.
 
 /// طريقة تقسيم القائمة
 enum AdminMemberGrouping: String, CaseIterable, Identifiable {
@@ -312,22 +314,5 @@ enum AdminGrouping {
         if !noPhone.isEmpty { list.append(flat("cnone", L10n.t("بلا رقم", "No number"), noPhone)) }
         if !deceased.isEmpty { list.append(flat("cdead", L10n.t("متوفون", "Deceased"), deceased)) }
         return list
-    }
-}
-
-/// مربّع اختيار الفرع (كل المستويات) — نوع مستقل (حارس المكدس)
-struct AdminBranchPickerBox: ViewModifier {
-    @Binding var isPresented: Bool
-    let members: [FamilyMember]
-    let selected: UUID?
-    let onSelect: (UUID) -> Void
-
-    func body(content: Content) -> some View {
-        content.dsTallBox(isPresented: $isPresented) {
-            BranchPickerSheet(allMembers: members, selectedId: selected, allLevels: true, onSelect: { id in
-                onSelect(id)
-                isPresented = false
-            })
-        }
     }
 }

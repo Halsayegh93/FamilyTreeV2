@@ -1,0 +1,204 @@
+import Foundation
+
+// MARK: - «العائلة» — المنطق الخالص (إعادة تصميم الإدارة U11، spec C.6/C.7، اختيار المالك «ب»)
+//
+// ما تقرّره صفحة «العائلة» بلا واجهة، في مكان واحد يُفحص بلا محاكي:
+//  ١) فلترا «الحساب» و«الحالة» على عضو (T2): «لهم حساب» = له حساب دخول فقط — الموقوف بلا حساب كان يُعدّ هنا فيختلف
+//     الرقم عن «المسجّلين» (رجال الشجرة الأحياء لهم حساب). والعدّ لكل خيار من جدول ٢×٢ واحد (`Tally`).
+//  ٢) ما تُفتح عليه الصفحة: معاملات `init` القديمة (`chip:`/`sub:`/`womenOutside:`) والهبوط (`AdminMembersLanding`) ←
+//     فلاتر الصفحة، أو قائمة تُدفع فوق الجذر (الرجوع يعود للجذر).
+//  ٣) سطر «آخر دخول» في صفّ العضو.
+//
+//   xcrun swiftc -D ADMIN_LOGIC_TEST -o /tmp/u11-logic \
+//     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminContracts.swift \
+//     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminMembersLogic.swift tests/admin-redesign/U11/main.swift && /tmp/u11-logic
+
+nonisolated enum AdminMembersLogic {
+    typealias Account = AdminMembersLanding.Account
+    typealias Life = AdminMembersLanding.Life
+    typealias Review = AdminMembersLanding.Review
+
+    // MARK: ١) الفلتران
+
+    /// «الحالة» ثم «الحساب» على عضو واحد. `hasLogin` = له حساب دخول (في قوائم «استخدام التطبيق»)
+    static func matches(deceased: Bool, hasLogin: Bool, account: Account, life: Life) -> Bool {
+        switch life {
+        case .all:      break
+        case .alive:    if deceased { return false }
+        case .deceased: if !deceased { return false }
+        }
+        switch account {
+        case .all:     return true
+        case .with:    return hasLogin
+        case .without: return !hasLogin
+        }
+    }
+
+    /// عدّ القائمة بعد البحث والفرع (قبل «الحساب» و«الحالة») — كل خيار في الورقة رقمه من هنا، فالأرقام تتبع بقية الاختيارات
+    struct Tally: Equatable {
+        var aliveLogin = 0
+        var aliveNoLogin = 0
+        var deadLogin = 0
+        var deadNoLogin = 0
+
+        init(aliveLogin: Int = 0, aliveNoLogin: Int = 0, deadLogin: Int = 0, deadNoLogin: Int = 0) {
+            self.aliveLogin = aliveLogin
+            self.aliveNoLogin = aliveNoLogin
+            self.deadLogin = deadLogin
+            self.deadNoLogin = deadNoLogin
+        }
+
+        mutating func add(deceased: Bool, hasLogin: Bool) {
+            switch (deceased, hasLogin) {
+            case (false, true):  aliveLogin += 1
+            case (false, false): aliveNoLogin += 1
+            case (true, true):   deadLogin += 1
+            case (true, false):  deadNoLogin += 1
+            }
+        }
+
+        var total: Int { aliveLogin + aliveNoLogin + deadLogin + deadNoLogin }
+
+        /// العدد لاختيارين — نفس `matches`
+        func count(account: Account, life: Life) -> Int {
+            var n = 0
+            if matches(deceased: false, hasLogin: true, account: account, life: life) { n += aliveLogin }
+            if matches(deceased: false, hasLogin: false, account: account, life: life) { n += aliveNoLogin }
+            if matches(deceased: true, hasLogin: true, account: account, life: life) { n += deadLogin }
+            if matches(deceased: true, hasLogin: false, account: account, life: life) { n += deadNoLogin }
+            return n
+        }
+
+        /// العدد للعرض: خيار «الحساب» لا يُعرف قبل وصول قوائم الحسابات («—»)
+        func shown(account: Account, life: Life, accountsReady: Bool) -> Int? {
+            if account != .all && !accountsReady { return nil }
+            return count(account: account, life: life)
+        }
+    }
+
+    // MARK: ٢) ما تُفتح عليه الصفحة
+
+    /// قائمة تُدفع فوق جذر «العائلة» (الرجوع يعود للجذر)
+    enum Push: Equatable {
+        /// قائمة مراجعة (`AdminReviewListPage(review:)`)
+        case review(Review)
+        /// «تواريخ وفاة ناقصة» — بيتها الواحد `DeathDatesCampaignPage` (spec E.19)
+        case deathDates
+        /// «نساء العائلة» بهبوطه (رقم «خارج العائلة»)
+        case women(AdminWomenLanding)
+    }
+
+    struct Opening: Equatable {
+        var account: Account = .all
+        var life: Life = .all
+        /// رأس الفرع — nil = كل الفروع
+        var branch: UUID? = nil
+        /// فلتر إضافي من رابط قديم لا تقابله قائمة مراجعة (القيمة الخام لـ`AdminMemberSub`) — يظهر شريحةً تُلغى
+        var sub: String? = nil
+        var push: Push? = nil
+
+        init(account: Account = .all, life: Life = .all, branch: UUID? = nil, sub: String? = nil, push: Push? = nil) {
+            self.account = account
+            self.life = life
+            self.branch = branch
+            self.sub = sub
+            self.push = push
+        }
+    }
+
+    /// معاملات `init` على افتراضها — الهبوط المخزَّن يُطبَّق (المعاملات الصريحة تغلبه)
+    static func isDefault(chip: String, sub: String, womenOutside: Bool) -> Bool {
+        chip == "all" && sub == "all" && !womenOutside
+    }
+
+    /// الروابط القديمة (`chip:`/`sub:`، القيم الخام لـ`AdminMemberChip`/`AdminMemberSub`): كل قيمة فلتر، أو قائمتها تُدفع
+    /// فوق الجذر بفلتر الشريحة سياقاً تحتها. «تحقق من الأحياء»/«ناقصة»/«مشكلات» قوائم مراجعة؛ «لم يسجّل الدخول بعد» =
+    /// قائمة «لم يفتحوا التطبيق بعد» نفسها، و«غير نشط» = «لم يدخلوا منذ 21 يوماً»، و«تاريخ الوفاة غير مكتمل» صفحة
+    /// تواريخ الوفاة. الشرائح الفرعية الباقية فلتر إضافي وحده (بلا «الحساب»/«الحالة» — قائمتها كاملة بذاتها).
+    static func opening(chip: String, sub: String, womenOutside: Bool) -> Opening {
+        if womenOutside {
+            // من مجموع («خارج العائلة» في «اليوم») ← «الحالة» = الكل (Autoplan note 3)
+            return Opening(push: .women(AdminWomenLanding(status: .all, branch: .outside)))
+        }
+        switch chip {
+        case "registered":
+            switch sub {
+            case "inactive":                    return Opening(account: .with, life: .alive, push: .review(.inactive))
+            case "usingApp", "noPush", "frozen": return Opening(sub: sub)
+            default:                            return Opening(account: .with, life: .alive)
+            }
+        case "treeOnly":
+            switch sub {
+            case "notSignedIn": return Opening(account: .without, life: .alive, push: .review(.notOpened))
+            case "noPhone":     return Opening(sub: sub)
+            default:            return Opening(account: .without, life: .alive)
+            }
+        case "deceased":
+            switch sub {
+            case "deathIncomplete": return Opening(life: .deceased, push: .deathDates)
+            case "deathComplete":   return Opening(sub: sub)
+            default:                return Opening(life: .deceased)
+            }
+        case "verifyLiving": return Opening(push: .review(.living))
+        case "gaps":         return Opening(push: .review(.gaps))
+        case "problems":     return Opening(push: .review(.problems))
+        case "all":
+            return sub == "newThisWeek" ? Opening(sub: sub) : Opening()
+        default:
+            return Opening()
+        }
+    }
+
+    /// الهبوط (`AdminMembersLanding`): الحقل الغائب = افتراض الصفحة (بلا فلتر)؛ «تواريخ الوفاة» صفحتها الواحدة
+    static func opening(landing: AdminMembersLanding) -> Opening {
+        var o = Opening(account: landing.account ?? .all, life: landing.life ?? .all, branch: landing.branch)
+        switch landing.review {
+        case .death?:  o.push = .deathDates
+        case let r?:   o.push = .review(r)
+        case nil:      break
+        }
+        return o
+    }
+
+    // MARK: ٣) سطر الصفّ
+
+    /// أيام التقويم بين آخر دخول واليوم (٠ = اليوم)
+    static func daysSince(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> Int {
+        let from = calendar.startOfDay(for: date)
+        let to = calendar.startOfDay(for: now)
+        return max(0, calendar.dateComponents([.day], from: from, to: to).day ?? 0)
+    }
+
+    /// أطول من هذا يُكتب التاريخ نفسه
+    static let lastSeenRelativeDays = 30
+
+    /// «آخر دخول اليوم» · «أمس» · «قبل يومين» · «قبل 5 أيام» · «قبل 12 يوماً» — nil بعد ٣٠ يوماً (يكتب المستدعي التاريخ)
+    static func lastSeen(days: Int) -> String? {
+        switch days {
+        case ..<1:  return L10n.t("آخر دخول اليوم", "Last seen today")
+        case 1:     return L10n.t("آخر دخول أمس", "Last seen yesterday")
+        case 2:     return L10n.t("آخر دخول قبل يومين", "Last seen 2 days ago")
+        case 3...10: return L10n.t("آخر دخول قبل \(days) أيام", "Last seen \(days) days ago")
+        case 11...lastSeenRelativeDays: return L10n.t("آخر دخول قبل \(days) يوماً", "Last seen \(days) days ago")
+        default:    return nil
+        }
+    }
+
+    /// سطر الملخّص تحت الشريط: الترتيب الظاهر — بالفروع (بلا فلتر ولا بحث)، أبجدياً، أو الأقرب للبحث
+    enum Order: Equatable {
+        case branches, alphabetical, relevance
+
+        static func make(filtered: Bool, searching: Bool) -> Order {
+            if searching { return .relevance }
+            return filtered ? .alphabetical : .branches
+        }
+
+        var title: String {
+            switch self {
+            case .branches:     return L10n.t("بالفروع", "by branch")
+            case .alphabetical: return L10n.t("أبجدياً", "A–Z")
+            case .relevance:    return L10n.t("الأقرب أولاً", "best match")
+            }
+        }
+    }
+}
