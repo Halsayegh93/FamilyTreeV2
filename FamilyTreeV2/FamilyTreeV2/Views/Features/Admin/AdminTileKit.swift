@@ -476,6 +476,8 @@ struct AdminRowTile: View {
     var readOnly: Bool
     /// تلميح القارئ الصوتي (وصف القسم)
     var hint: String?
+    /// الاسم الكامل للقارئ الصوتي حين يختصره المربّع (`AdminArea.tileTitle`) — nil = `title`
+    var spokenTitle: String? = nil
     @Environment(\.adminTilePressed) private var pressed
 
     init(icon: String, fill: Color, title: String, state: AdminTileState? = nil, health: AdminStoreHealth? = nil,
@@ -493,8 +495,9 @@ struct AdminRowTile: View {
     /// مربّع قسم من `AdminArea`: رمزه ولونه واسمه ووصفه للقارئ الصوتي
     init(area: AdminArea, state: AdminTileState? = nil, health: AdminStoreHealth? = nil,
          retry: (() -> Void)? = nil, readOnly: Bool = false) {
-        self.init(icon: area.icon, fill: area.fill, title: area.title, state: state, health: health, retry: retry,
+        self.init(icon: area.icon, fill: area.fill, title: area.tileTitle, state: state, health: health, retry: retry,
                   readOnly: readOnly, hint: area.subtitle)
+        spokenTitle = area.title
     }
 
     /// القديم: سطر صغير + شارة حمراء — الشارة تصير سطر حالة بنغمة «انتباه» والسطر يلحقها (spec E.16)
@@ -521,11 +524,12 @@ struct AdminRowTile: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(DS.Hub.areaTilePadding)
+        .padding(.horizontal, DS.Hub.areaTilePadding)
+        .padding(.vertical, DS.Hub.areaTilePaddingV)
         .frame(maxWidth: .infinity, minHeight: DS.Hub.areaTileMinHeight, maxHeight: .infinity, alignment: .topLeading)
         .modifier(AdminTileSurface(pressed: pressed))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([title, line.spoken].filter { !$0.isEmpty }.joined(separator: L10n.t("، ", ", ")))
+        .accessibilityLabel([spokenTitle ?? title, line.spoken].filter { !$0.isEmpty }.joined(separator: L10n.t("، ", ", ")))
         .accessibilityHint(hint ?? "")
         .accessibilityActions {
             if line.kind == .unknown, let retry {
