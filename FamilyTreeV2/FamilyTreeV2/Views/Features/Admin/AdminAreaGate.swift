@@ -1,10 +1,13 @@
 import SwiftUI
 
-// MARK: - بوابة القسم (طلب المالك ٢٠٢٦-١٠-٢٤: «التطبيق» و«الفريق والأمان» للمالك فقط، و«المؤشرات» ليست للمراقب)
+// MARK: - بوابة القسم (طلب المالك ٢٠٢٦-١٠-٢٤؛ إعادة التصميم ٢٠٢٦-١١-٢٦، الوحدة U19)
 //
 // الشرط الواحد `AdminArea.isVisible(for:)`. الأقسام الظاهرة وقائمة العنوان والبحث تقرأ منه فلا تعرض ما ليس لدورك؛
 // والبوابة للمداخل الأخرى (مسار محفوظ، إشعار قديم، رابط): صفحة القسم أو صفحة داخلية منه تُفتح لمن يملكها فقط،
 // ولغيره رأس القسم ورسالة هادئة بلا أي بيانات (لا يُبنى محتوى الصفحة ولا تُجلب بياناتها).
+// الرسالة (`AdminGateLogic`، AdminCatalogLogic.swift): «هذا القسم للمالك فقط» لقسم مقصور على المالك بسقف جدول الأدوار
+// («التطبيق»)، وغيره «هذا القسم ليس ضمن صلاحياتك» («الفريق والأمان» يراه المدير). الرفض يمسح الهبوطات المنتظرة
+// (`AdminAreaRouter.clearLandings()`) فلا يُعاد هبوط مرفوض لاحقاً.
 
 struct AdminAreaGate: View {
     let area: AdminArea
@@ -25,26 +28,24 @@ struct AdminAreaGate: View {
     }
 }
 
-/// رأس القسم ثم «هذا القسم للمالك فقط» — بلا بيانات
+/// رأس القسم ثم سبب الرفض — بلا بيانات
 private struct AdminAreaLockedPage: View {
     let area: AdminArea
 
-    private var message: String {
-        switch area {
-        case .team, .app:
-            return L10n.t("هذا القسم للمالك فقط.", "This section is for the owner only.")
-        default:
-            return L10n.t("هذا القسم غير متاح لدورك.", "This section isn't available for your role.")
-        }
+    /// من سقف جدول الأدوار (`AdminRoleItem.isOwnerOnly`) لا من الدور: «التطبيق» للمالك وحده، والباقي يُفتح لأدوار أخرى
+    private var message: AdminGateLogic.Message {
+        AdminGateLogic.message(areaKey: area.rawValue,
+                               allItemKeys: AdminRoleItem.allCases.map(\.rawValue),
+                               ownerOnlyItemKeys: Set(AdminRoleItem.allCases.filter(\.isOwnerOnly).map(\.rawValue)))
     }
 
     var body: some View {
         AdminHubPage {
             AdminBandHeader(title: area.title)
         } content: {
-            AdminPageStateCard(.empty(message, message: L10n.t("صلاحياتك في «الصلاحيات» أسفل «اليوم».",
-                                                              "Your permissions are under “My permissions” on Today."),
-                                      tint: DS.Color.textTertiary))
+            AdminPageStateCard(.empty(message.title, message: message.hint, tint: DS.Color.textTertiary))
         }
+        // هبوط هذا الانتقال (فلتر، قسم يُمرَّر إليه) لا يبقى منتظراً بعد الرفض
+        .onAppear { AdminAreaRouter.clearLandings() }
     }
 }
