@@ -3,12 +3,12 @@ import SwiftUI
 // MARK: - «ذكرى الراحلين» (طلب المالك ٢٠٢٦-١٠-١٩ «نبي نحط بلوحة الادارة ذكرى المتوفى»)
 //
 // نفس المواصفة في الأندرويد والموقع (memorial/SPEC.md). التقويم الميلادي فقط، وعرض فقط (بلا إشعارات).
-// منذ الدفعة ب («نفّذ كل المقترح» ٢٠٢٦-١٠-٢٠) لا صفحة مستقلّة: الذكرى القريبة (خلال ٣٠ يوماً) صفوف في «المناسبات
-// والإعلانات» ← «القادم» (`AdminOccasionsPage`)، و«تاريخ الوفاة غير مكتمل» (السنة فقط أو هجري) في «العائلة» ← متوفون ←
-// «تاريخ الوفاة غير مكتمل» — والاستكمال بمربّع `DeceasedDateBox` نفسه من ورقة العضو. بحث الذكرى حُذف (S8).
-// التصنيف والحساب في `DeceasedMemorial` (Core/DeceasedMemorial.swift).
+// لا صفحة مستقلّة: الذكرى القريبة (خلال ٣٠ يوماً) صفوف في «المناسبات والإعلانات» ← «عزاء وذكرى» (`AdminOccasionsPage`،
+// إعادة التصميم ٢٠٢٦-١١-٢٦ — الوحدة U14) وفي «اليوم» (`AdminDeathDatesSpot`)، و«متوفون بلا تاريخ وفاة كامل» (السنة فقط أو
+// هجري أو بلا تاريخ) ← «تواريخ الوفاة» (`DeathDatesCampaignPage`) — والاستكمال بمربّع `DeceasedDateBox` نفسه. بحث الذكرى
+// حُذف (S8). التصنيف والحساب في `DeceasedMemorial` (Core/DeceasedMemorial.swift).
 
-/// الذكرى القريبة — لـ«القادم» ولتلميح مربّع القسم في «اليوم»
+/// الذكرى القريبة — لـ«عزاء وذكرى» في «المناسبات والإعلانات» ولـ«اليوم»
 struct DeceasedMemorialBoard {
     struct Upcoming: Identifiable {
         let member: FamilyMember
@@ -140,6 +140,11 @@ struct DeceasedDateBox: View {
         guard birthRaw.isEmpty || birth != nil else {
             failure = L10n.t("تاريخ الميلاد المحفوظ غير واضح — عدّل من صفحة العضو.",
                              "The stored birth date is unclear — edit it from the member page.")
+            return
+        }
+        // تجربة دور (`-tmpAdminRole`/`-tmpRoleMatrix`): لا كتابة ولا تحديث محلي — نجاح مصطنع (T0)
+        if DebugAdminProbe.dryRun("death date \(member.id) → \(newDeath)") {
+            dismiss()
             return
         }
         isSaving = true

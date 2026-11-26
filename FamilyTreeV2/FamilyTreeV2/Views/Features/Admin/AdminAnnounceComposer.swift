@@ -14,6 +14,8 @@ import Supabase
 // الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` — والدفع من مشغّل جدول
 // الإشعارات على السيرفر كما هو. تعديل المجدول (من «الإشعارات المجدولة») = نفس الشاشة بالمسودّة → `updateScheduledNotification`.
 // الصلاحية `canSendNotifications` (المالك والمدير)، وحارس السيرفر يبقى الحَكَم.
+// إعادة التصميم ٢٠٢٦-١١-٢٦ (U14): الشكل من العُدّة فقط — شرائح «لمن؟»/«متى؟» صارت شريحة اللوحة الواحدة (spec A.9) تلتفّ
+// ولا مسار رمادي يشبه المبدّل؛ والإرسال يمرّ بـ`DebugAdminProbe.dryRun` (T0). هذا المربّع بيت الإعلان عند فتح التطبيق الوحيد.
 
 /// زرّ مكبّر الصوت في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
 struct AdminAnnounceLauncher: View {
@@ -908,6 +910,12 @@ struct AdminAnnounceComposer: View {
     private func send() async {
         let active = self.active
         guard blocker(active) == nil, !isSending else { return }
+        // تجربة دور (`-tmpAdminRole`/`-tmpRoleMatrix`): لا إشعار ولا جدولة ولا إعلان فتح — نجاح مصطنع (T0)
+        if DebugAdminProbe.dryRun("announce \(isEditing ? "edit scheduled" : (sendDate == nil ? "send" : "schedule")) → \(audienceLabel(active))\(wantsLaunch ? " + launch" : "")") {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            done = L10n.t("تجربة: لم يُرسل شيء.", "Dry run: nothing was sent.")
+            return
+        }
         isSending = true
         defer { isSending = false }
         let ids = targetIds(active)
@@ -991,9 +999,11 @@ struct AdminAnnounceComposer: View {
     }
 }
 
-// MARK: - شرائح الاختيار
+// MARK: - شرائح الاختيار (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec A.9، الوحدة U14)
 
-/// شريحة اختيار بشكل `DSFilterChips` (المختار ممتلئ بتدرّج القسم، والباقي بإطار خفيف)، و⌄ لما يفتح قائمة أو منتقياً.
+/// شريحة اختيار بشكل شريحة اللوحة الواحد (`DSAdminChipLabel`): تُرسم ٣٦ (`DS.Hub.filterChipHeight`) ولمسها ٤٤، كبسولة،
+/// ١٣ متوسط، إطار `frameStroke` على الأبيض؛ المختارة بتعبئة القسم الكحلية ونصّ أبيض و✓ ١٢ قبل الاسم (اللون ليس الإشارة
+/// الوحيدة)، و⌄ بعد النص حين تفتح قائمة أو منتقياً. الاسم الطويل مع الخط الكبير يلتفّ لسطرين ولا يُقصّ.
 /// وجه فقط — يُلبس `Button` أو `Menu`
 struct AdminChoiceChip: View {
     let title: String
@@ -1001,90 +1011,56 @@ struct AdminChoiceChip: View {
     let isSelected: Bool
     /// ⌄ بعد النص: يفتح قائمة/منتقياً/حقلاً
     var expands: Bool = false
-    /// false = شريحة فلتر مستقلّة في الصفحة (الفرع) — الشكل السابق، خارج المسار
+    /// باقٍ للتوافق (شريحة «الفرع» في «العائلة») — الشكلان صارا شريحة A.9 الواحدة
     var inTrack: Bool = true
     @Environment(\.dsSection) private var section
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        // الشكل الخفيف الموحّد (نفس `DSChoiceTiles`، طلب المالك ٢٠٢٦-١١-١١): داخل مسار `AdminChoiceRow` الرمادي،
-        // المختار حبّة بيضاء بظلّ ناعم ونصّ كحلي، وغيره نصّ ثانوي — والسلوك (قوائم ومنتقيات) كما هو
-        if inTrack { trackFace } else { filterFace }
-    }
-
-    /// شريحة الفلتر المستقلّة (كما كانت): المختارة ممتلئة بتعبئة القسم
-    private var filterFace: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            if let icon { Image(dsSymbol: icon).dsGlyph(DS.Glyph.smCompact) }
-            Text(title).dsFont(.sectionTitle).lineLimit(1)
-            if expands {
-                Image(systemName: "chevron.down").dsGlyph(DS.Glyph.xs, weight: .bold).opacity(0.8).accessibilityHidden(true)
-            }
-        }
-        .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-        .padding(.horizontal, DSBox.chipPadding)
-        .frame(minHeight: DSBox.chipHeight)
-        .background {
+        // تعبئة القسم الكحلية (`primaryFill` في الإدارة) — النص الأبيض ≥ ٦:١ في الوضعين
+        let fill = section?.fill ?? DS.Color.primaryFill
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.filterChipHeight / 2, style: .continuous)
+        return HStack(spacing: DS.Spacing.xsm) {
             if isSelected {
-                Capsule().fill(DSActionFill.style())
-            } else {
-                Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
-            }
-        }
-        .padding(.vertical, (DS.Icon.tapTarget - DSBox.chipHeight) / 2)
-        .contentShape(Rectangle())
-    }
-
-    private var trackFace: some View {
-        let ink = DS.Color.primary.dsChrome(in: section).dsReadableGlyph
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.md - DSBox.choiceTrackInset, style: .continuous)
-        let hitPad = max(0, (DS.Icon.tapTarget - DSBox.choiceTrackHeight) / 2 - DSBox.choiceTrackInset)
-        return HStack(spacing: DS.Spacing.xs) {
-            if let icon {
-                Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm)
-                    .foregroundColor(isSelected ? ink : DS.Color.textTertiary)
-            }
-            Text(title)
-                .dsFieldFont(.fieldValue)
-                .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? ink : DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            if expands {
-                Image(systemName: "chevron.down")
-                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                Image(systemName: "checkmark")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .accessibilityHidden(true)
+            } else if let icon {
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.smCompact)
                     .foregroundColor(DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
-        }
-        .padding(.horizontal, DS.Spacing.sm)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: DSBox.choiceTrackHeight)
-        .background {
-            if isSelected {
-                shape.fill(colorScheme == .dark ? DS.Color.cardBackground : Color.white)
-                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08),
-                            radius: DSBox.choiceShadowRadius, y: DSBox.choiceShadowY)
+            Text(title)
+                .dsFont(.chip)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            if expands {
+                Image(systemName: "chevron.down")
+                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    .foregroundColor(isSelected ? DS.Hub.onBandMuted : DS.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
         }
-        // مساحة ضغط ٤٤ (حدّ أبل) والشكل كما هو
-        .padding(.vertical, hitPad)
+        .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(minHeight: DS.Hub.filterChipHeight)
+        .background(shape.fill(isSelected ? fill : DS.Color.surface))
+        .overlay(shape.strokeBorder(isSelected ? fill : DS.Hub.frameStroke, lineWidth: DS.Border.width))
+        // مساحة ضغط ٤٤ تدخل في التخطيط: السطران الملتفّان يبعدان ٨ مرسومة و٠ بين مساحتي اللمس
+        .padding(.vertical, (DS.Icon.tapTarget - DS.Hub.filterChipHeight) / 2)
         .contentShape(Rectangle())
-        .padding(.vertical, -hitPad)
     }
 }
 
-/// مسار الشرائح الرمادي الواحد (الشكل الخفيف): أفقي إن اتّسع، وإلا عمودي (الخط الكبير جداً) — بلا تمرير أفقي يخفي خياراً
+/// صفّ شرائح الاختيار: يلتفّ لسطر جديد عند امتلاء العرض — لا تمرير جانبي يخفي خياراً ولا قصّ (spec A.9، `DSChipFlow`)
 struct AdminChoiceRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: DSBox.choiceTrackInset) { content() }
-            VStack(alignment: .leading, spacing: DSBox.choiceTrackInset) { content() }
-        }
-        .padding(DSBox.choiceTrackInset)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
+        DSChipFlow(spacing: DS.Spacing.sm) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
