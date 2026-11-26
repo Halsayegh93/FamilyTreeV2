@@ -1,26 +1,20 @@
 import SwiftUI
 
-// MARK: - «إشعارات الإدارة» خطّاً زمنياً (اختيار المالك ٢٠٢٦-١١-٠٦ — العيّنة «ب خطّ زمني»)
+// MARK: - صفوف «إشعارات الإدارة» (إعادة تصميم الإدارة ٢٠٢٦-١١-٢٦، الوحدة U18 — spec A.6/C.15، mock 11)
 //
-// كل إشعار بطاقة مستقلة (كان كل يوم بطاقة واحدة)، وعلى طرفها خطّ الوقت بنقطة ملوّنة بدل أيقونة النوع — لون النقطة = النوع
-// (طلب · إضافة · تعديل · نظام). عنوان كل قسم («يحتاج إجراء الآن»، اليوم، أمس…) حلقة فارغة على الخطّ نفسه. الإجراء رابط صغير
-// في طرف البطاقة. السحب والتحديد ونقطة «جديد» الذهبية والعنوان الأعرض لغير المقروء كما كانت.
+// كان خطّاً زمنياً بنقاط ملوّنة (اختيار ٢٠٢٦-١١-٠٦). صار قوائم اللوحة الواحدة: كل قسم («يحتاج إجراء الآن»، اليوم، أمس…)
+// بطاقة بيضاء من صفوفها (`dsGroupedRow` — كل صفّ جزؤه، فيبقى السحب والتحديد لكل صفّ)، والصفّ:
+//   [مربّع النوع ٣٠ ممتلئ] العنوان ١٥ (غير المقروء متوسط + نقطة ذهبية) ……… الوقت [›]
+//                          النص ١٣ رمادي · ما تغيّر · مَن فعل [الحالة]
+//                          [الملف] [تنبيه] · [شحن الرصيد]
+// في «يحتاج إجراء الآن» زرّ البيت الواحد كحلي في طرف الصفّ («إعلان» · «مراجعة» · «راجع» · «شحن الرصيد») — تحت النص من
+// أحجام إمكانية الوصول. الأزرار عناصر مستقلة للقارئ الصوتي، والنص عنصر واحد بإجراءاته («مقروء»، «حذف»).
 // كل جزء نوع صغير مستقل (حارس المكدس).
 
-/// نوع الإشعار على الخطّ الزمني — لون نقطته
+/// نوع الإشعار بالكلام للقارئ الصوتي (طلب · إضافة · تعديل · نظام)
 enum AdminNoticeTone: Equatable {
     case request, add, edit, system
 
-    var color: Color {
-        switch self {
-        case .request: return DS.Color.sea
-        case .add:     return DS.Color.palm
-        case .edit:    return DS.Color.accent
-        case .system:  return DS.Color.slate
-        }
-    }
-
-    /// اسم النوع للقارئ الصوتي (اللون وحده لا يُسمع)
     var spoken: String {
         switch self {
         case .request: return L10n.t("طلب", "Request")
@@ -46,239 +40,250 @@ enum AdminNoticeTone: Equatable {
     }
 }
 
-/// مقاسات الخطّ الزمني (مكانها هنا — لا أرقام عند الاستعمال)
-enum AdminTimelineMetrics {
-    /// عمود الخطّ في طرف البطاقة، والفراغ بينه وبين البطاقة
-    static let rail: CGFloat = DS.Spacing.md
-    static let railGap: CGFloat = DS.Spacing.sm
-    /// النقطة وحلقة عنوان القسم وسُمك الخطّ
-    static let dot: CGFloat = DS.Spacing.smd
-    static let ring: CGFloat = DS.Spacing.smd
-    static let line: CGFloat = DS.Border.widthBold
-    /// النقطة على مستوى عنوان البطاقة
-    static let dotTop: CGFloat = DSNoticeMetrics.paddingV + DS.Spacing.xs
-    /// بين البطاقات، وفوق عنوان القسم
-    static let cardGap: CGFloat = DS.Spacing.sm
-    static let headerTop: CGFloat = DS.Hub.stackSpacing
-    /// الحلقة على مستوى نصّ عنوان القسم
-    static var ringTop: CGFloat { headerTop + DS.Spacing.xxs }
-}
+/// إجراءات الإشعار — السحب والضغط المطوّل والقارئ الصوتي نفسها (spec A.15)
+enum AdminNoticeRowAction: String, Identifiable, Hashable {
+    case read, delete
 
-/// عمود الخطّ: جزء فوق النقطة (إن لم يكن أول الخطّ) ثم النقطة ثم جزء حتى أسفل الصفّ (إن لم يكن آخره) — يملأ ارتفاع صفّه
-struct AdminTimelineRail: View {
-    enum Mark { case dot(Color), ring }
-    let mark: Mark
-    /// بُعد مركز العلامة من أعلى الصفّ
-    let markTop: CGFloat
-    var lineAbove = true
-    var lineBelow = true
+    var id: String { rawValue }
 
-    private var size: CGFloat {
-        if case .dot = mark { return AdminTimelineMetrics.dot }
-        return AdminTimelineMetrics.ring
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            segment(visible: lineAbove).frame(height: max(0, markTop - size / 2))
-            markView
-            segment(visible: lineBelow).frame(maxHeight: .infinity)
+    var title: String {
+        switch self {
+        case .read:   return L10n.t("مقروء", "Read")
+        case .delete: return L10n.t("حذف", "Delete")
         }
-        .frame(width: AdminTimelineMetrics.rail)
-        .frame(maxHeight: .infinity, alignment: .top)
-        .accessibilityHidden(true)
     }
 
-    private func segment(visible: Bool) -> some View {
-        Rectangle()
-            .fill(visible ? DS.Color.cardBorder : Color.clear)
-            .frame(width: AdminTimelineMetrics.line)
-    }
-
-    @ViewBuilder
-    private var markView: some View {
-        switch mark {
-        case .dot(let color):
-            Circle().fill(color).frame(width: size, height: size)
-        case .ring:
-            Circle().strokeBorder(DS.Color.cardBorderStrong, lineWidth: AdminTimelineMetrics.line)
-                .background(Circle().fill(DS.Hub.background))
-                .frame(width: size, height: size)
+    var icon: String {
+        switch self {
+        case .read:   return "envelope.open.fill"
+        case .delete: return "trash.fill"
         }
     }
 }
 
-extension View {
-    /// الصفّ على الخطّ الزمني: يحجز عمود الخطّ في الطرف ويرسمه بطول الصفّ كله (مع الفراغ تحته — الخطّ متّصل).
-    /// الخطّ في طرف البداية (يمين الشاشة بالعربي) — طلب المالك ٢٠٢٦-١١-٠٧ «الخط الزمني ابيه في الجهة الثانية»
-    func adminTimelineRail(_ mark: AdminTimelineRail.Mark, markTop: CGFloat,
-                           lineAbove: Bool = true, lineBelow: Bool = true) -> some View {
-        padding(.leading, AdminTimelineMetrics.rail + AdminTimelineMetrics.railGap)
-            .overlay(alignment: .leading) {
-                AdminTimelineRail(mark: mark, markTop: markTop, lineAbove: lineAbove, lineBelow: lineBelow)
-            }
-    }
-}
-
-/// عنوان القسم على الخطّ: الاسم وعدده، وحلقة فارغة على الخطّ
-struct AdminTimelineHeader: View {
-    let title: String
-    let count: Int
-    let isFirst: Bool
-
-    var body: some View {
-        DSDayHeader(title: title, count: count)
-            .padding(.top, AdminTimelineMetrics.headerTop)
-            .padding(.bottom, DSNoticeMetrics.headerGap)
-            .adminTimelineRail(.ring, markTop: AdminTimelineMetrics.ringTop, lineAbove: !isFirst)
-    }
-}
-
-/// بطاقة الإشعار على الخطّ:
-///   العنوان (نوع الحدث) ……… • الوقت
-///   الشخص/النص · «قبل ← بعد» · السطر الصغير
-///   [الحالة]                     [رابط ›]
-struct AdminNoticeTimelineRow: View {
+/// صفّ في بطاقة قسمه
+struct AdminNoticeListRow: View {
     let item: AdminNoticeItem
+    let position: DSGroupPosition
+    /// قسم «يحتاج إجراء الآن»: زرّ البيت كحلي في الطرف والوقت نسبي («قبل 3 ساعات»)؛ صفوف الأيام بساعتها («9:05 ص»)
+    let now: Bool
     let selecting: Bool
     let picked: Bool
-    /// آخر صفّ في الخطّ — لا يمتدّ الخطّ تحته
-    var isLast = false
+    var actions: [AdminNoticeRowAction] = []
     let onTap: () -> Void
+    var perform: (AdminNoticeRowAction) -> Void = { _ in }
     var onSelfChild: ((AdminSelfChildAction, AdminNoticeSelfChild) -> Void)? = nil
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var showsCircle: Bool { selecting && item.notificationId != nil }
-
-    var body: some View {
-        card
-            .padding(.bottom, AdminTimelineMetrics.cardGap)
-            .adminTimelineRail(.dot(item.tone.color), markTop: AdminTimelineMetrics.dotTop, lineBelow: !isLast)
+    /// «تمت إضافة ابن» (لا باقي «تغييرات الأعضاء» — تنبيهها في التفاصيل)
+    private var child: AdminNoticeSelfChild? { item.selfChild.flatMap { $0.isGeneral ? nil : $0 } }
+    /// زرّ البيت في طرف الصفّ (لا تحته)
+    private var sidePill: Bool { now && item.button != nil && !typeSize.isAccessibilitySize }
+    private var hasPills: Bool { !selecting && ((child != nil && onSelfChild != nil) || (item.button != nil && !sidePill)) }
+    /// سهم ‹ حين يكون الضغط هو الإجراء الوحيد (يفتح التفاصيل)
+    private var showsChevron: Bool {
+        !selecting && !now && item.notificationId != nil && item.button == nil && child == nil
     }
 
-    private var card: some View {
-        HStack(alignment: .top, spacing: DSNoticeMetrics.selectGap) {
-            if showsCircle {
-                DSNoticeSelectCircle(picked: picked, tint: AppSection.admin.ink)
+    var body: some View {
+        HStack(alignment: now ? .center : .top, spacing: DSNoticeMetrics.gap) {
+            leading
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                AnyView(textBlock)
+                if hasPills { AnyView(pills) }
             }
-            AnyView(content)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if sidePill, !selecting, let homePill {
+                homePill
+            }
         }
         .padding(.horizontal, DSNoticeMetrics.paddingH)
         .padding(.vertical, DSNoticeMetrics.paddingV)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .dsGroupedRow(.single, radius: DS.Hub.cardRadius, dividerInset: 0,
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeightTwoLines, alignment: .leading)
+        .dsGroupedRow(position, radius: DS.Hub.cardRadius,
+                      dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Hub.iconSquare, selecting: showsCircle),
                       highlight: selecting && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
-        // برابط: يبقى الرابط عنصراً مستقلاً للقارئ الصوتي؛ ولون النقطة يُسمع نوعاً
-        .accessibilityElement(children: hasLink && !selecting ? .contain : .combine)
-        .accessibilityHint(item.tone.spoken)
-        .accessibilityValue(item.isUnread ? L10n.t("جديد", "New") : "")
-        .accessibilityAddTraits(item.notificationId != nil ? .isButton : [])
-        .accessibilityAddTraits(selecting && picked ? .isSelected : [])
     }
 
-    private var hasLink: Bool { item.button != nil || item.selfChild?.review == true }
+    private var leading: some View {
+        HStack(spacing: DSNoticeMetrics.selectGap) {
+            if showsCircle {
+                DSNoticeSelectCircle(picked: picked, tint: AppSection.admin.ink)
+            }
+            AdminIconSquare(symbol: item.icon, tint: item.tint, filled: true)
+        }
+    }
 
-    private var content: some View {
+    // MARK: النص
+
+    private var textBlock: some View {
         VStack(alignment: .leading, spacing: DSNoticeMetrics.lineGap) {
             titleLine
             if !item.subtitle.isEmpty {
                 // الحالة المشتقة (الآن) نصّها كاملاً حتى ٣ أسطر، والإشعار سطران أقصى
-                DSNoticeText(text: item.subtitle, unread: item.isUnread || item.pinned, lines: item.pinned ? 3 : 2)
+                Text(verbatim: item.subtitle)
+                    .dsFont(.subtitle)
+                    .foregroundColor(item.isUnread || item.pinned ? DS.Color.textSecondary : DS.Color.textTertiary)
+                    .lineLimit(item.pinned ? 3 : 2)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if let rich = item.rich, !rich.changes.isEmpty {
-                NotificationChangesInline(changes: rich.changes)
+            if let fields = changedFields {
+                Text(verbatim: fields)
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
             }
-            bottomLine
+            metaLine
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        // النص عنصر واحد: يفتح التفاصيل، ومعه «مقروء»/«حذف»؛ والنوع يُسمع (المربّع وحده لا يُسمع)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(item.notificationId != nil ? .isButton : [])
+        .accessibilityAddTraits(selecting && picked ? .isSelected : [])
+        .accessibilityValue(item.isUnread ? L10n.t("جديد", "New") : "")
+        .accessibilityHint(item.tone.spoken)
+        .accessibilityAction { onTap() }
+        .accessibilityActions {
+            ForEach(actions) { action in
+                Button(action.title) { perform(action) }
+            }
+        }
     }
 
     private var titleLine: some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
             Text(verbatim: item.title)
-                .dsFont(item.isUnread ? .noticeTitle : .noticeTitleRead)
+                .dsFont(item.isUnread ? .rowTitle : .body)
                 .foregroundColor(DS.Color.textPrimary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: DS.Spacing.xs)
-            if item.isUnread || !item.pinned {
+            if item.isUnread || !item.pinned || showsChevron {
                 HStack(spacing: DS.Spacing.xs) {
                     if item.isUnread { DSGoldDot(size: DSNoticeMetrics.unreadDot) }
                     if !item.pinned {
-                        Text(verbatim: AdminNoticeRow.relative(item.date))
-                            .dsFont(.caption)
+                        Text(verbatim: now ? AdminNoticeRow.relative(item.date) : AdminNoticeRow.clock(item.date))
+                            .dsFont(.subtitle)
                             .monospacedDigit()
                             .foregroundColor(item.isUnread ? AppSection.admin.ink.dsReadableGlyph : DS.Color.textTertiary)
                             .lineLimit(1)
                     }
+                    if showsChevron { DSChevron() }
                 }
                 .fixedSize()
             }
         }
     }
 
-    /// السطر الأخير: السطر الصغير (مَن فعل) والحالة، والرابط في طرف البطاقة
+    /// «قبل ← بعد» مكانه مربّع التفاصيل (spec B.7)؛ في الصفّ أسماء ما تغيّر فقط: «تاريخ الميلاد · الصورة +2»
+    private var changedFields: String? {
+        guard let changes = item.rich?.changes, !changes.isEmpty else { return nil }
+        let names = changes.prefix(2).map(\.displayLabel).joined(separator: " · ")
+        return changes.count > 2 ? "\(names) +\(changes.count - 2)" : names
+    }
+
+    /// مَن فعل («أضافه أبوه فهد»، «بواسطة: فيصل») وحالة الابن المضاف
     @ViewBuilder
-    private var bottomLine: some View {
-        let meta = item.meta
-        let status = item.selfChild.flatMap { $0.isGeneral ? nil : $0 }
-        let link = linkView
-        if meta != nil || status != nil || link != nil {
+    private var metaLine: some View {
+        if item.meta != nil || child != nil {
             HStack(alignment: .center, spacing: DS.Spacing.sm) {
-                if let meta {
+                if let meta = item.meta {
                     Text(verbatim: meta)
-                        .dsFont(.micro)
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
-                if let status {
-                    AdminSelfChildStatusChip(review: status.review)
+                if let child {
+                    AdminSelfChildStatusChip(review: child.review)
                 }
-                Spacer(minLength: 0)
-                if let link, !selecting { link }
             }
             .padding(.top, DS.Spacing.xxs)
         }
     }
 
-    /// رابط البيت الواحد: «إعلان/مراجعة/راجع/شحن الرصيد» ← صفحته، و«راجع» على الابن المشكوك فيه ← ملفه
-    private var linkView: AnyView? {
-        if let button = item.button {
-            return AnyView(AdminTapWrap(tap: .page { AdminNoticeRoutes.page(item.target) },
-                                        label: AnyView(AdminTimelineLink(title: button)),
-                                        accessibilityLabel: "\(button): \(item.title)")
-                .fixedSize())
+    // MARK: الأزرار
+
+    /// «الملف» و«تنبيه» للابن المضاف وحدهما (T4 — حذف العضو بيته ورقة العضو التي يفتحها «الملف»؛ كحلي عند احتمال
+    /// التكرار)، وزرّ البيت تحت النص في صفوف الأيام — تلتفّ لسطر ثانٍ ولا تُقصّ، و١٢ بينها فلا يتداخل لمسها (spec A.7/T6)
+    private var pills: some View {
+        DSChipFlow(spacing: DS.Hub.actingPillGap, lineSpacing: DS.Spacing.md) {
+            if let child, let onSelfChild {
+                let open = L10n.t("الملف", "Profile")
+                AdminPillButton(title: open, style: child.review ? .navy : .soft) { onSelfChild(.openProfile, child) }
+                    .accessibilityLabel(Text(verbatim: "\(open): \(child.childFullName)"))
+                if child.canAlert {
+                    let alert = L10n.t("تنبيه", "Alert")
+                    AdminPillButton(title: alert, style: .soft) { onSelfChild(.alert, child) }
+                        .accessibilityLabel(Text(verbatim: "\(alert): \(child.fatherName)"))
+                }
+            }
+            if !sidePill, let homePill {
+                homePill
+            }
         }
-        if let notice = item.selfChild, notice.review, !notice.isGeneral, let onSelfChild {
-            let title = L10n.t("راجع", "Review")
-            return AnyView(AdminTapWrap(tap: .action { onSelfChild(.openProfile, notice) },
-                                        label: AnyView(AdminTimelineLink(title: title)),
-                                        accessibilityLabel: "\(title): \(notice.childFullName)")
-                .fixedSize())
-        }
-        return nil
+    }
+
+    /// زرّ البيت الواحد: «إعلان» ← المناسبات · «مراجعة» ← الوارد على الطلب · «راجع» ← طلبات رمز الدخول · «شحن الرصيد» ←
+    /// رسائل رمز الدخول. كحلي في «يحتاج إجراء الآن»، وبإطار في صفوف الأيام
+    private var homePill: AnyView? {
+        guard let title = item.button, item.target != .none else { return nil }
+        let target = item.target
+        return AnyView(AdminTapWrap(tap: .page { AdminNoticeRoutes.page(target) },
+                                    label: AnyView(AdminPillLabel(title: title, style: now ? .navy : .soft)
+                                        .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.pillHeight)),
+                                    accessibilityLabel: "\(title): \(item.title)")
+            .fixedSize())
     }
 }
 
-/// رابط صغير في طرف البطاقة: النص وسهم صغير على تعبئة خفيفة — لمس ٤٤
-struct AdminTimelineLink: View {
-    let title: String
+/// «قراءة الكل» (نصّ كحلي، لمس ٤٤) في البداية و«12 غير مقروء» في الطرف (spec C.15 السطر ٣، mock 11) — تحته إن ضاق
+struct AdminNoticeCaption: View {
+    let unread: Int
+    let onReadAll: () -> Void
 
     var body: some View {
-        AdminPillLabel(title: title, icon: L10n.isArabic ? "chevron.left" : "chevron.right", style: .soft,
-                       iconTrailing: true)
-            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+        let button = Button(action: onReadAll) {
+            Text(L10n.t("قراءة الكل", "Mark all read"))
+                .dsFont(.button)
+                .foregroundColor(AppSection.admin.ink)
+                .frame(minHeight: DS.Icon.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
+        let count = (Text(verbatim: AdminNumberText.grouped(unread))
+            .font(DS.Font.role(.sectionTitle))
+            .foregroundColor(DS.Color.textPrimary)
+            + Text(verbatim: " " + AdminNoticeLogic.unreadTail()))
+            .dsFont(.subtitle)
+            .foregroundColor(DS.Color.textSecondary)
+            .monospacedDigit()
+            .accessibilityElement(children: .combine)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: DS.Spacing.sm) {
+                button.fixedSize()
+                Spacer(minLength: DS.Spacing.sm)
+                count
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                count.frame(minHeight: DS.Icon.tapTarget)
+                button
+            }
+        }
+        .frame(minHeight: DS.Icon.tapTarget)
     }
 }
 
-/// حالة الابن المضاف: «احتمال مكرر» (تنبيه) أو «بلا تكرار»
+/// حالة الابن المضاف: «احتمال مكرر» (تنبيه) أو «بلا تكرار» — حبّة حالة بكلمة (spec A.7)
 struct AdminSelfChildStatusChip: View {
     let review: Bool
 
     var body: some View {
-        DSStatusChip(text: review ? L10n.t("احتمال مكرر", "Possible duplicate") : L10n.t("بلا تكرار", "No duplicate"),
-                     tint: review ? DS.Color.warning : DS.Color.success, size: .mini)
+        AdminStatePill(title: review ? L10n.t("احتمال مكرر", "Possible duplicate") : L10n.t("بلا تكرار", "No duplicate"),
+                       tone: review ? .warn : .ok,
+                       icon: review ? "exclamationmark.triangle.fill" : "checkmark")
     }
 }

@@ -5,10 +5,11 @@ import SwiftUI
 // لتغييرات الأعضاء ونشاط الفريق (الطلبات والنظام يبقون في `NotificationDetailBox` بقرارهم):
 //   • العنوان = نوع الحدث («إضافة ابن»، «تعديل بيانات»)، وتحته الشجرة والوقت
 //   • الشخص مرة واحدة في بطاقته (يفتح ملفه)، والنص يختفي إن كرّر العنوان أو البطاقة، ثم «قبل ← بعد»
-//   • «تم» و«فيه خطأ؟» (و«حذف» بتأكيد للابن المضاف لمن يملكه)
+//   • «تم» و«إرسال تنبيه» — لا «حذف» (U18، T4 — spec E.21): حذف العضو بيته ورقة العضو التي تفتحها بطاقة الشخص
 //   • «فيه خطأ؟» يفتح الأسباب في المربّع نفسه: سبب جاهز ← الجملة التي ستصله ← «أرسل لـفلان»؛ الكتابة اختيارية («أضف
 //     ملاحظة»)، وبعد الإرسال سطر «أُرسل» في المربّع بدل نافذة النجاح. الإرسال نفسه القديم: إشعار «تنبيه من الإدارة»
-//     (`sendNotification`، `kind: admin`) يصل العضو في إشعاراته وبطاقة «حسابي» — بلا شيء جديد على السيرفر.
+//     (`sendNotification`، `kind: admin`) يصل العضو في إشعاراته وبطاقة «حسابي» — بلا شيء جديد على السيرفر، ويمرّ
+//     بـ`AdminNoticeWrites` (DRY-RUN في تجربة الأدوار — T0).
 // كل جزء نوع صغير مستقل (حارس المكدس).
 
 /// نصوص الإشعار بلا تكرار — العنوان والشخص ومَن فعل
@@ -107,9 +108,8 @@ struct AdminNoticeDetailBox: View {
     /// أدوات الابن المضاف أو «فيه خطأ؟» لمن غيّر البيانات — nil = بلا تنبيه
     let notice: AdminNoticeSelfChild?
     let onClose: () -> Void
-    /// ملف العضو (`AdminMemberSheet`) — الصفحة تغلق المربّع أولاً
+    /// ملف العضو (`AdminMemberSheet`، وفيه حذف العضو) — الصفحة تغلق المربّع أولاً
     let onOpenProfile: (UUID) -> Void
-    let onDelete: (AdminNoticeSelfChild) -> Void
 
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var authVM: AuthViewModel
@@ -215,9 +215,6 @@ struct AdminNoticeDetailBox: View {
             items.append(.init(title: L10n.t("إرسال تنبيه", "Send a notice"), kind: .secondary) {
                 withAnimation(DS.Anim.quick) { reporting = true }
             })
-        }
-        if let notice, notice.canDelete, !notice.isGeneral {
-            items.append(.init(title: L10n.t("حذف", "Delete"), kind: .reject) { onDelete(notice) })
         }
         return NotifButtonRow(items: items)
     }
@@ -369,15 +366,15 @@ struct AdminNoticeReportPanel: View {
         isSending = true
         failed = false
         Task {
-            let ok = await notificationVM.sendNotification(title: AdminAlertProfileCard.title, body: body,
-                                                           targetMemberIds: [father], kind: "admin")
+            let ok = await AdminNoticeWrites.sendAlert(title: AdminAlertProfileCard.title, body: body, to: father,
+                                                       notificationVM)
             isSending = false
             if ok {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 withAnimation(DS.Anim.quick) { sent = true }
                 UIAccessibility.post(notification: .announcement,
                                      argument: L10n.t("أُرسل لـ\(recipient)", "Sent to \(recipient)"))
-                await notificationVM.markNotificationAsRead(id: notice.notificationId)
+                await AdminNoticeWrites.markRead([notice.notificationId], notificationVM)
             } else {
                 failed = true
             }

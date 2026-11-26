@@ -2,9 +2,11 @@ import SwiftUI
 
 // MARK: - «تمت إضافة ابن» في «إشعارات الإدارة» (طلب المالك ٢٠٢٦-١١-٠٥)
 //
-// العضو يضيف ابنه بلا موافقة فيصل الإدارة علم وخبر، ومعه أدوات لو فيه خطأ: «الملف» (أو «راجع» عند الشك) يفتح «بيانات العضو»،
-// «تنبيه» مربّع بأسباب جاهزة يرسل للأب `sendNotification`، و«حذف» مسار حذف العضو نفسه بتأكيده (`deleteMember`).
-// كل زرّ بصلاحيته: `canSendNotifications` و`canDeleteMembers`؛ ولا يظهر ما لا يملكه الدور.
+// العضو يضيف ابنه بلا موافقة فيصل الإدارة علم وخبر، ومعه أدوات لو فيه خطأ: «الملف» (كحلي عند الشك) يفتح ورقة العضو،
+// و«تنبيه» مربّع بأسباب جاهزة يرسل للأب `sendNotification` (هذا الصفّ بيته). كل زرّ بصلاحيته (`canSendNotifications`)،
+// ولا يظهر ما لا يملكه الدور.
+// إعادة تصميم الإدارة (U18، T4 — spec E.21): «حذف» حُذف من الإشعار. حذف العضو له بيت واحد: آخر صفّ أحمر في ورقة العضو،
+// يفتحها «الملف». الكتابة (التنبيه، «مقروء») تمرّ بـ`AdminNoticeWrites` (DRY-RUN في تجربة الأدوار — T0).
 
 /// ما يحتاجه صفّ «تمت إضافة ابن» ومربّعاته
 struct AdminNoticeSelfChild: Identifiable, Equatable {
@@ -16,7 +18,6 @@ struct AdminNoticeSelfChild: Identifiable, Equatable {
     let fatherName: String
     let review: Bool
     let canAlert: Bool
-    let canDelete: Bool
     /// باقي «تغييرات الأعضاء» (طلب المالك «زر للتنبيه إذا في شي خطأ»): زرّ «تنبيه» وحده لمن غيّر البيانات
     var isGeneral = false
 
@@ -31,64 +32,7 @@ struct AdminNoticeSelfChild: Identifiable, Equatable {
 }
 
 enum AdminSelfChildAction {
-    case openProfile, alert, delete
-}
-
-/// أسفل الصفّ: سطر الحالة («راجعه» أو «ما فيه تكرار») ثم الأزرار
-struct AdminSelfChildFooter: View {
-    let notice: AdminNoticeSelfChild
-    let act: (AdminSelfChildAction, AdminNoticeSelfChild) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            if !notice.isGeneral { statusLine }
-            HStack(spacing: DS.Spacing.xsm) {
-                if notice.isGeneral {
-                    EmptyView()
-                } else if notice.review {
-                    pill(L10n.t("راجع", "Review"), style: .navy, action: .openProfile)
-                } else {
-                    pill(L10n.t("الملف", "Profile"), style: .soft, action: .openProfile)
-                }
-                if notice.canAlert {
-                    pill(L10n.t("تنبيه", "Alert"), style: .soft, action: .alert)
-                }
-                if notice.canDelete {
-                    pill(L10n.t("حذف", "Delete"), style: .reject, action: .delete)
-                }
-            }
-        }
-        .padding(.horizontal, DSNoticeMetrics.paddingH)
-        .padding(.bottom, DSNoticeMetrics.paddingV)
-    }
-
-    private var statusLine: some View {
-        let tint = notice.review ? DS.Color.warning : DS.Color.success
-        return HStack(alignment: .top, spacing: DS.Spacing.xs) {
-            Image(systemName: notice.review ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .dsGlyph(DS.Glyph.sm)
-                .accessibilityHidden(true)
-            Text(notice.review
-                 ? L10n.t("راجعه: الاسم الكامل أو تاريخ الميلاد يطابق عضواً آخر، احتمال مكرر.",
-                          "Review: the full name or birth date matches another member, possibly a duplicate.")
-                 : L10n.t("لا يوجد تكرار تحت الأب نفسه", "No duplicate under the same father"))
-                .dsFont(.caption)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .foregroundColor(tint)
-        .padding(.horizontal, DS.Spacing.sm)
-        .padding(.vertical, DS.Spacing.xsm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
-            .fill(tint.opacity(DS.Opacity.tintFill)))
-    }
-
-    private func pill(_ title: String, style: AdminPillStyle, action: AdminSelfChildAction) -> some View {
-        AdminTapWrap(tap: .action { act(action, notice) },
-                     label: AnyView(AdminPillLabel(title: title, style: style, fullWidth: true)),
-                     accessibilityLabel: "\(title): \(notice.childFullName)")
-            .frame(maxWidth: .infinity)
-    }
+    case openProfile, alert
 }
 
 // MARK: - المربّعات
@@ -97,12 +41,10 @@ struct AdminSelfChildFooter: View {
 struct AdminSelfChildFlow {
     var sheet: AdminMemberSheetContext?
     var alert: AdminNoticeSelfChild?
-    var deleting: AdminNoticeSelfChild?
-    var failure: String?
     var alertSent = false
 }
 
-/// الورقة والمربّعات وتأكيد الحذف — نوع مستقل (حارس المكدس)
+/// ورقة العضو ومربّع «تنبيه» ولحظة «أُرسل» — نوع مستقل (حارس المكدس)
 struct AdminSelfChildFlowModifier: ViewModifier {
     @Binding var flow: AdminSelfChildFlow
     /// أبناء لم يصلوا لقائمة الأعضاء بعد
@@ -127,21 +69,6 @@ struct AdminSelfChildFlowModifier: ViewModifier {
                                            onClose: { flow.alert = nil },
                                            onSent: { alertSent(notice) }))
             }
-            // نفس تأكيد «حذف العضو نهائياً» في «بيانات العضو»
-            .dsAlert(AdminMemberConfirm.delete.title,
-                     isPresented: Binding(get: { flow.deleting != nil }, set: { if !$0 { flow.deleting = nil } }),
-                     presenting: flow.deleting) { notice in
-                Button(AdminMemberConfirm.delete.button, role: .destructive) { delete(notice) }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { flow.deleting = nil }
-            } message: { _ in
-                Text(AdminMemberConfirm.delete.message)
-            }
-            .dsAlert(L10n.t("تعذّر التنفيذ", "Couldn't complete"),
-                     isPresented: Binding(get: { flow.failure != nil }, set: { if !$0 { flow.failure = nil } })) {
-                Button(L10n.t("حسناً", "OK")) { flow.failure = nil }
-            } message: {
-                Text(flow.failure ?? "")
-            }
             .dsAlert(L10n.t("أُرسل التنبيه", "Alert sent"), isPresented: $flow.alertSent, moment: .success) {
                 Button(L10n.t("حسناً", "OK")) {}
             }
@@ -150,24 +77,10 @@ struct AdminSelfChildFlowModifier: ViewModifier {
     private func alertSent(_ notice: AdminNoticeSelfChild) {
         flow.alert = nil
         Task {
-            await notificationVM.markNotificationAsRead(id: notice.notificationId)
+            await AdminNoticeWrites.markRead([notice.notificationId], notificationVM)
             // بعد إغلاق المربّع — لا تتداخل حركتاهما
             try? await Task.sleep(nanoseconds: UInt64(DSMotion.boxHandoff * 1_000_000_000))
             flow.alertSent = true
-        }
-    }
-
-    /// مسار حذف العضو نفسه (`AdminMemberSheet`) — حماية الروابط ترفض برسالة السيرفر
-    private func delete(_ notice: AdminNoticeSelfChild) {
-        flow.deleting = nil
-        Task {
-            if await memberVM.deleteMember(memberId: notice.childId) {
-                NotificationCenter.default.post(name: .memberDeleted, object: notice.childId)
-                await notificationVM.fetchNotifications(force: true)
-            } else {
-                flow.failure = memberVM.errorMessage
-                    ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again.")
-            }
         }
     }
 }
@@ -308,8 +221,7 @@ struct AdminChildAlertBox: View {
         failed = false
         let body = trimmed
         Task {
-            let ok = await notificationVM.sendNotification(title: noticeTitle, body: body,
-                                                           targetMemberIds: [father], kind: "admin")
+            let ok = await AdminNoticeWrites.sendAlert(title: noticeTitle, body: body, to: father, notificationVM)
             isSending = false
             if ok { onSent() } else { failed = true }
         }
