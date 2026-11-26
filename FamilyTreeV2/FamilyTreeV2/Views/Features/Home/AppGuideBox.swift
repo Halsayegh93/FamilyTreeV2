@@ -416,7 +416,7 @@ extension GuidePage {
 
     fileprivate static var diwaniyas: [GuidePage] {
         [
-            GuidePage(title: L10n.t("الفلتر", "Filter"),
+            GuidePage(title: L10n.t("التصفية", "Filter"),
                       text: L10n.t("اختر: الكل أو الديوانيات أو الحسينيات — والرقم عددها.",
                                    "Choose all, diwaniyas or husseiniyas — the number is how many."),
                       visual: .rect(image: "GuideDiwTop", rect: CGRect(x: 0.128, y: 0.034, width: 0.844, height: 0.112),

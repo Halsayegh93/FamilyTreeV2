@@ -34,6 +34,18 @@ nonisolated enum AdminMembersLogic {
         }
     }
 
+    /// اختيار متعدّد (F3): «الحساب» و«الحالة» مجموعتان — فارغة = «الكل»، وأيّ المختار داخل المجموعة (OR)، والاثنتان معاً (AND)
+    static func matches(deceased: Bool, hasLogin: Bool, accounts: Set<Account>, lives: Set<Life>) -> Bool {
+        let life: Life = deceased ? .deceased : .alive
+        let account: Account = hasLogin ? .with : .without
+        return (lives.isEmpty || lives.contains(.all) || lives.contains(life))
+            && (accounts.isEmpty || accounts.contains(.all) || accounts.contains(account))
+    }
+
+    /// الهبوط والروابط القديمة (اختيار واحد) ← اختيارات الورقة: «الكل» = لا اختيار، وغيره شريحة واحدة تُزال
+    static func picks(_ account: Account) -> Set<Account> { account == .all ? [] : [account] }
+    static func picks(_ life: Life) -> Set<Life> { life == .all ? [] : [life] }
+
     /// عدّ القائمة بعد البحث والفرع (قبل «الحساب» و«الحالة») — كل خيار في الورقة رقمه من هنا، فالأرقام تتبع بقية الاختيارات
     struct Tally: Equatable {
         var aliveLogin = 0
@@ -73,6 +85,22 @@ nonisolated enum AdminMembersLogic {
         func shown(account: Account, life: Life, accountsReady: Bool) -> Int? {
             if account != .all && !accountsReady { return nil }
             return count(account: account, life: life)
+        }
+
+        /// العدد لاختيارات متعدّدة (F3) — نفس `matches(deceased:hasLogin:accounts:lives:)`
+        func count(accounts: Set<Account>, lives: Set<Life>) -> Int {
+            var n = 0
+            if matches(deceased: false, hasLogin: true, accounts: accounts, lives: lives) { n += aliveLogin }
+            if matches(deceased: false, hasLogin: false, accounts: accounts, lives: lives) { n += aliveNoLogin }
+            if matches(deceased: true, hasLogin: true, accounts: accounts, lives: lives) { n += deadLogin }
+            if matches(deceased: true, hasLogin: false, accounts: accounts, lives: lives) { n += deadNoLogin }
+            return n
+        }
+
+        /// العدد للعرض لاختيارات متعدّدة: «الحساب» لا يُعرف قبل وصول قوائم الحسابات («—»)
+        func shown(accounts: Set<Account>, lives: Set<Life>, accountsReady: Bool) -> Int? {
+            if !accounts.subtracting([.all]).isEmpty && !accountsReady { return nil }
+            return count(accounts: accounts, lives: lives)
         }
     }
 

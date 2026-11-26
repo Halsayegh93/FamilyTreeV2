@@ -94,8 +94,8 @@ check(W.filters(landing: AdminWomenLanding(status: .all, branch: .all)), F(statu
 check(W.filters(landing: AdminWomenLanding(branch: .outside)), F(status: .living, branch: .outside),
       "landing: outside branch keeps the living default")
 check(W.filters(landing: AdminWomenLanding(status: .deceased)), F(status: .deceased), "landing: deceased")
-check(W.filters(landing: AdminWomenLanding(status: .registered)).status, .registered, "landing: registered")
-check(W.filters(landing: AdminWomenLanding(status: .married)).status, .married, "landing: married")
+check(W.filters(landing: AdminWomenLanding(status: .registered)).statuses, [.registered], "landing: registered")
+check(W.filters(landing: AdminWomenLanding(status: .married)).statuses, [.married], "landing: married")
 let stored = AdminWomenLanding(status: .registered, branch: .outside)
 check(W.filters(landing: stored.overridden(by: AdminWomenLanding(status: .all))), F(status: .all, branch: .outside),
       "landing: explicit init field wins over the stored landing")

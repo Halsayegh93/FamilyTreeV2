@@ -73,7 +73,7 @@ enum AdminToolCatalog {
         if authVM.canEditMembers {
             let family = AdminArea.family.title
             add(.familyMembers, group: family, title: L10n.t("الأعضاء", "Members"),
-                subtitle: L10n.t("بحث وفلاتر، و«يحتاج مراجعتك»، وورقة لكل عضو",
+                subtitle: L10n.t("بحث وتصفية، و«يحتاج مراجعتك»، وورقة لكل عضو",
                                  "Search and filters, “Needs your review”, one sheet per member"),
                 icon: "person.3.sequence.fill", tint: DS.Color.palm)
             // نفس شرط «＋» في رأس «العائلة»: الصلاحية × القسم «يعدّل» في جدول السيرفر (F2)
@@ -84,7 +84,7 @@ enum AdminToolCatalog {
             }
             if isAdmin {
                 add(.familyExport, group: family, title: L10n.t("تقرير PDF بالأعضاء", "Members PDF report"),
-                    subtitle: L10n.t("زرّ ⋯ في «العائلة» — بالفلاتر الحالية", "The ⋯ button in Family — with the current filters"),
+                    subtitle: L10n.t("زرّ ⋯ في «العائلة» — بالتصفية الحالية", "The ⋯ button in Family — with the current filter"),
                     icon: "doc.text.fill", tint: DS.Color.accent)
             }
         }

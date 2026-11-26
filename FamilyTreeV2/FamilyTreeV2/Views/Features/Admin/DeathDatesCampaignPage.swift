@@ -7,8 +7,9 @@ import SwiftUI
 // الرأس: ‹ رجوع · «تواريخ الوفاة» · «⋯» (للمالك: أدوات الحملة — إبرازها في «اليوم» وآخر يوم؛ قبل مفتاحي الحملة في السيرفر
 // ملاحظة بلا أزرار) ← سطر الأرقام «364 بلا تاريخ كامل ‹» «229 السنة فقط ‹» «136 بلا تاريخ ‹» (كل رقم يضبط فلتر «التاريخ»
 // فأول رقم تحت الشريط = الرقم المضغوط — T2) ← شريط رفيع و«اكتمل 3 من 367».
-// المحتوى: شريط الفلاتر (spec A.13: البحث بالاسم + «الفلاتر» — «التاريخ»: الكل · السنة فقط · بلا تاريخ، و«الفرع» صفّ يفتح
-// `BranchPickerSheet` داخل الورقة) ← الشرائح المفعّلة و«مسح الفلاتر» … «364 متوفى · أبجدياً» ← قائمة واحدة أبجدياً: الصورة ·
+// المحتوى: شريط التصفية (spec A.13، F3: البحث بالاسم + «تصفية» — «التاريخ» اختيار متعدّد: الكل · السنة فقط · بلا تاريخ، و«الفرع»
+// اختيار واحد: الكل أو صفّ يفتح `BranchPickerSheet` داخل الورقة؛ كل لمسة تُطبَّق فوراً) ← شريحة لكل اختيار بـ✕ و«364 متوفى ·
+// أبجدياً» ← قائمة واحدة أبجدياً: الصورة ·
 // الاسم · «بلا تاريخ · فرع X» / «السنة فقط: 1931 · فرع X» · زرّ «أدخل» يفتح مربّع الاستكمال الموجود (`DeceasedDateBox` —
 // نفس الحفظ). ما يكتمل يخرج من القائمة فوراً مع لحظة «اكتمل».
 // تجربة الأدوار (`-tmpAdminRole`): فتح مربّع التاريخ وأدوات الحملة تمرّ بـ`DebugAdminProbe.dryRun` (T0).
@@ -41,11 +42,29 @@ struct DeathDatesCampaignPage: View {
         }
     }
 
-    /// فلاتر الصفحة (ورقة «الفلاتر»): «التاريخ» و«الفرع» — رأس فرع بأي مستوى (nil = كل الفروع) وذرّيته
+    /// تصفية الصفحة (ورقة «تصفية»، F3): «التاريخ» اختيار متعدّد (فارغة = «الكل»، وأيّ المختار)، و«الفرع» رأس فرع بأي مستوى
+    /// (nil = كل الفروع) وذرّيته — اختيار واحد
     struct Filters: Equatable {
-        var kind: Filter = .all
-        var branch: UUID? = nil
+        var kinds: Set<Filter>
+        var branch: UUID?
+
+        /// اختيار واحد في «التاريخ» (رقم الرأس) — «الكل» = لا اختيار
+        init(kind: Filter = .all, branch: UUID? = nil) {
+            self.init(kinds: [kind], branch: branch)
+        }
+
+        init(kinds: Set<Filter>, branch: UUID? = nil) {
+            self.kinds = kinds.subtracting([.all])
+            self.branch = branch
+        }
+
+        func matches(_ e: DeathDatesEntry) -> Bool {
+            kinds.isEmpty || kinds.contains { $0.matches(e) }
+        }
     }
+
+    /// ورقة «تصفية» — من زرّها ومن «تعديل التصفية» في البطاقة الفارغة
+    @State private var showsFilters = false
 
     @State private var filters = Filters()
     /// الآباء والأبناء — مرة لكل تغيّر في الأعضاء
@@ -166,7 +185,7 @@ struct DeathDatesCampaignPage: View {
 
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// ورقة «الفلاتر»: «التاريخ» بأعداده لأي حالة (بعد البحث والفرع)، و«الفرع» صفّ يفتح قائمة الفروع داخل الورقة.
+    /// ورقة «تصفية»: «التاريخ» بأعداده لأي حالة (بعد البحث والفرع)، و«الفرع» صفّ يفتح قائمة الفروع داخل الورقة.
     /// «النتيجة الآن» = القائمة نفسها
     private func filterSet() -> AdminFilterSet<Filters> {
         let entries = self.entries
@@ -183,22 +202,24 @@ struct DeathDatesCampaignPage: View {
         let count: (Filters) -> Int? = { s in
             let set = subtree(s.branch)
             return entries.reduce(0) { n, e in
-                guard s.kind.matches(e), set?.contains(e.id) ?? true else { return n }
+                guard s.matches(e), set?.contains(e.id) ?? true else { return n }
                 guard words.isEmpty || NameSearch.score(queryWords: words, candidateWords: NameSearch.words(e.needle)) != nil
                 else { return n }
                 return n + 1
             }
         }
-        return AdminFilterSet(reset: Filters(), noun: { Self.deceasedNoun($0) }, resultCount: count) { s in
-            let kinds = Filter.allCases.map { kind -> AdminFilterOption<Filter> in
+        return AdminFilterSet(noun: { Self.deceasedNoun($0) }, resultCount: count) { s in
+            // عدد كل خيار = النتيجة لو اختير وحده مع الفرع والبحث
+            let kinds = Filter.allCases.filter { $0 != .all }.map { kind -> AdminFilterOption<Filter> in
                 var probe = s
-                probe.kind = kind
+                probe.kinds = [kind]
                 return AdminFilterOption(kind, kind.title, count: count(probe))
             }
             let groups: [AdminFilterGroup<Filters>] = [
-                .choices("kind", title: L10n.t("التاريخ", "Date"), value: \.kind, all: .all, options: kinds),
+                .choices("kind", title: L10n.t("التاريخ", "Date"), values: \.kinds, options: kinds),
                 .picker("branch", title: L10n.t("الفرع", "Branch"), value: \.branch, all: nil,
-                        valueTitle: s.branch.map(name) ?? L10n.t("كل الفروع", "All branches"),
+                        allTitle: L10n.t("كل الفروع", "All branches"), valueTitle: s.branch.map(name),
+                        chooseTitle: L10n.t("اختر فرعاً", "Pick a branch"),
                         count: s.branch == nil ? nil : count(s), ownsHeader: true) { current, pick in
                     AnyView(BranchPickerSheet(allMembers: members, selectedId: current, allLevels: true,
                                               onSelect: { pick($0) }))
@@ -227,9 +248,9 @@ struct DeathDatesCampaignPage: View {
         // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
         let q = NameSearch.words(trimmedQuery)
         let set = branchSet
-        let kind = filters.kind
+        let current = filters
         return entries.filter { e in
-            kind.matches(e) && (set?.contains(e.id) ?? true)
+            current.matches(e) && (set?.contains(e.id) ?? true)
                 && (q.isEmpty || NameSearch.score(queryWords: q, candidateWords: NameSearch.words(e.needle)) != nil)
         }
     }
@@ -254,24 +275,25 @@ struct DeathDatesCampaignPage: View {
 
     private var loaded: some View {
         let rows = visible
+        let set = filterSet()
         return VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
-            AdminFilterPanel(set: filterSet(), selection: $filters, search: $query,
+            AdminFilterPanel(set: set, selection: $filters, search: $query,
                              placeholder: L10n.t("ابحث بالاسم", "Search by name"),
-                             note: L10n.t("أبجدياً", "A–Z"))
+                             note: L10n.t("أبجدياً", "A–Z"), openFilters: { showsFilters = true })
             if rows.isEmpty {
                 if !trimmedQuery.isEmpty {
                     AdminPageStateCard(.empty(L10n.t("لا أحد بهذا الاسم", "Nobody with this name"),
                                               actionTitle: L10n.t("مسح البحث", "Clear search"),
                                               action: { query = "" }))
                 } else {
-                    AdminFilterEmptyCard {
-                        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filters = Filters() }
-                    }
+                    // لا مسح للكل (F3): الورقة تُفتح للتعديل، والشرائح فوق تُزال واحدة واحدة
+                    AdminFilterEmptyCard(editFilters: { showsFilters = true })
                 }
             } else {
                 AnyView(listCard(rows))
             }
         }
+        .adminFilterSheet(isPresented: $showsFilters, set: set, selection: $filters)
     }
 
     // MARK: القائمة

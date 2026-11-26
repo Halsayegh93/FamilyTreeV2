@@ -784,7 +784,7 @@ struct AdminNotificationsPage: View {
                                           actionTitle: L10n.t("مسح البحث", "Clear search"),
                                           action: { searchText = "" }))
             } else {
-                AdminPageStateCard(.empty(L10n.t("لا شيء في هذا الفلتر", "Nothing in this filter"),
+                AdminPageStateCard(.empty(L10n.t("لا شيء في هذه التصفية", "Nothing in this filter"),
                                           message: L10n.t("«\(filter.title)» فارغ الآن.", "«\(filter.title)» is empty now."),
                                           actionTitle: L10n.t("عرض الكل", "Show all"),
                                           action: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filter = .all } }))

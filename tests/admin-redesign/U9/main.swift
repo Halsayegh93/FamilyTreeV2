@@ -29,7 +29,7 @@ while let c = current {
 }
 check(steps, ["r1", "r2", "r3"], "three decisions in a row walk r1 → r2 → r3")
 check(B.endTitle(othersOutsideFilter: false, arabic: true), "كل الطلبات عولجت", "the third ends on «كل الطلبات عولجت»")
-check(B.endTitle(othersOutsideFilter: true, arabic: true), "عولجت كل الطلبات بهذه الفلاتر", "filtered end says so")
+check(B.endTitle(othersOutsideFilter: true, arabic: true), "عولجت كل الطلبات بهذه التصفية", "filtered end says so (F3: «تصفية»)")
 
 // MARK: شريط المراحل
 check(B.trackStep(stage: "review"), 1, "review = المختص")

@@ -7,9 +7,10 @@ import SwiftUI
 //
 // صفحة تُدفع من رقم «262 امرأة ‹» في رأس «العائلة» (U11) — كانت لوحة تحت مفتاح «شجرة العائلة | شجرة النساء» (حُذف، E.9).
 // كل ما يخص النساء في مكان واحد. الرأس: ‹ العائلة · «نساء العائلة» · زرّ «شجرة النساء» (← تبويب الشجرة على شجرة النساء) ·
-// سطر الأرقام «127 حية ‹» «135 متوفاة ‹» (كل رقم يضبط «الحالة»). تحته شريط الفلاتر (spec A.13): البحث باسمها أو اسم أبيها +
-// «الفلاتر» — «الحالة» (الكل · الحيّات · مسجّلات · متزوجات · متوفيات؛ الافتراضي «الحيّات» شريحةً مفعّلة)، «الفرع» (كل الفروع ·
-// فرع خارج العائلة)، «الترتيب» (أبجدياً · الأحدث = المضافات أو المربوطات بحساب، الأحدث أولاً، وكم منهن خلال ٣٠ يوماً).
+// سطر الأرقام «127 حية ‹» «135 متوفاة ‹» (كل رقم يضبط «الحالة»). تحته شريط التصفية (spec A.13، F3): البحث باسمها أو اسم
+// أبيها + «تصفية» — «الحالة» اختيار متعدّد (الكل · الحيّات · مسجّلات · متزوجات · متوفيات — أيّ المختار؛ الافتراضي «الحيّات»
+// شريحةً عادية تُزال)، «الفرع» اختيار واحد (كل الفروع | فرع خارج العائلة — قائمتان منفصلتان: الثانية بقسم متوفيها المطويّ)،
+// «الترتيب» (أبجدياً · الأحدث = المضافات أو المربوطات بحساب، الأحدث أولاً، وكم منهن خلال ٣٠ يوماً).
 // الضغط على امرأة يفتح مربّع تفاصيلها نفسه في شجرة النساء (`WomanDetailSheet`)، وابن البنت ورقة حسابه (`AdminMemberSheet`).
 // «فرع خارج العائلة» = أبناء البنات (`DaughterSonsIndex`) وأزواج البنات من خارج العائلة والنساء من خارجها
 // (`WomenStore.outsideFamilyIds`) — بقاعدة `AdminFamilyCensus.make` نفسها (المسمّون فقط، بلا حساب مراجعة أبل)، فعدد القائمة
@@ -73,13 +74,26 @@ nonisolated enum AdminWomenLogic {
         }
     }
 
+    /// «الحالة» اختيار متعدّد (F3): فارغة = «الكل»، وأيّ المختار. «الفرع» اختيار واحد: «كل الفروع» و«فرع خارج العائلة»
+    /// قائمتان منفصلتان (الثانية بقسم متوفيها المطويّ) لا تجتمعان
     struct Filters: Equatable {
-        var status: Status = .living
-        var branch: Branch = .family
-        var order: Order = .alphabetical
+        var statuses: Set<Status>
+        var branch: Branch
+        var order: Order
+
+        /// اختيار واحد في «الحالة» (الهبوط، رقم الرأس) — «الكل» = لا اختيار
+        init(status: Status = .living, branch: Branch = .family, order: Order = .alphabetical) {
+            self.init(statuses: [status], branch: branch, order: order)
+        }
+
+        init(statuses: Set<Status>, branch: Branch = .family, order: Order = .alphabetical) {
+            self.statuses = statuses.subtracting([.all])
+            self.branch = branch
+            self.order = order
+        }
     }
 
-    /// ما تُفتح عليه الصفحة مباشرة (spec C.9: «الحيّات»)، وما يرجع إليه «إعادة ضبط الفلاتر»
+    /// ما تُفتح عليه الصفحة مباشرة (spec C.9: «الحيّات» — شريحة عادية تُزال)
     static let pageDefault = Filters()
 
     /// ما يُعرف عن صفّ — يُحسب مرة لكل تغيّر في البيانات
@@ -99,11 +113,9 @@ nonisolated enum AdminWomenLogic {
         }
     }
 
-    /// في القائمة: الفرع ثم «الحالة». متوفو «فرع خارج العائلة» في قسمهم المطويّ — إلا حين تُختار «متوفيات»
-    static func inList(_ f: Fact, _ s: Filters) -> Bool {
-        guard f.outside == (s.branch == .outside) else { return false }
-        if f.outside && f.deceased && s.status != .deceased { return false }
-        switch s.status {
+    /// حالة واحدة على صفّ
+    static func matches(_ f: Fact, status: Status) -> Bool {
+        switch status {
         case .all:        return true
         case .living:     return !f.deceased
         case .registered: return f.registered
@@ -112,9 +124,17 @@ nonisolated enum AdminWomenLogic {
         }
     }
 
-    /// القسم المطويّ «المتوفون من خارج العائلة» تحت قائمة «فرع خارج العائلة» (مع «الكل» و«الحيّات»)
+    /// في القائمة: الفرع ثم «الحالة» (أيّ المختار). متوفو «فرع خارج العائلة» في قسمهم المطويّ — إلا حين تُختار «متوفيات»
+    static func inList(_ f: Fact, _ s: Filters) -> Bool {
+        guard f.outside == (s.branch == .outside) else { return false }
+        if f.outside && f.deceased && !s.statuses.contains(.deceased) { return false }
+        return s.statuses.isEmpty || s.statuses.contains { matches(f, status: $0) }
+    }
+
+    /// القسم المطويّ «المتوفون من خارج العائلة» تحت قائمة «فرع خارج العائلة» (مع «الكل» أو مع «الحيّات» بلا «متوفيات»)
     static func inOutsideDeceased(_ f: Fact, _ s: Filters) -> Bool {
-        s.branch == .outside && (s.status == .all || s.status == .living) && f.outside && f.deceased
+        s.branch == .outside && !s.statuses.contains(.deceased) && (s.statuses.isEmpty || s.statuses.contains(.living))
+            && f.outside && f.deceased
     }
 
     static func count(_ facts: [Fact], _ s: Filters) -> Int {
@@ -125,7 +145,7 @@ nonisolated enum AdminWomenLogic {
     static func filters(landing: AdminWomenLanding?) -> Filters {
         var s = pageDefault
         guard let landing else { return s }
-        if let status = landing.status { s.status = Status(landing: status) }
+        if let status = landing.status { s.statuses = Filters(status: Status(landing: status)).statuses }
         if let branch = landing.branch { s.branch = branch == .outside ? .outside : .family }
         return s
     }
@@ -207,6 +227,8 @@ struct AdminWomenPanel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var filters: L.Filters
+    /// ورقة «تصفية» — من زرّها ومن «تعديل التصفية» في البطاقة الفارغة
+    @State private var showsFilters = false
     @State private var query = ""
     @State private var limit = Self.pageSize
     /// الصفوف مبنية مرة لكل تغيّر في البيانات (كانت تُبنى مع كل ضغطة وحرف — بلاغ المالك ٢٠٢٦-١١-٠٨ «القسم شوي يعلق»)
@@ -403,12 +425,12 @@ struct AdminWomenPanel: View {
         }
         let outsideDeceased = searched.filter { L.inOutsideDeceased($0.fact, current) }
         let outside = current.branch == .outside
-        let set = AdminFilterSet<L.Filters>(reset: L.pageDefault,
-                                            noun: { n in outside ? Self.peopleNoun(n) : Self.womenNoun(n) },
+        let set = AdminFilterSet<L.Filters>(noun: { n in outside ? Self.peopleNoun(n) : Self.womenNoun(n) },
                                             resultCount: count) { s in
-            let statuses = L.Status.allCases.map { status -> AdminFilterOption<L.Status> in
+            // عدد كل حالة = النتيجة لو اختيرت وحدها مع الفرع
+            let statuses = L.Status.allCases.filter { $0 != .all }.map { status -> AdminFilterOption<L.Status> in
                 var probe = s
-                probe.status = status
+                probe.statuses = [status]
                 return AdminFilterOption(status, status.title, count: count(probe))
             }
             let branches = L.Branch.allCases.map { branch -> AdminFilterOption<L.Branch> in
@@ -417,8 +439,8 @@ struct AdminWomenPanel: View {
                 return AdminFilterOption(branch, branch.title, count: count(probe))
             }
             let groups: [AdminFilterGroup<L.Filters>] = [
-                .choices("status", title: L10n.t("الحالة", "Status"), value: \.status, all: .all, options: statuses),
-                .choices("branch", title: L10n.t("الفرع", "Branch"), value: \.branch, all: .family, options: branches),
+                .choices("status", title: L10n.t("الحالة", "Status"), values: \.statuses, options: statuses),
+                .single("branch", title: L10n.t("الفرع", "Branch"), value: \.branch, neutral: .family, options: branches),
                 .order("order", title: L10n.t("الترتيب", "Order"), value: \.order, standard: .alphabetical,
                        options: L.Order.allCases.map { AdminFilterOption($0, $0.title) }),
             ]
@@ -456,7 +478,7 @@ struct AdminWomenPanel: View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminFilterPanel(set: m.set, selection: $filters, search: $query,
                              placeholder: L10n.t("ابحث باسمها أو اسم أبيها", "Search by her or her father's name"),
-                             note: m.note)
+                             note: m.note, openFilters: { showsFilters = true })
             // مساحة القائمة لا تقصر فجأة عند تغيير الفلتر — كانت الصفحة تقفز للأعلى (بلاغ المالك ٢٠٢٦-١١-٠٨)
             VStack(spacing: 0) {
                 if m.visible.isEmpty {
@@ -470,22 +492,23 @@ struct AdminWomenPanel: View {
                 AnyView(outsideDeceasedSection(m.outsideDeceased))
             }
         }
+        // الورقة على اللوحة (لا داخل الشريط) — «تعديل التصفية» في البطاقة الفارغة يفتحها أيضاً
+        .adminFilterSheet(isPresented: $showsFilters, set: m.set, selection: $filters)
     }
 
-    /// فارغة: بالبحث «لا أحد بهذا الاسم» + «مسح البحث»؛ بالفلاتر «لا نساء بهذه الفلاتر» + «إعادة ضبط الفلاتر» (spec C.9)
+    /// فارغة: بالبحث «لا أحد بهذا الاسم» + «مسح البحث»؛ بالتصفية «لا نساء بهذه التصفية» + «تعديل التصفية» (spec C.9، F3 —
+    /// لا مسح للكل: الشرائح تُزال واحدة واحدة)
     @ViewBuilder
     private func emptyCard(_ m: Model) -> some View {
         if !trimmedQuery.isEmpty {
             AdminPageStateCard(.empty(L10n.t("لا أحد بهذا الاسم", "Nobody with this name"),
                                       actionTitle: L10n.t("مسح البحث", "Clear search"),
                                       action: { query = "" }))
-        } else if filters.order == .newest && filters.status == .all && filters.branch == .family {
+        } else if filters.order == .newest && filters.statuses.isEmpty && filters.branch == .family {
             AdminPageStateCard(.empty(L10n.t("لا أسماء مضافة أو مربوطة بعد", "No names added or linked yet")))
         } else {
-            AdminFilterEmptyCard(title: L10n.t("لا نساء بهذه الفلاتر", "No women with these filters"),
-                                 clearTitle: m.set.resetTitle) {
-                withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filters = L.pageDefault }
-            }
+            AdminFilterEmptyCard(title: L10n.t("لا نساء بهذه التصفية", "No women with this filter"),
+                                 editFilters: { showsFilters = true })
         }
     }
 

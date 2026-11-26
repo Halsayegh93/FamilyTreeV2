@@ -232,7 +232,7 @@ struct AdminReviewListPage: View {
         }
     }
 
-    /// فارغة: بالبحث «لا أحد بهذا الاسم أو الرقم» + «مسح البحث»؛ بالشريحة «لا نتائج بهذه الفلاتر» + «مسح الفلاتر»؛
+    /// فارغة: بالبحث «لا أحد بهذا الاسم أو الرقم» + «مسح البحث»؛ بالشريحة «لا نتائج بهذه التصفية» + «عرض الكل» (شريحة «الكل»)؛
     /// والقائمة نفسها فارغة «لا شيء للمراجعة» (spec A.12)
     @ViewBuilder
     private func emptyCard(listIsEmpty: Bool) -> some View {
@@ -241,7 +241,7 @@ struct AdminReviewListPage: View {
                                       actionTitle: L10n.t("مسح البحث", "Clear search"),
                                       action: { query = "" }))
         } else if filter != .all && !listIsEmpty {
-            AdminFilterEmptyCard { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filter = .all } }
+            AdminFilterEmptyCard(showAll: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filter = .all } })
         } else {
             AdminPageStateCard(.empty(L10n.t("لا شيء للمراجعة", "Nothing to review"),
                                       message: L10n.t("هذه القائمة فارغة الآن", "This list is empty right now"),
