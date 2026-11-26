@@ -1,18 +1,24 @@
 import SwiftUI
 
-// MARK: - صفحة «إدارة الوفيات» (طلب المالك ٢٠٢٦-١٠-٢٤؛ مبسّطة ٢٠٢٦-١١-٠٢ — `samples/simplify`)
+// MARK: - صفحة «تواريخ الوفاة» (طلب المالك ٢٠٢٦-١٠-٢٤؛ مبسّطة ٢٠٢٦-١١-٠٢؛ إعادة التصميم U12 ٢٠٢٦-١١-٢٦ — spec B.7/C.8/C.16)
 //
-// الرأس: ‹ اليوم · «إدارة الوفيات» · «⋯» (للمالك: أدوات الحملة — إبرازها في «اليوم» وآخر يوم، كما كانت؛ قبل مفتاحي الحملة
-// في السيرفر ملاحظة بلا أزرار) ← رقم واحد كبير «364 متوفى بلا تاريخ وفاة كامل» ← شريط رفيع و«اكتمل 3 من 367» ← البحث بالاسم
-// ← شرائح الكل · السنة فقط · بلا تاريخ ← «الفرع: الكل ⌄» والعدد ← قائمة واحدة أبجدياً: الصورة · الاسم · «بلا تاريخ · فرع X»
-// / «السنة فقط: 1931 · فرع X» · زرّ «أدخل» يفتح مربّع الاستكمال الموجود (`DeceasedDateBox` — نفس الحفظ). ما يكتمل يخرج
-// من القائمة فوراً مع لحظة «اكتمل». حُذف: الحلقة الكبيرة، بطاقات الفروع و«التقسيم»، و«أُكملت مؤخراً».
+// البيت الواحد لاستكمال تواريخ الوفاة (spec E.19): تُفتح من «يحتاج مراجعتك ← تواريخ وفاة ناقصة»، ومن بقعة «اليوم» و«المناسبات»،
+// و`AdminReviewListPage(.death)` يحوّل إليها.
+// الرأس: ‹ رجوع · «تواريخ الوفاة» · «⋯» (للمالك: أدوات الحملة — إبرازها في «اليوم» وآخر يوم؛ قبل مفتاحي الحملة في السيرفر
+// ملاحظة بلا أزرار) ← سطر الأرقام «364 بلا تاريخ كامل ‹» «229 السنة فقط ‹» «136 بلا تاريخ ‹» (كل رقم يضبط فلتر «التاريخ»
+// فأول رقم تحت الشريط = الرقم المضغوط — T2) ← شريط رفيع و«اكتمل 3 من 367».
+// المحتوى: شريط الفلاتر (spec A.13: البحث بالاسم + «الفلاتر» — «التاريخ»: الكل · السنة فقط · بلا تاريخ، و«الفرع» صفّ يفتح
+// `BranchPickerSheet` داخل الورقة) ← الشرائح المفعّلة و«مسح الفلاتر» … «364 متوفى · أبجدياً» ← قائمة واحدة أبجدياً: الصورة ·
+// الاسم · «بلا تاريخ · فرع X» / «السنة فقط: 1931 · فرع X» · زرّ «أدخل» يفتح مربّع الاستكمال الموجود (`DeceasedDateBox` —
+// نفس الحفظ). ما يكتمل يخرج من القائمة فوراً مع لحظة «اكتمل».
+// تجربة الأدوار (`-tmpAdminRole`): فتح مربّع التاريخ وأدوات الحملة تمرّ بـ`DebugAdminProbe.dryRun` (T0).
 
 struct DeathDatesCampaignPage: View {
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var store = DeathDatesCampaignStore.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Filter: String, CaseIterable, Identifiable {
         case all, yearOnly, missing
@@ -35,13 +41,17 @@ struct DeathDatesCampaignPage: View {
         }
     }
 
-    @State private var filter: Filter = .all
+    /// فلاتر الصفحة (ورقة «الفلاتر»): «التاريخ» و«الفرع» — رأس فرع بأي مستوى (nil = كل الفروع) وذرّيته
+    struct Filters: Equatable {
+        var kind: Filter = .all
+        var branch: UUID? = nil
+    }
+
+    @State private var filters = Filters()
     /// الآباء والأبناء — مرة لكل تغيّر في الأعضاء
     @State private var tree = AdminFamilyTree.empty
-    /// «الفرع: …» — رأس فرع بأي مستوى (nil = الكل) وذرّيته
-    @State private var branchFilter: UUID?
+    /// ذرّية الفرع المطبَّق (`filters.branch`) — مرة لكل تغيّر فيه
     @State private var branchSet: Set<UUID>?
-    @State private var showBranchPicker = false
     @State private var query = ""
     /// المتوفون بلا تاريخ كامل — أبجدياً
     @State private var entries: [DeathDatesEntry] = []
@@ -56,7 +66,17 @@ struct DeathDatesCampaignPage: View {
 
     static let pageSize = 40
 
+    init() {}
+
+    static var title: String { L10n.t("تواريخ الوفاة", "Death dates") }
+
+    // حارس المكدس: الصفحة والمربّعات طبقات خلف `AnyView`
     var body: some View {
+        AnyView(page)
+            .debugStackProbe("DeathDatesCampaignPage")
+    }
+
+    private var page: some View {
         AdminPage(header: header, content: AnyView(content))
             .dsCenterBox(item: $target) { m in
                 DeceasedDateBox(member: m)
@@ -64,15 +84,14 @@ struct DeathDatesCampaignPage: View {
             .dsCenterBox(isPresented: $showTools) {
                 DeathDatesToolsBox(stats: built ? stats : nil)
             }
-            .modifier(AdminBranchPickerBox(isPresented: $showBranchPicker, members: memberVM.allMembers,
-                                           selected: branchFilter, onSelect: { pickBranch($0) }))
-            .task {
-                if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
-                rebuild()
-                await store.refresh()
-            }
+            .refreshable { await reload(force: true) }
+            .task { await reload(force: false) }
             .onChange(of: memberVM.membersVersion) { _ in rebuild() }
             .onChange(of: query) { _ in limit = Self.pageSize }
+            .onChange(of: filters) { f in
+                limit = Self.pageSize
+                branchSet = f.branch.map { tree.subtree(of: $0) }
+            }
             .onChange(of: target?.id) { id in
                 // أُغلق المربّع: من اكتمل تاريخه — لحظة «اكتمل»
                 guard id == nil, let done = editing else { return }
@@ -80,6 +99,12 @@ struct DeathDatesCampaignPage: View {
                 guard let m = memberVM.member(byId: done), case .exact = DeceasedMemorial.classify(m.deathDate) else { return }
                 DSMomentToast.show(L10n.t("اكتمل تاريخ \(m.shortFullName)", "\(m.shortFullName)'s date is complete"), moment: .success)
             }
+    }
+
+    private func reload(force: Bool) async {
+        if memberVM.allMembers.isEmpty || force { await memberVM.fetchAllMembers(force: force) }
+        rebuild()
+        await store.refresh(force: force)
     }
 
     private func rebuild() {
@@ -91,28 +116,16 @@ struct DeathDatesCampaignPage: View {
         entries = list.sorted { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
         stats = DeathDatesCampaign.stats(all)
         tree = AdminFamilyTree(all)
-        branchSet = branchFilter.map { tree.subtree(of: $0) }
+        branchSet = filters.branch.map { tree.subtree(of: $0) }
         built = !all.isEmpty
     }
 
-    // MARK: الفرع المختار
-
-    private func pickBranch(_ id: UUID?) {
-        guard id != branchFilter else { return }
-        UISelectionFeedbackGenerator().selectionChanged()
-        branchFilter = id
-        branchSet = id.map { tree.subtree(of: $0) }
-        limit = Self.pageSize
-    }
-
-    /// اسم الفرع المختار في الشريحة (الاسم المختصر للرأس)
-    private var branchFilterTitle: String? {
-        guard let id = branchFilter else { return nil }
-        let m = tree.byId[id] ?? memberVM.member(byId: id)
-        return m.map { $0.shortFullName.isEmpty ? $0.fullName : $0.shortFullName } ?? L10n.t("فرع", "Branch")
-    }
+    /// «أدخل» ومربّع التاريخ: صلاحية الدور مضروبة بـ«يعدّل» في جدول السيرفر (Autoplan note 7)
+    private var canEdit: Bool { authVM.canEditMembers && authVM.adminCanEdit(.family) }
 
     private func open(_ m: FamilyMember) {
+        guard canEdit else { return }
+        if DebugAdminProbe.dryRun("death date box \(m.id)") { return }
         editing = m.id
         target = m
     }
@@ -120,82 +133,143 @@ struct DeathDatesCampaignPage: View {
     // MARK: الرأس
 
     private var header: AdminPageHeader {
-        AdminPageHeader(title: L10n.t("إدارة الوفيات", "Deaths"),
-                        actions: authVM.isOwner
-                            ? [AdminPageAction(symbol: "ellipsis", label: L10n.t("أدوات الحملة", "Campaign tools"),
-                                               tap: .action { showTools = true })]
-                            : [],
-                        accessory: AnyView(headerAccessory))
+        let ready = built
+        let items = [
+            AdminHeaderItem(id: "incomplete", value: ready ? stats.incomplete : nil,
+                            label: L10n.t("بلا تاريخ كامل", "without a full date"),
+                            tap: .action { land(.all) }),
+            AdminHeaderItem(id: "yearOnly", value: ready ? stats.yearOnly : nil, label: Filter.yearOnly.title,
+                            tap: .action { land(.yearOnly) }),
+            AdminHeaderItem(id: "missing", value: ready ? stats.missing : nil, label: Filter.missing.title,
+                            tap: .action { land(.missing) }),
+        ]
+        return AdminPageHeader(title: Self.title,
+                               readOnly: !authVM.adminCanEdit(.family),
+                               items: items,
+                               actions: authVM.isOwner
+                                   ? [AdminPageAction(symbol: "ellipsis", label: L10n.t("أدوات الحملة", "Campaign tools"),
+                                                      tap: .action { showTools = true })]
+                                   : [],
+                               accessory: AnyView(DeathDatesHeadline(stats: built ? stats : nil)))
     }
 
-    private var headerAccessory: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            AnyView(DeathDatesHeadline(stats: built ? stats : nil))
-            AdminBandSearchField(text: $query, placeholder: L10n.t("ابحث بالاسم", "Search by name"))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DS.Spacing.xsm) {
-                    ForEach(Filter.allCases) { f in
-                        AdminBandFilterChip(title: f.title, count: built ? count(f) : nil, selected: filter == f) {
-                            guard filter != f else { return }
-                            UISelectionFeedbackGenerator().selectionChanged()
-                            withAnimation(DS.Anim.snappy) {
-                                filter = f
-                                limit = Self.pageSize
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, DS.Spacing.xxs)
+    /// رقم الرأس يفتح قائمته: «التاريخ» وحده، بلا فرع ولا بحث — فأول رقم تحت الشريط = الرقم المضغوط (T2)
+    private func land(_ kind: Filter) {
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
+            filters = Filters(kind: kind)
+            query = ""
+        }
+    }
+
+    // MARK: الفلاتر
+
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// ورقة «الفلاتر»: «التاريخ» بأعداده لأي حالة (بعد البحث والفرع)، و«الفرع» صفّ يفتح قائمة الفروع داخل الورقة.
+    /// «النتيجة الآن» = القائمة نفسها
+    private func filterSet() -> AdminFilterSet<Filters> {
+        let entries = self.entries
+        let tree = self.tree
+        let applied = filters.branch
+        let appliedSet = branchSet
+        let words = NameSearch.words(trimmedQuery)
+        let members = memberVM.allMembers
+        let name: (UUID) -> String = { id in self.branchTitle(id) }
+        let subtree: (UUID?) -> Set<UUID>? = { id in
+            guard let id else { return nil }
+            return id == applied ? appliedSet : tree.subtree(of: id)
+        }
+        let count: (Filters) -> Int? = { s in
+            let set = subtree(s.branch)
+            return entries.reduce(0) { n, e in
+                guard s.kind.matches(e), set?.contains(e.id) ?? true else { return n }
+                guard words.isEmpty || NameSearch.score(queryWords: words, candidateWords: NameSearch.words(e.needle)) != nil
+                else { return n }
+                return n + 1
             }
         }
+        return AdminFilterSet(reset: Filters(), noun: { Self.deceasedNoun($0) }, resultCount: count) { s in
+            let kinds = Filter.allCases.map { kind -> AdminFilterOption<Filter> in
+                var probe = s
+                probe.kind = kind
+                return AdminFilterOption(kind, kind.title, count: count(probe))
+            }
+            let groups: [AdminFilterGroup<Filters>] = [
+                .choices("kind", title: L10n.t("التاريخ", "Date"), value: \.kind, all: .all, options: kinds),
+                .picker("branch", title: L10n.t("الفرع", "Branch"), value: \.branch, all: nil,
+                        valueTitle: s.branch.map(name) ?? L10n.t("كل الفروع", "All branches"),
+                        count: s.branch == nil ? nil : count(s), ownsHeader: true) { current, pick in
+                    AnyView(BranchPickerSheet(allMembers: members, selectedId: current, allLevels: true,
+                                              onSelect: { pick($0) }))
+                },
+            ]
+            return groups
+        }
     }
 
-    private func count(_ f: Filter) -> Int {
-        // داخل الفرع المختار: من القائمة نفسها
-        if let set = branchSet {
-            return entries.reduce(0) { $0 + (set.contains($1.id) && f.matches($1) ? 1 : 0) }
-        }
-        switch f {
-        case .all:      return stats.incomplete
-        case .yearOnly: return stats.yearOnly
-        case .missing:  return stats.missing
-        }
+    /// «متوفى» · «متوفيان» · «متوفين» · «متوفى»
+    static func deceasedNoun(_ n: Int) -> String {
+        L10n.t(AdminFilterText.noun(n, one: "متوفى", two: "متوفيان", few: "متوفين", many: "متوفى"),
+               n == 1 ? "deceased" : "deceased")
+    }
+
+    /// اسم الفرع في صفّ «الفرع» وشريحته: الاسم المخصّص من «أسماء العوائل والفروع» إن وُجد، وإلا الاسم المختصر لرأسه
+    private func branchTitle(_ id: UUID) -> String {
+        if let custom = appSettingsVM.branchName(for: id) { return custom }
+        let m = tree.byId[id] ?? memberVM.member(byId: id)
+        return m.map { $0.shortFullName.isEmpty ? $0.fullName : $0.shortFullName } ?? L10n.t("فرع", "Branch")
     }
 
     // MARK: المحتوى
-
-    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var visible: [DeathDatesEntry] {
         // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
         let q = NameSearch.words(trimmedQuery)
         let set = branchSet
+        let kind = filters.kind
         return entries.filter { e in
-            filter.matches(e) && (set?.contains(e.id) ?? true) && (q.isEmpty || NameSearch.score(queryWords: q, candidateWords: NameSearch.words(e.needle)) != nil)
+            kind.matches(e) && (set?.contains(e.id) ?? true)
+                && (q.isEmpty || NameSearch.score(queryWords: q, candidateWords: NameSearch.words(e.needle)) != nil)
         }
     }
 
     private var content: some View {
-        let rows = visible
-        return VStack(spacing: DS.Hub.stackSpacing) {
-            if !built {
-                AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
+        VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+            if memberVM.membersLoadFailed && memberVM.allMembers.isEmpty {
+                AdminPageStateCard(.error(L10n.t("تعذّر تحميل الأعضاء", "Couldn't load members"),
+                                          message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                                          retry: { Task { await reload(force: true) } }))
+            } else if !built {
+                AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…"), rows: 5))
             } else if entries.isEmpty {
                 AdminPageStateCard(.empty(L10n.t("اكتملت كل التواريخ", "Every date is complete"),
                                           message: L10n.t("ذكراهم كلها في «ذكرى الراحلين».", "All their memorials now show."),
                                           tint: DS.Color.success))
             } else {
-                AnyView(AdminMembersFilterBar(branchTitle: branchFilterTitle,
-                                              countText: L10n.t("\(AdminMembersFilterBar.grouped(rows.count)) متوفى",
-                                                                "\(AdminMembersFilterBar.grouped(rows.count)) deceased"),
-                                              pickBranch: { showBranchPicker = true },
-                                              clearBranch: { pickBranch(nil) }))
-                if rows.isEmpty {
-                    AdminPageStateCard(.empty(L10n.t("لا نتائج", "No results"),
-                                              message: L10n.t("جرّب اسماً آخر أو شريحة أخرى", "Try another name or filter")))
+                AnyView(loaded)
+            }
+        }
+    }
+
+    private var loaded: some View {
+        let rows = visible
+        return VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+            AdminFilterPanel(set: filterSet(), selection: $filters, search: $query,
+                             placeholder: L10n.t("ابحث بالاسم", "Search by name"),
+                             note: L10n.t("أبجدياً", "A–Z"))
+            if rows.isEmpty {
+                if !trimmedQuery.isEmpty {
+                    AdminPageStateCard(.empty(L10n.t("لا أحد بهذا الاسم", "Nobody with this name"),
+                                              actionTitle: L10n.t("مسح البحث", "Clear search"),
+                                              action: { query = "" }))
                 } else {
-                    AnyView(listCard(rows))
+                    AdminFilterEmptyCard {
+                        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filters = Filters() }
+                    }
                 }
+            } else {
+                AnyView(listCard(rows))
             }
         }
     }
@@ -204,11 +278,12 @@ struct DeathDatesCampaignPage: View {
 
     private func listCard(_ rows: [DeathDatesEntry]) -> some View {
         let shown = Array(rows.prefix(limit))
+        let editable = canEdit
         return VStack(alignment: .leading, spacing: 0) {
             LazyVStack(spacing: 0) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { pos, e in
-                    if pos > 0 { AdminRowDivider() }
-                    entryRow(e)
+                    if pos > 0 { AdminRowDivider(inset: DS.Icon.avatar + DS.Spacing.md) }
+                    entryRow(e, editable: editable)
                 }
             }
             if rows.count > limit {
@@ -224,68 +299,54 @@ struct DeathDatesCampaignPage: View {
         .adminCard()
     }
 
-    /// صفّ متوفى يفتح مربّع الاستكمال
-    private func entryRow(_ e: DeathDatesEntry) -> some View {
-        Button { open(e.member) } label: {
-            DeathDatesRow(entry: e, detail: detail(e))
+    /// صفّ متوفى يفتح مربّع الاستكمال — للاطلاع: الصفّ وحده بلا «أدخل» ولا ضغطة
+    @ViewBuilder
+    private func entryRow(_ e: DeathDatesEntry, editable: Bool) -> some View {
+        if editable {
+            Button { open(e.member) } label: {
+                DeathDatesRow(entry: e, detail: detail(e))
+            }
+            .buttonStyle(AdminRowPressStyle())
+            .accessibilityHint(L10n.t("يفتح مربّع إدخال تاريخ الوفاة", "Opens the death date box"))
+        } else {
+            DeathDatesRow(entry: e, detail: detail(e), canEdit: false)
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح مربّع إدخال تاريخ الوفاة", "Opens the death date box"))
     }
 
     /// «بلا تاريخ · فرع X» / «السنة فقط: 1931 · فرع X»
     private func detail(_ e: DeathDatesEntry) -> String {
         var parts = [e.isMissing ? L10n.t("بلا تاريخ", "No date") : DeathDatesCampaign.note(e.kind)]
-        if let branch = branchTitle(e.branch) { parts.append(branch) }
+        if let branch = rowBranchTitle(e.branch) { parts.append(branch) }
         return parts.joined(separator: " · ")
     }
 
     /// «فرع X» — الاسم المخصّص من «أسماء العوائل والفروع» إن وُجد
-    private func branchTitle(_ head: UUID?) -> String? {
+    private func rowBranchTitle(_ head: UUID?) -> String? {
         guard let head else { return nil }
         if let name = appSettingsVM.branchName(for: head) { return name }
         return memberVM.member(byId: head).map { L10n.t("فرع \($0.firstName)", "\($0.firstName) branch") }
     }
 }
 
-// MARK: - رقم الرأس وشريط التقدّم
+// MARK: - شريط التقدّم في الرأس
 
-/// «364 متوفى بلا تاريخ وفاة كامل» ثم شريط رفيع و«اكتمل 3 من 367» — فوق الكحلي
+/// شريط رفيع و«اكتمل 3 من 367» فوق الكحلي (الرقم الكبير صار سطر الأرقام — spec A.3/A.10)
 struct DeathDatesHeadline: View {
     let stats: DeathDatesStats?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) { number; label }
-                VStack(alignment: .leading, spacing: 0) { number; label }
-            }
+        HStack(spacing: DS.Spacing.sm) {
+            Text(verbatim: progressText)
+                .dsFont(.subtitle)
+                .monospacedDigit()
+                .foregroundColor(DS.Color.accentLight)
+                .fixedSize()
             DSMeterBar(parts: stats?.share.map { [DSGaugePart("full", share: $0, tint: DS.Color.accentLight)] },
                        track: DS.Ring.bandTrack)
-                .padding(.top, DS.Spacing.xs)
                 .accessibilityHidden(true)
-            Text(verbatim: progressText)
-                .dsFont(.hubLabel)
-                .monospacedDigit()
-                .foregroundColor(DS.Hub.onBandMuted)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L10n.t("\(stats.map { "\($0.incomplete)" } ?? "—") متوفى بلا تاريخ وفاة كامل، \(progressText)",
-                                   "\(stats.map { "\($0.incomplete)" } ?? "—") deceased without a full date, \(progressText)"))
-    }
-
-    private var number: some View {
-        Text(verbatim: stats.map { "\($0.incomplete)" } ?? "—")
-            .dsFont(.heroTitle)
-            .monospacedDigit()
-            .foregroundColor(DS.Color.accentLight)
-    }
-
-    private var label: some View {
-        Text(L10n.t("متوفى بلا تاريخ وفاة كامل", "deceased without a full death date"))
-            .dsFont(.hubRow)
-            .foregroundColor(DS.Color.accentLight)
-            .fixedSize(horizontal: false, vertical: true)
+        .accessibilityLabel(progressText)
     }
 
     /// «اكتمل 3 من 367»
@@ -296,17 +357,17 @@ struct DeathDatesHeadline: View {
     }
 }
 
-/// صفّ متوفى: الصورة · الاسم · حاله وفرعه · «أدخل» كحلي — مع الخط الكبير (XXL فأكبر) الزرّ تحت النص
+/// صفّ متوفى: الصورة · الاسم · حاله وفرعه · «أدخل» كحلي — مع الخط الكبير (XXL فأكبر) الزرّ تحت النص.
+/// `canEdit: false` = للاطلاع بلا «أدخل»
 struct DeathDatesRow: View {
     let entry: DeathDatesEntry
     let detail: String
+    var canEdit: Bool = true
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         let member = entry.member
         let stacked = typeSize >= .xxLarge
-        let action = AdminPillLabel(title: L10n.t("أدخل", "Enter"), style: .navy, height: DS.Hub.pillHeightCard)
-            .fixedSize()
         let text = VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(member.shortFullName.isEmpty ? member.fullName : member.shortFullName)
                 .dsFont(.hubRow)
@@ -323,12 +384,15 @@ struct DeathDatesRow: View {
                 .grayscale(1)
                 .accessibilityHidden(true)
             if stacked {
-                VStack(alignment: .leading, spacing: DS.Spacing.sm) { text; action }
+                VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    text
+                    if canEdit { action }
+                }
                 Spacer(minLength: 0)
             } else {
                 text
                 Spacer(minLength: DS.Spacing.xs)
-                action
+                if canEdit { action }
             }
         }
         .padding(.vertical, DS.Spacing.sm)
@@ -336,7 +400,12 @@ struct DeathDatesRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(member.displayFullName)، \(detail)")
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(canEdit ? .isButton : [])
+    }
+
+    private var action: some View {
+        AdminPillLabel(title: L10n.t("أدخل", "Enter"), style: .navy, height: DS.Hub.pillHeightCard)
+            .fixedSize()
     }
 }
 
@@ -415,7 +484,10 @@ private struct DeathDatesOwnerControls: View {
                             subtitle: L10n.t("يمكن إيقافها في أي وقت، وتعود مكانها «ذكرى الراحلين»", "Stop it any time — Memorials return"),
                             control: AnyView(Toggle(L10n.t("إبرازها في «اليوم»", "Feature on Today"), isOn: Binding(
                                 get: { store.enabled ?? true },
-                                set: { on in Task { failure = await store.save(enabled: on) } }))
+                                set: { on in
+                                    if DebugAdminProbe.dryRun("app_config death_dates_campaign=\(on)") { return }
+                                    Task { failure = await store.save(enabled: on) }
+                                }))
                                 .labelsHidden()
                                 .tint(DS.Color.accent)))
             AdminRowDivider()
@@ -444,6 +516,7 @@ private struct DeathDatesOwnerControls: View {
             if store.until != nil {
                 Divider()
                 Button(L10n.t("بلا نهاية — حتى تكتمل التواريخ", "No end — until the dates are complete"), role: .destructive) {
+                    if DebugAdminProbe.dryRun("app_config death_dates_campaign_until=nil") { return }
                     Task { failure = await store.save(until: nil) }
                 }
             }
@@ -468,6 +541,7 @@ private struct DeathDatesOwnerControls: View {
     private func save(days: Int) {
         let cal = DeathDatesCampaignStore.calendar
         guard let day = cal.date(byAdding: .day, value: days, to: cal.startOfDay(for: Date())) else { return }
+        if DebugAdminProbe.dryRun("app_config death_dates_campaign_until=+\(days)d") { return }
         Task { failure = await store.save(until: day) }
     }
 }
