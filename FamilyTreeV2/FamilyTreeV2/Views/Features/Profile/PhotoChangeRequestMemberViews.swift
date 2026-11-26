@@ -15,7 +15,14 @@ struct PhotoChangeRequestNoticeButton: View {
     var body: some View {
         VStack(spacing: 0) {
             if let pending = store.mine, !PhotoChangeRequestStore.isSentForApproval(pending.id) {
-                DSButton(L10n.t("تغيير الصورة", "Change photo"), icon: "camera.fill") { onOpen(pending) }
+                // بلا صورة: طلب «أضف صورتك الشخصية» (P1)
+                let adds = authVM.currentUser.map(PhotoReminder.hasNoPhoto) ?? false
+                DSButton(adds ? L10n.t("أضف صورة", "Add a photo") : L10n.t("تغيير الصورة", "Change photo"),
+                         icon: "camera.fill") {
+                    // فُتح المربّع لهذا الإشعار = رآه (لا يظهر مرة ثانية عند الفتح)
+                    if let user = authVM.currentUser { PhotoChangeRequestStore.markSeen(pending, userId: user.id) }
+                    onOpen(pending)
+                }
             }
         }
         .task {

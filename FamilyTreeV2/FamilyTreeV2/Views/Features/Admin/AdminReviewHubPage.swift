@@ -152,6 +152,8 @@ struct AdminReviewHubPage: View {
 
     @State private var index = AdminMembersIndex.empty
     @State private var counts: [AdminReviewHubLogic.List: Int] = [:]
+    /// «مسجّلون بلا صورة» (P1) — nil قبل وصول الحسابات
+    @State private var photoCount: Int?
 
     init() {}
 
@@ -195,6 +197,7 @@ struct AdminReviewHubPage: View {
                                             branchName: { names.branchName(for: $0) })
         index = built
         counts = AdminReviewHubCounts.make(index: built, verified: verified.ids, members: memberVM.allMembers)
+        photoCount = AdminPhotoNudgeList.rows(in: built, viewer: .init(authVM: authVM))?.count
     }
 
     // MARK: المحتوى
@@ -207,7 +210,9 @@ struct AdminReviewHubPage: View {
                                           retry: { Task { await reload(force: true) } }))
             } else {
                 AnyView(section(L10n.t("الشجرة والبيانات", "Tree and data"), AdminReviewHubLogic.treeAndData))
-                AnyView(section(L10n.t("الحسابات", "Accounts"), AdminReviewHubLogic.accounts))
+                // + «مسجّلون بلا صورة» (P1، `AdminPhotoNudgeHubRow` ← `AdminPhotoNudgePage`)
+                AnyView(section(L10n.t("الحسابات", "Accounts"), AdminReviewHubLogic.accounts,
+                                extra: AnyView(AdminPhotoNudgeHubRow(count: photoCount))))
                 if counts.count == AdminReviewHubLogic.List.allCases.count,
                    AdminReviewHubLogic.isAllClear(counts) {
                     Text(L10n.t("كل القوائم فارغة الآن — لا شيء ينتظرك.", "Every list is empty right now — nothing is waiting for you."))
@@ -221,13 +226,14 @@ struct AdminReviewHubPage: View {
     }
 
     /// عنوان ١٥ ثم بطاقة صفوفها مفصولة بخط يبدأ من النص (spec A.4/A.5)
-    private func section(_ title: String, _ lists: [AdminReviewHubLogic.List]) -> some View {
+    private func section(_ title: String, _ lists: [AdminReviewHubLogic.List], extra: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
             AdminSectionLabel(title: title)
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
                 ForEach(lists, id: \.self) { list in
                     row(list)
                 }
+                if let extra { extra }
             }
         }
     }

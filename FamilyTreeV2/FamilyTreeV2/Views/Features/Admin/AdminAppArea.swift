@@ -492,7 +492,157 @@ struct AdminAppRulesCard: View {
                     AdminAppCommandRow(model: model, setting: .resetCounter, icon: "arrow.counterclockwise",
                                        subtitle: L10n.t("تصفير فترات الانتظار", "Clear the waiting periods"))
                 }
+                // «تنبيه الصورة» + تذكير طلب الصورة (P1، ٢٠٢٦-١١-٢٦) — `app_config` عبر `set_app_config` (المالك)
+                AdminPhotoReminderRow(kind: .popupDays, health: model.configHealth, canEdit: canEdit)
+                AdminPhotoReminderRow(kind: .remindDays, health: model.configHealth, canEdit: canEdit)
+                AdminPhotoReminderRow(kind: .maxReminders, health: model.configHealth, canEdit: canEdit)
             }
+        }
+    }
+}
+
+// MARK: - «تنبيه الصورة» وتذكير طلب الصورة (P1)
+
+/// صفّ رقم بـ«−/+» يكتب مفتاح `app_config` (int) بـ`set_app_config` — للمالك. القيمة تظهر فوراً، والفشل يُرجع القديمة
+/// + «لم يُحفظ. أعد المحاولة»؛ مفتاح غائب على السيرفر (قبل الترحيل) = «يحتاج تحديث السيرفر» بلا أزرار.
+private struct AdminPhotoReminderRow: View {
+    enum Kind {
+        /// «تنبيه الصورة»: «كمّل ملفك بصورة» يرجع بعد (`photo_reminder_days`)
+        case popupDays
+        /// «التذكير كل 3 أيام» (`photo_request_remind_days`)
+        case remindDays
+        /// «حتى 3 تذكيرات» (`photo_request_max_reminders`)
+        case maxReminders
+
+        var key: String {
+            switch self {
+            case .popupDays:    return "photo_reminder_days"
+            case .remindDays:   return PhotoNudgeLogic.remindDaysKey
+            case .maxReminders: return PhotoNudgeLogic.maxRemindersKey
+            }
+        }
+
+        var range: ClosedRange<Int> {
+            switch self {
+            case .popupDays:    return 0...365
+            case .remindDays:   return PhotoNudgeLogic.remindDaysRange
+            case .maxReminders: return PhotoNudgeLogic.maxRemindersRange
+            }
+        }
+
+        var ladder: [Int]? { self == .popupDays ? [0, 7, 14, 30, 60, 90, 180, 365] : nil }
+        var unit: ApprovalHoursStepper.Unit { self == .maxReminders ? .count : .days }
+        var icon: String {
+            switch self {
+            case .popupDays:    return "person.crop.circle.badge.plus"
+            case .remindDays:   return "bell.badge.fill"
+            case .maxReminders: return "number"
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .popupDays:    return L10n.t("تنبيه الصورة", "Photo prompt")
+            case .remindDays:   return L10n.t("تذكير طلب الصورة", "Photo request reminder")
+            case .maxReminders: return L10n.t("حدّ التذكيرات", "Reminder limit")
+            }
+        }
+
+        func subtitle(_ v: Int) -> String {
+            switch self {
+            case .popupDays:
+                return v == 0 ? L10n.t("«كمّل ملفك بصورة» مطفأ", "«Add a photo» prompt off")
+                              : L10n.t("«كمّل ملفك بصورة» يرجع بعد \(v) يوم", "«Add a photo» returns after \(v) days")
+            case .remindDays:
+                switch v {
+                case 0:  return L10n.t("بلا تذكير", "No reminders")
+                case 1:  return L10n.t("التذكير كل يوم", "Remind every day")
+                case 2:  return L10n.t("التذكير كل يومين", "Remind every 2 days")
+                default: return L10n.t("التذكير كل \(v) أيام", "Remind every \(v) days")
+                }
+            case .maxReminders:
+                switch v {
+                case 0:  return L10n.t("بلا تذكير", "No reminders")
+                case 1:  return L10n.t("تذكير واحد", "1 reminder")
+                case 2:  return L10n.t("حتى تذكيرين", "Up to 2 reminders")
+                default: return L10n.t("حتى \(v) تذكيرات", "Up to \(v) reminders")
+                }
+            }
+        }
+    }
+
+    let kind: Kind
+    let health: AdminStoreHealth
+    let canEdit: Bool
+    @ObservedObject private var config = AppConfigValues.shared
+    /// قيمة حُفظت للتو (تغلب الذاكرة حتى يعيد الجلب)
+    @State private var pending: Int?
+    @State private var saving = false
+    @State private var failed: Int?
+    @State private var missing = false
+
+    private nonisolated struct Params: Encodable, Sendable {
+        let p_key: String
+        let p_value: Int
+    }
+
+    /// المفتاح على السيرفر (بعد الترحيل) — قبل وصول القيم لا يُحكم بغيابه
+    private var exists: Bool { config.values[kind.key] != nil }
+    private var value: Int { pending ?? config.int(kind.key, default: 0) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            AdminControlRow(icon: kind.icon, tint: DS.Color.sadu, title: kind.title, subtitle: subtitleText,
+                            control: control)
+            if let failed {
+                AdminAppFailLine(busy: saving) { write(failed) }
+            }
+        }
+    }
+
+    private var subtitleText: String {
+        guard AdminAppLogic.showsValue(health) else { return AdminStoreHealthText.placeholder }
+        guard exists && !missing else {
+            return L10n.t("يحتاج تحديث السيرفر", "Needs a server update")
+        }
+        return kind.subtitle(value)
+    }
+
+    private var control: AnyView {
+        guard AdminAppLogic.showsValue(health), exists, !missing else { return AnyView(EmptyView()) }
+        let enabled = AdminAppLogic.controlEnabled(health: health, canEdit: canEdit, busy: saving)
+        return AnyView(HStack(spacing: DS.Spacing.sm) {
+            if saving { AdminAppSpinner() }
+            ApprovalHoursStepper(value: value, range: kind.range, step: 1, label: kind.title,
+                                 onChange: { write($0) }, unit: kind.unit, ladder: kind.ladder,
+                                 zeroText: L10n.t("مطفأ", "Off"))
+                .disabled(!enabled)
+        })
+    }
+
+    private func write(_ v: Int) {
+        guard canEdit, !saving else { return }
+        let old = pending
+        pending = v
+        failed = nil
+        if DebugAdminProbe.dryRun("set_app_config \(kind.key)=\(v)") { return }
+        saving = true
+        Task {
+            do {
+                _ = try await SupabaseConfig.client.rpc("set_app_config", params: Params(p_key: kind.key, p_value: v)).execute()
+                await AppConfigValues.shared.refresh(force: true)
+                if config.int(kind.key, default: -1) == v { pending = nil }
+            } catch {
+                pending = old
+                if (error as? PostgrestError)?.hint == "unknown_key" {
+                    missing = true
+                } else if !ErrorHelper.isCancellation(error) {
+                    failed = v
+                    UIAccessibility.post(notification: .announcement, argument: AdminAppLogic.failedAnnouncement(kind.title))
+                    Log.warning("[CONFIG] تعذّر حفظ \(kind.key): \(error.localizedDescription)")
+                }
+            }
+            saving = false
         }
     }
 }

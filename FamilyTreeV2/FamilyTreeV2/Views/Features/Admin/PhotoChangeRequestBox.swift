@@ -132,8 +132,9 @@ struct PhotoChangeRequestBox: View {
     /// سطر التأكيد باسمه الرباعي، ثم الخطأ إن وُجد
     @ViewBuilder
     private var confirmation: some View {
-        DSNoteCard(L10n.t("سيصل الطلب إلى \(name) بإشعار، ويظهر له عند فتح التطبيق حتى يغيّر صورته.",
-                          "\(name) will be notified, and asked again each time they open the app until the photo is changed."),
+        // مرة لكل إشعار، ثم التذكير التلقائي (P1 — «مابي التنبيه يكون بشكل يومي كل ما يدخل التطبيق»)
+        DSNoteCard(L10n.t("سيصل الطلب إلى \(name) بإشعار يفتح له مربّع تغيير الصورة، ثم تذكير تلقائي حتى يغيّرها.",
+                          "\(name) will get a notice that opens the photo box, then automatic reminders until it's changed."),
                    icon: "paperplane.fill")
             .dsStaggerIn(3)
         if let errorText {
@@ -173,6 +174,7 @@ struct PhotoChangeRequestBox: View {
 // MARK: - صفّ «بيانات العضو»
 
 /// صفّ في بطاقة «البيانات» تحت «الصورة»: طلب معلّق («منذ … — السبب …» و«إلغاء الطلب») أو «طلب تغيير الصورة»
+@available(*, deprecated, message: "use PhotoNudgeSheetRow (PhotoNudgeViews.swift); U21 removes")
 struct PhotoChangeRequestSheetRow: View {
     let member: FamilyMember
     /// يُعرض «طلب» (العضو مسجّل حيّ له صورة وليس أنت) — الطلب المعلّق يُعرض دائماً

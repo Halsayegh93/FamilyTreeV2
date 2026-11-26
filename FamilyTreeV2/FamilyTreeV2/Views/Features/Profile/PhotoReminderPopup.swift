@@ -4,8 +4,9 @@ import UserNotifications
 
 // MARK: - «كمّل ملفك بصورة» (طلب المالك ٢٠٢٦-١١-٠٥، العينة «ج»)
 //
-// مربّع واحد بعد الفتح لعضو مفعّل بلا صورة (الذكور فقط حالياً)، مرة لكل فتح على الأكثر. «لاحقاً» يحفظ تاريخاً لكل حساب
-// ويرجع بعد `app_config.photo_reminder_days` يوم (٠ أو غائب = لا يظهر أبداً). لا يظهر لحساب مراجعة Apple ولا للمتوفى،
+// مربّع واحد بعد الفتح لعضو مفعّل بلا صورة (الذكور فقط حالياً)، مرة لكل فتح على الأكثر. ظهوره يحفظ تاريخاً لكل حساب
+// (أي إغلاق — «لاحقاً» أو الإغلاق أو السحب — يؤجّله، P1 ٢٠٢٦-١١-٢٦) ويرجع بعد `app_config.photo_reminder_days` يوم
+// (٠ أو غائب = لا يظهر أبداً)، ولا يظهر في يوم ظهر فيه مربّع طلب الإدارة. لا يظهر لحساب مراجعة Apple ولا للمتوفى،
 // ولا فوق «الموافقة على الشروط» أو طلب إذن الإشعارات أو أي مربّع مفتوح. الدخول والتحديث الإجباري والصيانة بلا تبويبات أصلاً
 // فلا يعمل فيها (`RootView`) ويُفحصان هنا أيضاً لأن الإعدادات قد تصل بعد ظهور التبويبات.
 
@@ -89,8 +90,11 @@ enum PhotoReminder {
 }
 
 /// يقرّر متى يظهر المربّع — على `MainTabView`، بعد انتهاء فحص إذن الإشعارات (`blocked`).
-/// «طلب تغيير الصورة» من الإدارة (طلب المالك ٢٠٢٦-١١-١١) يسبق «كمّل ملفك بصورة» بنفس قواعد الظهور، ويرجع كل فتح
-/// ما دام الطلب مفتوحاً؛ الضغط على إشعاره من خارج التطبيق يفتحه أيضاً (`.openPhotoChangeRequest`)
+/// «طلب تغيير الصورة» / «أضف صورتك الشخصية» من الإدارة يسبق «كمّل ملفك بصورة» بنفس قواعد الظهور، ويظهر **مرة لكل
+/// إشعار** (P1، طلب المالك ٢٠٢٦-١١-٢٦ «مابي التنبيه يكون بشكل يومي كل ما يدخل التطبيق»): بعد الطلب الأول وبعد كل تذكير
+/// (`notified_at` يتغيّر) — `photoRequestSeen.<userId>` = معرّف الطلب + `notified_at`، يُحفظ عند الظهور فأي إغلاق أو إضافة
+/// الصورة = رآه. الضغط على إشعاره من خارج التطبيق يفتحه دائماً (`.openPhotoChangeRequest`). الطلب يبقى مفتوحاً على
+/// السيرفر والتذكير يكمل بجدوله.
 struct PhotoReminderGate: ViewModifier {
     /// فحص الإشعارات لم ينتهِ أو مربّعه ظاهر
     let blocked: Bool
@@ -146,11 +150,15 @@ struct PhotoReminderGate: ViewModifier {
             case .show(let found):
                 if Task.isCancelled || isPresented { return }
                 PhotoReminder.shownThisLaunch = true
+                // أي إغلاق يؤجّله `photo_reminder_days` — لا يرجع في الفتح القادم
+                PhotoReminder.snooze(userId: found.id)
                 shown = Shown(member: found, request: nil)
                 return
             case .showRequest(let found, let pending):
                 if Task.isCancelled || isPresented { return }
                 PhotoReminder.shownThisLaunch = true
+                // مرة لكل إشعار: ظهر = رآه (الإغلاق و«لاحقاً» وإضافة الصورة سواء)
+                PhotoChangeRequestStore.markSeen(pending, userId: found.id)
                 shown = Shown(member: found, request: pending)
                 return
             }
@@ -177,13 +185,20 @@ struct PhotoReminderGate: ViewModifier {
         if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0) && user.role != .owner { return .never }
         if appSettingsVM.settings.maintenanceMode && !authVM.canModerate { return .never }
 
-        // «طلب تغيير الصورة» من الإدارة — قبل «كمّل ملفك بصورة»، بنفس قواعد الظهور أدناه
+        // طلب الإدارة («أضف صورتك» / «غيّر صورتك») — قبل «كمّل ملفك بصورة»، بنفس قواعد الظهور أدناه، ولأي جنس
         if user.status == .active && user.role != .pending && user.isDeceased != true,
            let pending = await pendingRequest(for: user, fetched: &fetched) {
+            // عند الفتح: مرة لكل إشعار. من الإشعار نفسه: دائماً. طلب مفتوح رآه = لا «كمّل ملفك بصورة» فوقه أيضاً
+            guard PhotoNudgeLogic.showsRequestBox(token: pending.seenToken,
+                                                  seen: PhotoChangeRequestStore.seenToken(userId: user.id),
+                                                  fromTap: requestOnly) else { return .never }
             if let blocked = await displayBlocked(user) { return blocked }
             return .showRequest(user, pending)
         }
         if requestOnly { return .never }
+        // لا «كمّل ملفك بصورة» في يوم ظهر فيه مربّع طلب الإدارة
+        guard PhotoNudgeLogic.generalPopupAllowed(requestBoxDay: PhotoChangeRequestStore.requestBoxDay(userId: user.id),
+                                                  today: PhotoNudgeLogic.dayKey(Date())) else { return .never }
 
         guard PhotoReminder.isEligible(user) else { return .never }
         // نسخة الشجرة قد تكون أحدث من الجلسة (صورة أُضيفت من جهاز آخر)
@@ -218,8 +233,8 @@ struct PhotoReminderGate: ViewModifier {
 }
 
 /// المربّع نفسه — نوع مستقل (حارس المكدس). الصورة بمسار «حسابي»: المعرض ← القصّ الدائري ← الرفع.
-/// `request` = «يرجى تغيير صورتك الشخصية» بطلب الإدارة: السبب، الصورة الحالية في الدائرة، و«لاحقاً» لا يؤجّل
-/// (يرجع في الفتح القادم ما دام الطلب مفتوحاً)
+/// `request` = طلب الإدارة: بلا صورة «أضف صورتك الشخصية» (P1)، وبصورة «يرجى تغيير صورتك الشخصية» بالسبب والصورة
+/// الحالية في الدائرة. يظهر مرة لكل إشعار (`PhotoReminderGate`)، ويرجع مع التذكير التالي ما دام الطلب مفتوحاً
 struct PhotoReminderBox: View {
     let member: FamilyMember
     var request: PhotoChangeRequest? = nil
@@ -242,16 +257,26 @@ struct PhotoReminderBox: View {
 
     @State private var showPicker = false
 
+    /// طلب «غيّر صورتك» (له صورة) — بلا صورة الطلب «أضف صورتك الشخصية» (P1)
+    private var isChangeRequest: Bool {
+        request != nil && PhotoNudgeLogic.memberBox(hasPhoto: !PhotoReminder.hasNoPhoto(member)) == .change
+    }
+
+    private var boxTitle: String {
+        guard request != nil else { return L10n.t("الصورة الشخصية", "Profile photo") }
+        return isChangeRequest ? L10n.t("يرجى تغيير صورتك الشخصية", "Please change your profile photo")
+                               : L10n.t("أضف صورتك الشخصية", "Add your profile photo")
+    }
+
     var body: some View {
         // هيكل المربّعات الموحّد (`DSComposer`، طلب المالك ٢٠٢٦-١١-١١): رأس كحلي، المحتوى، ثم «أضف صورة» و«لاحقاً» الخفيف
         DSComposer(
-            title: request != nil ? L10n.t("يرجى تغيير صورتك الشخصية", "Please change your profile photo")
-                                  : L10n.t("الصورة الشخصية", "Profile photo"),
+            title: boxTitle,
             subtitle: request != nil ? L10n.t("طلب من الإدارة", "A request from the admins")
                                      : L10n.t("أكمل ملفك بصورة", "Complete your profile with a photo"),
-            icon: request != nil ? "camera.badge.ellipsis" : "camera.fill",
+            icon: isChangeRequest ? "camera.badge.ellipsis" : "camera.fill",
             tint: DS.Color.actionNavy,
-            actionTitle: request != nil ? L10n.t("تغيير الصورة", "Change photo") : L10n.t("أضف صورة", "Add a photo"),
+            actionTitle: isChangeRequest ? L10n.t("تغيير الصورة", "Change photo") : L10n.t("أضف صورة", "Add a photo"),
             actionIcon: "photo.on.rectangle",
             showsAction: !finished,
             cancelTitle: finished ? L10n.t("إغلاق", "Close") : L10n.t("لاحقاً", "Later"),
@@ -266,7 +291,7 @@ struct PhotoReminderBox: View {
         ) {
             VStack(spacing: DS.Spacing.md) {
                 ring
-                if let request {
+                if let request, isChangeRequest, !request.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(L10n.t("السبب: \(request.reason)", "Reason: \(request.reason)"))
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
@@ -314,6 +339,10 @@ struct PhotoReminderBox: View {
             return L10n.t("تظهر صورتك في الشجرة، وتساعد أفراد العائلة على التعرّف عليك.",
                           "Your photo appears in the tree and helps family recognize you.")
         }
+        guard isChangeRequest else {
+            return L10n.t("تطلب منك الإدارة إضافة صورة شخصية لملفك. تظهر صورتك في الشجرة، وتساعد أفراد العائلة على التعرّف عليك.",
+                          "The admins ask you to add a profile photo. It appears in the tree and helps family recognize you.")
+        }
         return request.hidePhoto
             ? L10n.t("صورتك الحالية مخفية عن الأعضاء حتى تغيّرها. يرجى اختيار صورة شخصية واضحة لك.",
                      "Your current photo is hidden from members until you change it. Please choose a clear photo of yourself.")
@@ -324,7 +353,7 @@ struct PhotoReminderBox: View {
         ZStack {
             if let newImage {
                 Image(uiImage: newImage).resizable().scaledToFill()
-            } else if request != nil, !PhotoReminder.hasNoPhoto(member) {
+            } else if isChangeRequest {
                 // الصورة الحالية المطلوب تغييرها
                 DSMemberAvatar(name: member.fullName, avatarUrl: member.avatarUrl, size: DS.Icon.profileAvatarRing)
                     .accessibilityLabel(L10n.t("صورتك الحالية", "Your current photo"))

@@ -850,15 +850,9 @@ struct AdminMemberDataSection: View {
     let open: (AdminMemberBox) -> Void
     let openTall: (AdminMemberTallBox) -> Void
     @EnvironmentObject private var authVM: AuthViewModel
-    /// «طلب تغيير الصورة» المعلّق — الصفّ يظهر ويختفي معه
+    /// الطلب المعلّق وإعداد التذكير — صفّ «تنبيه لإضافة صورة»/«طلب تغيير الصورة» يظهر ويختفي معهما
     @ObservedObject private var photoRequests = PhotoChangeRequestStore.shared
-
-    /// «طلب تغيير الصورة» (طلب المالك ٢٠٢٦-١١-١١): عضو مسجّل حيّ له صورة، ليس أنت، والمالك لا يطلبه منه إلا مالك
-    private var canRequestPhotoChange: Bool {
-        canEdit && member.isDeceased != true && facts.account != nil && !AdminMemberFacts.isBlank(member.avatarUrl)
-            && member.id != authVM.currentUser?.id
-            && (member.role != .owner || authVM.currentUser?.role == .owner)
-    }
+    @ObservedObject private var photoConfig = AppConfigValues.shared
 
     private var genderText: String {
         switch (member.gender ?? "").lowercased() {
@@ -936,7 +930,8 @@ struct AdminMemberDataSection: View {
         let birth = AdminMemberSheetFacts.dayText(m.birthDate)
         let hasPhoto = !AdminMemberFacts.isBlank(m.avatarUrl)
         let bio = m.bio?.count ?? 0
-        let photoRequest = canEdit && PhotoChangeRequestSheetRow.isVisible(member: m, canRequest: canRequestPhotoChange)
+        // «نبّهه يضيف صورة» / «طلب تغيير الصورة» / الطلب المعلّق (P1، `PhotoNudgeSheetRow` — المنطق PhotoNudgeLogic.swift)
+        let photoRequest = canEdit && PhotoNudgeSheetRow.isVisible(member: m, hasLogin: facts.account != nil, authVM: authVM)
         return VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
             AdminSectionLabel(title: L10n.t("البيانات", "Details"))
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
@@ -969,8 +964,7 @@ struct AdminMemberDataSection: View {
                                    value: photoText, thumbnail: hasPhoto && !m.isFemale ? m.avatarUrl : nil),
                     verb: hasPhoto ? L10n.t("تغيير", "Change") : L10n.t("إضافة", "Add")) { open(.photo(m)) }
                 if photoRequest {
-                    PhotoChangeRequestSheetRow(member: m, canRequest: canRequestPhotoChange,
-                                               onRequest: { open(.photoRequest(m)) })
+                    PhotoNudgeSheetRow(member: m, hasLogin: facts.account != nil, onAskChange: { open(.photoRequest(m)) })
                 }
                 row(AdminMemberRow(icon: "doc.text.fill", tint: DS.Color.accent, title: L10n.t("السيرة", "Biography"),
                                    subtitle: latestBioLine, value: bioCountText(bio)),
