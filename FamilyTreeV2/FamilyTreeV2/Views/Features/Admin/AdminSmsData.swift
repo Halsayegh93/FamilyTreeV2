@@ -354,6 +354,9 @@ final class SmsBalanceStore: ObservableObject {
         lastFetch = Date()
         state = .loading
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.sms, hasLoaded: overview != nil || status != nil)   // `-tmpFailStores sms`
+            #endif
             let data = try await SupabaseConfig.client.rpc("sms_admin_overview").execute().data
             let o = try SmsOverview.decode(data)
             overview = o
@@ -377,6 +380,9 @@ final class SmsBalanceStore: ObservableObject {
             let at: String?
         }
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.sms, hasLoaded: status != nil)   // الاحتياط يفشل معه (انقطاع كامل)
+            #endif
             let row: Row = try await SupabaseConfig.client.rpc("sms_balance_status").execute().value
             status = Status(balance: row.balance, at: ApprovalWorkflow.date(row.at))
             state = .loaded
@@ -460,6 +466,12 @@ final class SmsBalanceStore: ObservableObject {
 
     private func call<B: Encodable, T: Decodable>(_ action: String, body: B, as type: T.Type) async throws -> T {
         do {
+            #if DEBUG
+            // تجربة الأدوار: لا رسالة تجريبية ولا حفظ اسم مرسل ولا فك قفل رقم — نجاح مصطنع (الردود كل حقولها اختيارية)
+            if ["test_send", "set_sender", "unlock"].contains(action), DebugAdminProbe.dryRun("kwtsms-admin \(action)") {
+                return try JSONDecoder().decode(T.self, from: Data("{}".utf8))
+            }
+            #endif
             let data: Data = try await SupabaseConfig.client.functions.invoke(
                 "kwtsms-admin",
                 options: FunctionInvokeOptions(method: .post, body: body)

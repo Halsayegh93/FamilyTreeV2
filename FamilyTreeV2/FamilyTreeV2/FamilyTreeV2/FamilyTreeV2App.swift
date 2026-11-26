@@ -92,6 +92,9 @@ struct FamilyTreeV2App: App {
                 // — خط واحد في التطبيق كله (طلب المالك ٢٠٢٦-١٠-٠٧)
                 .font(DS.Font.body)
                 .preferredColorScheme(preferredScheme)
+                #if DEBUG
+                .debugAdminProbeRoot()   // أعلام -tmp* لفحص لوحة الإدارة (Core/DebugAdminProbe.swift): سطر الإقلاع والشارة ومقياس المكدس
+                #endif
                 // preferredColorScheme وحده لا يصل للشيتات والتنبيهات المقدَّمة من UIKit،
                 // فنفرض النمط على النافذة نفسها ليشمل كل ما يُعرض فوقها.
                 .onChange(of: appearanceMode) { _ in applyWindowStyle() }

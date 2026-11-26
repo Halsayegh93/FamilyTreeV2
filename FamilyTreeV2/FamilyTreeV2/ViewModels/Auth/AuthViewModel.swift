@@ -107,6 +107,13 @@ class AuthViewModel: ObservableObject {
     @Published var currentUser: FamilyMember? = nil {
         // «إظهار آخر ظهوري ونشاطي» مطفأ → لا يُرسَل `current_screen` (٢٠٢٦-١٠-٢٩)
         didSet {
+            #if DEBUG
+            // `-tmpAdminRole` (DEBUG فقط، Core/DebugAdminProbe.swift): الدور يدخل هنا من كل تحديث للملف، فيُبدَّل هنا
+            // ولا يرجع للمالك مع التحديث التالي — للعرض فقط، والكتابة تجريبية (`DebugAdminProbe.isDryRun`)
+            if let role = currentUser?.role, let forced = DebugAdminProbe.forcedRole(over: role), forced != role {
+                currentUser?.role = forced
+            }
+            #endif
             MemberActivityTracker.setVisible(currentUser?.activityVisible ?? true)
             // قوائم الأسماء: الإدارة كما كانت، وغيرها متشدّد (`NamePrivacy`)
             NamePrivacy.isStrict = !canModerate

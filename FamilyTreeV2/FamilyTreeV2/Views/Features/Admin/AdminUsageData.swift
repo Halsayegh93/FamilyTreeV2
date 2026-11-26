@@ -196,6 +196,9 @@ final class AdminUsageStore: ObservableObject {
 
     private func loadTrend(_ period: Int) async -> Bool {
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.usage, hasLoaded: trends[period] != nil)   // `-tmpFailStores usage`
+            #endif
             let data = try await SupabaseConfig.client
                 .rpc("app_usage_trend", params: ["p_days": period])
                 .execute().data
@@ -211,6 +214,9 @@ final class AdminUsageStore: ObservableObject {
 
     private func loadEngagement(_ period: Int) async -> Bool {
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.usage, hasLoaded: engagements[period] != nil)
+            #endif
             let data = try await SupabaseConfig.client
                 .rpc("app_usage_engagement", params: ["p_days": period])
                 .execute().data

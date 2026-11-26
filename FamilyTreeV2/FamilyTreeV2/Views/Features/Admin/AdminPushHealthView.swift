@@ -136,6 +136,9 @@ final class AdminDeviceReachStore: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.devices, hasLoaded: rows != nil)   // `-tmpFailStores devices`
+            #endif
             let fetched: [AdminDeviceRow] = try await SupabaseConfig.client
                 .from("device_tokens")
                 .select("id, member_id, token, platform, environment, device_name, updated_at")
@@ -156,6 +159,10 @@ final class AdminDeviceReachStore: ObservableObject {
             loadedAt = Date()
         } catch {
             guard !ErrorHelper.isCancellation(error) else { return }
+            #if DEBUG
+            // الفشل المصطنع لا يمرّ بـ`Log.error` (يبلّغ السيرفر)
+            if DebugAdminProbe.isInjected(error) { failed = true; return }
+            #endif
             Log.error("[Devices] فشل جلب الأجهزة: \(error.localizedDescription)")
             failed = true
         }
@@ -398,6 +405,9 @@ struct AdminPushHealthView: View {
                     get: { appSettingsVM.settings.maxDevicesPerUser },
                     set: { newValue in
                         appSettingsVM.settings.maxDevicesPerUser = newValue
+                        #if DEBUG
+                        if DebugAdminProbe.dryRun("app_settings max_devices_per_user=\(newValue)") { return }
+                        #endif
                         Task { await appSettingsVM.updateSetting("max_devices_per_user", value: newValue,
                                                                  updatedBy: authVM.currentUser?.id) }
                     }), in: 1...10)
@@ -490,6 +500,12 @@ struct AdminPushHealthView: View {
         isSendingTest = true
         testResult = nil
         defer { isSendingTest = false }
+        #if DEBUG
+        if DebugAdminProbe.dryRun("notifications.insert kind=test (test push)") {
+            withAnimation { testResult = (L10n.t("تم الإرسال — تحقّق من جهازك خلال ثوانٍ", "Sent — check your device in a few seconds"), true) }
+            return
+        }
+        #endif
         do {
             let payload: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(memberId.uuidString),
@@ -521,7 +537,12 @@ struct AdminPushHealthView: View {
             let invalidIds = rows
                 .filter { ($0.token ?? "").trimmingCharacters(in: .whitespacesAndNewlines).count <= 20 }
                 .map(\.id)
-            if !invalidIds.isEmpty {
+            #if DEBUG
+            let dryRun = !invalidIds.isEmpty && DebugAdminProbe.dryRun("device_tokens.delete \(invalidIds.count) invalid registrations")
+            #else
+            let dryRun = false
+            #endif
+            if !invalidIds.isEmpty, !dryRun {
                 try await SupabaseConfig.client.from("device_tokens").delete().in("id", values: invalidIds).execute()
             }
             withAnimation {
