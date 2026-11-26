@@ -81,6 +81,8 @@ struct AdminDashboardView: View {
 
     // حال المخازن (Autoplan note 2) — كل كلمة ورقم من مخزنه
     @State private var inboxHealth: AdminStoreHealth = .idle
+    /// جلب «اليوم» للأعضاء (أبناء البنات ثم الأعضاء) — جارٍ = هيكل ولو بقيت علامة فشل من جلب سابق (F1)
+    @State private var membersFetch: AdminStoreHealth = .idle
     @State private var womenHealth: AdminStoreHealth = WomenStore.cache.isEmpty ? .idle : .loaded(at: Date())
     @State private var accountsHealth: AdminStoreHealth = AdminAccountsStore.shared.loaded ? .loaded(at: Date()) : .idle
     @State private var announcedHealth: AdminStoreHealth = .idle
@@ -270,8 +272,11 @@ struct AdminDashboardView: View {
 
     /// ١) «العائلة»: أبناء البنات قبل الأعضاء (لا يُعدّون في «الرجال»)، ثم شجرة النساء وقوائم الحسابات معاً
     private func loadCensus(force: Bool) async {
+        membersFetch = membersFetch.beginning()
         if authVM.canModerateTree { await DaughterSonsIndex.shared.refresh(force: force) }
         await memberVM.fetchAllMembers(force: force)
+        membersFetch = AdminTodayLogic.membersFetchEnded(hasMembers: !memberVM.allMembers.isEmpty,
+                                                         loadFailed: memberVM.membersLoadFailed)
         guard needsFigures else { return }
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in await loadWomen(force: force) }
@@ -305,8 +310,11 @@ struct AdminDashboardView: View {
             accountsHealth = accountsHealth.ending(success: false)
             return
         }
-        await AdminAccountsStore.shared.refresh(force: force)
-        accountsHealth = accountsHealth.ending(success: AdminAccountsStore.shared.loaded)
+        let store = AdminAccountsStore.shared
+        await store.refresh(force: force)
+        // بحال المخزن نفسه: جلب أُلغي (أو آخر ما زال جارياً) ليس فشلاً — كان «تعذّر التحميل» في مربّع «الإحصاءات» (F1)
+        accountsHealth = AdminTodayLogic.accountsHealth(after: accountsHealth, store: store.health,
+                                                        storeLoaded: store.loaded)
     }
 
     /// ١) «الوارد»: المفتاح طازجاً ثم كل قوائم الطلبات بالتوازي (نفس نداءات «الوارد»). `-tmpFailStores inbox` يُفشلها
@@ -331,7 +339,8 @@ struct AdminDashboardView: View {
                     group.addTask { @MainActor in await adminRequestVM.fetchContactMessages() }
                 }
                 group.addTask { @MainActor in await adminRequestVM.fetchJoinApprovalRequests() }
-                // طلبات «الوارد» الأخرى (حذف الحساب، الخصوصية…) — في العدّاد و«يحتاج إجراء» في «إشعارات الإدارة»
+                // طلبات الخصوصية (حذف الحساب، الخصوصية…) — حقيقة وحدها في مربّع «الوارد» وسطر التحية (لا في «بانتظار
+                // قرارك» — F1) و«يحتاج إجراء» في «إشعارات الإدارة»
                 group.addTask { @MainActor in await adminRequestVM.fetchPolicyRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
@@ -452,7 +461,9 @@ struct AdminDashboardView: View {
             diwaniyaVM: diwaniyaVM, projectsVM: projectsVM,
             pendingArchiveCount: pendingArchiveCount,
             scope: AdminAllRequestsView.reviewScope(for: authVM),
-            includePhotos: AdminAllRequestsView.reviewIncludesPhotos(for: authVM))
+            includePhotos: AdminAllRequestsView.reviewIncludesPhotos(for: authVM),
+            // قائمة «الوارد» وحدها = شريحة «بانتظار قرارك» فيه (T2)؛ طلبات الخصوصية رقمها وحدها (`counts.policy`)
+            includePolicy: false)
         let deaths = all.filter { $0.isDeceased == true && $0.role != .pending && DeathRecency.isRecent($0.deathDate) }
             .sorted { ($0.deathDate ?? "") > ($1.deathDate ?? "") }
         // نفس أرقام «الإحصاءات» (`AdminStatsSnapshot`): الرقم المضغوط = أول رقم في بيته (T2)
@@ -492,10 +503,9 @@ struct AdminDashboardView: View {
         return recentDeaths.filter { !announcedIds.contains($0.id) && DeathRecency.isRecent($0.deathDate, within: DeathRecency.alertDays) }
     }
 
-    /// الأعضاء: وصلوا = كلمة، فشل أول جلب = «تعذّر التحميل»
+    /// الأعضاء: وصلوا = كلمة؛ وإلا حال جلب «اليوم» — «تعذّر التحميل» بعد أن ينتهي بفشل فقط (F1)
     private var membersHealth: AdminStoreHealth {
-        if !memberVM.allMembers.isEmpty { return .loaded(at: refreshedAt ?? .distantPast) }
-        return memberVM.membersLoadFailed ? .failed(lastGood: nil) : .loading
+        AdminTodayLogic.membersHealth(hasMembers: !memberVM.allMembers.isEmpty, loadedAt: refreshedAt, fetch: membersFetch)
     }
 
     /// أرقام بطاقة «العائلة»: الأعضاء وشجرة النساء معاً
@@ -527,6 +537,7 @@ struct AdminDashboardView: View {
             loading: isInitialLoading,
             urgent: seesAttention ? c.urgent : 0,
             waiting: seesAttention ? c.waiting : 0,
+            policy: seesAttention ? c.policy : 0,
             memorialToday: memorialToday,
             unannounced: unannounced.map(\.shortFullName),
             joinedThisWeek: AdminArea.family.isVisible(for: authVM) ? joinedThisWeek : nil,
@@ -604,7 +615,8 @@ struct AdminDashboardView: View {
                 .buttonStyle(BounceButtonStyle())
                 .accessibilityLabel(L10n.t("بحث في اللوحة", "Search the dashboard"))
                 NavigationLink {
-                    AdminLazyPage { AnyView(AdminNotificationsPage().adminBackTitle(L10n.t("اليوم", "Today"))) }
+                    // الرجوع باسم الرأس المرئي «الإدارة» كبقية ما يُدفع من «اليوم» (F1 — كانت «اليوم» تُترجم في الصفحة)
+                    AdminLazyPage { AnyView(AdminNotificationsPage().adminBackTitle(AdminArea.homeTitle)) }
                 } label: {
                     AdminHeaderIcon(symbol: "bell", count: bell)
                 }
@@ -779,7 +791,7 @@ struct AdminDashboardView: View {
             guard authVM.adminSees(.todayAttention) else { return TileModel(health: inboxHealth, retry: retryInbox) }
             let c = counts
             let f = fourth
-            let word = AdminTodayLogic.inboxWord(urgent: c.urgent, waiting: c.waiting, late: c.late,
+            let word = AdminTodayLogic.inboxWord(urgent: c.urgent, waiting: c.waiting, late: c.late, policy: c.policy,
                                                  fourth: f.kind, fourthCount: f.count)
             return TileModel(state: word.state, health: inboxHealth, retry: retryInbox, landing: word.landing)
         case .family:

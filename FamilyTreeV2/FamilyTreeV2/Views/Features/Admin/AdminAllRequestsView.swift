@@ -1134,6 +1134,8 @@ struct AdminAllRequestsView: View {
         authVM.adminSees(.inboxPhotos)
     }
 
+    /// `includePolicy: false` = قائمة «الوارد» وحدها (= «كل الطلبات» فيه وشريحة «بانتظار قرارك» والمسار مطفأ): طلبات
+    /// الخصوصية بابها صفّ مستقل فوق القائمة — «اليوم» يعدّها وحدها (F1، T2)
     @MainActor
     static func reviewRequestsTotal(
         memberVM: MemberViewModel,
@@ -1143,7 +1145,8 @@ struct AdminAllRequestsView: View {
         projectsVM: ProjectsViewModel,
         pendingArchiveCount: Int = 0,
         scope: ReviewScope = .all,
-        includePhotos: Bool = true
+        includePhotos: Bool = true,
+        includePolicy: Bool = true
     ) -> Int {
         let members = memberVM.allMembers
         let pending = members.filter { $0.role == .pending }.count
@@ -1162,7 +1165,7 @@ struct AdminAllRequestsView: View {
             + adminRequestVM.deceasedRequests.count
             + adminRequestVM.childAddRequests.count
             + adminRequestVM.treeEditRequests.count
-            + adminRequestVM.policyRequestsCount
+            + (includePolicy ? adminRequestVM.policyRequestsCount : 0)
         switch scope {
         case .all:     return content + tree + photos
         case .content: return content + photos

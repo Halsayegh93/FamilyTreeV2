@@ -16,8 +16,10 @@ struct AdminTodayCounts: Equatable {
     var late = 0
     var unreadMessages = 0
     var pendingMessages = 0
-    /// كل ما في «الوارد» لهذا الدور (= عدّاد «الكل» فيه)
+    /// كل ما في قائمة «الوارد» لهذا الدور (= «كل الطلبات» فيه — بلا طلبات الخصوصية، بابها مستقل)
     var inboxTotal = 0
+    /// طلبات الخصوصية المعلّقة (باب «طلبات الخصوصية · N بانتظار الرد» في «الوارد») — لا تُضاف إلى `waiting` (F1، T2)
+    var policy = 0
 }
 
 /// بيوت إشارات «حالة النظام» السابقة (الصيانة · الرصيد · المجدول · بلا إشعارات). السطر ولوحته حُذفا (spec E.2 — حالها
@@ -243,7 +245,8 @@ enum AdminTodayFeed {
     // MARK: الأرقام
 
     /// أرقام كلمات مربّع «الوارد» وسطر التحية — نفس تعريف فلاتر «الوارد» (`AdminInboxLogic`): المسار شغّال = بانتظارك ·
-    /// عاجل · متأخر من لقطات مجال الدور؛ مطفأ = كل ما في «الوارد» لدورك بانتظارك (`inboxTotal` = «الكل» فيه)، بلا عاجل ولا متأخر
+    /// عاجل · متأخر من لقطات مجال الدور؛ مطفأ = كل ما في قائمة «الوارد» لدورك بانتظارك (`inboxTotal` = «كل الطلبات» فيه —
+    /// `reviewRequestsTotal(includePolicy: false)`)، بلا عاجل ولا متأخر. طلبات الخصوصية رقمها وحدها (`policy`)
     static func counts(authVM: AuthViewModel, adminRequestVM: AdminRequestViewModel, inboxTotal: Int) -> AdminTodayCounts {
         var c = AdminTodayCounts()
         // «الرسائل» لمن يراها في جدول السيرفر فقط (`inbox.messages`)
@@ -251,6 +254,8 @@ enum AdminTodayFeed {
         c.unreadMessages = seesMessages ? adminRequestVM.unreadContactMessagesCount : 0
         c.pendingMessages = seesMessages ? adminRequestVM.pendingContactMessagesCount : 0
         c.inboxTotal = inboxTotal
+        // نفس شرط باب «طلبات الخصوصية» في «الوارد» (الجلب نفسه مقصور على ما يعالجه الدور)
+        c.policy = adminRequestVM.policyRequestsCount
         if adminRequestVM.approvalsWorkflowOn {
             let flows = scopedSnapshots(authVM: authVM, adminRequestVM: adminRequestVM)
             c.waiting = flows.filter(adminRequestVM.isApprovalWaitingForMe).count

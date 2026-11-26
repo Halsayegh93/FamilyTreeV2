@@ -6,11 +6,12 @@ import SwiftUI
 // بعدد القائمة كاملة = رقم الصفّ الذي فتحها (T2) · شريط التقدّم حيث له معنى) ← حقل البحث («بيانات ناقصة») ← شرائح بُعد واحد
 // تلتفّ (`DSFilterChips(style: .admin)` — لا مفتاح ولا تبويب) ← الأعضاء بأقسام ← زرّ الإصلاح في الصفّ نفسه (والاسم يفتح ورقة
 // العضو بالسابق/التالي) ← سطر إرشاد.
-// لا كتابة جديدة: كل زرّ يفتح المربّع الموجود أو يستدعي الموجود (حي ✓ المحلي، مربّع الوفاة، الحذف، الاتصال والواتساب).
+// لا كتابة جديدة: كل زرّ يفتح المربّع الموجود أو يستدعي الموجود (حي ✓ المحلي، مربّع الوفاة، الاتصال والواتساب).
+// لا حذف هنا (T4، F1): «بلا اسم» زرّه «الملف» يفتح ورقة العضو — بيت «حذف العضو نهائياً» الوحيد (قسم «الحساب»).
 // الأعضاء من الفهرس نفسه (`AdminMembersIndex`) والقائمة من `AdminMemberReview.rows`.
 // «تاريخ وفاة غير مكتمل» (`.death`) لم تعد هنا: بيتها الواحد `DeathDatesCampaignPage` (spec E.19) — `AdminReviewListPage(.death)`
 // يفتحها هي (رابط «اليوم» وغيره يبقى يعمل). مفتاح «الأحياء · تواريخ الوفاة» حُذف (لا مفاتيح — قاعدة المالك ٣).
-// تجربة الأدوار (`-tmpAdminRole`): «حي ✓» و«متوفى» والحذف تمرّ بـ`DebugAdminProbe.dryRun` (T0).
+// تجربة الأدوار (`-tmpAdminRole`): «حي ✓» و«متوفى» تمرّ بـ`DebugAdminProbe.dryRun` (T0).
 
 struct AdminReviewListPage: View {
     /// القائمة المعروضة
@@ -39,9 +40,6 @@ struct AdminReviewListPage: View {
     @State private var sheet: AdminMemberSheetContext?
     /// «متوفى» من «هل ما زالوا أحياء؟»
     @State private var deathTarget: FamilyMember?
-    @State private var deleteTarget: FamilyMember?
-    @State private var deleting = false
-    @State private var deleteError: String?
     @State private var photoURL: AdminPhotoURL?
 
     // حارس المكدس: الصفحة والمربّعات طبقات خلف `AnyView`
@@ -63,23 +61,6 @@ struct AdminReviewListPage: View {
             .modifier(AdminLivingDeathBox(member: $deathTarget))
             .fullScreenCover(item: $photoURL) { p in
                 ProjectPhotoViewer(urls: [p.url], startIndex: 0, section: .admin)
-            }
-            .dsAlert(L10n.t("حذف العضو نهائياً؟", "Delete the member permanently?"),
-                     isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })) {
-                Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) {
-                    if let m = deleteTarget { delete(m) }
-                    deleteTarget = nil
-                }
-                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { deleteTarget = nil }
-            } message: {
-                Text(L10n.t("سيُحذف «\(deleteTarget?.fourPartName ?? "")» من الشجرة ولا يمكن التراجع.",
-                            "“\(deleteTarget?.fourPartName ?? "")” will be removed from the tree. This can't be undone."))
-            }
-            .dsAlert(L10n.t("تعذّر الحذف", "Couldn't delete"),
-                     isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
-                Button(L10n.t("حسناً", "OK")) { deleteError = nil }
-            } message: {
-                Text(deleteError ?? "")
             }
             .refreshable { await reload(force: true) }
             .task { await reload(force: false) }
@@ -395,14 +376,12 @@ struct AdminReviewListPage: View {
             }
             .fixedSize()
         } else if problems.contains(.noName) && canDelete {
-            Button { deleteTarget = entry.member } label: {
-                Image(systemName: "trash.fill")
-                    .dsGlyph(DSButtonSize.compact.glyph)
-                    .modifier(DSDeleteCircleFace(enabled: !deleting, size: .compact))
-            }
-            .buttonStyle(DSPressStyle())
-            .disabled(deleting)
-            .accessibilityLabel(L10n.t("حذف \(entry.member.fourPartName)", "Delete \(entry.member.fourPartName)"))
+            // T4: بيت حذف العضو الوحيد ورقة العضو («الحساب» ← «حذف العضو نهائياً») — «الملف» يفتحها (كان سلّة حذف هنا)
+            let profile = L10n.t("الملف", "Profile")
+            AdminPillButton(title: profile, icon: "person.crop.circle", style: .soft, height: DS.Hub.pillHeightCard,
+                            action: open)
+                .fixedSize()
+                .accessibilityLabel(Text(verbatim: "\(profile): \(entry.member.fourPartName)"))
         } else if let first = problems.first, canEdit {
             AdminPillButton(title: first.fixTitle, icon: first.icon, style: .soft, height: DS.Hub.pillHeightCard, action: open)
                 .fixedSize()
@@ -463,25 +442,6 @@ struct AdminReviewListPage: View {
     private func markDeceased(_ m: FamilyMember) {
         if DebugAdminProbe.dryRun("death box (mark deceased) \(m.id)") { return }
         deathTarget = m
-    }
-
-    private func delete(_ m: FamilyMember) {
-        if DebugAdminProbe.dryRun("deleteMember \(m.id)") {
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            return
-        }
-        deleting = true
-        Task {
-            let ok = await memberVM.deleteMember(memberId: m.id)
-            deleting = false
-            if ok {
-                NotificationCenter.default.post(name: .memberDeleted, object: m.id)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            } else {
-                deleteError = memberVM.errorMessage
-                    ?? L10n.t("تأكد من الاتصال ثم حاول مرة أخرى.", "Check your connection and try again.")
-            }
-        }
     }
 }
 

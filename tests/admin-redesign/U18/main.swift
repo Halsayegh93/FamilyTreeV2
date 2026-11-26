@@ -113,7 +113,9 @@ check(L.deleteQuestion(5), "حذف 5 إشعارات؟", "delete five")
 check(L.deleteQuestion(12), "حذف 12 إشعاراً؟", "delete twelve")
 check(L.deleteQuestion(100), "حذف 100 إشعار؟", "delete a hundred")
 check(L.unreadTail(), "غير مقروء", "unread tail")
-check(L.backTitle("اليوم"), "الإدارة", "bell on «اليوم» → back reads the visible title «الإدارة»")
+// F1: الجرس يمرّر «الإدارة» من مصدره — لا ترجمة «اليوم» هنا بعد الآن
+check(L.backTitle("الإدارة"), "الإدارة", "bell on «اليوم» passes «الإدارة» at the source")
+check(L.backTitle("اليوم"), "اليوم", "no «اليوم» → «الإدارة» workaround (F1)")
 check(L.backTitle(nil), "الإدارة", "no opener → «الإدارة»")
 check(L.backTitle("البحث"), "البحث", "other opener kept")
 

@@ -13,7 +13,8 @@ import SwiftUI
 //    («الرجال: 2,729، 87 بالمئة أحياء. يفتح القائمة»). ألوان السلاسل اجتازت فاحص dataviz على الأبيض و#1C1F25 (spec A.11).
 //  • «≈ نسبة الأحياء تقديرية: فيها كبار سن بلا تاريخ وفاة ‹» ١٣ بالذهبي الغامق تحت الحلقات ما دام في «تحقق من الأحياء»
 //    (`AdminMemberCounts.oldLiving`) من لم يراجعه المستخدم «حي ✓» (`AdminLivingVerifiedStore`). الأعداد لا تحمل «≈» أبداً.
-//  • سطران: «اليوم» = «في التطبيق» (من 2,489 حياً) 170 ‹ · «خارج العائلة» (أحياء، و87 متوفى) 50 ‹ بمربّع لون `DS.Chart.outside`
+//  • سطران: «اليوم» = «في التطبيق» (من 2,489 حياً) 170 ‹ · «خارج العائلة» (أحياء) 50 ‹ بمربّع لون `DS.Chart.outside` —
+//    خارج العائلة أحياؤه فقط، بلا متوفين (طلب المالك، F1)
 //    (تظليل ٤٥° مع «التمييز بدون لون»)؛ «الإحصاءات» = «أحياء» (2,362 رجل و127 امرأة) 2,489 · «متوفون» 502 — بلا سهم.
 //  • الحالات (`AdminStoreHealth`): قبل الوصول الحلقات على `DS.Ring.emptyTrack` و«—» (لا صفر)، والرقم «—» لا يُضغط؛ الفشل بلا
 //    بيانات = بطاقة «تعذّر تحميل الأرقام» + «أعد المحاولة» مكانها؛ الفشل بعد تحميل = الأرقام + «آخر تحديث 9:12»؛ المرفوض = لا شيء.
@@ -69,7 +70,8 @@ nonisolated struct AdminCensusFigures: Equatable {
     /// الأحياء المسجّلون بتعريف العائلة الواحد (`AdminMemberCounts.setFamilyAccounts`) — رجالاً ونساءً
     var menAccounts: Int? = nil
     var womenAccounts: Int? = nil
-    /// «خارج العائلة» الأحياء (`AdminFamilyCensus.outsideTotal`) ومتوفوه (`outsideDeceased(members:women:)`)
+    /// «خارج العائلة» الأحياء (`AdminFamilyCensus.outsideTotal`) ومتوفوه (`outsideDeceased(members:women:)` — لا يُعرض منذ F1:
+    /// أرقام خارج العائلة للأحياء وحدهم بطلب المالك؛ باقٍ لمن يقرؤه حتى U21)
     var outsideLiving: Int? = nil
     var outsideDeceased: Int? = nil
     /// مرشّحو «تحقق من الأحياء» قبل استبعاد ما راجعه المستخدم (`AdminMemberCounts.oldLiving`) — رجال فقط
@@ -273,7 +275,11 @@ nonisolated enum AdminCensusText {
         living.map { L10n.t("من \(Self.living($0))", "of \(Self.living($0))") }
     }
 
+    /// تحت «خارج العائلة»: «أحياء» — أرقام خارج العائلة للأحياء وحدهم (طلب المالك، F1: بلا «و87 متوفى»)
+    static var outsideLivingSub: String { L10n.t("أحياء", "Living") }
+
     /// تحت «خارج العائلة»: «أحياء، و87 متوفى» — «أحياء» وحدها بلا متوفين أو قبل وصولهم
+    @available(*, deprecated, message: "use outsideLivingSub (outside the family = living only, F1); U21 removes")
     static func outsideSub(deceased: Int?) -> String {
         guard let deceased, deceased > 0 else { return L10n.t("أحياء", "Living") }
         return L10n.t("أحياء، و\(Self.deceased(deceased))", "Living, and \(Self.deceased(deceased))")
@@ -618,7 +624,7 @@ private struct AdminCensusRingsCard: View {
                 row(title: AdminCensusText.inAppTitle, sub: AdminCensusText.inAppSub(living: figures.totalAlive),
                     value: figures.inApp, action: actions.inApp)
                 AdminRowDivider()
-                row(title: AdminCensusText.outsideTitle, sub: AdminCensusText.outsideSub(deceased: figures.outsideDeceased),
+                row(title: AdminCensusText.outsideTitle, sub: AdminCensusText.outsideLivingSub,
                     value: figures.outsideLiving, action: actions.outside, swatch: true)
             })
         case .livingAndDeceased:
