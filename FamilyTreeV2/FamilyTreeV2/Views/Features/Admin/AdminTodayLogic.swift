@@ -11,7 +11,9 @@ import Foundation
 //     («4 مشكلات في الشجرة» ← «العائلة» ثم قائمة «مشكلات» فوقها؛ «2 عاجل» ← «الوارد» على «عاجل»).
 //     ترتيب كلمات «الوارد» من جدول الأدوار: `today.attention` (عاجل · بانتظارك · متأخر) ثم الرقم الرابع للدور
 //     (`attention_fourth`: رسائل · بلاغات؛ «مشكلات الشجرة» يقولها مربّع «العائلة» نفسه فلا تتكرّر). حقيقتان على الأكثر.
-//  حال المخزن (لا كلمة هادئة قبل وصول بياناتها، و«تعذّر التحميل» عند الفشل) يرسمها `AdminRowTile(health:)` — هنا الكلمة فقط.
+//  حال المخزن (لا كلمة هادئة قبل وصول بياناتها، و«تعذّر التحميل» عند الفشل) يرسمها `AdminRowTile(health:)` — هنا الكلمة،
+//  ومحوّلا حال الأعضاء وقوائم الحسابات (F1: جلب جارٍ أو ملغى ليس فشلاً).
+//  طلبات الخصوصية لا تُضاف إلى «بانتظار قرارك» (شريحة «الوارد» لا تعدّها — T2)؛ تُقال حقيقةً وحدها في المربّع والسطر (F1).
 //
 // يُفحص بلا محاكي:
 //   xcrun swiftc -D ADMIN_LOGIC_TEST -o /tmp/u7-logic \
@@ -63,8 +65,10 @@ nonisolated enum AdminTodayLogic {
         var loading = false
         /// العاجل في مجال الدور (مسار الموافقات) — ٠ لمن لا يرى أرقام «الوارد» (`today.attention`)
         var urgent = 0
-        /// بانتظار قرارك (المسار مطفأ: كل ما في «الوارد» لدورك)
+        /// بانتظار قرارك (المسار مطفأ: كل ما في قائمة «الوارد» لدورك — بلا طلبات الخصوصية، نفس شريحة «بانتظار قرارك» فيه)
         var waiting = 0
+        /// طلبات الخصوصية المعلّقة (بابها «طلبات الخصوصية» في «الوارد») — تُقال وحدها ولا تُضاف إلى «بانتظار قرارك» (F1)
+        var policy = 0
         /// ذكرى وفاة اليوم
         var memorialToday: [String] = []
         /// وفيات حديثة لم يُعلن عنها (المالك والمدير — فارغة لغيرهما)
@@ -117,6 +121,11 @@ nonisolated enum AdminTodayLogic {
                 : (n == 1 ? "1 request awaits your decision" : "\(AdminNumberText.grouped(n)) requests await your decision")
             return AdminSmartLine(text: text, link: link(.inbox, .inbox(AdminInboxLanding(status: .waiting))))
         }
+        // «الوارد» بلا فلتر: باب «طلبات الخصوصية · N بانتظار الرد» فيه بالعدد نفسه (T2)
+        if input.policy > 0 {
+            let text = L10n.t("\(policyText(input.policy)) بانتظار الرد", "\(policyText(input.policy)) awaiting a reply")
+            return AdminSmartLine(text: text, link: link(.inbox))
+        }
         if let joined = input.joinedThisWeek, joined > 0 {
             let text = L10n.isArabic
                 ? (joined == 1 ? "انضمّ عضو جديد هذا الأسبوع"
@@ -139,9 +148,12 @@ nonisolated enum AdminTodayLogic {
 
     // MARK: كلمات المربّعات
 
-    /// «الوارد»: عاجل › بانتظارك › متأخر › الرقم الرابع للدور — أول حقيقتين غير صفريتين، والهبوط على فلتر الأولى.
+    /// «الوارد»: عاجل › بانتظارك › متأخر › طلبات الخصوصية › الرقم الرابع للدور — أول حقيقتين غير صفريتين، والهبوط على
+    /// فلتر الأولى. `waiting` = شريحة «بانتظار قرارك» في «الوارد» نفسها (بلا طلبات الخصوصية — T2)، و`policy` حقيقة وحدها
+    /// تفتح «الوارد» بلا فلتر حيث بابها «طلبات الخصوصية · N بانتظار الرد» (F1).
     /// لا شيء = «لا جديد» ✓ (بعد وصول البيانات فقط — `AdminRowTile(health:)`)
-    static func inboxWord(urgent: Int, waiting: Int, late: Int, fourth: AdminTodayFourth, fourthCount: Int) -> AdminTodayWord {
+    static func inboxWord(urgent: Int, waiting: Int, late: Int, policy: Int = 0, fourth: AdminTodayFourth,
+                          fourthCount: Int) -> AdminTodayWord {
         var facts: [(state: AdminTileState, landing: AdminInboxLanding?)] = []
         if urgent > 0 {
             facts.append((.urgent(L10n.t("\(AdminNumberText.grouped(urgent)) عاجل", "\(AdminNumberText.grouped(urgent)) urgent")),
@@ -153,6 +165,10 @@ nonisolated enum AdminTodayLogic {
         if late > 0 {
             facts.append((.attention(L10n.t("\(AdminNumberText.grouped(late)) متأخر", "\(AdminNumberText.grouped(late)) late")),
                           AdminInboxLanding(status: .late)))
+        }
+        if policy > 0 {
+            // بابها صفّ في «الوارد» نفسه لا فلتر — يُفتح على افتراضه «كل الطلبات»
+            facts.append((.attention(policyText(policy)), nil))
         }
         if fourthCount > 0 {
             switch fourth {
@@ -266,6 +282,34 @@ nonisolated enum AdminTodayLogic {
         return AdminTodayWord(state: .good(L10n.t("يعمل للجميع", "Open to everyone")))
     }
 
+    // MARK: حال المخازن (F1: التحميل لا يُرسم فشلاً — spec A.12)
+
+    /// حال الأعضاء في «اليوم»: وصلوا = كلمة؛ وإلا حال جلب «اليوم» نفسه (`fetch`). علامة الفشل في نموذج الأعضاء
+    /// (`membersLoadFailed`) لا تُقرأ وحدها: تبقى من جلب سابق فشل (تبويب آخر، جلب أُلغي) وجلب «اليوم» ما زال جارياً، فكان
+    /// مربّع «الإحصاءات» يقول «تعذّر التحميل» ثم «170 في التطبيق» بعد ثوانٍ (جولة المحاكي ٢٠٢٦-١١-٢٦)
+    static func membersHealth(hasMembers: Bool, loadedAt: Date?, fetch: AdminStoreHealth) -> AdminStoreHealth {
+        hasMembers ? .loaded(at: loadedAt ?? .distantPast) : fetch
+    }
+
+    /// نهاية جلب الأعضاء في «اليوم»: وصلوا = `loaded`؛ انتهى بلا أعضاء وعلامة الفشل قائمة = `failed`؛ غير ذلك (أُلغي،
+    /// أو لم يجلب) = لا شيء معروف — هيكل (`idle`) لا «تعذّر التحميل»
+    static func membersFetchEnded(hasMembers: Bool, loadFailed: Bool, at date: Date = Date()) -> AdminStoreHealth {
+        if hasMembers { return .loaded(at: date) }
+        return loadFailed ? .failed(lastGood: nil) : .idle
+    }
+
+    /// نهاية جلب قوائم الحسابات (`AdminAccountsStore.refresh`) بحال المخزن نفسه لا بـ«وصلت أم لا»: فشل المخزن = `failed`
+    /// (بآخر وقت صالح إن وصلت قبله)؛ وصلت = `loaded`؛ لا هذا ولا ذاك (الجلب أُلغي فرجع المخزن لحاله، أو جلب آخر ما زال
+    /// جارياً) = ما كان إن كان في اليد بيانات، وإلا هيكل — لا «تعذّر التحميل» أبداً لجلب لم يفشل
+    static func accountsHealth(after previous: AdminStoreHealth, store: AdminStoreHealth, storeLoaded: Bool,
+                               at date: Date = Date()) -> AdminStoreHealth {
+        if case .failed(let lastGood) = store {
+            return .failed(lastGood: storeLoaded ? (lastGood ?? previous.lastGood ?? date) : nil)
+        }
+        if storeLoaded { return .loaded(at: store.lastGood ?? date) }
+        return previous.hasData ? previous : .loading
+    }
+
     // MARK: النصوص
 
     /// «رسالة جديدة» · «رسالتان جديدتان» · «7 رسائل جديدة» · «11 رسالة جديدة»
@@ -273,6 +317,13 @@ nonisolated enum AdminTodayLogic {
         guard L10n.isArabic else { return n == 1 ? "1 new message" : "\(AdminNumberText.grouped(n)) new messages" }
         return counted(n, one: "رسالة جديدة", two: "رسالتان جديدتان", few: "رسائل جديدة", many: "رسالة جديدة",
                        single: "رسالة جديدة")
+    }
+
+    /// «طلب خصوصية» · «طلبا خصوصية» · «3 طلبات خصوصية» · «11 طلب خصوصية» (باب «طلبات الخصوصية» في «الوارد»)
+    static func policyText(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "1 privacy request" : "\(AdminNumberText.grouped(n)) privacy requests" }
+        return counted(n, one: "طلب خصوصية", two: "طلبا خصوصية", few: "طلبات خصوصية", many: "طلب خصوصية",
+                       single: "طلب خصوصية")
     }
 
     /// «بلاغ» · «بلاغان» · «3 بلاغات» · «11 بلاغاً»

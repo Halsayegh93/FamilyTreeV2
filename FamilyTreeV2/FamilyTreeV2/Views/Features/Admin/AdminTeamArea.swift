@@ -274,7 +274,23 @@ nonisolated enum AdminTeamLogic {
         }
     }
 
+    /// «من 171 حساباً» — كل حسابات الدخول المسمّاة (نشط + خامل + دخل بلا جهاز من «استخدام التطبيق»)، ومنها حسابات من خارج
+    /// العائلة. ليست «في التطبيق» (170 في «الإحصاءات» و«اليوم» = أحياء العائلة المسجّلون، `setFamilyAccounts`)، فلا تُسمّى
+    /// «لهم حساب» فيبدو الرقمان شيئاً واحداً بعددين (F1)
+    static func usageBaseLine(accounts: Int) -> String {
+        guard accounts > 0 else { return L10n.t("لا حسابات بعد", "No accounts yet") }
+        guard L10n.isArabic else {
+            return accounts == 1 ? "of 1 account" : "of \(AdminNumberText.grouped(accounts)) accounts"
+        }
+        switch accounts {
+        case 1:  return "من حساب واحد"
+        case 2:  return "من حسابين"
+        default: return "من " + arabicCount(accounts, few: "حسابات", many: "حساباً", single: "حساب")
+        }
+    }
+
     /// «من 170 لهم حساب» — أصحاب الحسابات = نشط + خامل + دخل بلا جهاز (تعريف «عضو مسجّل»)
+    @available(*, deprecated, message: "use usageBaseLine(accounts:) — the base is every account, not the family's registered (F1); U21 removes")
     static func usageLine(registered: Int) -> String {
         registered == 0 ? L10n.t("لا أحد له حساب بعد", "No one has an account yet")
                         : L10n.t("من \(AdminNumberText.grouped(registered)) لهم حساب",
@@ -654,7 +670,7 @@ struct AdminTeamMembersCard: View {
 
 // MARK: - بطاقة «الاستخدام»
 
-/// «96 نشطون» · «من 170 لهم حساب» + شريط ٣ أجزاء بصفوف ألوانه (بدل المفتاح) + «تفاصيل الاستخدام ‹»
+/// «96 نشطون» · «من 171 حساباً» (كل الحسابات — لا «لهم حساب»، F1) + شريط ٣ أجزاء بصفوف ألوانه (بدل المفتاح) + «تفاصيل الاستخدام ‹»
 struct AdminTeamUsageCard: View {
     let usage: AppUsageStats?
     let health: AdminStoreHealth
@@ -686,14 +702,14 @@ struct AdminTeamUsageCard: View {
             Part(id: "noDevice", label: L10n.t("دخل بلا جهاز", "Signed in, no device"), value: u.loginNoDevice,
                  tint: DS.Color.textTertiary.opacity(DS.Opacity.tintStroke))
         ]
-        let registered = u.active + u.idle + u.loginNoDevice
+        let accounts = u.active + u.idle + u.loginNoDevice
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(verbatim: AdminTeamLogic.usageHeadline(active: u.active))
                     .dsFont(.statValue)
                     .monospacedDigit()
                     .foregroundColor(DS.Color.textPrimary)
-                Text(verbatim: AdminTeamLogic.usageLine(registered: registered))
+                Text(verbatim: AdminTeamLogic.usageBaseLine(accounts: accounts))
                     .dsFont(.subtitle)
                     .monospacedDigit()
                     .foregroundColor(DS.Color.textTertiary)

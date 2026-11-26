@@ -12,7 +12,7 @@ import Combine
 //  ٤ «جديد في الشجرة» — «121 أُضيفوا» + أعمدة ٦ أشهر، و«أغلبه استيراد دفعة واحدة» حين يكون الشهر الشاذّ يوماً واحداً.
 //  ٥ «الأعمار» — «نعرف عمر 185 فقط» + شريط المعروف + أشرطة الفئات + «أكمل البيانات الناقصة» ‹ (عدد قائمة «بيانات ناقصة»).
 //  ٦ «الأدوار» — مالك · مدير · عضو · مراقب ومشرف (الرجال الأحياء) + «فريق الإدارة» ‹ (بابه، لمن يرى «الفريق والأمان»).
-//  ٧ «الشجرة» — رقمان في بطاقة واحدة.  ٨ «خارج العائلة» — «50 حياً من خارج العائلة» ‹ + أجزاؤه + متوفوه ‹ (بمساعد U6).
+//  ٧ «الشجرة» — رقمان في بطاقة واحدة.  ٨ «خارج العائلة» — «50 حياً من خارج العائلة» ‹ + أجزاؤه — الأحياء وحدهم (طلب المالك، F1) (بمساعد U6).
 //  ٩ «الموافقات» (AdminInsightsReport.swift) ثم «آخر تحديث 9:41».
 // كل رقم بسهم يفتح قائمة أول عدد فيها يساويه (T2، `AdminStatsLogic.destination` في AdminInsightsArea.swift) — تُدفع فوق الصفحة
 // والرجوع يعود إليها. الحالات لكل قسم: هيكل قبل الوصول، خطأ بإعادة المحاولة مكانه، والأرقام القديمة بوقتها.
@@ -174,7 +174,6 @@ struct AdminAnalyticsView: View {
                 figures: s.figures, outsideWomen: s.outsideWomen, husbands: s.husbands, daughtersSons: s.daughtersSons,
                 health: AdminStoreHealth.combined([membersHealth, womenHealth]),
                 livingTap: tap(.outsideLiving, value: s.figures.outsideLiving),
-                deceasedTap: tap(.outsideDeceased, value: s.figures.outsideDeceased),
                 retry: { Task { await reloadAccountsAndWomen() } }))
         case .family, .approvals:
             return AnyView(EmptyView())
@@ -706,7 +705,8 @@ private struct AdminStatsTreeSection: View {
     }
 }
 
-/// «خارج العائلة»: «50 حياً من خارج العائلة» ‹ (= «فرع خارج العائلة» الأحياء) + أجزاؤه + متوفوه ‹ (spec C.12 البند ٨)
+/// «خارج العائلة»: «50 حياً من خارج العائلة» ‹ (= «فرع خارج العائلة» الأحياء) + أجزاؤه (spec C.12 البند ٨). الأحياء وحدهم —
+/// صفّ «متوفون من خارج العائلة» حُذف (طلب المالك «خارج العائلة الأحياء فقط»، F1)
 private struct AdminStatsOutsideSection: View {
     let figures: AdminCensusFigures
     let outsideWomen: Int?
@@ -714,7 +714,6 @@ private struct AdminStatsOutsideSection: View {
     let daughtersSons: Int?
     let health: AdminStoreHealth
     let livingTap: AdminPageTap
-    let deceasedTap: AdminPageTap
     let retry: () -> Void
 
     var body: some View {
@@ -748,11 +747,6 @@ private struct AdminStatsOutsideSection: View {
             part(L10n.t("أزواج البنات", "Daughters' husbands"), husbands)
             AdminRowDivider()
             part(L10n.t("أبناء البنات", "Daughters' sons"), daughtersSons)
-            AdminRowDivider()
-            AdminStatsRow(title: L10n.t("متوفون من خارج العائلة", "Deceased from outside the family"),
-                          mark: .swatch(DS.Color.deceased, hatched: false),
-                          value: AdminStatsText.number(figures.outsideDeceased),
-                          dim: (figures.outsideDeceased ?? 0) == 0, tap: deceasedTap)
         }
     }
 

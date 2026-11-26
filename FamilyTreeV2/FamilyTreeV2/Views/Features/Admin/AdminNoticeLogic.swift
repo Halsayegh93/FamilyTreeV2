@@ -193,10 +193,10 @@ nonisolated enum AdminNoticeLogic {
 
     // MARK: النصوص
 
-    /// زرّ الرجوع باسم ما فُتحت منه. جرس «اليوم» يمرّر «اليوم» وعنوان رأسه المرئي «الإدارة» (mock 11: «‹ الإدارة»)،
-    /// فيُقرأ بعنوانه المرئي؛ وبلا فاتح «الإدارة»
+    /// زرّ الرجوع باسم ما فُتحت منه كما مرّره (جرس «اليوم» يمرّر «الإدارة» من مصدره — F1، mock 11: «‹ الإدارة»)؛
+    /// وبلا فاتح «الإدارة»
     static func backTitle(_ opener: String?) -> String {
-        guard let opener, !opener.isEmpty, opener != L10n.t("اليوم", "Today") else { return L10n.t("الإدارة", "Admin") }
+        guard let opener, !opener.isEmpty else { return L10n.t("الإدارة", "Admin") }
         return opener
     }
 
