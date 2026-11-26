@@ -2679,6 +2679,29 @@ extension DS {
         /// اسم الفرع فوق صفوفه — Headline (١٧) شبه عريض
         static let familyBranchTitle = DS.TextRole(.headline, weight: .semibold)
         // MARK: ── V2-2 «العائلة» — نهاية ──
+
+        // MARK: ── V2-3 ورقة العضو «أ3 ملف موجز وأفعال» (اختيار المالك ٢٠٢٦-١١-٢٦) — بداية ──
+        // `AdminMemberSheet`: الرأس الكحلي المختصر بأزراره الأربعة، رقاقات «أكمل الناقص»، عناوين الأقسام بشريطها (نمط
+        // «فرع حسن» — `familyBranchBar`/`familyBranchTitle`)، وزرّ الحذف الأحمر بإطار
+        /// صورة العضو في الرأس
+        static let memberAvatar: CGFloat = 56
+        /// زرّ الرأس: مربّع زجاجي (العرض × الارتفاع) وزاويته، والفراغ بين الأعمدة وبين المربّع واسمه
+        static let memberActionWidth: CGFloat = 56
+        static let memberActionHeight: CGFloat = 52
+        static let memberActionRadius: CGFloat = DS.Radius.lg
+        static let memberActionGap: CGFloat = DS.Spacing.xsm
+        /// الزرّ في شبكة ٢×٢ (أحجام إمكانية الوصول): الرمز واسمه في سطر، أقل ارتفاع وزاوية
+        static let memberActionTileHeight: CGFloat = 56
+        static let memberActionTileRadius: CGFloat = familyControlRadius
+        /// رقاقة «أكمل الناقص»: تعبئة كهرمانية خافتة (كريمية في الفاتح) وزاويتها
+        static let memberMissingFill = DS.Color.warning.opacity(DS.Opacity.tintFill)
+        static let memberMissingRadius: CGFloat = familyControlRadius
+        /// بين أقسام الورقة (العنوان بشريطه ثم بطاقته)
+        static let memberSectionGap: CGFloat = DS.Spacing.xl
+        /// زرّ «حذف العضو نهائياً»: إطار أحمر خافت وزاويته
+        static let memberDeleteStroke = DS.Color.error.opacity(DS.Opacity.tintStroke)
+        static let memberDeleteRadius: CGFloat = familyControlRadius
+        // MARK: ── V2-3 ورقة العضو — نهاية ──
     }
 }
 

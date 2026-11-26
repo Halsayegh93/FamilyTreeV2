@@ -1,12 +1,17 @@
 import SwiftUI
 import Supabase
 
-// MARK: - ورقة العضو الواحدة «بيانات العضو» (إعادة تصميم الإدارة ٢٠٢٦-١١-٢٦، الوحدة U13 — spec C.10، النموذج ٦)
+// MARK: - ورقة العضو الواحدة «بيانات العضو» — «أ3 ملف موجز وأفعال» (الوحدة V2-3، اختيار المالك ٢٠٢٦-١١-٢٦؛ قبلها U13)
 //
-// على نمط «تفاصيل المكان» في خرائط Google: ورقة طويلة (`dsTallBox`) تتمرّر بلا تبويبات، من الأعلى:
-//   سطر «إغلاق» ← كتلة العنوان (الصورة، الاسم، الحالة، الفرع) ← صفّ أزرار دائرية «اتصال · واتساب · الملف الكامل»
-//   ← «أكمل الناقص» (الناقص والمشكلات بزرّ إصلاح كلٍّ منها) ← «البيانات» ← «النسب» ← «الحساب» (آخره «حذف العضو
-//   نهائياً» أحمر بتأكيد) ← شريط «السابق · 3 من 123 · التالي» أسفل الورقة داخل القائمة التي فُتحت منها فقط.
+// ورقة طويلة (`dsTallBox`) تتمرّر بلا تبويبات، من الأعلى:
+//   «إغلاق» ذهبي ثابت على الكحلي ← الرأس الكحلي المختصر (الصورة ٥٦، الاسم كاملاً يلتفّ، «الحالة · الفرع» ذهبياً) وتحته
+//   حتى أربعة أزرار: «الملف الكامل» · «في الشجرة» · «اتصال» · «واتساب» (الأخيران للرقم الظاهر لك فقط — `dsVisiblePhone`؛
+//   شبكة ٢×٢ مع الخط الكبير) ← رقاقة كريمية لكل ناقص («⚠ تاريخ الوفاة غير مكتمل · أكمل ‹») ← «البيانات» (شريط كحلي) ←
+//   «النسب» (أخضر) ← «الحساب» (بترولي، للأحياء) ← «حذف العضو نهائياً» زرّ أحمر بإطار ← سطر القفل على ورقتك/ورقة المالك
+//   ← شريط «السابق · 3 من 123 · التالي» أسفل الورقة داخل القائمة التي فُتحت منها فقط.
+// القيم في الصفوف بالاسم الأول وحده — الاسم الكامل مرة واحدة في الرأس. القطع في `AdminMemberSheetKit.swift`، صفّ الصورة
+// بحالات P1 في `AdminMemberPhotoRow.swift`، و«الحساب» في `AdminMemberAccountSection.swift`؛ المنطق في
+// `AdminMemberSheetLogic` (فحصه tests/admin-redesign/U13 وV2c).
 // كل أمر هو نفسه السابق بصلاحيته ونداء سيرفره — تغيّر الشكل والترتيب فقط، والتعديل بالمربّعات الموجودة:
 //   تاريخ الميلاد `EditBirthDateSheet` · الجنس `EditGenderSheet` · الصورة `EditMemberPhotoSheet` · الوفاة
 //   `EditDeathDateSheet` (بلا تاريخ) / `DeceasedDateBox` (سنة فقط/هجري) · الأب `LinkFatherSheet` · الاسم `EditNameSheet` ·
@@ -14,12 +19,15 @@ import Supabase
 //   · «تسجيل في التطبيق» `activateAccount` · الإيقاف `setMemberSuspension` (`canFreezeMembers`) · الأجهزة
 //   `fetchDevicesForMember` (عرض `canViewSystemSettings`) وتسجيل خروجها `removeDeviceByAdmin` (`canManageDevices`) · الإخفاء
 //   `is_hidden_from_tree` · مسح الرقم المكرر `clearPhoneNumber` · الحذف `deleteMember` (`canDeleteMembers`، لا المالك ولا النفس).
+// «في الشجرة»: `.requestMemberInTree` ← `MainTabView` (تبويب الشجرة) و`TreeTabContainer` (شجرة العائلة) ← `.openMemberInTree`
+//   الذي تعالجه `TreeView` أصلاً (نفس اختيار عضو من بحث الشجرة: المسار مفتوح والعضو مظلّل والكاميرا عليه).
 // «منع الرقم من التسجيل» بيته الوحيد صفحة «التسجيل والمنع» (spec B.7/T4): الصفّ هنا يفتحها برقم العضو مطبَّعاً
 //   (`KuwaitPhone.normalizedForStorage`، لا رقم مخفي أبداً) ومربّع المنع هناك مملوء لا يُرسل وحده؛ رفع المنع من قائمتها.
 // كل أمر = صلاحية الدور × «يعدّل» في جدول السيرفر لقسم «العائلة» (`adminCanEdit(.family)`، Autoplan note 7).
 // تجربة الأدوار (`-tmpAdminRole`/`-tmpRoleMatrix`، T0): كل كتابة من هنا تمرّ بـ`DebugAdminProbe.dryRun` (نجاح مصطنع)، والمربّعات
 // التي تكتب في ملفات أخرى (الرقم، تاريخ الوفاة، طلب الصورة، المحرّر الكامل) لا تُفتح أثناءها.
-// حارس المكدس: الأقسام في `AnyView` منفصلة، والمربّعات والتأكيدات في مُعدِّلاتها المستقلة. `AdminMemberSheet(ids:start:)` ثابت.
+// حارس المكدس: الرأس والرقاقات والأقسام أنواع مستقلة في `AnyView`، والمربّعات والتأكيدات في مُعدِّلاتها المستقلة.
+// `AdminMemberSheet(ids:start:)` ثابت.
 
 struct AdminMemberSheet: View {
     let ids: [UUID]
@@ -32,7 +40,6 @@ struct AdminMemberSheet: View {
     @ObservedObject private var accounts = AdminAccountsStore.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// من السيرفر عند فتح كل عضو — العضو المحمّل قد يكون قديماً
     @State private var liveStatus: FamilyMember.MemberStatus?
@@ -72,14 +79,15 @@ struct AdminMemberSheet: View {
     private var canSignOutDevices: Bool { authVM.canManageDevices && familyEdit }
     private var canDelete: Bool { authVM.canDeleteMembers && familyEdit }
 
+    /// لا المالك ولا أنت — وحده يقبل الإيقاف ومنع الرقم والحذف
     private func isOther(_ m: FamilyMember) -> Bool {
-        m.role != .owner && m.id != authVM.currentUser?.id
+        AdminMemberSheetLogic.isOther(memberId: m.id, viewerId: authVM.currentUser?.id, memberIsOwner: m.role == .owner)
     }
 
     var body: some View {
         page
             .safeAreaInset(edge: .bottom, spacing: 0) { stepBar }
-            .background(DS.Hub.background.ignoresSafeArea())
+            .background(AdminMemberSheetBackdrop(band: member != nil))
             .modifier(AdminMemberSheetBoxes(box: $box, tall: $tall, bans: $bans, onBansClosed: bansClosed))
             .modifier(AdminMemberSheetAlerts(confirm: $confirm, failure: $failure, suspendReason: $suspendReason, run: run))
             .onAppear { tree = AdminMemberFacts.TreeContext(memberVM.allMembers) }
@@ -92,10 +100,10 @@ struct AdminMemberSheet: View {
 
     // MARK: الهيكل
 
-    /// سطر «إغلاق» ثابت فوق، والمحتوى يتمرّر تحته
+    /// «إغلاق» ثابت فوق على الكحلي، والرأس والأقسام تتمرّر تحته
     private var page: AnyView {
         AnyView(VStack(spacing: 0) {
-            navRow
+            AdminMemberCloseBar { dismiss() }
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     content
@@ -111,24 +119,6 @@ struct AdminMemberSheet: View {
 
     private static let topAnchor = "member-sheet-top"
 
-    /// «إغلاق» في الطرف (spec C.10: بلا عنوان — الاسم في كتلة العنوان). مكان «⋯» محجوز فارغاً: لا أمر له اليوم،
-    /// وزرّ لا يفعل شيئاً أسوأ من فراغ. داخل مكدس (مربّع طلب) «إغلاق» يرجع خطوة
-    private var navRow: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Text(L10n.t("إغلاق", "Close"))
-                    .dsFont(.body)
-                    .foregroundColor(DS.Color.primary)
-                    .frame(minWidth: DS.Icon.tapTarget, minHeight: DS.Icon.tapTarget, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(DSPressStyle())
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.sm)
-    }
-
     private var content: AnyView {
         guard let m = member else {
             return AnyView(DSEmptyView(L10n.t("العضو غير موجود", "Member not found"),
@@ -140,73 +130,99 @@ struct AdminMemberSheet: View {
         let facts = AdminMemberSheetFacts(member: m, all: memberVM.allMembers, byId: memberVM.member(byId:), tree: tree,
                                           account: accounts.info(m.id), accountsReady: accounts.loaded,
                                           liveStatus: liveStatus, daughterSon: DaughterSonsIndex.shared.contains(m.id))
-        return AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionGap) {
-            AnyView(head(m, facts))
-            if canEdit && (!facts.gaps.isEmpty || !facts.problems.isEmpty) {
-                AnyView(fixesSection(m, facts))
+        let phone = m.dsVisiblePhone(viewerId: authVM.currentUser?.id, viewerCanModerate: authVM.canModerate)
+        let actions = AdminMemberSheetLogic.headerActions(canEdit: canEdit, inTree: m.isCountable,
+                                                          isDeceased: m.isDeceased == true, visiblePhone: phone)
+        return AnyView(VStack(spacing: 0) {
+            AnyView(AdminMemberSheetHeader(member: m, facts: facts, branch: facts.branchTitle(appSettingsVM),
+                                           actions: actions) { perform($0, m, phone: phone) })
+            AnyView(sections(m, facts))
+        })
+    }
+
+    /// تحت الرأس: الرقاقات ← «البيانات» ← «النسب» ← «الحساب» ← الحذف ← سطر القفل (أرضية بيضاء)
+    private func sections(_ m: FamilyMember, _ facts: AdminMemberSheetFacts) -> some View {
+        let chips = AdminMemberSheetLogic.missingChips(
+            gaps: facts.gaps.compactMap { AdminMemberSheetLogic.Missing(rawValue: $0.rawValue) },
+            problems: facts.problems.compactMap { AdminMemberSheetLogic.Missing(rawValue: $0.rawValue) },
+            canEdit: canEdit)
+        let living = m.isDeceased != true
+        let other = isOther(m)
+        let phone = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // الرقم المخفي يُرفض قبل استعمال المطبَّع (المنطق في `AdminMemberSheetLogic`)
+        let normalized = Self.storagePhone(phone)
+        let banPrefill = AdminMemberSheetLogic.banPrefill(phone, normalize: { _ in normalized })
+        let commands = AdminMemberSheetLogic.accountCommands(isOther: other, canFreeze: canFreeze, canBan: canBan,
+                                                             banPrefill: banPrefill, canDelete: canDelete)
+        let lock = AdminMemberSheetLogic.lockNote(memberId: m.id, viewerId: authVM.currentUser?.id,
+                                                  memberIsOwner: m.role == .owner, isDeceased: !living,
+                                                  viewerCanAct: canEdit || canFreeze || canBan || canDelete)
+        return VStack(alignment: .leading, spacing: DS.Hub.memberSectionGap) {
+            if !chips.isEmpty {
+                AnyView(AdminMemberMissingChips(items: chips, busy: busy) { fix($0, m) })
             }
-            AnyView(AdminMemberDataSection(member: m, facts: facts, canEdit: canEdit,
+            AnyView(AdminMemberDataSection(member: m, facts: facts, canEdit: canEdit, noDevices: noDevices(facts),
                                            open: openBox, openTall: openTall))
             AnyView(AdminMemberLineageSection(member: m, facts: facts, canEdit: canEdit,
                                               canManageChildren: canManageChildren, busy: busy,
                                               open: openTall, ask: { confirm = $0 },
                                               openWomen: openWomenTree))
-            if m.isDeceased != true {
-                AnyView(accountSection(m, facts))
-            } else if canDelete && isOther(m) {
-                // المتوفى بلا «الحساب»: الحذف وحده آخر الورقة، أحمر بتأكيد
-                AnyView(AdminRowsCard(dividerInset: AdminRowDivider.iconInset) { deleteRow })
+            if living {
+                AnyView(AdminMemberAccountSection(
+                    member: m, facts: facts, canEdit: canEdit, isOther: other, commands: commands, banPrefill: banPrefill,
+                    liveStatus: liveStatus, ban: ban, devices: devices, devicesFailed: devicesFailed,
+                    devicesOpen: $devicesOpen,
+                    showsDevices: authVM.canViewSystemSettings && facts.status != .treeOnly,
+                    canSignOutDevices: canSignOutDevices, busy: busy,
+                    openBox: openBox, ask: ask, openBans: { bans = AdminMemberBanPrefill(phone: $0) },
+                    retryDevices: { Task { await loadDevices(m) } }))
+            }
+            // آخر الورقة: أحمر بإطار، ويسأل قبل الحذف (spec A.6/A.14)
+            if commands.delete {
+                AnyView(AdminMemberDeleteButton(busy: busy == AdminMemberConfirm.delete.id) { confirm = .delete })
+            }
+            if let lock {
+                AnyView(AdminMemberLockNote(note: lock))
             }
         }
         .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.xs)
+        .padding(.top, DS.Spacing.md)
         .padding(.bottom, DS.Hub.pageBottom)
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
-        .frame(maxWidth: .infinity))
+        .frame(maxWidth: .infinity)
+        .background(DS.Hub.background)
     }
 
-    // MARK: كتلة العنوان + الأزرار الدائرية
+    /// لا جهاز مسجّل له: الأجهزة حين جُلبت (المالك)، وإلا فئة الاستخدام «دخل بلا جهاز» (`AdminAccountsStore`)
+    private func noDevices(_ facts: AdminMemberSheetFacts) -> Bool {
+        if let devices, !devicesFailed { return devices.isEmpty }
+        return facts.account?.usage == .loginNoDevice
+    }
 
-    private func head(_ m: FamilyMember, _ facts: AdminMemberSheetFacts) -> some View {
-        let phone = m.dsVisiblePhone(viewerId: authVM.currentUser?.id, viewerCanModerate: authVM.canModerate)
-        let canContact = AdminMemberSheetLogic.canContact(phone)
-        return VStack(alignment: .leading, spacing: DS.Spacing.lg) {
-            AdminMemberTitleBlock(member: m, facts: facts, branch: facts.branchTitle(appSettingsVM))
-            if canContact || canEdit {
-                HStack(alignment: .top, spacing: DS.Spacing.lg) {
-                    if canContact {
-                        AdminMemberRoundAction(title: L10n.t("اتصال", "Call"), icon: "phone.fill") {
-                            if let url = KuwaitPhone.telURL(phone) { openURL(url) }
-                        }
-                        AdminMemberRoundAction(title: L10n.t("واتساب", "WhatsApp"), icon: "message.fill") {
-                            if let url = KuwaitPhone.whatsappURL(phone) { openURL(url) }
-                        }
-                    }
-                    if canEdit {
-                        AdminMemberRoundAction(title: L10n.t("الملف الكامل", "Full profile"), icon: "pencil") {
-                            openTall(.editAll(m))
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
+    // MARK: أزرار الرأس
+
+    private func perform(_ action: AdminMemberHeaderAction, _ m: FamilyMember, phone: String?) {
+        switch action {
+        case .fullProfile: openTall(.editAll(m))
+        case .tree: openInTree(m)
+        case .call: if let url = KuwaitPhone.telURL(phone) { openURL(url) }
+        case .whatsapp: if let url = KuwaitPhone.whatsappURL(phone) { openURL(url) }
         }
     }
 
-    // MARK: «أكمل الناقص» — الناقص ومشكلات الشجرة بزرّ إصلاح كلٍّ منها (نفس المربّعات)
+    /// «في الشجرة»: تغلق الورقة، وتبويب الشجرة يفتح على شجرة العائلة والعضو في وسطها بمساره مفتوحاً ومظلّلاً
+    private func openInTree(_ m: FamilyMember) {
+        dismiss()
+        NotificationCenter.default.post(name: .requestMemberInTree, object: nil, userInfo: ["memberId": m.id])
+    }
 
-    private func fixesSection(_ m: FamilyMember, _ facts: AdminMemberSheetFacts) -> some View {
-        VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("أكمل الناقص", "Fill in what's missing"))
-            AdminRowsCard(dividerInset: AdminMemberFixRow.dividerInset, framed: true) {
-                ForEach(facts.gaps) { gap in
-                    AdminMemberFixRow(title: AdminMemberFix.title(gap), verb: AdminMemberFix.verb(gap)) { fixGap(gap, m) }
-                }
-                ForEach(facts.problems) { problem in
-                    AdminMemberFixRow(title: AdminMemberFix.title(problem), verb: AdminMemberFix.verb(problem),
-                                      busy: busy == AdminMemberFix.confirm(problem)?.id) { fixProblem(problem, m) }
-                }
-            }
+    // MARK: «أكمل الناقص» — كل رقاقة تفتح مربّع إصلاحها (نفس المربّعات) أو تأكيده
+
+    private func fix(_ item: AdminMemberSheetLogic.Missing, _ m: FamilyMember) {
+        if let gap = item.gap {
+            fixGap(gap, m)
+        } else if let problem = item.problem {
+            fixProblem(problem, m)
         }
     }
 
@@ -227,166 +243,10 @@ struct AdminMemberSheet: View {
         }
     }
 
-    // MARK: «الحساب» — الرقم، التسجيل، آخر دخول، الأجهزة، الإيقاف، منع الرقم، وآخرها الحذف
-
-    private func accountSection(_ m: FamilyMember, _ facts: AdminMemberSheetFacts) -> some View {
-        let other = isOther(m)
-        let phone = (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let frozen = facts.status == .frozen
-        // الرقم المخفي يُرفض قبل استعمال المطبَّع (المنطق في `AdminMemberSheetLogic`)
-        let normalized = Self.storagePhone(phone)
-        let banPrefill = AdminMemberSheetLogic.banPrefill(phone, normalize: { _ in normalized })
-        return VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("الحساب", "Account"))
-            AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                phoneRow(m, phone: phone)
-                registerRow(m, facts, phone: phone, other: other, frozen: frozen)
-                AdminMemberRow(icon: "clock.fill", tint: DS.Color.sea, title: L10n.t("آخر دخول", "Last sign-in"),
-                               value: facts.lastSeenText)
-                // الأجهزة لمن له حساب دخول (من بلا حساب لا جهاز له)
-                if authVM.canViewSystemSettings && facts.status != .treeOnly {
-                    devicesRow(m)
-                    if devicesOpen, let devices, !devicesFailed {
-                        ForEach(devices) { device in deviceRow(device) }
-                    }
-                }
-                if canFreeze && other {
-                    AdminMemberTapRow(hint: frozen ? L10n.t("يسأل قبل رفع الإيقاف", "Asks before lifting")
-                                                   : L10n.t("يسأل قبل الإيقاف", "Asks before suspending"),
-                                      action: { suspendReason = ""; confirm = frozen ? .unsuspend : .suspend }) {
-                        AdminMemberRow(icon: frozen ? "play.fill" : "pause.fill", tint: DS.Color.slate,
-                                       title: frozen ? L10n.t("رفع الإيقاف", "Lift the suspension")
-                                                     : L10n.t("إيقاف الحساب", "Suspend account"),
-                                       subtitle: frozen ? L10n.t("الحساب موقوف الآن", "The account is suspended") : nil,
-                                       showsChevron: true,
-                                       busy: busy == AdminMemberConfirm.suspend.id || busy == AdminMemberConfirm.unsuspend.id)
-                    }
-                }
-                if canBan && other, let banPrefill {
-                    AdminMemberTapRow(hint: L10n.t("يفتح «التسجيل والمنع» برقمه", "Opens sign-up and blocking with this number"),
-                                      action: { bans = AdminMemberBanPrefill(phone: banPrefill) }) {
-                        AdminMemberRow(icon: "lock.fill", tint: DS.Color.slate,
-                                       title: L10n.t("منع الرقم من التسجيل", "Block the number from signing up"),
-                                       subtitle: ban == nil ? nil : L10n.t("الرقم ممنوع من التسجيل الآن", "The number is blocked now"),
-                                       showsChevron: true)
-                    }
-                }
-                if canDelete && other {
-                    deleteRow
-                }
-            }
-        }
-    }
-
-    private func phoneRow(_ m: FamilyMember, phone: String) -> some View {
-        let row = AdminMemberRow(icon: "phone.fill", tint: DS.Color.sea, title: L10n.t("الهاتف", "Phone"),
-                                 value: phone.isEmpty ? L10n.t("بلا رقم هاتف", "No phone") : KuwaitPhone.display(phone),
-                                 valueIsNumber: !phone.isEmpty, showsChevron: canEdit)
-        return Group {
-            if canEdit {
-                AdminMemberTapRow(hint: phone.isEmpty ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"),
-                                  action: { openBox(.phone(m)) }) { row }
-            } else {
-                row
-            }
-        }
-    }
-
-    /// «تسجيل في التطبيق»: حبّة الحالة، أو حبّة «سجّل» حين يمكن (بتأكيد) — نفس شرط الزرّ السابق
-    private func registerRow(_ m: FamilyMember, _ facts: AdminMemberSheetFacts, phone: String, other: Bool, frozen: Bool) -> some View {
-        let canRegister = canEdit && other && !frozen && !phone.isEmpty && m.role != .pending
-            && (liveStatus ?? m.status) != .active && facts.status != .registered
-        let note: String? = {
-            guard !canRegister, facts.status == .treeOnly else { return nil }
-            if phone.isEmpty { return L10n.t("يحتاج رقم هاتف أولاً", "Needs a phone number first") }
-            return nil
-        }()
-        return AdminMemberRow(icon: "iphone", tint: DS.Color.sea, title: L10n.t("تسجيل في التطبيق", "Registered in the app"),
-                              subtitle: note, busy: busy == AdminMemberConfirm.register.id) {
-            if canRegister {
-                AdminPillButton(title: L10n.t("سجّل", "Register"), style: .navy) { confirm = .register }
-                    .accessibilityLabel(L10n.t("تسجيل في التطبيق", "Register in the app"))
-                    .accessibilityHint(L10n.t("يسأل قبل التسجيل", "Asks first"))
-            } else {
-                AdminStatePill(title: Self.registerWord(facts.status), tone: Self.registerTone(facts.status),
-                               icon: facts.status == .registered ? "checkmark" : nil)
-            }
-        }
-    }
-
-    private static func registerWord(_ status: AdminMemberStatus?) -> String {
-        switch status {
-        case .registered: return L10n.t("مسجّل", "Registered")
-        case .frozen: return L10n.t("موقوف", "Suspended")
-        case .pendingJoin: return L10n.t("قيد المراجعة", "Under review")
-        case .treeOnly, .deceased: return L10n.t("غير مسجّل", "Not registered")
-        case nil: return AdminStoreHealthText.placeholder
-        }
-    }
-
-    private static func registerTone(_ status: AdminMemberStatus?) -> AdminPillTone {
-        switch status {
-        case .registered: return .ok
-        case .frozen: return .error
-        default: return .off
-        }
-    }
-
-    /// «الأجهزة · 2 ⌄» يفتح أجهزته تحته (و«تسجيل خروج» للمالك) — التحميل «—»، والفشل «تعذّر التحميل» يعيد الجلب
-    @ViewBuilder
-    private func devicesRow(_ m: FamilyMember) -> some View {
-        let title = L10n.t("الأجهزة", "Devices")
-        if let devices {
-            if devicesFailed {
-                AdminMemberTapRow(hint: AdminStoreHealthText.retry, action: { Task { await loadDevices(m) } }) {
-                    AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title) {
-                        AdminStatePill(title: AdminStoreHealthText.failed, tone: .unknown, icon: "arrow.clockwise")
-                    }
-                }
-            } else if devices.isEmpty {
-                AdminMemberRow(icon: "iphone.slash", tint: DS.Color.sea, title: title,
-                               subtitle: L10n.t("لا تصله الإشعارات", "Gets no notifications"),
-                               value: L10n.t("لا أجهزة", "None"))
-            } else {
-                AdminMemberTapRow(hint: devicesOpen ? L10n.t("يطوي الأجهزة", "Hides the devices")
-                                                    : L10n.t("يعرض الأجهزة", "Shows the devices"),
-                                  action: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { devicesOpen.toggle() } }) {
-                    AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title,
-                                   value: "\(devices.count)", valueIsNumber: true) {
-                        Image(systemName: "chevron.down")
-                            .dsGlyph(DS.Glyph.sm)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .rotationEffect(.degrees(devicesOpen ? 180 : 0))
-                            .accessibilityHidden(true)
-                    }
-                }
-                .accessibilityValue(devicesOpen ? L10n.t("ظاهرة", "Shown") : L10n.t("مطويّة", "Collapsed"))
-            }
-        } else {
-            AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title, value: AdminStoreHealthText.placeholder)
-                .accessibilityValue(AdminStoreHealthText.loading)
-        }
-    }
-
-    private func deviceRow(_ device: NotificationViewModel.LinkedDevice) -> some View {
-        AdminMemberRow(icon: device.platform.lowercased() == "android" ? "candybarphone" : "iphone.gen3",
-                       tint: DS.Color.info, title: device.displayName,
-                       subtitle: L10n.t("آخر استخدام: ", "Last used: ") + AdminMemberSheetFacts.dateText(iso: device.updatedAt),
-                       busy: busy == AdminMemberConfirm.signOut(device).id) {
-            if canSignOutDevices {
-                AdminPillButton(title: L10n.t("تسجيل خروج", "Sign out"), style: .reject) { confirm = .signOut(device) }
-                    .accessibilityLabel(L10n.t("تسجيل خروج \(device.displayName)", "Sign out \(device.displayName)"))
-                    .accessibilityHint(L10n.t("يسأل قبل الخروج", "Asks first"))
-            }
-        }
-    }
-
-    /// آخر صفّ في الورقة: أحمر، بلا سهم، ويسأل قبل الحذف (spec A.6/A.14)
-    private var deleteRow: some View {
-        AdminMemberTapRow(hint: L10n.t("يسأل قبل الحذف", "Asks before deleting"), action: { confirm = .delete }) {
-            AdminMemberRow(icon: "trash.fill", title: L10n.t("حذف العضو نهائياً", "Delete member permanently"),
-                           destructive: true, busy: busy == AdminMemberConfirm.delete.id)
-        }
+    /// تأكيد من «الحساب»: الإيقاف ورفعه يبدآن بسبب فارغ
+    private func ask(_ action: AdminMemberConfirm) {
+        if action == .suspend || action == .unsuspend { suspendReason = "" }
+        confirm = action
     }
 
     // MARK: شريط «السابق · 3 من 123 · التالي» — داخل القائمة التي فُتحت منها فقط
@@ -625,17 +485,15 @@ struct AdminMemberSheetFacts {
         }
     }
 
-    /// «عضو مسجّل · يستخدم التطبيق» …
-    var statusLine: String {
-        guard let status else { return L10n.t("جارٍ التحقق…", "Checking…") }
-        guard status == .registered || status == .frozen, let usage = account?.usage else { return status.title }
-        let use: String
+    /// استخدامه للتطبيق — سطر تحت «آخر دخول» (كان بعد الحالة في كتلة العنوان قبل «أ3»): يستخدم التطبيق · غير نشط ·
+    /// لا تصله الإشعارات
+    var usageLine: String? {
+        guard status == .registered || status == .frozen, let usage = account?.usage else { return nil }
         switch usage {
-        case .active: use = AdminMemberSub.usingApp.title
-        case .idle: use = AdminMemberSub.inactive.title
-        default: use = AdminMemberSub.noPush.title
+        case .active: return AdminMemberSub.usingApp.title
+        case .idle: return AdminMemberSub.inactive.title
+        default: return AdminMemberSub.noPush.title
         }
-        return "\(status.title) · \(use)"
     }
 
     var lastSeenText: String {
@@ -664,92 +522,9 @@ struct AdminMemberSheetFacts {
     }
 }
 
-// MARK: - كتلة العنوان
-
-/// الصورة ٦٦، الاسم ١٧ شبه عريض (سطران)، سطر الحالة ١٣، والفرع (والدور الإداري) ١٣ — بلا شرائح. الحالة «جارٍ التحقق»
-/// هيكلاً رمادياً حتى تصل (spec C.10: التحميل = هيكل كتلة العنوان)
-struct AdminMemberTitleBlock: View {
-    let member: FamilyMember
-    let facts: AdminMemberSheetFacts
-    let branch: String?
-
-    private var name: String {
-        member.displayFullName.isEmpty ? L10n.t("بلا اسم", "No name") : member.displayFullName
-    }
-
-    /// «فرع جاسم · مراقب» — الدور لأعضاء الإدارة فقط
-    private var secondLine: String? {
-        let role: String? = [.owner, .admin, .monitor, .supervisor].contains(member.role) ? member.roleName : nil
-        let parts = [branch, role].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: DS.Spacing.md) {
-            // لا صور للإناث في التطبيق (طلب المالك ٢٠٢٦-١١-٢٤) — الحرف الأول بدلها
-            DSMemberAvatar(name: member.fullName, avatarUrl: member.isFemale ? nil : member.avatarUrl,
-                           size: DS.Icon.avatarLarge, roleColor: member.roleColor)
-                .grayscale(member.isDeceased == true ? 1 : 0)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(verbatim: name)
-                    .dsFont(.statValue)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
-                Text(verbatim: facts.statusLine)
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .redacted(reason: facts.status == nil ? .placeholder : [])
-                if let secondLine {
-                    Text(verbatim: secondLine)
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// زرّ دائري بعنوان تحته (صفّ خرائط Google): دائرة ٤٨ كحلية خفيفة ورمز كحلي، العنوان ١٣، اللمس بعرض ٦٦
-struct AdminMemberRoundAction: View {
-    let title: String
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: DS.Spacing.xsm) {
-                Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.lg, weight: .medium)
-                    .foregroundColor(DS.Color.primary)
-                    .frame(width: DSBox.buttonHeightLarge, height: DSBox.buttonHeightLarge)
-                    .background(Circle().fill(DS.Color.primary.opacity(DS.Opacity.tintFill)))
-                Text(title)
-                    .dsFont(.chip)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(minWidth: DS.Hub.quickWidth)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(DSScaleButtonStyle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(title))
-        .accessibilityAddTraits(.isButton)
-    }
-}
-
 // MARK: - «أكمل الناقص»
 
-/// عنوان كل نقص/مشكلة وفعل إصلاحه القصير («تاريخ الميلاد ناقص — أضف»)
+/// عنوان كل نقص/مشكلة وفعل إصلاحه القصير — رقاقات «أكمل الناقص» تحت الرأس («تاريخ الوفاة غير مكتمل · أكمل»)
 @MainActor
 enum AdminMemberFix {
     static func title(_ gap: AdminMemberGap) -> String {
@@ -799,60 +574,18 @@ enum AdminMemberFix {
     }
 }
 
-/// صفّ نقص: رمز تنبيه + النص + حبّة الفعل — الصفّ كله لمسة واحدة (spec A.7)
-struct AdminMemberFixRow: View {
-    let title: String
-    let verb: String
-    var busy: Bool = false
-    let action: () -> Void
-
-    /// الفاصل يبدأ من النص (بعد الرمز)
-    static let dividerInset: CGFloat = DS.Icon.section + DS.Spacing.md
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.md) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .dsGlyph(DS.Glyph.md, weight: .medium)
-                    .foregroundColor(DS.Color.warning)
-                    .frame(width: DS.Icon.section)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .dsFont(.body)
-                    .foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: DS.Spacing.sm)
-                if busy {
-                    ProgressView().scaleEffect(DS.Spinner.chipScale)
-                } else {
-                    AdminPillLabel(title: verb, style: .soft)
-                }
-            }
-            .padding(.vertical, DS.Spacing.xsm)
-            .frame(minHeight: DS.Hub.rowMinHeight)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(AdminRowPressStyle())
-        .disabled(busy)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(title))
-        .accessibilityHint(Text(verb))
-        .accessibilityAddTraits(.isButton)
-    }
-}
-
 // MARK: - «البيانات»
 
+/// «البيانات» (شريط كحلي): الاسم الأول · الميلاد (+ العمر) · الوفاة (+ «تاريخ الوفاة غير مكتمل» كهرمانياً) · الجنس ·
+/// الصورة (بحالات P1 — `AdminMemberPhotoRow`) · السيرة
 struct AdminMemberDataSection: View {
     let member: FamilyMember
     let facts: AdminMemberSheetFacts
     let canEdit: Bool
+    /// لا جهاز مسجّل له — سطر صفّ الصورة مع «نبّهه يضيف صورة»
+    var noDevices: Bool = false
     let open: (AdminMemberBox) -> Void
     let openTall: (AdminMemberTallBox) -> Void
-    @EnvironmentObject private var authVM: AuthViewModel
-    /// الطلب المعلّق وإعداد التذكير — صفّ «تنبيه لإضافة صورة»/«طلب تغيير الصورة» يظهر ويختفي معهما
-    @ObservedObject private var photoRequests = PhotoChangeRequestStore.shared
-    @ObservedObject private var photoConfig = AppConfigValues.shared
 
     private var genderText: String {
         switch (member.gender ?? "").lowercased() {
@@ -860,11 +593,6 @@ struct AdminMemberDataSection: View {
         case "female": return L10n.t("أنثى", "Female")
         default: return L10n.t("غير محدّد", "Not set")
         }
-    }
-
-    private var photoText: String {
-        if !AdminMemberFacts.isBlank(member.avatarUrl) { return L10n.t("موجودة", "Added") }
-        return member.avatarUnavailable == true ? L10n.t("لا توجد صورة لهذا العضو", "No photo exists") : L10n.t("بلا صورة", "No photo")
     }
 
     /// «40 سنة» / «سنتان» — العمر بالكلمات
@@ -928,54 +656,48 @@ struct AdminMemberDataSection: View {
     var body: some View {
         let m = member
         let birth = AdminMemberSheetFacts.dayText(m.birthDate)
-        let hasPhoto = !AdminMemberFacts.isBlank(m.avatarUrl)
         let bio = m.bio?.count ?? 0
-        // «نبّهه يضيف صورة» / «طلب تغيير الصورة» / الطلب المعلّق (P1، `PhotoNudgeSheetRow` — المنطق PhotoNudgeLogic.swift)
-        let photoRequest = canEdit && PhotoNudgeSheetRow.isVisible(member: m, hasLogin: facts.account != nil, authVM: authVM)
-        return VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("البيانات", "Details"))
-            AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                row(AdminMemberRow(icon: "textformat", tint: DS.Color.primary, title: L10n.t("الاسم", "Name"),
-                                   value: m.displayFullName.isEmpty ? L10n.t("بلا اسم", "No name") : m.displayFullName,
-                                   wrapsValue: true),
-                    verb: L10n.t("تعديل", "Edit")) { openTall(.editAll(m)) }
-                row(AdminMemberRow(icon: "calendar", tint: DS.Color.primary, title: L10n.t("الميلاد", "Birth"),
-                                   subtitle: ageLine, value: birth ?? L10n.t("غير مسجّل", "Not recorded")),
-                    verb: birth == nil ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit")) { open(.birth(m)) }
-                if m.isDeceased == true {
-                    let incomplete = AdminMemberFacts.deathIncomplete(m)
-                    let value: String = m.deathDateUnknown == true
-                        ? L10n.t("غير معروف", "Unknown")
-                        : (AdminMemberSheetFacts.dayText(m.deathDate) ?? L10n.t("غير مسجّل", "Not recorded"))
-                    row(AdminMemberRow(icon: "calendar.badge.clock", tint: DS.Color.deceased, title: L10n.t("الوفاة", "Death"),
-                                       subtitle: incomplete ? AdminMemberGap.deathIncomplete.title : ageAtDeathLine, value: value),
-                        verb: incomplete ? L10n.t("استكمال", "Complete") : L10n.t("تعديل", "Edit")) {
-                        open(AdminMemberFacts.isBlank(m.deathDate) || m.deathDateUnknown == true ? .death(m) : .deathDate(m))
-                    }
+        // الاسم الأول وحده — الكامل مرة واحدة في الرأس
+        let first = AdminMemberSheetLogic.firstName(m.firstName, full: m.fullName) ?? L10n.t("بلا اسم", "No name")
+        return AdminMemberSheetSection(title: L10n.t("البيانات", "Details"), bar: DS.Color.primary) {
+            row(AdminMemberRow(icon: "textformat", tint: DS.Color.primary, title: L10n.t("الاسم", "Name"), value: first),
+                verb: L10n.t("تعديل", "Edit")) { openTall(.editAll(m)) }
+            row(AdminMemberRow(icon: "calendar", tint: DS.Color.primary, title: L10n.t("الميلاد", "Birth"),
+                               subtitle: ageLine, value: birth ?? L10n.t("غير مسجّل", "Not recorded")),
+                verb: birth == nil ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit")) { open(.birth(m)) }
+            if m.isDeceased == true {
+                let incomplete = AdminMemberFacts.deathIncomplete(m)
+                let value: String = m.deathDateUnknown == true
+                    ? L10n.t("غير معروف", "Unknown")
+                    : (AdminMemberSheetFacts.dayText(m.deathDate) ?? L10n.t("غير مسجّل", "Not recorded"))
+                row(AdminMemberRow(icon: "calendar.badge.clock", tint: DS.Color.deceased, title: L10n.t("الوفاة", "Death"),
+                                   subtitle: incomplete ? AdminMemberGap.deathIncomplete.title : ageAtDeathLine,
+                                   subtitleWarns: incomplete, value: value),
+                    verb: incomplete ? L10n.t("استكمال", "Complete") : L10n.t("تعديل", "Edit")) {
+                    open(AdminMemberFacts.isBlank(m.deathDate) || m.deathDateUnknown == true ? .death(m) : .deathDate(m))
                 }
-                // جنس محدّد: تغييره نقل بين الشجرتين — في المحرّر الكامل (`move_child_gender` بتأكيد)؛ بلا جنس: المربّع الصغير
-                row(AdminMemberRow(icon: m.isFemale ? "figure.stand.dress" : "person.fill", tint: DS.Color.slate,
-                                   title: L10n.t("الجنس", "Gender"), value: genderText),
-                    verb: AdminMemberFacts.isBlank(m.gender) ? L10n.t("تحديد", "Set") : L10n.t("تغيير", "Change")) {
-                    if AdminMemberFacts.isBlank(m.gender) { open(.gender(m)) } else { openTall(.editAll(m)) }
-                }
-                // لا صور للإناث في التطبيق (طلب المالك ٢٠٢٦-١١-٢٤) — المصغّرة للذكور فقط
-                row(AdminMemberRow(icon: "photo.fill", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"),
-                                   value: photoText, thumbnail: hasPhoto && !m.isFemale ? m.avatarUrl : nil),
-                    verb: hasPhoto ? L10n.t("تغيير", "Change") : L10n.t("إضافة", "Add")) { open(.photo(m)) }
-                if photoRequest {
-                    PhotoNudgeSheetRow(member: m, hasLogin: facts.account != nil, onAskChange: { open(.photoRequest(m)) })
-                }
-                row(AdminMemberRow(icon: "doc.text.fill", tint: DS.Color.accent, title: L10n.t("السيرة", "Biography"),
-                                   subtitle: latestBioLine, value: bioCountText(bio)),
-                    verb: bio == 0 ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit")) { openTall(.editAll(m)) }
             }
+            // جنس محدّد: تغييره نقل بين الشجرتين — في المحرّر الكامل (`move_child_gender` بتأكيد)؛ بلا جنس: المربّع الصغير
+            row(AdminMemberRow(icon: m.isFemale ? "figure.stand.dress" : "person.fill", tint: DS.Color.slate,
+                               title: L10n.t("الجنس", "Gender"), value: genderText),
+                verb: AdminMemberFacts.isBlank(m.gender) ? L10n.t("تحديد", "Set") : L10n.t("تغيير", "Change")) {
+                if AdminMemberFacts.isBlank(m.gender) { open(.gender(m)) } else { openTall(.editAll(m)) }
+            }
+            // صفّ واحد بحالات P1 («نبّهه يضيف صورة»، التذكير، «طلب تغيير الصورة») وسهمه للإضافة/التبديل —
+            // لا صور للإناث في التطبيق (طلب المالك ٢٠٢٦-١١-٢٤): المصغّرة للذكور فقط
+            AdminMemberPhotoRow(member: m, hasLogin: facts.account != nil, canEdit: canEdit, noDevices: noDevices,
+                                openPhoto: { open(.photo(m)) }, askChange: { open(.photoRequest(m)) })
+            row(AdminMemberRow(icon: "doc.text.fill", tint: DS.Color.accent, title: L10n.t("السيرة", "Biography"),
+                               subtitle: latestBioLine, value: bioCountText(bio)),
+                verb: bio == 0 ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit")) { openTall(.editAll(m)) }
         }
     }
 }
 
 // MARK: - «النسب»
 
+/// «النسب» (شريط أخضر): الأب (اسمه الأول) · الأبناء (العدد + أسماؤهم الأولى) · الأم والزوجة («تُدار من شجرة النساء» ‹) ·
+/// «الظهور في الشجرة»
 struct AdminMemberLineageSection: View {
     let member: FamilyMember
     let facts: AdminMemberSheetFacts
@@ -986,37 +708,38 @@ struct AdminMemberLineageSection: View {
     let ask: (AdminMemberConfirm) -> Void
     let openWomen: () -> Void
 
+    /// الأب بالاسم الأول؛ بلا أب «غير مرتبط بأب»
+    private var fatherText: String {
+        guard let father = facts.father else { return AdminMemberProblem.orphan.title }
+        return AdminMemberSheetLogic.firstName(father.firstName, full: father.fullName) ?? L10n.t("بلا اسم", "No name")
+    }
+
     var body: some View {
         let kids = facts.children
-        let names = kids.prefix(4).map(\.firstName).joined(separator: "، ") + (kids.count > 4 ? "…" : "")
-        return VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("النسب", "Lineage"))
-            AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                if !facts.isFamilyRoot {
-                    let father = AdminMemberRow(icon: "arrow.triangle.branch", tint: DS.Color.palm, title: L10n.t("الأب", "Father"),
-                                                value: facts.father?.displayFullName ?? AdminMemberProblem.orphan.title,
-                                                wrapsValue: true)
-                    if canEdit {
-                        AdminMemberTapRow(hint: facts.father == nil ? L10n.t("ربط", "Link") : L10n.t("تغيير", "Change"),
-                                          action: { open(.father(member)) }) { father.chevron(true) }
-                    } else {
-                        father
-                    }
-                }
-                let children = AdminMemberRow(icon: "person.2.fill", tint: DS.Color.palm, title: L10n.t("الأبناء", "Children"),
-                                              subtitle: kids.isEmpty ? L10n.t("لا أبناء مسجّلون", "No children recorded") : names,
-                                              value: "\(kids.count)", valueIsNumber: true)
-                if canManageChildren {
-                    AdminMemberTapRow(hint: L10n.t("إدارة", "Manage"), action: { open(.editAll(member)) }) { children.chevron(true) }
+        return AdminMemberSheetSection(title: L10n.t("النسب", "Lineage"), bar: DS.Color.palm) {
+            if !facts.isFamilyRoot {
+                let father = AdminMemberRow(icon: "arrow.triangle.branch", tint: DS.Color.palm, title: L10n.t("الأب", "Father"),
+                                            value: fatherText)
+                if canEdit {
+                    AdminMemberTapRow(hint: facts.father == nil ? L10n.t("ربط", "Link") : L10n.t("تغيير", "Change"),
+                                      action: { open(.father(member)) }) { father.chevron(true) }
                 } else {
-                    children
+                    father
                 }
-                AdminMemberTapRow(hint: L10n.t("يفتح شجرة النساء", "Opens the women's tree"), action: openWomen) {
-                    AdminMemberRow(icon: "heart.fill", tint: DS.Color.palm, title: L10n.t("الأم والزوجة", "Mother and wife"),
-                                   subtitle: L10n.t("تُدار من شجرة النساء", "Managed in the women's tree"), showsChevron: true)
-                }
-                visibilityRow
             }
+            let children = AdminMemberRow(icon: "person.2.fill", tint: DS.Color.palm, title: L10n.t("الأبناء", "Children"),
+                                          subtitle: AdminMemberSheetLogic.childrenLine(kids.map(\.firstName)),
+                                          value: "\(kids.count)", valueIsNumber: true)
+            if canManageChildren {
+                AdminMemberTapRow(hint: L10n.t("إدارة", "Manage"), action: { open(.editAll(member)) }) { children.chevron(true) }
+            } else {
+                children
+            }
+            AdminMemberTapRow(hint: L10n.t("يفتح شجرة النساء", "Opens the women's tree"), action: openWomen) {
+                AdminMemberRow(icon: "heart.fill", tint: DS.Color.palm, title: L10n.t("الأم والزوجة", "Mother and wife"),
+                               subtitle: L10n.t("تُدار من شجرة النساء", "Managed in the women's tree"), showsChevron: true)
+            }
+            visibilityRow
         }
     }
 
@@ -1047,14 +770,17 @@ struct AdminMemberLineageSection: View {
 
 // MARK: - صفّ الورقة (spec A.6)
 
-/// صفّ معلومة: `[مربّع ٣٠ ممتلئ][العنوان ١٥ / سطر ١٣ رمادي]…[القيمة ١٥ رمادية | حبّة | مفتاح][سهم إن فتح شيئاً]`.
-/// ٤٤ لسطر و٥٦ لسطرين. القيمة الطويلة (الاسم) تلتفّ بجانب عنوان قصير، والقصيرة لا تلتفّ؛ من أحجام إمكانية الوصول
-/// القيمة تحت العنوان. الحذف (`destructive`): العنوان أحمر والمربّع رمز أحمر على ١٢٪
+/// صفّ معلومة: `[مربّع ٣٠ ممتلئ][العنوان ١٥ متوسط / سطر ١٣ رمادي]…[القيمة ١٥ رمادية | حبّة | مفتاح][سهم إن فتح شيئاً]`.
+/// ٤٤ لسطر و٥٦ لسطرين. القيمة الطويلة تلتفّ بجانب عنوان قصير، والقصيرة لا تلتفّ؛ من أحجام إمكانية الوصول القيمة تحت
+/// العنوان. السطر الكهرماني (`subtitleWarns`): نقص في الصفّ نفسه («تاريخ الوفاة غير مكتمل»). الحذف (`destructive`):
+/// العنوان أحمر والمربّع رمز أحمر على ١٢٪
 struct AdminMemberRow: View {
     let icon: String
     var tint: Color = DS.Color.primary
     let title: String
     var subtitle: String? = nil
+    /// السطر بلون التنبيه (نقص في الصفّ)
+    var subtitleWarns: Bool = false
     var value: String? = nil
     /// الرقم يُقرأ من اليسار (+965 …)
     var valueIsNumber: Bool = false
@@ -1068,13 +794,14 @@ struct AdminMemberRow: View {
     var accessory: AnyView? = nil
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(icon: String, tint: Color = DS.Color.primary, title: String, subtitle: String? = nil, value: String? = nil,
-         valueIsNumber: Bool = false, wrapsValue: Bool = false, thumbnail: String? = nil, destructive: Bool = false,
-         showsChevron: Bool = false, busy: Bool = false) {
+    init(icon: String, tint: Color = DS.Color.primary, title: String, subtitle: String? = nil, subtitleWarns: Bool = false,
+         value: String? = nil, valueIsNumber: Bool = false, wrapsValue: Bool = false, thumbnail: String? = nil,
+         destructive: Bool = false, showsChevron: Bool = false, busy: Bool = false) {
         self.icon = icon
         self.tint = tint
         self.title = title
         self.subtitle = subtitle
+        self.subtitleWarns = subtitleWarns
         self.value = value
         self.valueIsNumber = valueIsNumber
         self.wrapsValue = wrapsValue
@@ -1106,13 +833,13 @@ struct AdminMemberRow: View {
             AdminIconSquare(symbol: icon, tint: destructive ? DS.Color.error : tint, filled: !destructive)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(title)
-                    .dsFont(.body)
+                    .dsFont(.rowTitle)
                     .foregroundColor(destructive ? DS.Color.error : DS.Color.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let subtitle, !subtitle.isEmpty {
                     Text(verbatim: subtitle)
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textTertiary)
+                        .dsFont(subtitleWarns ? .chip : .subtitle)
+                        .foregroundColor(subtitleWarns ? DS.Color.warning : DS.Color.textTertiary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1152,7 +879,7 @@ struct AdminMemberRow: View {
         let text = Text(verbatim: value)
             .dsFont(.body)
             .monospacedDigit()
-            .foregroundColor(DS.Color.textSecondary)
+            .foregroundColor(DS.Color.textTertiary)
             .multilineTextAlignment(alignment)
             .environment(\.layoutDirection, valueIsNumber ? .leftToRight : LanguageManager.shared.layoutDirection)
         if wrapsValue || stacked {
@@ -1176,7 +903,7 @@ struct AdminMemberTapRow<Label: View>: View {
     }
 }
 
-/// صفّ في بطاقات الورقة بزرّ كبسولة (يستعمله `PhotoChangeRequestSheetRow` في «البيانات»): نفس هيئة `AdminMemberRow` —
+/// صفّ في بطاقات الورقة بزرّ كبسولة («طلب تغيير الصورة» في صفّ الصورة، ومربّع `PhotoChangeRequestBox`): نفس هيئة `AdminMemberRow` —
 /// مربّع ممتلئ، عنوان ١٥، سطر ١٣ رمادي، والإجراء حبّة بإطار في الطرف (لا سهم — الإجراء ظاهر)
 struct AdminSheetRow: View {
     let icon: String
@@ -1187,6 +914,8 @@ struct AdminSheetRow: View {
     var multiline: Bool = false
     var action: (String, () -> Void)? = nil
     var busy: Bool = false
+    /// حبّة الإجراء: بإطار (افتراضي)، أو كحلية في ورقة العضو («طلب» — النموذج «أ3»)
+    var actionStyle: AdminPillStyle = .soft
 
     var body: some View {
         HStack(spacing: DS.Spacing.md) {
@@ -1211,7 +940,7 @@ struct AdminSheetRow: View {
                     ProgressView().scaleEffect(DS.Spinner.chipScale)
                         .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                 } else {
-                    AdminPillButton(title: action.0, style: .soft, action: action.1)
+                    AdminPillButton(title: action.0, style: actionStyle, action: action.1)
                         .fixedSize()
                         .accessibilityLabel("\(action.0) — \(title)")
                 }

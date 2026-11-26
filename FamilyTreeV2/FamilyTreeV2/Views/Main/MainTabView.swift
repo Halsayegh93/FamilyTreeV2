@@ -200,6 +200,16 @@ struct MainTabView: View {
                 NotificationCenter.default.post(name: .showKinshipPath, object: nil, userInfo: info)
             }
         }
+        // «في الشجرة» من ورقة العضو في الإدارة (V2-3): تاب الشجرة ← شجرة العائلة ← العضو في الوسط بمساره
+        // (`.openMemberInTree` الذي تعالجه `TreeView` — نفس اختيار عضو من بحث الشجرة)
+        .onReceive(NotificationCenter.default.publisher(for: .requestMemberInTree)) { note in
+            let info = note.userInfo
+            let alreadyOnTree = selectedTab == 1
+            DSScreenCrossfade.run { selectedTab = 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (alreadyOnTree ? 0.15 : 0.6)) {
+                NotificationCenter.default.post(name: .openMemberInTree, object: nil, userInfo: info)
+            }
+        }
         }
         // القسم المختار لما يُعرض في نافذة مستقلّة (الرسائل، مربّع التاريخ، النعي) — ولا قسم خارج
         // التبويبات: عند الخروج (الدخول، الانتظار، التجميد) يرجع كحلي العلامة. لا نصفّره إن اختفت
@@ -290,6 +300,8 @@ extension Notification.Name {
     static let didReselectTab       = Notification.Name("didReselectTab")
     /// يعرض صلة القرابة في الشجرة من أي مكان — نفس userInfo لـ `showKinshipPath`
     static let requestKinshipPath   = Notification.Name("requestKinshipPath")
+    /// يفتح الشجرة على عضو من أي مكان (ورقة العضو في الإدارة) — userInfo: ["memberId": UUID]
+    static let requestMemberInTree  = Notification.Name("requestMemberInTree")
     /// زر التحديد في هيدر الصفحة الفرعية — userInfo: ["page": "archive" | "projects"]
     static let subPageStartSelection = Notification.Name("subPageStartSelection")
     static let openAdminRequests    = Notification.Name("openAdminRequests")

@@ -67,6 +67,11 @@ struct TreeTabContainer: View {
         .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { _ in
             if treeTab != 0 { treeTab = 0 }
         }
+        // «في الشجرة» من ورقة العضو: العضو في شجرة العائلة
+        .onReceive(NotificationCenter.default.publisher(for: .requestMemberInTree)) { _ in
+            Self.openWomenOnAppear = false
+            if treeTab != 0 { treeTab = 0 }
+        }
     }
 }
 

@@ -61,4 +61,109 @@ nonisolated enum AdminMemberSheetLogic {
         guard let phone = visiblePhone?.trimmingCharacters(in: .whitespacesAndNewlines), !phone.isEmpty else { return false }
         return !isMasked(phone) && phone.contains(where: \.isNumber)
     }
+
+    // MARK: - «أ3 ملف موجز وأفعال» (الوحدة V2-3، اختيار المالك ٢٠٢٦-١١-٢٦)
+    //   xcrun swiftc -o /private/tmp/claude-501/v2c-logic \
+    //     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminMemberSheetLogic.swift tests/admin-redesign/V2c/main.swift \
+    //     && /private/tmp/claude-501/v2c-logic
+
+    /// أزرار الرأس الكحلي بترتيبها من الطرف البادئ
+    enum HeaderAction: String, CaseIterable, Equatable {
+        case fullProfile, tree, call, whatsapp
+    }
+
+    /// أزرار الرأس (حتى أربعة): «الملف الكامل» لمن يعدّل · «في الشجرة» لمن له عقدة في شجرة العائلة (لا مخفي ولا موقوف
+    /// ولا ابن بنت — `isCountable`) · «اتصال» و«واتساب» للحيّ برقم ظاهر لهذا المشاهد فقط (`dsVisiblePhone`) — يُحذفان
+    /// حين لا رقم، لا يُعتّمان أبداً
+    static func headerActions(canEdit: Bool, inTree: Bool, isDeceased: Bool, visiblePhone: String?) -> [HeaderAction] {
+        var list: [HeaderAction] = []
+        if canEdit { list.append(.fullProfile) }
+        if inTree { list.append(.tree) }
+        if !isDeceased && canContact(visiblePhone) { list += [.call, .whatsapp] }
+        return list
+    }
+
+    /// أعمدة صفّ الأزرار: أربعة دائماً (الأقل يبدأ من الطرف البادئ بعرض الربع)، وشبكة ٢×٢ من أحجام إمكانية الوصول
+    static func actionColumns(accessibilitySize: Bool) -> Int {
+        accessibilitySize ? 2 : 4
+    }
+
+    /// فهارس الأزرار صفاً صفاً (`actionColumns` في كل صفّ، والأخير قد ينقص)
+    static func actionRows(count: Int, accessibilitySize: Bool) -> [[Int]] {
+        guard count > 0 else { return [] }
+        let columns = actionColumns(accessibilitySize: accessibilitySize)
+        return stride(from: 0, to: count, by: columns).map { Array($0..<min($0 + columns, count)) }
+    }
+
+    /// رقاقات «أكمل الناقص» — نفس `rawValue` في `AdminMemberGap` و`AdminMemberProblem`
+    enum Missing: String, CaseIterable, Equatable {
+        case noBirth, noGender, noPhoto, deathIncomplete
+        case orphan, noName, brokenParent, hidden, dupPhone
+    }
+
+    /// رقاقة لكل ناقص تحت الرأس: لمن يعدّل فقط، النواقص ثم مشكلات الشجرة بلا تكرار. «الصورة ناقصة» بلا رقاقة — بيتها صفّ
+    /// «الصورة» (بلا صورة + «نبّهه يضيف صورة» + سهمه). فارغة = لا شيء تحت الرأس
+    static func missingChips(gaps: [Missing], problems: [Missing], canEdit: Bool) -> [Missing] {
+        guard canEdit else { return [] }
+        var seen = Set<Missing>()
+        return (gaps + problems).filter { $0 != .noPhoto && seen.insert($0).inserted }
+    }
+
+    /// قيمة الصفوف بالاسم الأول فقط (الاسم الكامل مرة واحدة في الرأس): الاسم الأول المحفوظ، وإلا أول كلمة من الكامل؛
+    /// nil = بلا اسم («بدون اسم» اسم مؤقت لا اسم)
+    static func firstName(_ first: String?, full: String?) -> String? {
+        let placeholder = "بدون اسم"
+        if let first = first?.trimmingCharacters(in: .whitespacesAndNewlines), !first.isEmpty, first != placeholder {
+            return first
+        }
+        let whole = full?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !whole.isEmpty, whole != placeholder else { return nil }
+        return whole.split(whereSeparator: \.isWhitespace).first.map(String.init)
+    }
+
+    /// سطر «الأبناء»: أول أربعة أسماء أولى بفاصلة عربية، و«…» إن زادوا. nil بلا أبناء (الرقم ٠ يكفي)
+    static func childrenLine(_ firstNames: [String], limit: Int = 4) -> String? {
+        let names = firstNames.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard !names.isEmpty else { return nil }
+        return names.prefix(limit).joined(separator: "، ") + (names.count > limit ? "…" : "")
+    }
+
+    // MARK: قفل ورقتك وورقة المالك
+
+    /// العضو «غيرك»: لا المالك ولا أنت — وحده يقبل الإيقاف ومنع الرقم والحذف
+    static func isOther(memberId: UUID, viewerId: UUID?, memberIsOwner: Bool) -> Bool {
+        !memberIsOwner && memberId != viewerId
+    }
+
+    /// أوامر «الحساب» الثلاثة الخطرة: الصلاحية × «غيرك» (والمنع برقم صالح للملء فقط)
+    struct AccountCommands: Equatable {
+        let suspend: Bool
+        let ban: Bool
+        let delete: Bool
+    }
+
+    static func accountCommands(isOther: Bool, canFreeze: Bool, canBan: Bool, banPrefill: String?,
+                                canDelete: Bool) -> AccountCommands {
+        AccountCommands(suspend: canFreeze && isOther,
+                        ban: canBan && isOther && banPrefill != nil,
+                        delete: canDelete && isOther)
+    }
+
+    /// سطر القفل آخر الورقة: لماذا لا إيقاف ولا منع ولا حذف هنا
+    enum LockNote: Equatable {
+        /// «هذا حسابك، وأنت المالك: …»
+        case selfOwner
+        /// «هذا حسابك: …»
+        case selfAccount
+        /// «حساب المالك: …» (مالك آخر)
+        case ownerAccount
+    }
+
+    /// للحيّ فقط، ولمن يملك أمراً من أوامر الورقة (يعدّل أو يوقف أو يمنع أو يحذف) — غيره لا يحتاج شرحاً
+    static func lockNote(memberId: UUID, viewerId: UUID?, memberIsOwner: Bool, isDeceased: Bool,
+                         viewerCanAct: Bool) -> LockNote? {
+        guard viewerCanAct, !isDeceased else { return nil }
+        if memberId == viewerId { return memberIsOwner ? .selfOwner : .selfAccount }
+        return memberIsOwner ? .ownerAccount : nil
+    }
 }
