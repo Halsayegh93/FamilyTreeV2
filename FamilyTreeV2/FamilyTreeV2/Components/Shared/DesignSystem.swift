@@ -2659,6 +2659,26 @@ extension DS {
         static let miniIcon: CGFloat = 30
         static let miniIconRadius: CGFloat = 9
         static let miniCellPadding: CGFloat = DS.Spacing.sm
+
+        // MARK: ── V2-2 «العائلة» (اتجاه «أ»، ٢٠٢٦-١١-٢٦) — بداية ──
+        // جذر «العائلة» (`AdminMembersPage`/`AdminMembersHeader`): مربّعات الأرقام الزجاجية في الرأس، الحقل وزرّ «تصفية»،
+        // بطاقة «يحتاج مراجعتك»، وعنوان الفرع. الألوان من `DS.Color`/`DS.Hub` الموجودة (الزجاج، الكريمي، أخضر العائلة لمسة)
+        /// زاوية ما في رأس «العائلة»: مربّع الرقم والحقل وزرّ «تصفية» (١٤ — بين البطاقة ١٢ وبطاقة المراجعة ١٦)
+        static let familyControlRadius: CGFloat = 14
+        /// أقل ارتفاع لمربّع الرقم الزجاجي (الرقم ١٧ والاسم ١٢ تحته) — يكبر مع الخط
+        static let familyKPIMinHeight: CGFloat = 52
+        /// عدد التصفية المفعّلة على زرّ «تصفية» (كبسولة خضراء)
+        static let familyFilterBadge: CGFloat = 22
+        /// بطاقة «يحتاج مراجعتك»: أقل ارتفاع، زاويتها، وحبّة «5 قوائم»
+        static let familyReviewMinHeight: CGFloat = 64
+        static let familyReviewRadius: CGFloat = DS.Radius.lg
+        static let familyReviewPill: CGFloat = 26
+        /// عنوان الفرع: طول الشريط الأخضر في بدايته (عرضه `stripeWidth`) وحبّة العدد
+        static let familyBranchBar: CGFloat = 20
+        static let familyBranchCount: CGFloat = 24
+        /// اسم الفرع فوق صفوفه — Headline (١٧) شبه عريض
+        static let familyBranchTitle = DS.TextRole(.headline, weight: .semibold)
+        // MARK: ── V2-2 «العائلة» — نهاية ──
     }
 }
 
