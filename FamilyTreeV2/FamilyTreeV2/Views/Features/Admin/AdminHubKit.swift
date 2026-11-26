@@ -27,6 +27,14 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// الاسم على مربّعه في «اليوم» — سطر واحد فتتساوى المربّعات (طلب المالك ٢٠٢٦-١١-٢٦ «نصغر المربعات»)؛ الاسم الكامل للعنوان والقارئ الصوتي
+    var tileTitle: String {
+        switch self {
+        case .occasions: return L10n.t("المناسبات", "Occasions")
+        default:         return title
+        }
+    }
+
     var subtitle: String {
         switch self {
         case .inbox:     return L10n.t("الطلبات ورسائل الأعضاء", "Requests and member messages")
