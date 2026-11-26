@@ -3,8 +3,9 @@ import SwiftUI
 
 // MARK: - معاينة التصميم بلا سيرفر (للتصوير فقط — نسخ التطوير)
 //
-// `-uiPreviewRequestTrail sender|fallback|handled|list` عند التشغيل: مربّع تفاصيل الطلب بـ«المرسل» وأزرار
-// الطلبات الجديدة، أو بلا بيانات مسجّلة (طلب قديم)، أو المربّع المعالَج للعرض فقط، أو صفوف «تمت معالجتها».
+// `-uiPreviewRequestTrail sender|fallback|handled|list|filters|select|buttons` عند التشغيل: مربّع تفاصيل الطلب بـ«المرسل»
+// وأزرار الطلبات الجديدة، أو بلا بيانات مسجّلة (طلب قديم)، أو المربّع المعالَج للعرض فقط، أو صفوف «المنجز»، أو جذر «الوارد»
+// الجديد (U8) بأبوابه وفلاتره وأيامه، أو وضع «تحديد» بشريطه السفلي، أو صفوف الأزرار.
 // أسماء وهمية — لا بيانات أعضاء حقيقية.
 
 enum AdminTrailPreview {
@@ -76,39 +77,115 @@ private enum PreviewData {
     ].compactMap { $0 }
 }
 
-/// رأس «الوارد» بالأقسام الثلاثة وصفّ الفلاتر الواحد بأعداد وهمية (المسار والمجموعة يجتمعان)
-private struct FiltersPreview: View {
-    enum Seg: Hashable { case requests, handled, messages }
-    @State private var seg: Seg = .requests
-    @State private var flow = "all"
-    @State private var group: String? = nil
+/// جذر «الوارد» الجديد (U8، spec C.2) بأعداد وأسماء وهمية: الرأس بسطر الأرقام، صفّا الأبواب، شريط الفلاتر بشريحة
+/// مفعّلة، الأيام بصفوفها، و«المنجز» — بنفس قطع الصفحة الحقيقية (`AdminInboxBand`، `AdminInboxRow`…). `selecting` = وضع
+/// «تحديد» بشريطه السفلي
+private struct InboxRootPreview: View {
+    var selecting = false
+    @State private var search = ""
+    @State private var filters = AdminInboxLogic.Filters(group: .tree)
+    @State private var picked: Set<Int> = [0, 2]
+
+    private struct Day: Identifiable {
+        let title: String
+        let rows: [AdminInboxRowModel]
+        var id: String { title }
+    }
+
+    private static func row(_ name: String, _ icon: String, _ fill: Color, _ time: String, _ ask: String,
+                            pills: [AdminInboxRowModel.Pill] = [], word: String, mine: Bool, new: Bool = false)
+        -> AdminInboxRowModel {
+        AdminInboxRowModel(name: name, avatarName: name, avatarURL: nil, typeIcon: icon, typeFill: fill, time: time,
+                           ask: ask, pills: pills, stateWord: word, stateTone: mine ? .mine : .neutral, isNew: new)
+    }
+
+    private let days: [Day] = [
+        Day(title: "اليوم", rows: [
+            row("سالم أحمد يوسف المحمدعلي", "leaf.fill", DS.Color.deceasedFill, "8:40 ص",
+                "يبلّغ عن وفاة: علي حسن محمد", pills: [.init(title: "عاجل", tone: .error)], word: "عند المختص",
+                mine: false, new: true),
+            row("بدر خالد ناصر المحمدعلي", "person.badge.plus", DS.Color.palmFill, "9:12 ص",
+                "يطلب إضافة ابن: ليلى", word: "بانتظار قرارك", mine: true),
+            row("نورة سالم أحمد يوسف", "person.fill", DS.Color.femaleFill, "10:05 ص",
+                "طلب انضمام · أنثى · تُربط بشجرة النساء", word: "عند المختص", mine: false),
+        ]),
+        Day(title: "أمس", rows: [
+            row("علي حسن محمد المحمدعلي", "phone.fill", DS.Color.seaFill, "7:15 م", "يطلب تغيير رقمه",
+                pills: [.init(title: "متأخر", tone: .warn)], word: "بانتظار قرارك", mine: true),
+        ]),
+    ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                Text("الوارد").dsFont(.title).foregroundColor(DS.Color.textOnPrimary)
-                AdminInboxSegmentTrack(options: [
-                    AdminInboxSegmentOption(id: Seg.requests, title: "الطلبات", count: 5),
-                    AdminInboxSegmentOption(id: Seg.handled, title: "تمت معالجتها"),
-                    AdminInboxSegmentOption(id: Seg.messages, title: "الرسائل", count: 2, alert: true),
-                ], selection: $seg)
+        ScrollView {
+            VStack(spacing: 0) {
+                AdminInboxBand(backTitle: "الإدارة", onBack: {}, items: [
+                    AdminHeaderItem(id: "waiting", value: 5, label: "بانتظار قرارك", tap: .action {}),
+                    AdminHeaderItem(id: "urgent", value: 2, label: "عاجل", tap: .action {}),
+                    AdminHeaderItem(id: "late", value: 1, label: "متأخر", tap: .action {}),
+                ]) {
+                    AdminGlassCircle(symbol: "gearshape")
+                    AdminHeaderTextButton(title: selecting ? "إلغاء" : "تحديد") {}
+                }
+                VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+                    if !selecting {
+                        AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                            AdminInboxDoorRow(icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.sea,
+                                              title: AdminInboxView.title,
+                                              subtitle: AdminInboxText.messagesLine(unread: 7, awaiting: 2)) {}
+                            AdminInboxDoorRow(icon: "checkmark.shield.fill", tint: DS.Color.accent,
+                                              title: "بانتظار المراجعة", subtitle: AdminInboxText.postReviewLine(3)) {}
+                        }
+                        AdminFilterBar(search: $search, activeCount: filters.isEmpty ? 0 : 1) {}
+                        if !filters.isEmpty {
+                            Button { filters = AdminInboxLogic.Filters() } label: {
+                                DSAdminChipLabel(title: "الشجرة", count: "3", selected: true, removable: true)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        HStack {
+                            Spacer()
+                            Text(verbatim: "\(AdminInboxText.requests(12)) · الأحدث أولاً")
+                                .dsFont(.subtitle)
+                                .foregroundColor(DS.Color.textSecondary)
+                        }
+                    }
+                    ForEach(days) { day in
+                        VStack(alignment: .leading, spacing: DSNoticeMetrics.headerGap) {
+                            DSDayHeader(title: day.title, count: day.rows.count)
+                            VStack(spacing: 0) {
+                                ForEach(Array(day.rows.enumerated()), id: \.offset) { index, model in
+                                    let id = (day.title == "اليوم" ? 0 : 10) + index
+                                    AdminInboxRow(model: model, position: DSGroupPosition(index: index, count: day.rows.count),
+                                                  selecting: selecting, picked: picked.contains(id))
+                                        .onTapGesture {
+                                            guard selecting else { return }
+                                            if picked.contains(id) { picked.remove(id) } else { picked.insert(id) }
+                                        }
+                                }
+                            }
+                        }
+                    }
+                    if !selecting {
+                        AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                            AdminInboxDoorRow(icon: "checkmark.circle.fill", tint: DS.Color.palm,
+                                              title: AdminInboxHandledPage.title, subtitle: "آخر 30 يوماً، للاطلاع",
+                                              value: "48") {}
+                        }
+                        .padding(.top, DS.Hub.sectionGap - DS.Hub.stackSpacing)
+                    }
+                }
+                .dsPageMargin()
+                .padding(.top, DS.Spacing.lg)
+                .padding(.bottom, DS.Hub.pageBottom)
             }
-            .dsPageMargin()
-            .padding(.top, DS.Spacing.xxxl)
-            .padding(.bottom, DS.Spacing.lg)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(DS.Color.bandFill.ignoresSafeArea(edges: .top))
-            AdminInboxFilterRow(items: [
-                AdminInboxFilterItem(id: "all", title: "كل الطلبات", count: 5, selected: flow == "all" && group == nil) { flow = "all"; group = nil },
-                AdminInboxFilterItem(id: "w", title: "بانتظار قرارك", count: 3, tone: .amber, selected: flow == "w") { flow = flow == "w" ? "all" : "w" },
-                AdminInboxFilterItem(id: "l", title: "متأخر", count: 1, icon: "clock", tone: .red, selected: flow == "l") { flow = flow == "l" ? "all" : "l" },
-                AdminInboxFilterItem(id: "m", title: "أعضاء", count: 2, icon: "person.2.fill", selected: group == "m") { group = group == "m" ? nil : "m" },
-                AdminInboxFilterItem(id: "t", title: "الشجرة", count: 3, icon: "tree.fill", selected: group == "t") { group = group == "t" ? nil : "t" },
-            ])
-            .dsPageMargin()
-            .padding(.top, DS.Spacing.md)
-            Spacer()
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting {
+                AdminInboxSelectionBar(count: picked.count, allPicked: picked.count == 4, canPickAll: true,
+                                       canReject: true, busy: false, onToggleAll: {}, onApprove: {}, onReject: {})
+            }
+        }
+        .background(DS.Hub.background.ignoresSafeArea())
     }
 }
 
@@ -149,7 +226,9 @@ struct AdminTrailPreviewScreen: View {
         ZStack {
             DS.Hub.background.ignoresSafeArea()
             if mode == "filters" {
-                FiltersPreview()
+                InboxRootPreview()
+            } else if mode == "select" {
+                InboxRootPreview(selecting: true)
             } else if mode == "buttons" {
                 ScrollView {
                     VStack(alignment: .leading, spacing: DS.Spacing.lg) {
@@ -189,14 +268,22 @@ struct AdminTrailPreviewScreen: View {
                     .padding(.top, DS.Page.top)
                 }
             } else if mode == "list" {
+                // «المنجز» (U8، spec C.5): صفوف الصفحة الحقيقية من طلبات وهمية
                 ScrollView {
-                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                    VStack(alignment: .leading, spacing: DSNoticeMetrics.headerGap) {
                         DSDayHeader(title: L10n.t("اليوم", "Today"), count: 3)
-                        ForEach(["approved", "rejected", "approved"].indices, id: \.self) { i in
-                            if let r = PreviewData.request(status: ["approved", "rejected", "approved"][i], recorded: i != 2,
-                                                           type: i == 2 ? "contact_message" : "tree_edit",
-                                                           reply: i == 1 ? "الاسم غير مطابق" : nil) {
-                                AdminHandledRow(request: r, events: i == 0 ? PreviewData.events : nil, lookup: lookup) {}
+                        VStack(spacing: 0) {
+                            ForEach(["approved", "rejected", "approved"].indices, id: \.self) { i in
+                                if let r = PreviewData.request(status: ["approved", "rejected", "approved"][i], recorded: i != 2,
+                                                               type: i == 2 ? "contact_message" : "tree_edit",
+                                                               reply: i == 1 ? "الاسم غير مطابق" : nil) {
+                                    let events = i == 0 ? PreviewData.events : nil
+                                    AdminInboxRow(model: AdminInboxHandledPage.rowModel(
+                                                    .request(r), events: events,
+                                                    date: DateHelper.parse(AdminTrailText.handledAt(r, events: events)) ?? Date(),
+                                                    lookup: lookup),
+                                                  position: DSGroupPosition(index: i, count: 3))
+                                }
                             }
                         }
                     }
@@ -205,7 +292,7 @@ struct AdminTrailPreviewScreen: View {
                 }
             }
         }
-        .dsCenterBox(isPresented: Binding(get: { open && mode != "list" && mode != "buttons" && mode != "filters" }, set: { open = $0 })) {
+        .dsCenterBox(isPresented: Binding(get: { open && !["list", "buttons", "filters", "select"].contains(mode) }, set: { open = $0 })) {
             box
         }
     }
