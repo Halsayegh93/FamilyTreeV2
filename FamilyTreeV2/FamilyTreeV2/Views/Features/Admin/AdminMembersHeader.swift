@@ -1,14 +1,26 @@
 import SwiftUI
 
-// MARK: - رأس «العائلة» (إعادة تصميم الإدارة U11 — spec C.6، mock 4، اختيار المالك «ب»)
+// MARK: - رأس «العائلة» (admin v2، اتجاه «أ» «بطاقات العائلة الملوّنة» — الوحدة V2-2، ٢٠٢٦-١١-٢٦)
 //
-// الرأس الكحلي المسطّح (`AdminBandHeader`): «‹ الإدارة» ← العنوان قائمة الأقسام «العائلة ⌄» وفي طرفه «＋» (تسجيل عضو
-// جديد، `canRegisterMembers`) و«⋯» («التقارير (PDF)» بالفلاتر والفرع والبحث الحاليين، `isAdmin`) ← سطر الأرقام
-// (`AdminHeaderLine`): «2,729 رجل» (هذه القائمة — بلا سهم) · «262 امرأة ‹» (← «نساء العائلة»؛ المراقب ← شجرة النساء) ·
-// «50 خارج العائلة ‹» (← «نساء العائلة» على «فرع خارج العائلة»). كل رقم = أول رقم في ما يفتحه (T2). حلقات الرأس ومفتاح
-// «شجرة العائلة | شجرة النساء» حُذفا (spec E.9/E.10) — الحلقات باقية في «اليوم» و«الإحصاءات».
-// مطويّاً (حين يصعد شريط البحث تحت سطر الرأس): سطر واحد مثبّت فوق التمرير (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ ·
-// 2,729» · بحث (يرجع للحقل ويضع المؤشر فيه) · «الفلاتر» بعدده — والشرائح المفعّلة تحته على الأبيض.
+// الرأس الكحلي المسطّح (`AdminBandHeader`) مثل كل صفحات الإدارة: «‹ الإدارة» بالذهبي ← العنوان قائمة الأقسام «العائلة ⌄»
+// وفي طرفه دائرتان زجاجيتان ٤٤: «＋» (تسجيل عضو جديد، `canRegisterMembers` × «يعدّل») و«⋯» («التقارير (PDF)» بالتصفية
+// والفرع والبحث الحاليين، `isAdmin`) ← سطر ذهبي «كل العائلة» أو اسم الفرع المختار ← ثلاثة مربّعات أرقام زجاجية
+// (`AdminMembersKPIRow`): «2,729 رجل» (هذه القائمة — بلا سهم) · «262 امرأة ‹» (← «نساء العائلة»؛ المراقب ← شجرة النساء)
+// · «46 حياً خارج العائلة ‹» (← «نساء العائلة» على «فرع خارج العائلة»؛ الأحياء وحدهم). الرقم أبيض والاسم ذهبي والسهم حيث
+// يفتح الرقم شيئاً (T2: أول رقم في ما يفتحه = الرقم نفسه) ← حقل البحث الأبيض بعرض الرأس + زرّ «تصفية» الكريمي بعدده
+// (`AdminMembersFilterBar`). الأخضر لمسة فقط (عدد «تصفية»، شريط الفرع) — الرأس كحلي.
+// مطويّاً (حين يصعد الحقل تحت سطر الرأس): سطر واحد مثبّت فوق التمرير (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ ·
+// 2,729» · بحث (يرجع للحقل ويضع المؤشر فيه) · «تصفية» بعدده — والشرائح المفعّلة تحته على الأبيض.
+
+/// نصوص «العائلة» — «تصفية» (كلمة الآيفون العربية، طلب المالك ٢٠٢٦-١١-٢٦) بدل «الفلاتر» في ما تملكه هذه الصفحة.
+/// ورقة الطقم المشتركة (`AdminFilterSheet`) يغيّر عنوانها مكانها الواحد
+enum AdminMembersText {
+    static var filter: String { L10n.t("تصفية", "Filter") }
+    static func filterOn(_ n: Int) -> String { L10n.t("تصفية، \(n) مفعّلة", "Filter, \(n) on") }
+    static var filterHint: String { L10n.t("يفتح لوحة التصفية", "Opens the filter") }
+    static var noResults: String { L10n.t("لا نتائج بهذه التصفية", "No results with this filter") }
+    static var clear: String { L10n.t("مسح التصفية", "Clear filter") }
+}
 
 /// أرقام رأس «العائلة» — نفس تعريفات «إحصاء الأفراد» (`AdminMemberCounts`): الرجال = الشجرة بلا طلبات الانضمام، النساء =
 /// إناث شجرة النساء
@@ -88,21 +100,156 @@ enum AdminMembersHeaderItems {
     }
 }
 
+// MARK: - مربّعات الأرقام الزجاجية (V2-2)
+
+/// رقم من أرقام الرأس + كلمة صغيرة بعده اختيارية («46 حياً»)
+struct AdminMembersKPI: Identifiable {
+    let item: AdminHeaderItem
+    /// بالذهبي بعد الرقم — nil = بلا
+    var unit: String? = nil
+    var id: String { item.id }
+}
+
+extension AdminMembersHeaderItems {
+    /// عناصر الرأس نفسها (`make`) مربّعاتٍ: «خارج العائلة» بكلمة «حياً» بعد رقمه
+    static func kpis(_ items: [AdminHeaderItem]) -> [AdminMembersKPI] {
+        items.map { AdminMembersKPI(item: $0, unit: $0.id == "outside" ? AdminMembersLogic.livingUnit : nil) }
+    }
+}
+
+/// ثلاثة مربّعات زجاجية بعرض واحد وطول واحد على الكحلي (عمود واحد من أحجام إمكانية الوصول). الشكل والضغطة والحال من
+/// `AdminHeaderItemLook` نفسه (الصفر والتحميل باهتان بلا ضغطة، الفشل «—» برمز إعادة المحاولة، المرفوض مخفي)، و«آخر تحديث
+/// 9:12» تحتها بعد فشل لاحق
+struct AdminMembersKPIRow: View {
+    let kpis: [AdminMembersKPI]
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private struct Row: Identifiable {
+        let kpi: AdminMembersKPI
+        let look: AdminHeaderItemLook
+        var id: String { kpi.id }
+    }
+
+    var body: some View {
+        let rows = kpis.map { Row(kpi: $0, look: $0.item.look) }.filter { !$0.look.hidden }
+        let stale = rows.compactMap(\.look.staleSince).min()
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(rows) { AdminMembersKPIBox(kpi: $0.kpi, look: $0.look) }
+                }
+            } else {
+                HStack(spacing: DS.Spacing.sm) {
+                    ForEach(rows) { AdminMembersKPIBox(kpi: $0.kpi, look: $0.look) }
+                }
+                // المربّعات الثلاثة بطول أطولها
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            if let stale {
+                Text(AdminStoreHealthText.updated(stale))
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Hub.lineZero)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// مربّع رقم واحد: الرقم ١٧ أبيض (والكلمة الصغيرة والسهم بالذهبي) وتحته الاسم ذهبي ١٢
+struct AdminMembersKPIBox: View {
+    let kpi: AdminMembersKPI
+    let look: AdminHeaderItemLook
+
+    private var item: AdminHeaderItem { kpi.item }
+
+    var body: some View {
+        if look.retry, let retry = item.retry {
+            Button(action: retry) { face }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("\(item.label): \(AdminStoreHealthText.failed)",
+                                           "\(item.label): \(AdminStoreHealthText.failed)"))
+                .accessibilityHint(AdminStoreHealthText.retry)
+        } else if look.opens {
+            AdminTapWrap(tap: item.tap, feel: .scale, label: AnyView(face), accessibilityLabel: spoken)
+                .accessibilityHint(L10n.t("يفتح القائمة", "Opens the list"))
+        } else {
+            face
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken)
+        }
+    }
+
+    /// «262 امرأة» — أو حال التحميل/الفشل بالكلمات (نفس سطر الرأس `AdminHeaderLine`)
+    private var spoken: String {
+        if look.retry {
+            return L10n.t("\(item.label): \(AdminStoreHealthText.failed)", "\(item.label): \(AdminStoreHealthText.failed)")
+        }
+        if look.text == AdminStoreHealthText.placeholder {
+            return L10n.t("\(item.label): \(AdminStoreHealthText.loading)", "\(item.label): \(AdminStoreHealthText.loading)")
+        }
+        let base = item.spoken ?? "\(look.text) \(item.label)"
+        guard let since = look.staleSince else { return base }
+        let stamp = AdminStoreHealthText.updated(since)
+        return L10n.t("\(base)، \(stamp)", "\(base), \(stamp)")
+    }
+
+    private var face: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.familyControlRadius, style: .continuous)
+        let ink = look.dim ? DS.Hub.lineZero : DS.Color.accentLight
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                Text(verbatim: look.text)
+                    .dsFont(.statValue)
+                    .monospacedDigit()
+                    .foregroundColor(look.dim ? DS.Hub.lineZero : DS.Color.headerTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                if let unit = kpi.unit, !look.dim {
+                    Text(unit)
+                        .dsFont(.caption)
+                        .foregroundColor(ink)
+                        .lineLimit(1)
+                }
+                if look.retry {
+                    Image(systemName: "arrow.clockwise")
+                        .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                        .foregroundColor(ink)
+                } else if look.opens {
+                    Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                        .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                        .foregroundColor(ink)
+                }
+            }
+            Text(item.label)
+                .dsFont(.caption)
+                .foregroundColor(ink)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, DS.Hub.kpiPadding)
+        .padding(.vertical, DS.Spacing.xsm)
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.familyKPIMinHeight, maxHeight: .infinity, alignment: .leading)
+        .background(shape.fill(DS.Hub.glass))
+        .overlay(shape.strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+        .contentShape(shape)
+    }
+}
+
 // MARK: - أزرار الرأس
 
-/// «＋» و«⋯» في طرف العنوان (زرّان على الأكثر — spec A.3). المراقب بلا شيء
+/// «＋» و«⋯» في طرف العنوان: دائرتان زجاجيتان ٤٤ مرسومتين (زرّان على الأكثر — spec A.3). المراقب بلا شيء
 struct AdminMembersHeaderButtons: View {
     /// صفحة «تسجيل عضو جديد» — nil = بلا «＋»
     let register: (() -> AnyView)?
-    /// «التقارير (PDF)» بالفلاتر الحالية — nil = بلا «⋯»
+    /// «التقارير (PDF)» بالتصفية الحالية — nil = بلا «⋯»
     let reports: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: DS.Spacing.xsm) {
             if let register {
                 // بيته الوحيد (المالك والمدير)
                 NavigationLink { AdminLazyPage { register() } } label: {
-                    AdminGlassCircle(symbol: "plus")
+                    AdminMembersBandCircle(symbol: "plus")
                 }
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
@@ -113,73 +260,182 @@ struct AdminMembersHeaderButtons: View {
                         Label(L10n.t("التقارير (PDF)", "Reports (PDF)"), systemImage: "doc.richtext")
                     }
                 } label: {
-                    AdminGlassCircle(symbol: "ellipsis")
+                    AdminMembersBandCircle(symbol: "ellipsis")
                 }
                 .accessibilityLabel(L10n.t("المزيد", "More"))
-                .accessibilityHint(L10n.t("التقارير بالفلاتر الحالية", "Reports with the current filters"))
+                .accessibilityHint(L10n.t("التقارير بالتصفية الحالية", "Reports with the current filter"))
             }
         }
     }
 }
 
-// MARK: - «يحتاج مراجعتك» (spec C.6 البند ١ — صفّ واحد بدل بطاقة المربّعات، E.12)
-
-/// صفّ بإطار يُرى ورمز تنبيه: «يحتاج مراجعتك» وتحته أول قائمتين فيهما أحد و«و4 قوائم» (`AdminReviewHubLogic.summary`)
-/// ← صفحة «يحتاج مراجعتك» (`AdminReviewHubPage`). يُخفيه من يضعه حين تصل كل القوائم صفراً
-struct AdminMembersReviewRow: View {
-    /// nil = لم تصل الأرقام بعد (هيكل)
-    let summary: String?
-
-    static var title: String { L10n.t("يحتاج مراجعتك", "Needs your review") }
-    /// شكل السطر أثناء التحميل (يُرسم مموّهاً)
-    private static var placeholder: String { L10n.t("هل ما زالوا أحياء؟ · بيانات ناقصة", "Still alive? · Missing data") }
+/// دائرة زجاجية ٤٤ مرسومة (لمسها هي نفسها) — رمز أبيض
+struct AdminMembersBandCircle: View {
+    let symbol: String
 
     var body: some View {
-        NavigationLink {
+        Image(dsSymbol: symbol)
+            .dsGlyph(DS.Glyph.xl, weight: .medium)
+            .foregroundStyle(DS.Color.headerGlyph)
+            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+            .background(Circle().fill(DS.Hub.glass))
+            .overlay(Circle().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+            .contentShape(Circle())
+    }
+}
+
+// MARK: - زرّ «تصفية» في الرأس
+
+/// «تصفية» على الكحلي بجانب الحقل: كريمي بنص كحلي ورمز التصفية، وعدد التصفية المفعّلة في كبسولة خضراء (الأخضر لمسة).
+/// ٤٤ طولاً، زاوية الحقل نفسها
+struct AdminMembersFilterPill: View {
+    let count: Int
+    let action: () -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.familyControlRadius, style: .continuous)
+        Button(action: action) {
+            HStack(spacing: DS.Spacing.xsm) {
+                Image(systemName: "line.3.horizontal.decrease")
+                    .dsGlyph(DS.Glyph.lg, weight: .medium)
+                    .accessibilityHidden(true)
+                Text(AdminMembersText.filter)
+                    .dsFont(.button)
+                    .lineLimit(1)
+                if count > 0 {
+                    Text(verbatim: "\(count)")
+                        .dsFont(.badge)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .padding(.horizontal, DS.Spacing.xsm)
+                        .frame(minWidth: DS.Hub.familyFilterBadge, minHeight: DS.Hub.familyFilterBadge)
+                        .background(Capsule().fill(DS.Color.palmFill))
+                        .accessibilityHidden(true)
+                }
+            }
+            .foregroundColor(DS.Color.textPrimary)
+            .padding(.horizontal, DS.Spacing.md)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .background(shape.fill(DS.Color.cardBackgroundSoft))
+            // في الداكن الكريمي رمادي غامق — الإطار الزجاجي يفصله عن الكحلي (لا يُرى على الكريمي في الفاتح)
+            .overlay(shape.strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+            .contentShape(shape)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(count > 0 ? AdminMembersText.filterOn(count) : AdminMembersText.filter)
+        .accessibilityHint(AdminMembersText.filterHint)
+    }
+}
+
+// MARK: - «يحتاج مراجعتك» (V2-2 البند ٣)
+
+/// بطاقة بإطار رملي: مربّع الرمز · «يحتاج مراجعتك» وتحته سطران («363 تواريخ وفاة ناقصة» / «هل ما زالوا أحياء؟») ·
+/// حبّة «5 قوائم» (قوائم لا أشخاص) · ‹ ← صفحة «يحتاج مراجعتك» (`AdminReviewHubPage`) كما كانت. يُخفيها من يضعها حين تصل
+/// كل القوائم صفراً (`AdminMembersLogic.reviewState`)
+struct AdminMembersReviewRow: View {
+    /// nil = لم تصل الأرقام بعد (هيكل بشكل البطاقة)
+    let card: AdminMembersLogic.ReviewCard?
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    static var title: String { L10n.t("يحتاج مراجعتك", "Needs your review") }
+    /// شكل السطرين والحبّة أثناء التحميل (يُرسمان مموّهين)
+    private static var placeholder: AdminMembersLogic.ReviewCard {
+        AdminMembersLogic.ReviewCard(first: L10n.t("363 تواريخ وفاة ناقصة", "363 missing death dates"),
+                                     second: L10n.t("هل ما زالوا أحياء؟", "Still alive?"), lists: 5)
+    }
+
+    var body: some View {
+        let shown = card ?? Self.placeholder
+        // «5 قوائم» بعد وصول كل الأرقام فقط — قبلها الحبّة هيكل بمكانها
+        let lists = card?.lists.map(AdminMembersLogic.listsText)
+        let pillText = lists ?? AdminMembersLogic.listsText(Self.placeholder.lists ?? 0)
+        return NavigationLink {
             AdminLazyPage {
                 AnyView(AdminReviewHubPage().adminBackTitle(AdminArea.family.title).adminArea(.family))
             }
         } label: {
-            HStack(spacing: DS.Spacing.smd) {
-                Image(systemName: "exclamationmark.triangle")
+            HStack(spacing: DS.Spacing.md) {
+                Image(systemName: "list.bullet.clipboard")
                     .dsGlyph(DS.Glyph.lg, weight: .medium)
                     .foregroundColor(DS.Color.warning)
+                    .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
+                    .background(RoundedRectangle(cornerRadius: DS.Hub.tileIconRadius, style: .continuous)
+                        .fill(DS.Color.warning.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(Self.title)
                         .dsFont(.hubSection)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(verbatim: summary ?? Self.placeholder)
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .redacted(reason: summary == nil ? .placeholder : [])
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(verbatim: shown.first)
+                        if let second = shown.second {
+                            Text(verbatim: second)
+                        }
+                    }
+                    .dsFont(.subtitle)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .redacted(reason: card == nil ? .placeholder : [])
+                    // من أحجام إمكانية الوصول الحبّة تحت السطرين
+                    if typeSize.isAccessibilitySize {
+                        pill(pillText)
+                            .redacted(reason: lists == nil ? .placeholder : [])
+                            .padding(.top, DS.Spacing.xs)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                if !typeSize.isAccessibilitySize {
+                    pill(pillText)
+                        .redacted(reason: lists == nil ? .placeholder : [])
+                }
                 Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
                     .dsGlyph(DS.Glyph.sm, weight: .semibold)
                     .foregroundColor(DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, DS.Hub.cardPadding)
-            .padding(.vertical, DS.Spacing.xsm)
-            .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeightTwoLines, alignment: .leading)
+            .padding(.vertical, DS.Spacing.smd)
+            .frame(maxWidth: .infinity, minHeight: DS.Hub.familyReviewMinHeight, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(AdminMembersFramePressStyle())
+        .buttonStyle(AdminMembersFramePressStyle(radius: DS.Hub.familyReviewRadius))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(summary.map { L10n.t("\(Self.title): \($0)", "\(Self.title): \($0)") }
-                            ?? L10n.t("\(Self.title): \(AdminStoreHealthText.loading)", "\(Self.title): \(AdminStoreHealthText.loading)"))
+        .accessibilityLabel(spoken(lists: lists))
         .accessibilityHint(L10n.t("يفتح قوائم المراجعة", "Opens the review lists"))
         .accessibilityAddTraits(.isButton)
     }
+
+    /// «5 قوائم» — كبسولة بلون التنبيه الخافت
+    private func pill(_ text: String) -> some View {
+        Text(verbatim: text)
+            .dsFont(.badge)
+            .monospacedDigit()
+            .foregroundColor(DS.Color.warning)
+            .lineLimit(1)
+            .padding(.horizontal, DS.Spacing.smd)
+            .frame(minHeight: DS.Hub.familyReviewPill)
+            .background(Capsule().fill(DS.Color.warning.opacity(DS.Opacity.tintFill)))
+            .fixedSize()
+    }
+
+    private func spoken(lists: String?) -> String {
+        guard let card else {
+            return L10n.t("\(Self.title): \(AdminStoreHealthText.loading)", "\(Self.title): \(AdminStoreHealthText.loading)")
+        }
+        let parts = [card.first, card.second, lists].compactMap { $0 }
+        let joined = parts.joined(separator: L10n.isArabic ? "، " : ", ")
+        return L10n.t("\(Self.title): \(joined)", "\(Self.title): \(joined)")
+    }
 }
 
-/// صفّ بإطار يُرى (`DS.Hub.frameStroke`، زاوية ١٢): الضغط تظليل داخل الشكل لا تصغير (spec A.6/A.16)
+/// صفّ بإطار يُرى (`DS.Hub.frameStroke`): الضغط تظليل داخل الشكل لا تصغير (spec A.6/A.16). الزاوية ١٢ افتراضاً، وبطاقة
+/// «يحتاج مراجعتك» ١٦
 struct AdminMembersFramePressStyle: ButtonStyle {
+    var radius: CGFloat = DS.Hub.cardRadius
+
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return configuration.label
             .background(shape.fill(configuration.isPressed ? DS.Hub.rowPress : DS.Color.cardBackground))
             .overlay(shape.strokeBorder(DS.Hub.frameStroke, lineWidth: DS.Border.width))
@@ -190,14 +446,14 @@ struct AdminMembersFramePressStyle: ButtonStyle {
 
 // MARK: - الرأس المطويّ
 
-/// سطر واحد مثبّت فوق التمرير حين يصعد شريط البحث تحت سطر الرأس: ‹ · «العائلة ⌄ · 2,729» · بحث · «الفلاتر» بعدده —
+/// سطر واحد مثبّت فوق التمرير حين يصعد شريط البحث تحت سطر الرأس: ‹ · «العائلة ⌄ · 2,729» · بحث · «تصفية» بعدده —
 /// والشرائح المفعّلة تحته على الأبيض (تُلغى من هنا أيضاً)
 struct AdminMembersCompactBar: View {
     let total: Int?
     let backTitle: String
     let back: () -> Void
     let search: () -> Void
-    /// عدد الفلاتر المفعّلة (رقم زرّ «الفلاتر»)
+    /// عدد التصفية المفعّلة (رقم زرّ «تصفية»)
     let filterCount: Int
     let openFilters: () -> Void
     /// الشرائح المفعّلة — nil = بلا فلاتر
@@ -242,8 +498,8 @@ struct AdminMembersCompactBar: View {
     }
 }
 
-/// «الفلاتر» فوق الكحلي: كبسولة زجاجية ٣٦ (لمسها ٤٤)، الرمز والاسم أبيض، والعدد كبسولة ذهبية حين يكون فلتر مفعّل
-/// (الذهبي على الكحلي فقط — لا عدد أحمر لفلتر)
+/// «تصفية» في السطر المطويّ فوق الكحلي: كبسولة زجاجية ٣٦ (لمسها ٤٤)، الرمز والاسم أبيض، والعدد كبسولة ذهبية حين تكون
+/// تصفية مفعّلة (الذهبي على الكحلي فقط — لا عدد أحمر لتصفية)
 struct AdminMembersBandFilterButton: View {
     let count: Int
     let action: () -> Void
@@ -257,7 +513,7 @@ struct AdminMembersBandFilterButton: View {
                     .accessibilityHidden(true)
                 // من أحجام إمكانية الوصول الرمز والعدد فقط — السطر المطويّ لا يتّسع للاسم مع العنوان (الاسم للقارئ الصوتي)
                 if !typeSize.isAccessibilitySize {
-                    Text(AdminFilterText.filters)
+                    Text(AdminMembersText.filter)
                         .dsFont(.chip)
                         .lineLimit(1)
                 }
@@ -280,7 +536,7 @@ struct AdminMembersBandFilterButton: View {
         }
         .buttonStyle(DSScaleButtonStyle())
         .fixedSize()
-        .accessibilityLabel(count > 0 ? L10n.t("الفلاتر، \(count) مفعّلة", "Filters, \(count) on") : AdminFilterText.filters)
-        .accessibilityHint(L10n.t("يفتح لوحة الفلاتر", "Opens the filters"))
+        .accessibilityLabel(count > 0 ? AdminMembersText.filterOn(count) : AdminMembersText.filter)
+        .accessibilityHint(AdminMembersText.filterHint)
     }
 }
