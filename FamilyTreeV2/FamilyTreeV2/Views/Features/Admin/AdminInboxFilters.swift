@@ -173,6 +173,8 @@ nonisolated enum AdminInboxLogic {
         case failed
         /// فشل تحديث بعد تحميل ناجح: الصفوف القديمة + «آخر تحديث 9:12» + «أعد المحاولة»
         case stale(since: Date, stores: [Store])
+        /// قوائم تُعاد («أعد المحاولة») وغيرها في اليد: الصفوف باقية + سطر صغير «جارٍ تحميل …» — لا هيكل فوق بيانات (F2)
+        case refreshing([Store])
     }
 
     static func isSettled(_ health: AdminStoreHealth) -> Bool {
@@ -200,7 +202,17 @@ nonisolated enum AdminInboxLogic {
             return nil
         }
         if let oldest = stale.map(\.1).min() { return .stale(since: oldest, stores: stale.map(\.0)) }
-        return settled.count < relevant.count ? .loading : .loaded
+        // هنا ما لم يصل بعد يُجلب وغيره في اليد (أول سطر أعلاه يأخذ «لا شيء في اليد») — الصفوف تبقى (F2)
+        let running = zip(relevant, states).filter { !isSettled($0.1) }.map(\.0)
+        return running.isEmpty ? .loaded : .refreshing(running)
+    }
+
+    /// حال قائمة بعد انتهاء جلبها. أُلغي الجلب (غادر «الوارد»: دفع صفحة، رجوع) = ما كانت عليه قبله — `idle` يبقى هيكلاً
+    /// يُعاد جلبه في الظهور التالي، والفشل يبقى بـ«أعد المحاولة» — لا «وصلت» لجلب لم يكتمل (F2)
+    static func ended(before: AdminStoreHealth?, running: AdminStoreHealth?, success: Bool, cancelled: Bool,
+                      at date: Date = Date()) -> AdminStoreHealth {
+        if cancelled { return before ?? .idle }
+        return (running ?? .loading).ending(success: success, at: date)
     }
 
     /// الطلب المطلوب (`focusId` — إشعار، «اليوم»، «إشعارات الإدارة»): يُبحث في كل الطلبات المعلّقة بلا فلاتر المستخدم
@@ -279,6 +291,13 @@ nonisolated enum AdminInboxText {
         let names = stores.map(\.title)
         if names.count == 1 { return L10n.t("تعذّر تحميل \(names[0])", "Couldn't load \(names[0])") }
         return L10n.t("تعذّر تحميل: ", "Couldn't load: ") + names.joined(separator: L10n.t("، ", ", "))
+    }
+
+    /// سطر إعادة المحاولة فوق الصفوف الباقية: «جارٍ تحميل الصور المقترحة…» · «جارٍ تحميل: الأخبار، البلاغات…»
+    static func refreshingLine(_ stores: [AdminInboxLogic.Store]) -> String {
+        let names = stores.map(\.title)
+        if names.count == 1 { return L10n.t("جارٍ تحميل \(names[0])…", "Loading \(names[0])…") }
+        return L10n.t("جارٍ تحميل: ", "Loading: ") + names.joined(separator: L10n.t("، ", ", ")) + "…"
     }
 
     /// «الموافقة على كل طلبات إضافة ابن (6)»
@@ -480,6 +499,30 @@ struct AdminInboxDoorRow: View {
         }
         .buttonStyle(AdminRowPressStyle())
         .accessibilityHint(hint)
+    }
+}
+
+// MARK: - سطر إعادة المحاولة (F2)
+
+/// «جارٍ تحميل الصور المقترحة…» فوق الصفوف الباقية أثناء «أعد المحاولة» — ١٣ رمادي برمز ↻ ثابت، مكان بطاقة الفشل؛
+/// لا هيكل يخفي ما في اليد ولا دوّارة عارية
+struct AdminInboxRefreshLine: View {
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "arrow.clockwise")
+                .dsGlyph(DS.Glyph.sm)
+        }
+        .dsFont(.subtitle)
+        .foregroundColor(DS.Color.textTertiary)
+        .padding(.horizontal, DS.Spacing.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
     }
 }
 

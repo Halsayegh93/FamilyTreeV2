@@ -76,7 +76,8 @@ enum AdminToolCatalog {
                 subtitle: L10n.t("بحث وفلاتر، و«يحتاج مراجعتك»، وورقة لكل عضو",
                                  "Search and filters, “Needs your review”, one sheet per member"),
                 icon: "person.3.sequence.fill", tint: DS.Color.palm)
-            if authVM.canRegisterMembers {
+            // نفس شرط «＋» في رأس «العائلة»: الصلاحية × القسم «يعدّل» في جدول السيرفر (F2)
+            if authVM.canRegisterMembers && authVM.adminCanEdit(.family) {
                 add(.familyRegister, group: family, title: L10n.t("تسجيل عضو جديد", "Register a new member"),
                     subtitle: L10n.t("عضو جديد بصورته ورقمه", "A new member with photo and phone"),
                     icon: "person.badge.plus", tint: DS.Color.palm)

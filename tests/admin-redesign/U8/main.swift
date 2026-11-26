@@ -85,8 +85,9 @@ func health(_ pairs: [(L.Store, AdminStoreHealth)]) -> [L.Store: AdminStoreHealt
     Dictionary(uniqueKeysWithValues: pairs)
 }
 check(L.phase([:], relevant: relevant), .loading, "nothing yet → loading")
+// F2: قوائم تُعاد وغيرها في اليد = الصفوف باقية + سطر صغير (كان هيكلاً يخفي ما وصل)
 check(L.phase(health([(.joins, .loaded(at: now)), (.children, .loading), (.photos, .loading), (.policy, .loading)]),
-              relevant: relevant), .loading, "first load still running → loading")
+              relevant: relevant), .refreshing([.children, .photos, .policy]), "some lists reloading, one in hand → rows stay")
 check(L.phase(health([(.joins, .loaded(at: now)), (.children, .loaded(at: now)), (.photos, .loaded(at: now)),
                       (.policy, .loaded(at: now))]), relevant: relevant), .loaded, "all loaded")
 check(L.phase(health([(.joins, .loaded(at: now)), (.children, .loaded(at: now)), (.photos, .failed(lastGood: nil)),

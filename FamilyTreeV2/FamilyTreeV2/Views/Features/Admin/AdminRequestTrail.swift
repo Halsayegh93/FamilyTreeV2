@@ -85,7 +85,12 @@ final class AdminHandledStore: ObservableObject {
     private func load(reset: Bool) async {
         guard !isLoading else { return }
         isLoading = true
-        defer { isLoading = false; loadedOnce = true }
+        // جلب أُلغي (غادر «الوارد» أو صفحته) لا يُعدّ «وصل»: كان يرسم «المنجز 0» حتى سحب للتحديث (F2)
+        var cancelled = false
+        defer {
+            isLoading = false
+            if !cancelled { loadedOnce = true }
+        }
         let from = reset ? 0 : items.count
         do {
             let rows: [LossyHandledRequest] = try await supabase
@@ -106,7 +111,9 @@ final class AdminHandledStore: ObservableObject {
             await loadWomenLinks(for: page)
             await loadDeletions()
         } catch {
-            if !ErrorHelper.isCancellation(error) {
+            if ErrorHelper.isCancellation(error) {
+                cancelled = true
+            } else {
                 Log.warning("[Handled] تعذّر جلب الطلبات المعالجة: \(error.localizedDescription)")
                 failed = true
             }

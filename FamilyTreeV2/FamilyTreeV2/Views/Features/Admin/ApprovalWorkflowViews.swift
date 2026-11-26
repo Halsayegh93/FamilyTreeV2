@@ -1240,6 +1240,8 @@ struct ApprovalInternalNotes: View {
     let requestId: UUID
     /// شكل مربّع «الوارد» الجديد (U9): الملاحظات صفوفاً في بطاقة والحقل تحتها، والعنوان من القسم الذي يحتويها
     var card: Bool = false
+    /// القسم «يعدّل» (`adminCanEdit(.inbox)`) — للاطلاع: الملاحظات تُقرأ بلا حقل ولا حذف، وبلا ملاحظات لا شيء (F2)
+    var canEdit: Bool = true
 
     @State private var draft = ""
     @State private var sending = false
@@ -1251,7 +1253,7 @@ struct ApprovalInternalNotes: View {
     private var me: UUID? { adminRequestVM.authVM?.currentUser?.id }
 
     var body: some View {
-        if adminRequestVM.approvalNotesAvailable == true {
+        if adminRequestVM.approvalNotesAvailable == true && (canEdit || !notes.isEmpty) {
             if card { cardBody } else { plainBody }
         }
     }
@@ -1264,7 +1266,7 @@ struct ApprovalInternalNotes: View {
                     ForEach(notes) { cardRow($0) }
                 }
             }
-            inputRow
+            if canEdit { inputRow }
             if let error {
                 Text(error)
                     .dsFont(.subtitle)
@@ -1292,7 +1294,7 @@ struct ApprovalInternalNotes: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            if mine {
+            if mine && canEdit {
                 Button {
                     if DebugAdminProbe.dryRun("approval note delete \(note.id)") { return }
                     Task { error = await adminRequestVM.deleteApprovalNote(note) }
@@ -1323,7 +1325,7 @@ struct ApprovalInternalNotes: View {
                         ForEach(notes) { row($0) }
                     }
                 }
-                inputRow
+                if canEdit { inputRow }
                 if let error {
                     Text(error)
                         .dsFieldFont(.footnote)
@@ -1357,7 +1359,7 @@ struct ApprovalInternalNotes: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            if mine {
+            if mine && canEdit {
                 Button {
                     if DebugAdminProbe.dryRun("approval note delete \(note.id)") { return }
                     Task {

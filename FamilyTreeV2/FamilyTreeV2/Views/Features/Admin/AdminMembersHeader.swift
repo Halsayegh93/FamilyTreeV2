@@ -20,15 +20,14 @@ struct AdminFamilyCensus: Equatable {
     var outsideMale: Int?
     var outsideFemale: Int?
     var outsideTotal: Int? { outsideMale.flatMap { m in outsideFemale.map { m + $0 } } }
-    /// «N لهم حساب» تحت الرجال والنساء وخارج العائلة (طلب المالك ٢٠٢٦-١١-٠٩ — في «العائلة» لا في «اليوم»):
-    /// الرجال من قوائم «استخدام التطبيق» (`AdminAccountsStore`)، النساء من ربط عقدتها بحساب (`WomenStore.linkedUserByWoman`)،
-    /// وأبناء البنات من `get_members_last_signin` (`signedIn`) لأن السيرفر يستبعدهم من القوائم. nil قبل وصول البيانات
+    /// «N لهم حساب» تحت الرجال والنساء (طلب المالك ٢٠٢٦-١١-٠٩ — في «العائلة» لا في «اليوم»): الرجال من قوائم «استخدام
+    /// التطبيق» (`AdminAccountsStore`)، النساء من ربط عقدتها بحساب (`WomenStore.linkedUserByWoman`). nil قبل وصول البيانات.
+    /// «خارج العائلة» الأحياء وحدهم بلا عدد حسابات (طلب المالك ٢٠٢٦-١١-٢٦؛ حُذف `outsideAccounts` و`signedIn` — F2)
     var menAccounts: Int?
     var womenAccounts: Int?
-    var outsideAccounts: Int?
 
     @MainActor
-    static func make(members: [FamilyMember], women: [FamilyMember], signedIn: Set<UUID>? = nil) -> AdminFamilyCensus {
+    static func make(members: [FamilyMember], women: [FamilyMember]) -> AdminFamilyCensus {
         var c = AdminFamilyCensus()
         let outside = WomenStore.outsideFamilyIds
         c.counts.setMen(from: members)
@@ -45,10 +44,6 @@ struct AdminFamilyCensus: Equatable {
             c.outsideFemale = outsideRows.filter(\.isFemale).count
             let linked = WomenStore.linkedUserByWoman
             c.womenAccounts = women.filter { $0.isFemale && $0.hasName && !outside.contains($0.id) && linked[$0.id] != nil }.count
-            if let signedIn {
-                c.outsideAccounts = members.filter { sons.contains($0.id) && $0.hasName && !review.contains($0.id) && signedIn.contains($0.id) }.count
-                    + outsideRows.filter { linked[$0.id] != nil }.count
-            }
         }
         let accounts = AdminAccountsStore.shared
         if accounts.loaded {

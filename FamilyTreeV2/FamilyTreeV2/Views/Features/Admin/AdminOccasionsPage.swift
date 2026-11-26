@@ -109,6 +109,9 @@ struct AdminOccasionsPage: View {
     /// الإشعارات المجدولة — الجلب لا يبلّغ عن فشله (`NotificationViewModel`)، فالحال تحميل ثم وصول
     @State private var scheduledHealth: AdminStoreHealth = .idle
     @State private var newsHealth: AdminStoreHealth = .idle
+    /// جلب الأعضاء من هذه الصفحة (`AdminTodayLogic.membersFetchEnded`): علامة الفشل في نموذج الأعضاء تبقى من جلب سابق
+    /// حتى ينجح جلب، فلا تُقرأ وحدها أثناء «أعد المحاولة» (F2، كما في «اليوم» F1)
+    @State private var membersFetch: AdminStoreHealth = .idle
     /// وصلت إشعاراتك (عدد «المنشور» قبلها «—»)
     @State private var publishedReady = false
     /// ما يُحسب من الأعضاء مرة لكل تغيّر (لا مع كل رسم)
@@ -140,9 +143,9 @@ struct AdminOccasionsPage: View {
         AdminCreateKind.allowed(for: authVM).filter { $0 != .announcement || authVM.adminCanEdit(.occasionsAnnounce) }
     }
 
+    /// الأعضاء: وصلوا = كلمة؛ وإلا حال جلب هذه الصفحة — هيكل أثناء التحميل، و«تعذّر التحميل» بعد أن ينتهي بفشل فقط (F2)
     private var membersHealth: AdminStoreHealth {
-        if !memberVM.allMembers.isEmpty { return .loaded(at: updatedAt ?? .distantPast) }
-        return memberVM.membersLoadFailed ? .failed(lastGood: nil) : .loading
+        AdminTodayLogic.membersHealth(hasMembers: !memberVM.allMembers.isEmpty, loadedAt: updatedAt, fetch: membersFetch)
     }
 
     // MARK: الصفحة
@@ -286,7 +289,7 @@ struct AdminOccasionsPage: View {
     }
 
     private func load(force: Bool = false) async {
-        if memberVM.allMembers.isEmpty || force { await memberVM.fetchAllMembers(force: force) }
+        if memberVM.allMembers.isEmpty || force { await fetchMembers(force: force) }
         // «أفراح العائلة» من الأخبار المحمّلة نفسها (لكل الأدوار)
         if newsVM.allNews.isEmpty || force {
             await reloadNews(force: force)
@@ -312,8 +315,16 @@ struct AdminOccasionsPage: View {
     }
 
     private func reloadMembers() async {
-        await memberVM.fetchAllMembers(force: true)
+        await fetchMembers(force: true)
         rebuild()
+    }
+
+    /// جلب الأعضاء بحاله: أثناءه هيكل، وبعده وصلوا أو فشل حقيقي — الملغى (غادر الصفحة) هيكل يُعاد في الظهور التالي
+    private func fetchMembers(force: Bool) async {
+        membersFetch = membersFetch.beginning()
+        await memberVM.fetchAllMembers(force: force)
+        membersFetch = AdminTodayLogic.membersFetchEnded(hasMembers: !memberVM.allMembers.isEmpty,
+                                                         loadFailed: memberVM.membersLoadFailed && !Task.isCancelled)
     }
 
     private func reloadNews(force: Bool = true) async {

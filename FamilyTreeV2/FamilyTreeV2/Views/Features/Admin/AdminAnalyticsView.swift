@@ -45,6 +45,9 @@ struct AdminAnalyticsView: View {
     @State private var womenHealth: AdminStoreHealth = WomenStore.cache.isEmpty ? .idle : .loaded(at: Date())
     /// قوائم الحسابات (`AdminAccountsStore`) وحالها
     @State private var accountsHealth: AdminStoreHealth = AdminAccountsStore.shared.loaded ? .loaded(at: Date()) : .idle
+    /// جلب الأعضاء من هذه الصفحة (`AdminTodayLogic.membersFetchEnded`): علامة الفشل في نموذج الأعضاء تبقى من جلب سابق
+    /// حتى ينجح جلب، فلا تُقرأ وحدها أثناء «أعد المحاولة» (F2، كما في «اليوم» F1)
+    @State private var membersFetch: AdminStoreHealth = .idle
     /// مفتاح مسار الموافقات قُرئ طازجاً (قبله لا تُعرض «لا إحصاءات» لمن له «الموافقات» وحدها)
     @State private var flagReady = false
     @State private var updatedAt: Date?
@@ -67,9 +70,10 @@ struct AdminAnalyticsView: View {
         return AdminStatsLogic.Viewer(family: family, womenPage: family && authVM.isAdmin, editMembers: authVM.canEditMembers)
     }
 
+    /// الأعضاء: وصلوا = كلمة؛ وإلا حال جلب هذه الصفحة — هيكل أثناء التحميل، و«تعذّر التحميل» بعد أن ينتهي بفشل فقط (F2)
     private var membersHealth: AdminStoreHealth {
-        if !memberVM.allMembers.isEmpty { return .loaded(at: updatedAt ?? Date()) }
-        return memberVM.membersLoadFailed ? .failed(lastGood: nil) : .loading
+        AdminTodayLogic.membersHealth(hasMembers: !memberVM.allMembers.isEmpty, loadedAt: updatedAt ?? Date(),
+                                      fetch: membersFetch)
     }
 
     private var shown: [AdminStatsAnchor] {
@@ -113,7 +117,11 @@ struct AdminAnalyticsView: View {
         .navigationDestination(isPresented: $isPushed) { pushedPage }
         .refreshable { await load(force: true) }
         .task {
-            guard !started else { return }
+            guard !started else {
+                // جلب أعضاء أُلغي قبل انتهائه (`membersFetch` رجع هيكلاً): الظهور التالي يعيده (F2)
+                if memberVM.allMembers.isEmpty && membersFetch == .idle { await load(force: false) }
+                return
+            }
             started = true
             // الهبوط مرة واحدة — الصريح يغلب المخزَّن؛ «الموافقات» تُقبل قبل قراءة مفتاح المسار
             let possible = AdminStatsLogic.sections(.make(familyItem: authVM.adminSees(.metricsFamily),
@@ -276,7 +284,12 @@ struct AdminAnalyticsView: View {
     // MARK: التحميل
 
     private func load(force: Bool) async {
-        if memberVM.allMembers.isEmpty || force { await memberVM.fetchAllMembers(force: force) }
+        if memberVM.allMembers.isEmpty || force {
+            membersFetch = membersFetch.beginning()
+            await memberVM.fetchAllMembers(force: force)
+            membersFetch = AdminTodayLogic.membersFetchEnded(hasMembers: !memberVM.allMembers.isEmpty,
+                                                             loadFailed: memberVM.membersLoadFailed && !Task.isCancelled)
+        }
         rebuild()
         async let womenDone: Void = loadWomen(force: force)
         async let sonsDone: Void = sons.refresh(force: force)

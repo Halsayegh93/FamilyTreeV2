@@ -246,8 +246,10 @@ struct AdminAllRequestsView: View {
     /// حال كل قائمة (عقد U2 `AdminStoreHealth`) — نموذج العرض يبتلع الخطأ، فالفشل = انتهى الجلب والجهاز غير متصل
     /// (أو `-tmpFailStores inbox`)
     @State private var storeHealth: [AdminInboxLogic.Store: AdminStoreHealth] = [:]
-    /// أول ظهور: الهبوط والطلب المطلوب والرسائل والجلب مرة واحدة (الرجوع من صفحة باب لا يعيدها)
+    /// أول ظهور: الهبوط والطلب المطلوب والرسائل مرة واحدة (الرجوع من صفحة باب لا يعيدها)
     @State private var didStart = false
+    /// أول جلب اكتمل (لم يُلغَ). الجلب الملغى (دفع صفحة أو رجوع قبل انتهائه) يُعاد في الظهور التالي (F2)
+    @State private var firstLoadDone = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsLandscape) private var landscape
     /// عدّاد الانتقال (`.area(.inbox, hop)`) — مفتاح الهبوط
@@ -895,27 +897,47 @@ struct AdminAllRequestsView: View {
 
     // MARK: - البداية والجلب
 
-    /// أول ظهور: الهبوط ← الرسائل لمن طلبها ← الجلب ← الطلب المطلوب ← «المنجز» بعده (بلا انتظار)
+    /// أول ظهور: الهبوط ← الجلب ← الطلب المطلوب ← «المنجز» ← الرسائل لمن طلبها. الدفع (صفحة الرسائل أو الخصوصية) يخفي
+    /// «الوارد» فيُلغي `.task` وما يجلبه — فلا دفع قبل انتهاء أول جلب، والملغى لا يُعدّ «وصل» ويُعاد في الظهور التالي (F2)
     private func start() async {
-        guard !didStart else { return }
-        didStart = true
-        applyLanding()
-        // فُتح على «الرسائل» (إشعار/بحث/رابط): صفحتها فوق «الوارد» — لمن يراها في جدول السيرفر وحده
-        if startsWithMessages && canSeeMessages {
-            DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { open(.messages) }
+        let firstAppear = !didStart
+        if firstAppear {
+            didStart = true
+            applyLanding()
+            // رسالة قديمة من إجراء خارج هذه الشاشة (قبول من الإشعار مثلاً) لا تظهر عند الفتح
+            adminRequestVM.errorMessage = nil
+            diwaniyaVM.notificationVM = notificationVM
+            diwaniyaVM.canModerate = authVM.canModerate
+            diwaniyaVM.authVM = authVM
+            archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
         }
-        // رسالة قديمة من إجراء خارج هذه الشاشة (قبول من الإشعار مثلاً) لا تظهر عند الفتح
-        adminRequestVM.errorMessage = nil
-        diwaniyaVM.notificationVM = notificationVM
-        diwaniyaVM.canModerate = authVM.canModerate
-        diwaniyaVM.authVM = authVM
-        archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
-        await reload()
-        // «المنجز» بعد الطلبات — رقم صفّه، وصفحته تفتح على ما وصل
-        if !handledStore.loadedOnce && !handledStore.isLoading {
-            handledStore.includesDeletions = authVM.canModerateTree
-            await handledStore.reload()
+        guard !firstLoadDone else {
+            loadHandledIfNeeded()
+            return
         }
+        let opened = Date()
+        // أُلغي (غادر «الوارد» قبل انتهائه): المخازن رجعت لحالها — الظهور التالي يعيده
+        guard await reload() else { return }
+        firstLoadDone = true
+        loadHandledIfNeeded()
+        // الطلب المطلوب بعد وصول القوائم (`reload` يفتحه بنفسه في إعادة المحاولة فقط)
+        openFocusIfNeeded()
+        // فُتح على «الرسائل» (إشعار/بحث/رابط): صفحتها فوق «الوارد» بعد أول جلب — لمن يراها في جدول السيرفر وحده،
+        // وفي الظهور الأول فقط (من رجع بعد مغادرة لا تُدفع له)، وبعد انتهاء دفع «الوارد» نفسه
+        if firstAppear && startsWithMessages && canSeeMessages {
+            let wait = DSMotion.boxHandoff - Date().timeIntervalSince(opened)
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled else { return }
+            open(.messages)
+        }
+    }
+
+    /// «المنجز» (رقم صفّه، وصفحته تفتح على ما وصل) — مهمة مستقلّة: دفع صفحة فوق «الوارد» لا يقطعها
+    private func loadHandledIfNeeded() {
+        guard !handledStore.loadedOnce && !handledStore.isLoading else { return }
+        handledStore.includesDeletions = authVM.canModerateTree
+        let store = handledStore
+        Task { await store.reload() }
     }
 
     /// الهبوط (`AdminInboxLanding` بعدّاد الانتقال) مرة واحدة — مقصوصاً على أنواع الدور؛ المعاملات الصريحة تغلبه
@@ -927,10 +949,13 @@ struct AdminAllRequestsView: View {
         filters = next
     }
 
-    /// الجلب المتوازي لكل القوائم (أو الفاشلة وحدها) — المفتاح طازجاً قبلها. حال كل قائمة بعد انتهائها
-    private func reload(_ only: Set<AdminInboxLogic.Store>? = nil) async {
+    /// الجلب المتوازي لكل القوائم (أو الفاشلة وحدها) — المفتاح طازجاً قبلها. حال كل قائمة بعد انتهائها.
+    /// false = أُلغي (غادر «الوارد»): كل قائمة ترجع لحالها قبله، لا «وصلت» ولا «فشل» (F2)
+    @discardableResult
+    private func reload(_ only: Set<AdminInboxLogic.Store>? = nil) async -> Bool {
         typealias S = AdminInboxLogic.Store
         let targets = only ?? Set(S.allCases)
+        let before = storeHealth
         for s in targets { storeHealth[s] = (storeHealth[s] ?? .idle).beginning() }
         // «مسار الموافقات»: المفتاح طازجاً قبل القوائم (مطفأ = لا شيء يتغيّر)
         await adminRequestVM.refreshApprovalsFlag()
@@ -950,12 +975,17 @@ struct AdminAllRequestsView: View {
             }
         }
         let online = NetworkMonitor.shared.isConnected
+        let cancelled = Task.isCancelled
         for s in targets {
-            storeHealth[s] = (storeHealth[s] ?? .loading).ending(success: online && !(injected && s.isContent))
+            storeHealth[s] = AdminInboxLogic.ended(before: before[s], running: storeHealth[s],
+                                                   success: online && !(injected && s.isContent), cancelled: cancelled)
         }
+        guard !cancelled else { return false }
         if run.contains(.joins) { await fetchAllRegistrationMatches() }
         recalculateCounts()
-        openFocusIfNeeded()
+        // أول جلب: `start` يفتح الطلب المطلوب بعد أن يكتمل (دفع صفحة الخصوصية هنا كان يقطع ما بعده)
+        if firstLoadDone { openFocusIfNeeded() }
+        return true
     }
 
     /// جلب قائمة واحدة — نفس نداءات نماذج العرض
@@ -1413,6 +1443,10 @@ struct AdminAllRequestsView: View {
                                               message: L10n.t("تعرض آخر طلبات وصلت.", "Showing the last requests received.")
                                                 + focusFailedNote,
                                               retry: { _ = retry() }, lastGood: since)))
+                .adminPageRow(top: DS.Spacing.sm, bottom: 0)
+        case .refreshing(let stores):
+            // «أعد المحاولة» والصفوف الموجودة باقية تحته — سطر صغير لا هيكل فوق بيانات (F2)
+            AnyView(AdminInboxRefreshLine(text: AdminInboxText.refreshingLine(stores)))
                 .adminPageRow(top: DS.Spacing.sm, bottom: 0)
         default:
             EmptyView()
@@ -2853,14 +2887,18 @@ struct AdminAllRequestsView: View {
         let notesId: UUID? = flow?.requestId ?? row?.id
         let hidden = flow.map { adminRequestVM.hidesApprovalNotes($0) } ?? boxIsOwnRow(row)
         let flowNotes = flow.map { ApprovalFlowNotesCard.hasContent($0) } ?? false
-        let ownNotes = notesId != nil && !hidden && adminRequestVM.approvalNotesAvailable == true
+        // «الوارد» للاطلاع: الملاحظات الموجودة تُقرأ بلا حقل ولا حذف، وبلا ملاحظات لا قسم (F2)
+        let canEdit = authVM.adminCanEdit(.inbox)
+        let hasOwn = notesId.map { !(adminRequestVM.approvalNotes[$0] ?? []).isEmpty } ?? false
+        let ownNotes = notesId != nil && !hidden && adminRequestVM.approvalNotesAvailable == true && (canEdit || hasOwn)
         if flowNotes || ownNotes {
             AdminBoxSection(title: L10n.t("ملاحظات الإدارة", "Admin notes"),
                             trailing: L10n.t("لا يراها العضو", "Hidden from the member")) {
                 VStack(alignment: .leading, spacing: DS.Hub.cardGap) {
                     if let flow, flowNotes { ApprovalFlowNotesCard(flow: flow) }
                     if ownNotes, let notesId {
-                        ApprovalInternalNotes(adminRequestVM: adminRequestVM, memberVM: memberVM, requestId: notesId, card: true)
+                        ApprovalInternalNotes(adminRequestVM: adminRequestVM, memberVM: memberVM, requestId: notesId, card: true,
+                                              canEdit: canEdit)
                     }
                 }
             }
@@ -3488,7 +3526,8 @@ struct AdminAllRequestsView: View {
         return AnyView(AdminRequestContextPanel(context: context, index: index) {
             // خارج المسار: ملاحظات الإدارة نفسها (`admin_request_notes`) — لا تظهر لصاحب الطلب أو المعني به (إلا المالك)
             if !inFlow, let id = row?.id, !ownRequest {
-                ApprovalInternalNotes(adminRequestVM: adminRequestVM, memberVM: memberVM, requestId: id)
+                ApprovalInternalNotes(adminRequestVM: adminRequestVM, memberVM: memberVM, requestId: id,
+                                      canEdit: authVM.adminCanEdit(.inbox))
             }
         }
         .task(id: row?.id) {
@@ -3619,7 +3658,8 @@ struct AdminAllRequestsView: View {
 
     /// العضو المعلّق الذي يُعدَّل رقمه — لطلبات الانضمام فقط ولمن يملك canModerate
     private func detailPhoneEditMember(_ detail: RequestDetail) -> FamilyMember? {
-        guard authVM.canModerate, case .join(let member) = detail else { return nil }
+        // «الوارد» للاطلاع (جدول السيرفر) = بلا قلم (F2)
+        guard authVM.canModerate, authVM.adminCanEdit(.inbox), case .join(let member) = detail else { return nil }
         return member
     }
 

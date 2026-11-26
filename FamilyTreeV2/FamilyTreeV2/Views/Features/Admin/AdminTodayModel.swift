@@ -4,7 +4,7 @@ import Supabase
 // MARK: - بيانات «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٠ — الصفحة الأولى تجيب «وش يحتاجني الآن؟»؛ إعادة التصميم U7 ٢٠٢٦-١١-٢٦)
 //
 // كل رقم هنا من بيانات محمّلة أصلاً في التطبيق (الطلبات، مسار الموافقات ٢، الرسائل، الأعضاء) أو من دوال
-// قراءة موجودة على السيرفر (النشطون الآن، تقرير الموافقات، رصيد رسائل الدخول) — بلا أي دالة جديدة. ما لا
+// قراءة موجودة على السيرفر (تقرير الموافقات، رصيد رسائل الدخول) — بلا أي دالة جديدة. ما لا
 // يتوفّر لا يُرسم (لا أرقام مختلقة). مجال كل دور كما في «الوارد» (`AdminAllRequestsView.tabsForRole`).
 // منطق الكلمات وسطر التحية الخالص في AdminTodayLogic.swift. زرّ الرأس `AdminHeaderIcon` (كان في AdminTodayPager.swift)
 // آخر هذا الملف.
@@ -273,14 +273,8 @@ enum AdminTodayFeed {
 // MARK: - قراءات إضافية من دوال موجودة (لا شيء جديد على السيرفر)
 
 enum AdminTodayFetch {
-    /// من دخل التطبيق ولو مرة (`get_members_last_signin` — المالك والمدير والمراقب). لأبناء البنات في «خارج العائلة»:
-    /// قوائم «استخدام التطبيق» تستبعدهم على السيرفر. nil إن تعذّر الجلب
-    static func signedInIds() async -> Set<UUID>? {
-        struct Row: Decodable { let member_id: UUID }
-        guard let rows: [Row] = try? await SupabaseConfig.client
-            .rpc("get_members_last_signin").execute().value else { return nil }
-        return Set(rows.map(\.member_id))
-    }
+    // (F2) حُذف `signedInIds` (`get_members_last_signin`) و`activeNowCount` (`get_active_members_now`) بلا نداء باقٍ:
+    // «خارج العائلة» الأحياء وحدهم بلا عدد حسابات، و«N الآن» ليس في التصميم الجديد («الاستخدام» يجلب قائمته بنفسه)
 
     /// الوفيات المعلن عنها — nil إن تعذّر الجلب (فلا يظهر تنبيه «لم يُعلن عنها» خطأً)
     static func announcedDeathIds() async -> Set<UUID>? {
@@ -302,18 +296,6 @@ enum AdminTodayFetch {
             .from("app_settings").select("death_alert_days").limit(1).execute().value,
               let days = rows.first?.death_alert_days else { return }
         DeathRecency.alertDays = min(max(days, 1), DeathRecency.days)
-    }
-
-    /// عدد من يستخدم التطبيق الآن (`get_active_members_now` — المالك والمدير)
-    static func activeNowCount() async -> Int? {
-        struct Row: Decodable { let member_id: UUID }
-        do {
-            let response = try await SupabaseConfig.client.rpc("get_active_members_now").execute()
-            let rows = try JSONDecoder().decode([Row].self, from: response.data)
-            return Set(rows.map(\.member_id)).count
-        } catch {
-            return nil
-        }
     }
 
     /// المنجز هذا الأسبوع من «تقرير الموافقات» (نُفّذ + رُفض خلال ٧ أيام) — nil إن لم يتوفّر
