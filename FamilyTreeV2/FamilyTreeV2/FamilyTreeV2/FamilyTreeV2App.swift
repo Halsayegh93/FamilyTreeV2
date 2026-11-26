@@ -18,6 +18,11 @@ struct FamilyTreeV2App: App {
 
     // Deep link handling is done via NotificationCenter → TreeView
 
+    init() {
+        // بلاغات الأعطال أولاً — قبل أي شيء آخر ليُلتقط أي عطل عند الإقلاع
+        CrashReporting.start()
+    }
+
     private var preferredScheme: ColorScheme? {
         switch appearanceMode {
         case "light":

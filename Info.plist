@@ -39,6 +39,8 @@
 	<string>يستخدم التطبيق الكاميرا لمسح رمز QR الخاص بأحد أفراد العائلة ومعرفة صلة القرابة بينكما.</string>
 	<key>OCCASION_KIT_BASE_URL</key>
 	<string>https://app.almohali.com/occasion-kit/</string>
+	<key>SENTRY_DSN</key>
+	<string>$(SENTRY_DSN)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
