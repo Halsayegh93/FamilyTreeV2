@@ -211,7 +211,8 @@ struct AdminMemberCounts: Equatable {
     var idle: Int? = nil
 
     /// حلقة «المستخدمين»: من فتح التطبيق بلا المنقطعين ٢١ يوماً، والعدد = هؤلاء + من لم يفتحه بعد
-    var usersOpened: Int? { accounts.flatMap { a in idle.map { a - $0 } } }
+    /// حلقة «المستخدمين» تبقى على «استخدام التطبيق» (كل من فتح التطبيق برقم) — لا تتأثر بتعريف «المسجّلون» للعائلة
+    var usersOpened: Int? { usageAccounts.flatMap { a in idle.map { a - $0 } } }
     var usersTotal: Int? { withPhone.flatMap { w in idle.map { w - $0 } } }
     /// مرشّحو «تحقق من الأحياء» (كبار السن بلا وفاة مسجّلة) — قبل استبعاد ما راجعه المستخدم «حي ✓» على جهازه.
     /// ما دام منهم من لم يُراجَع فأحياء الرجال والإجمالي «تقديري»
@@ -259,10 +260,46 @@ struct AdminMemberCounts: Equatable {
         womenAlive = females.filter { $0.isDeceased != true }.count
     }
 
+    /// «المسجّلون» بتعريف العائلة الواحد (طلب المالك ٢٠٢٦-١١-٢٦ «رتب الارقام عدل بالمسجلين و غير مسجلين و تحقق من
+    /// الكل»): رجال الشجرة الأحياء لهم حساب دخول (`AdminAccountsStore` — نفس فلتر «لديهم حساب» في «العائلة») + نساء العائلة
+    /// الأحياء المربوطات بحساب (نفس «مسجّلات» في قسم النساء). بلا «خارج العائلة» ولا السجلّات بلا اسم. كان من
+    /// «استخدام التطبيق» وحده: يعدّ حسابات النساء كلها (ومنهن من خارج العائلة) ولا يعدّ النساء بلا حساب في «بدون حساب».
+    /// قبل وصول قوائم الحسابات يبقى الرقم السابق.
+    @MainActor
+    mutating func setFamilyAccounts(members all: [FamilyMember]) {
+        let store = AdminAccountsStore.shared
+        guard store.loaded, !all.isEmpty else { return }
+        let sons = DaughterSonsIndex.shared.ids
+        let men = all.filter {
+            $0.role != .pending && $0.hasName && !$0.isWomanAccount && !sons.contains($0.id)
+                && $0.isDeceased != true && store.info($0.id) != nil
+        }.count
+        let outside = WomenStore.outsideFamilyIds
+        let linked = WomenStore.linkedUserByWoman
+        let women = WomenStore.cache.filter {
+            $0.isFemale && $0.hasName && !outside.contains($0.id) && $0.isDeceased != true && linked[$0.id] != nil
+        }.count
+        menAccounts = men
+        womenAccounts = women
+        accounts = men + women
+        if let alive = totalAlive { living = alive }
+    }
+
+    /// لهم حساب حسب «استخدام التطبيق» (قبل تعريف العائلة) — لحلقة «المستخدمين»
+    var usageAccounts: Int? = nil
+    /// المسجّلون من الرجال ومن نساء العائلة (الأحياء) — `setFamilyAccounts`
+    var menAccounts: Int? = nil
+    var womenAccounts: Int? = nil
+    /// «بدون حساب» من الأحياء = الأحياء ناقص المسجّلين (رجالاً ونساءً)
+    var menWithoutAccount: Int? { menAlive.flatMap { a in menAccounts.map { max(0, a - $0) } } }
+    var womenWithoutAccount: Int? { womenAlive.flatMap { a in womenAccounts.map { max(0, a - $0) } } }
+    var withoutAccount: Int? { menWithoutAccount.flatMap { m in womenWithoutAccount.map { m + $0 } } }
+
     mutating func setUsage(_ u: AppUsageStats?) {
         guard let u else { return }
         // «الأعضاء المسجّلون» = لهم حساب دخول (نفس شريحة «مسجّلون» في العائلة)
         accounts = u.active + u.idle + u.loginNoDevice
+        usageAccounts = accounts
         living = u.active + u.idle + u.loginNoDevice + u.neverLogged + u.noPhone
         withPhone = u.active + u.idle + u.loginNoDevice + u.neverLogged
         neverLogged = u.neverLogged
@@ -277,6 +314,7 @@ struct AdminMemberCounts: Equatable {
         // نساء العائلة بلا «خارج العائلة» — نفس `AdminFamilyCensus.make` (٢٠٢٦-١١-٢٦)
         c.setWomen(WomenStore.cache, excluding: WomenStore.outsideFamilyIds)
         c.setUsage(AppUsageStats.cached)
+        c.setFamilyAccounts(members: members)
         return c
     }
 }

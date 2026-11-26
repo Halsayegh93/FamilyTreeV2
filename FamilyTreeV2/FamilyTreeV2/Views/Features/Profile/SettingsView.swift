@@ -28,6 +28,8 @@ struct SettingsView: View {
     /// «أيقونة التطبيق» (طلب المالك ٢٠٢٦-١٠-٣١)
     @State private var showAppIcon = false
     @State private var showAbout = false
+    /// «ما الجديد» — يرجع له العضو متى ما بغى (طلب المالك ٢٠٢٦-١١-٢٦ «وين مكانه؟»)؛ يظهر وحده مرة بعد كل تحديث
+    @State private var showWhatsNew = false
     @State private var showTerms = false
     @State private var showPrivacyDoc = false
     @State private var showDeleteConfirmation = false
@@ -115,6 +117,9 @@ struct SettingsView: View {
         }
         .dsCenterBox(isPresented: $showAppIcon, onBackgroundTap: { showAppIcon = false }) { AppIconSettingsView() }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
+        .dsCenterBox(isPresented: $showWhatsNew, onBackgroundTap: { showWhatsNew = false }) {
+            WhatsNewBox(items: WhatsNewStore.shared.items) { showWhatsNew = false }
+        }
         // قراءة طويلة — مربّع طويل (توصية أبل)؛ وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
         .dsTallBox(isPresented: $showPrivacyDoc) { PrivacyPolicyView(only: "privacy") }
         .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView(only: "terms") }
@@ -296,9 +301,11 @@ struct SettingsView: View {
                       value: AppIconChoice.current.title) { showAppIcon = true }]
     }
 
-    /// «عن التطبيق»: سياسة الخصوصية · قواعد الاستخدام · عن التطبيق
+    /// «عن التطبيق»: ما الجديد · سياسة الخصوصية · قواعد الاستخدام · عن التطبيق
     private var helpTiles: [SettingsTile] {
-        [SettingsTile(id: "privacyDoc", icon: "hand.raised.fill", fill: DS.Color.slateFill,
+        [SettingsTile(id: "whatsNew", icon: "sparkles", fill: DS.Color.goldFill,
+                      title: t("ما الجديد", "What's new"), value: WhatsNewStore.version) { showWhatsNew = true },
+         SettingsTile(id: "privacyDoc", icon: "hand.raised.fill", fill: DS.Color.slateFill,
                       title: t("سياسة الخصوصية", "Privacy Policy"), value: "") { showPrivacyDoc = true },
          SettingsTile(id: "terms", icon: "doc.text.fill", fill: DS.Color.slateFill,
                       title: t("قواعد الاستخدام", "Terms of Use"), value: "") { showTerms = true },

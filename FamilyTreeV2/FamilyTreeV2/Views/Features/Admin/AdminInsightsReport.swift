@@ -138,7 +138,7 @@ struct AdminInsightsFamilyCard: View {
                 }
             }
         }
-        .onAppear { counts = AdminMemberCounts.seeded(members: memberVM.allMembers); counts.setUsage(usage) }
+        .onAppear { refreshCounts() }
         .onChange(of: memberVM.allMembers.count) { _ in refreshCounts() }
         .task { await load() }
     }
@@ -151,6 +151,7 @@ struct AdminInsightsFamilyCard: View {
     private func refreshCounts() {
         var c = AdminMemberCounts.seeded(members: memberVM.allMembers)
         c.setUsage(usage)
+        c.setFamilyAccounts(members: memberVM.allMembers)
         counts = c
     }
 

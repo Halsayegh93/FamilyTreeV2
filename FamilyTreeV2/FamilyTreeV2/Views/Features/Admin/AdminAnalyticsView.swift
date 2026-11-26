@@ -113,7 +113,7 @@ struct AdminAnalyticsView: View {
             return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
                 AnyView(outsideCard(census))
                 AnyView(aliveDeadSection(census))
-                AnyView(registeredSection)
+                AnyView(registeredSection(census))
             })
         }
         return AnyView(AdaptiveCardStack(spacing: DS.Hub.stackSpacing) {
@@ -122,7 +122,7 @@ struct AdminAnalyticsView: View {
             // ٢ الأحياء والراحلون
             AnyView(aliveDeadSection(census))
             // ٣ التطبيق
-            AnyView(registeredSection)
+            AnyView(registeredSection(census))
             AnyView(rolesSection)
             // ٤ تركيبة العائلة
             AnyView(ageGroupsSection)
@@ -141,11 +141,17 @@ struct AdminAnalyticsView: View {
 
     /// الحلقات الثلاث (الإجمالي · الرجال · النساء) + المسجّلون — انتقلت من مربّع «اليوم» (طلب المالك ٢٠٢٦-١٠-٢٢) فبيتها
     /// هنا وحده. نفس الأعداد من البيانات المحمّلة في الصفحة (الأعضاء، شجرة النساء، «استخدام التطبيق») بلا جلب جديد
-    private func censusCard(_ census: AdminFamilyCensus) -> some View {
-        // نساء العائلة بلا «خارج العائلة» (كانت تعدّهن هنا وحدها — ٢٠٢٦-١١-٢٦)
+    /// أعداد الصفحة كلها: أعداد «العائلة» + «المسجّلون» بتعريف العائلة الواحد (`setFamilyAccounts`)
+    private func familyCounts(_ census: AdminFamilyCensus) -> AdminMemberCounts {
         var counts = census.counts
         counts.setUsage(usage)
-        return AdminMemberCountsCard(counts: counts)
+        counts.setFamilyAccounts(members: memberVM.allMembers)
+        return counts
+    }
+
+    private func censusCard(_ census: AdminFamilyCensus) -> some View {
+        // نساء العائلة بلا «خارج العائلة» (كانت تعدّهن هنا وحدها — ٢٠٢٦-١١-٢٦)
+        return AdminMemberCountsCard(counts: familyCounts(census))
     }
 
     // MARK: - «خارج العائلة» (الأحياء فقط — نفس حلقتها في «العائلة»)
@@ -259,33 +265,41 @@ struct AdminAnalyticsView: View {
     // MARK: - المسجّلون في التطبيق من الأحياء (الحالات الرسمية — «عضو مسجّل» · «بدون حساب»)
 
     /// كل رقم يفتح شريحته في «العائلة» (بيت القائمة)
-    private var registeredSection: some View {
-        let u = usage
-        let registered = u.map { $0.active + $0.idle + $0.loginNoDevice }
-        let treeOnly = u.map { $0.neverLogged + $0.noPhone }
-        let living = (registered ?? 0) + (treeOnly ?? 0)
+    /// المسجّلون وبدون حساب من الأحياء — رجال الشجرة ونساء العائلة (بلا «خارج العائلة»)، نفس فلتري «العائلة»
+    /// (طلب المالك ٢٠٢٦-١١-٢٦ «رتب الارقام عدل بالمسجلين و غير مسجلين»)
+    private func registeredSection(_ census: AdminFamilyCensus) -> some View {
+        let c = familyCounts(census)
+        let registered = c.menAccounts == nil ? nil : c.accounts
+        let without = c.withoutAccount
+        let living = c.totalAlive ?? 0
+        let known = registered != nil && living > 0
         let pct = AnalyticsPercent.value(registered ?? 0, of: living)
-        let line = L10n.t("\(registered ?? 0) من \(living) من الأحياء", "\(registered ?? 0) of \(living) living members")
+        let line = L10n.t("\((registered ?? 0).formatted()) من \(living.formatted()) من الأحياء",
+                          "\((registered ?? 0).formatted()) of \(living.formatted()) living members")
+        func split(_ men: Int?, _ women: Int?) -> String {
+            guard let men, let women else { return L10n.t("جارٍ التحميل…", "Loading…") }
+            return L10n.t("رجال \(men.formatted()) · نساء \(women.formatted())", "Men \(men.formatted()) · Women \(women.formatted())")
+        }
         return AdminSectionCard(title: L10n.t("المسجّلون في التطبيق من الأحياء", "Registered among the living"),
                                 spacing: DS.Spacing.sm) {
             // الحلقة الموحّدة (الدفعة ١٠): المسجّلون أخضر فوق رمادي «بدون حساب»
-            DSGaugeRow(gauge: DSRingGauge(progress: u == nil || living == 0 ? nil : Double(registered ?? 0) / Double(living),
+            DSGaugeRow(gauge: DSRingGauge(progress: known ? Double(registered ?? 0) / Double(living) : nil,
                                           tint: DS.Color.success, size: DS.Ring.medium, track: DS.Ring.restTrack,
-                                          center: .percent(u == nil || living == 0 ? nil : pct),
+                                          center: .percent(known ? pct : nil),
                                           caption: L10n.t("مسجّلون", "Registered")),
                        title: L10n.t("لهم حساب في التطبيق", "Have an app account"),
-                       subtitle: u == nil ? L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…") : line,
-                       spoken: u == nil ? nil : L10n.t("المسجّلون \(pct)٪، \(line)", "Registered \(pct)%, \(line)"))
+                       subtitle: known ? line : L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…"),
+                       spoken: known ? L10n.t("المسجّلون \(pct)٪، \(line)", "Registered \(pct)%, \(line)") : nil)
             AdminRowsCardBody {
                 AdminTapRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
-                            title: L10n.t("الأعضاء المسجّلون", "Registered members"),
-                            subtitle: L10n.t("لهم حساب في التطبيق", "Have an app account"),
-                            value: registered.map { "\($0)" } ?? "—",
+                            title: L10n.t("لديهم حساب", "Have an account"),
+                            subtitle: split(c.menAccounts, c.womenAccounts),
+                            value: registered.map { $0.formatted() } ?? "—",
                             tap: .page { AnyView(AdminMembersPage(chip: .registered).adminArea(.family)) })
                 AdminTapRow(icon: "person.fill", tint: DS.Color.slate,
-                            title: L10n.t("بدون حساب", "In the tree only"),
-                            subtitle: L10n.t("أسماء في الشجرة بلا حساب", "Names in the tree without an account"),
-                            value: treeOnly.map { "\($0)" } ?? "—",
+                            title: L10n.t("ليس لديهم حساب", "No account"),
+                            subtitle: split(c.menWithoutAccount, c.womenWithoutAccount),
+                            value: without.map { $0.formatted() } ?? "—",
                             tap: .page { AnyView(AdminMembersPage(chip: .treeOnly).adminArea(.family)) })
             }
         }

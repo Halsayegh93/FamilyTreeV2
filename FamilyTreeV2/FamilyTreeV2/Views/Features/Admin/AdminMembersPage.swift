@@ -52,7 +52,9 @@ struct AdminMembersPage: View {
     @State private var searchToken = 0
     @State private var searchFocus = 0
 
-    @State private var chip: AdminMemberChip
+    /// الفلتران (طلب المالك ٢٠٢٦-١١-٢٦): «الحساب» أولاً ثم «الحالة» — بدل شرائح «الكل · مسجّلون · غير مسجّلين · متوفون»
+    @State private var accountFilter: AdminAccountFilter
+    @State private var lifeFilter: AdminLifeFilter
     /// قائمة المراجعة المفتوحة في «الأعضاء» — nil = الشريحة
     @State private var review: AdminMemberReview?
     @State private var query = ""
@@ -98,7 +100,9 @@ struct AdminMembersPage: View {
             _scope = State(initialValue: .women)
             _womenChipRequest = State(initialValue: AdminWomenChipRequest(chip: .outside))
         }
-        _chip = State(initialValue: chip.shownChip)
+        let f = chip.shownChip.filters
+        _accountFilter = State(initialValue: f.account)
+        _lifeFilter = State(initialValue: f.life)
         _review = State(initialValue: chip.review ?? (chip == .deceased && sub == .deathIncomplete ? .death : nil))
     }
 
@@ -287,11 +291,16 @@ struct AdminMembersPage: View {
         branchCounts = counts
     }
 
-    /// عدد الشريحة — داخل الفرع المختار إن وُجد
-    private func chipCount(_ c: AdminMemberChip) -> Int? {
-        guard let base = index.shownCount(c) else { return nil }
-        guard branchSet != nil else { return base }
-        return branchCounts[AdminMembersIndex.Key(chip: c, sub: .all)] ?? 0
+    /// عدد خيار الفلتر مع الفلتر الآخر — داخل الفرع المختار إن وُجد؛ nil قبل وصول ما يلزمه (الحسابات)
+    private func filterCount(account: AdminAccountFilter, life: AdminLifeFilter) -> Int? {
+        guard index.built else { return nil }
+        if account != .all && !index.accountsReady { return nil }
+        var n = 0
+        for i in index.rows(.all, .all) where index.matches(i, account: account, life: life) {
+            if let set = branchSet, !set.contains(index.entries[i].id) { continue }
+            n += 1
+        }
+        return n
     }
 
     /// اسم الفرع المختار في الشريحة (الاسم المختصر للرأس — الأسماء المخصّصة لصفوف قائمة الفروع فقط)
@@ -341,7 +350,7 @@ struct AdminMembersPage: View {
     /// تحت العنوان: الحلقات فقط — البحث والشرائح نزلت تحت «يحتاج مراجعتك»
     private var headerAccessory: some View {
         // «النساء» تعرض قائمة النساء هنا (كانت تقفز لتبويب الشجرة) و«خارج العائلة» فرعها — للمالك والمدير
-        AnyView(AdminFamilyCensusBand(census: census, openMen: { scope = .family; select(.all) },
+        AnyView(AdminFamilyCensusBand(census: census, openMen: { scope = .family; resetFilters() },
                                       openWomen: authVM.isAdmin ? { openWomenList(.all) } : nil,
                                       openOutside: authVM.isAdmin ? { openWomenList(.outside) } : nil))
             // أنزل قليلاً عن العنوان (طلب المالك ٢٠٢٦-١١-٠٨ «نزل شوي الحلقات ما نخليهم لازقين»)
@@ -349,55 +358,101 @@ struct AdminMembersPage: View {
             .padding(.bottom, DS.Spacing.xs)
     }
 
-    /// الشرائح الظاهرة في «شجرة العائلة» (فرع خارج العائلة ونساء الحسابات في «شجرة النساء»)
-    private var visibleChips: [AdminMemberChip] { AdminMemberChip.shown }
-
-    /// الشرائح فوق الكحلي — في الرأس المطويّ
+    /// الفلتران فوق الكحلي — في الرأس المطويّ: «الحساب» ثم «الحالة»
     private var bandChipsRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Spacing.xsm) {
-                ForEach(visibleChips) { c in
-                    AdminBandFilterChip(title: c.chipTitle, count: c == .all ? nil : chipCount(c),
-                                        selected: review == nil && c == chip) {
-                        select(c)
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xsm) {
+                    ForEach(AdminAccountFilter.allCases) { a in
+                        AdminBandFilterChip(title: a.title,
+                                            count: a == .all ? nil : filterCount(account: a, life: lifeFilter),
+                                            selected: review == nil && a == accountFilter) { setAccount(a) }
                     }
                 }
             }
-            .padding(.vertical, DS.Spacing.xxs)
-        }
-    }
-
-    /// الشرائح على الأبيض تحت «الأعضاء»: الكل · مسجّلون · مقيّدون · متوفون — موضعها يقرّر طيّ الرأس
-    private var chipsRow: some View {
-        ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.xsm) {
-                    ForEach(visibleChips) { c in
-                        Button { select(c) } label: {
-                            AdminMembersLightChip(title: c.chipTitle, count: c == .all ? nil : chipCount(c),
-                                                  selected: review == nil && c == chip)
+                    ForEach(AdminLifeFilter.allCases) { l in
+                        AdminBandFilterChip(title: l.title,
+                                            count: l == .all ? nil : filterCount(account: accountFilter, life: l),
+                                            selected: review == nil && l == lifeFilter) { setLife(l) }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, DS.Spacing.xxs)
+    }
+
+    /// الفلتران على الأبيض تحت «الأعضاء»: «الحساب» (كل الحسابات · لديهم حساب · ليس لديهم حساب) ثم «الحالة» (الأحياء
+    /// والمتوفون · الأحياء فقط · المتوفون فقط) — موضعهما يقرّر طيّ الرأس
+    private var chipsRow: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xsm) {
+                    ForEach(AdminAccountFilter.allCases) { a in
+                        Button { setAccount(a) } label: {
+                            AdminMembersLightChip(title: a.title,
+                                                  count: a == .all ? nil : filterCount(account: a, life: lifeFilter),
+                                                  selected: review == nil && a == accountFilter)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityAddTraits(review == nil && c == chip ? .isSelected : [])
-                        .id(c)
+                        .accessibilityAddTraits(review == nil && a == accountFilter ? .isSelected : [])
                     }
                 }
                 .padding(.horizontal, DS.Border.width)
             }
-            .onAppear {
-                // بعد أول تخطيط — الشريحة المختارة (من «اليوم» أو التنبيه) ظاهرة كاملة
-                guard chip != .all else { return }
-                DispatchQueue.main.async { proxy.scrollTo(chip, anchor: .center) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: DS.Spacing.xsm) {
+                    ForEach(AdminLifeFilter.allCases) { l in
+                        Button { setLife(l) } label: {
+                            AdminMembersLightChip(title: l.title,
+                                                  count: l == .all ? nil : filterCount(account: accountFilter, life: l),
+                                                  selected: review == nil && l == lifeFilter)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(review == nil && l == lifeFilter ? .isSelected : [])
+                    }
+                }
+                .padding(.horizontal, DS.Border.width)
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(AdminHubScroll.space)).minY } action: { chipsMoved($0) }
     }
 
-    private func select(_ c: AdminMemberChip) {
-        guard c != chip || review != nil else { return }
+    private func setAccount(_ a: AdminAccountFilter) {
+        guard a != accountFilter || review != nil else { return }
         UISelectionFeedbackGenerator().selectionChanged()
         withAnimation(DS.Anim.snappy) {
-            chip = c
+            accountFilter = a
+            review = nil
+            limit = Self.pageSize
+        }
+    }
+
+    private func setLife(_ l: AdminLifeFilter) {
+        guard l != lifeFilter || review != nil else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(DS.Anim.snappy) {
+            lifeFilter = l
+            review = nil
+            limit = Self.pageSize
+        }
+    }
+
+    /// «الكل»: الفلتران على أولهما وبلا قائمة مراجعة (حلقة «الرجال»)
+    private func resetFilters() {
+        withAnimation(DS.Anim.snappy) {
+            accountFilter = .all
+            lifeFilter = .all
+            review = nil
+            limit = Self.pageSize
+        }
+    }
+
+    /// ✕ قائمة المراجعة — يرجع للقائمة بالفلترين كما هما
+    private func closeReview() {
+        UISelectionFeedbackGenerator().selectionChanged()
+        withAnimation(DS.Anim.snappy) {
             review = nil
             limit = Self.pageSize
         }
@@ -415,8 +470,15 @@ struct AdminMembersPage: View {
     /// الفلتر الحالي للتصدير: الشريحة (أو قائمة المراجعة) · الفرع · «البحث» — بلا فلتر = كل العائلة
     private var currentExportScope: AdminReportScope? {
         let q = trimmedQuery
-        guard chip != .all || review != nil || !q.isEmpty || branchFilter != nil else { return nil }
-        var parts = [review?.title ?? chip.title]
+        guard accountFilter != .all || lifeFilter != .all || review != nil || !q.isEmpty || branchFilter != nil else { return nil }
+        var parts: [String] = []
+        if let review {
+            parts.append(review.title)
+        } else {
+            if accountFilter != .all { parts.append(accountFilter.title) }
+            if lifeFilter != .all { parts.append(lifeFilter.title) }
+            if parts.isEmpty { parts.append(L10n.t("الكل", "All")) }
+        }
         if let b = branchFilterTitle { parts.append(L10n.t("الفرع: \(b)", "Branch: \(b)")) }
         if !q.isEmpty { parts.append("«\(q)»") }
         return AdminReportScope(ids: Set(currentRows.map { index.entries[$0].id }), title: parts.joined(separator: " · "))
@@ -539,7 +601,8 @@ struct AdminMembersPage: View {
         if let review {
             base = rows(of: review)
         } else {
-            base = index.rows(chip, .all)
+            let account = accountFilter, life = lifeFilter
+            base = index.rows(.all, .all).filter { index.matches($0, account: account, life: life) }
             if let set = branchSet { base = base.filter { set.contains(index.entries[$0].id) } }
         }
         let q = trimmedQuery
@@ -579,7 +642,7 @@ struct AdminMembersPage: View {
                     .dsFont(.caption)
                     .foregroundColor(review.tint.dsReadableGlyph)
                     .lineLimit(1)
-                Button { select(chip) } label: {
+                Button { closeReview() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .dsGlyph(DS.Glyph.md, weight: .regular)
                         .foregroundColor(DS.Color.textTertiary)

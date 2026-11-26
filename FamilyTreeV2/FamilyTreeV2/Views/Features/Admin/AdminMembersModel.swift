@@ -204,6 +204,46 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
     }
 }
 
+/// فلتر «الحساب» في «العائلة» — قبل فلتر «الحالة» (طلب المالك ٢٠٢٦-١١-٢٦ «فلتر لديهم حساب و ليس لديهم حساب قبل
+/// فلتر المتوفين و الاحياء علشان نراقب التطبيق و الاعضاء بشكل افضل»). بدل شرائح «مسجّلون · غير مسجّلين · متوفون»
+enum AdminAccountFilter: String, CaseIterable, Identifiable {
+    case all, with, without
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all:     return L10n.t("كل الحسابات", "All accounts")
+        case .with:    return L10n.t("لديهم حساب", "Have an account")
+        case .without: return L10n.t("ليس لديهم حساب", "No account")
+        }
+    }
+}
+
+/// فلتر «الحالة» في «العائلة»: الأحياء والمتوفون معاً · الأحياء فقط · المتوفون فقط (طلب المالك ٢٠٢٦-١١-٢٦)
+enum AdminLifeFilter: String, CaseIterable, Identifiable {
+    case all, alive, deceased
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all:      return L10n.t("الأحياء والمتوفون", "Living and deceased")
+        case .alive:    return L10n.t("الأحياء فقط", "Living only")
+        case .deceased: return L10n.t("المتوفون فقط", "Deceased only")
+        }
+    }
+}
+
+extension AdminMemberChip {
+    /// الشريحة القديمة (من «اليوم» أو التنبيه) ← الفلتران: مسجّلون = لديهم حساب + الأحياء · غير مسجّلين = ليس لديهم
+    /// حساب + الأحياء · متوفون = المتوفون فقط
+    var filters: (account: AdminAccountFilter, life: AdminLifeFilter) {
+        switch self {
+        case .registered: return (.with, .alive)
+        case .treeOnly:   return (.without, .alive)
+        case .deceased:   return (.all, .deceased)
+        default:          return (.all, .all)
+        }
+    }
+}
+
 /// «يحتاج مراجعتك» — أربع قوائم أعلى صفحة «العائلة» (اختيار المالك ٢٠٢٦-١١-٠٦ «ب — المراجعة أولاً»)، كل قائمة تُراجَع
 /// عضواً عضواً بالسابق والتالي في ورقة العضو
 enum AdminMemberReview: String, CaseIterable, Identifiable {
@@ -672,6 +712,8 @@ struct AdminMembersIndex {
         let member: FamilyMember
         let status: AdminMemberStatus?
         let usage: AppUsageCategory?
+        /// له حساب دخول (في قوائم «استخدام التطبيق») — يفرّق المتوفين في فلتر «الحساب»
+        let hasLogin: Bool
         let gaps: [AdminMemberGap]
         let problems: [AdminMemberProblem]
         /// رأس الفرع (ابن مباشر لرأس الشجرة) — nil = خارج الفروع
@@ -711,6 +753,27 @@ struct AdminMembersIndex {
     static let empty = AdminMembersIndex()
 
     func rows(_ chip: AdminMemberChip, _ sub: AdminMemberSub) -> [Int] { lists[Key(chip: chip, sub: sub)] ?? [] }
+
+    /// فلترا «الحساب» و«الحالة» معاً على صفّ من «الكل» — الحساب لا يُعرف قبل وصول قوائم الحسابات
+    func matches(_ i: Int, account: AdminAccountFilter, life: AdminLifeFilter) -> Bool {
+        let e = entries[i]
+        let dead = e.member.isDeceased == true
+        switch life {
+        case .all: break
+        case .alive: if dead { return false }
+        case .deceased: if !dead { return false }
+        }
+        switch account {
+        case .all:
+            return true
+        case .with:
+            guard accountsReady else { return false }
+            return e.status == .registered || e.status == .frozen || e.hasLogin
+        case .without:
+            guard accountsReady else { return false }
+            return e.status == .treeOnly || (e.status == .deceased && !e.hasLogin)
+        }
+    }
     func count(_ chip: AdminMemberChip, _ sub: AdminMemberSub = .all) -> Int { rows(chip, sub).count }
 
     /// العدد للعرض — nil قبل وصول ما يلزمه (الحسابات لشرائح المسجّلين والمقيّدين)
@@ -756,7 +819,7 @@ struct AdminMembersIndex {
             let registered = status == .registered || (status == .frozen && info != nil)
             let gaps = AdminMemberFacts.gaps(m, registered: registered)
             let problems = AdminMemberFacts.problems(m, in: ctx)
-            entries.append(Entry(member: m, status: status, usage: info?.usage, gaps: gaps, problems: problems,
+            entries.append(Entry(member: m, status: status, usage: info?.usage, hasLogin: info != nil, gaps: gaps, problems: problems,
                                  branch: heads[m.id], living: oldLiving[m.id],
                                  needle: ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
                                  digits: AdminMemberFacts.asciiDigits(m.phoneNumber ?? "")))
