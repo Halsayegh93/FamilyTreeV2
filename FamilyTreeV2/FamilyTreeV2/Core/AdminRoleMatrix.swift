@@ -144,7 +144,11 @@ enum AdminRoleMatrix {
     // MARK: من السيرفر
 
     private static func roleObject(_ role: FamilyMember.UserRole) -> [String: Any]? {
-        (AppConfigValues.shared.values[configKey] as? [String: Any])?[role.rawValue] as? [String: Any]
+        #if DEBUG
+        // أداة الفحص T0 (`-tmpRoleMatrix`): جدول تجريبي يحلّ محلّ جدول السيرفر في النسخة التجريبية فقط
+        if let o = DebugAdminProbe.roleMatrixOverride(role.rawValue) { return o }
+        #endif
+        return (AppConfigValues.shared.values[configKey] as? [String: Any])?[role.rawValue] as? [String: Any]
     }
 
     private static func serverValue(role: FamilyMember.UserRole, group: String, key: String) -> AdminAccess? {
