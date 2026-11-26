@@ -6,6 +6,8 @@ import PhotosUI
 // تفتحها «ورقة العضو» (`AdminMemberSheet`) من أزرار «بيانات ناقصة» و«مشكلات الشجرة» وصفوف «البيانات» و«النسب»:
 // ربط الأب، تاريخ الميلاد، الجنس، تاريخ الوفاة، الصورة، والاسم (كان في «صحة الشجرة»). صفحة المحطة نفسها حُذفت
 // (٢٠٢٦-١٠-٢٠) — «التالي ›» في الورقة يمشي في القائمة عضواً عضواً. المربّعات ونداءاتها كما هي.
+// إعادة تصميم الإدارة (٢٠٢٦-١١-٢٦، U13): كل حفظ يمرّ بـ`DebugAdminProbe.dryRun` (تجربة دور = نجاح مصطنع بلا كتابة)،
+// وما يُبلغ فشله (الوفاة، الصورة، الجنس) يبقى المربّع مفتوحاً بسطر الخطأ داخله (spec C.10) بدل الإغلاق بصمت.
 
 // MARK: - Link Father Sheet
 
@@ -149,6 +151,7 @@ struct LinkFatherSheet: View {
 
     private func save() {
         guard let father = selectedFather else { return }
+        if DebugAdminProbe.dryRun("updateMemberFather \(member.id) → \(father.id)") { dismiss(); return }
         isSaving = true
         Task {
             await memberVM.updateMemberFather(memberId: member.id, fatherId: father.id)
@@ -226,6 +229,7 @@ struct EditBirthDateSheet: View {
     }
 
     private func save() {
+        if DebugAdminProbe.dryRun("updateMemberBirthDate \(member.id)") { dismiss(); return }
         isSaving = true
         Task {
             let dateString = Self.formatter.string(from: selectedDate)
@@ -403,6 +407,7 @@ struct EditGenderSheet: View {
     @State private var failure: String?
 
     private func save() {
+        if DebugAdminProbe.dryRun("gender \(gender) \(member.id)") { dismiss(); return }
         isSaving = true
         failure = nil
         Task {
@@ -433,6 +438,8 @@ struct EditDeathDateSheet: View {
     @State private var selectedDate = Date()
     @State private var isSaving = false
     @State private var isUnknown = false
+    /// فشل الحفظ — سطر داخل المربّع (يبقى مفتوحاً)
+    @State private var failure: String?
     /// ما فُتح عليه المربّع (اليوم + «غير معروف») — «إلغاء» يسأل فقط إذا تغيّر (توصية أبل)
     private let startDay: String
     private let startUnknown: Bool
@@ -495,21 +502,31 @@ struct EditDeathDateSheet: View {
                     }
                 }
             }
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+            }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func save() {
+        if DebugAdminProbe.dryRun("death date \(isUnknown ? "unknown" : "set") \(member.id)") { dismiss(); return }
         isSaving = true
+        failure = nil
+        memberVM.errorMessage = nil
         Task {
             if isUnknown {
                 await memberVM.setDeathDateUnknown(memberId: member.id)
                 isSaving = false
+                if let err = memberVM.errorMessage {
+                    withAnimation(DS.Anim.quick) { failure = err }
+                    return
+                }
                 dismiss()
                 return
             }
             let birth = member.birthDate.flatMap { Self.formatter.date(from: $0) }
-            _ = await memberVM.updateMemberData(
+            let saved = await memberVM.updateMemberData(
                 memberId: member.id,
                 fullName: member.fullName,
                 phoneNumber: member.phoneNumber ?? "",
@@ -520,9 +537,15 @@ struct EditDeathDateSheet: View {
                 isPhoneHidden: member.isPhoneHidden ?? false
             )
             isSaving = false
+            guard saved else {
+                withAnimation(DS.Anim.quick) { failure = memberVM.errorMessage ?? Self.saveFailed }
+                return
+            }
             dismiss()
         }
     }
+
+    static let saveFailed = L10n.t("تعذّر الحفظ. تأكد من الاتصال ثم حاول مرة أخرى.", "Couldn't save. Check your connection and try again.")
 }
 
 /// صورة العضو — دائرة الصورة (مثل شعار مربّعات الإضافة) و«لا توجد صورة لهذا العضو»
@@ -533,6 +556,8 @@ struct EditMemberPhotoSheet: View {
     @State private var pickedItem: PhotosPickerItem?
     @State private var pickedImage: UIImage?
     @State private var isSaving = false
+    /// فشل الحفظ — سطر داخل المربّع (يبقى مفتوحاً)
+    @State private var failure: String?
 
     var body: some View {
         DSComposer(
@@ -554,6 +579,9 @@ struct EditMemberPhotoSheet: View {
                               icon: "photo.fill", tint: AppSection.admin.ink, index: 1) {
                 StationPhotoCircle(item: $pickedItem, image: pickedImage)
                 noPhotoButton
+            }
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
         .onChange(of: pickedItem) { item in
@@ -586,20 +614,34 @@ struct EditMemberPhotoSheet: View {
     }
 
     private func markNoPhoto() {
+        if DebugAdminProbe.dryRun("setAvatarUnavailable \(member.id)") { dismiss(); return }
         isSaving = true
+        failure = nil
+        memberVM.errorMessage = nil
         Task {
             await memberVM.setAvatarUnavailable(memberId: member.id)
             isSaving = false
+            if let err = memberVM.errorMessage {
+                withAnimation(DS.Anim.quick) { failure = err }
+                return
+            }
             dismiss()
         }
     }
 
     private func save() {
         guard let img = pickedImage else { return }
+        if DebugAdminProbe.dryRun("uploadAvatar \(member.id)") { dismiss(); return }
         isSaving = true
+        failure = nil
+        memberVM.errorMessage = nil
         Task {
-            _ = await memberVM.uploadAvatar(image: img, for: member.id)
+            let uploaded = await memberVM.uploadAvatar(image: img, for: member.id)
             isSaving = false
+            guard uploaded else {
+                withAnimation(DS.Anim.quick) { failure = memberVM.errorMessage ?? EditDeathDateSheet.saveFailed }
+                return
+            }
             dismiss()
         }
     }
@@ -679,6 +721,7 @@ struct EditNameSheet: View {
     private func saveName() async {
         let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if DebugAdminProbe.dryRun("updateMemberName \(member.id)") { dismiss(); return }
         isSaving = true
         await memberVM.updateMemberName(memberId: member.id, fullName: trimmed)
         isSaving = false
