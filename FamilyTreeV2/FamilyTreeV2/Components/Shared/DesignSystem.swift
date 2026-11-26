@@ -2593,13 +2593,11 @@ extension DS {
         static let filterChipHeight: CGFloat = 36
         /// زرّ الاختيار في ورقة الفلاتر — spec A.13
         static let filterRadio: CGFloat = 22
-        /// مربّعات الأقسام (`AdminRowTile`؛ غير `areaColumns` ٣ لمربّعات البحث والأدوات): عمودان بفراغ ١٠، حشوة ١٢ جانباً و١٠ فوق وتحت،
-        /// أقل ارتفاع ٦٠، والزاوية `cardRadius` — spec A.8؛ صُغّرت ٢٠٢٦-١١-٢٦ (طلب المالك «نصغر المربعات»: كان ٧٦ وحشوة ١٢ من كل جهة)
+        /// مربّعات الأقسام (`AdminRowTile`؛ غير `areaColumns` ٣ لمربّعات البحث والأدوات): عمودان بفراغ ١٠، حشوة ١٢، أقل ارتفاع ٧٦، والزاوية `cardRadius` — spec A.8
         static let areaTileColumns = 2
         static let areaTileGap: CGFloat = DS.Spacing.smd
         static let areaTilePadding: CGFloat = DS.Spacing.md
-        static let areaTilePaddingV: CGFloat = DS.Spacing.smd
-        static let areaTileMinHeight: CGFloat = 60
+        static let areaTileMinHeight: CGFloat = 76
         /// الضغط: المربّع يصغر ٠٫٩٧ مع تظليل في ١٢٠ م.ث، والصفّ تظليل فقط في ١٠٠ م.ث — spec A.8/A.16
         static let tilePressScale: CGFloat = 0.97
         static let tilePress = Animation.easeOut(duration: 0.12)
