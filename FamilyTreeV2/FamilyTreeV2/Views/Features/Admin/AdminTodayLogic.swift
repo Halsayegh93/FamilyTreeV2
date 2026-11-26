@@ -133,8 +133,11 @@ nonisolated enum AdminTodayLogic {
                 : (joined == 1 ? "1 member joined this week" : "\(AdminNumberText.grouped(joined)) members joined this week")
             return AdminSmartLine(text: text, link: link(.family))
         }
-        return AdminSmartLine(text: L10n.t("ما في طلبات — يوم هادئ", "No requests — a quiet day"), link: nil)
+        return AdminSmartLine(text: calmText, link: nil)
     }
+
+    /// «ما في طلبات — يوم هادئ» — السطر حين لا شيء (v2: لا يُرسم حبّةً — `AdminTodayBandLogic.showsSmartPill`)
+    static var calmText: String { L10n.t("ما في طلبات — يوم هادئ", "No requests — a quiet day") }
 
     /// «طلب عاجل في الوارد» · «طلبان عاجلان في الوارد» · «3 طلبات عاجلة في الوارد» · «12 طلباً عاجلاً في الوارد»
     static func urgentLine(_ n: Int) -> String {

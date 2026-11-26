@@ -2773,6 +2773,51 @@ extension DS.Hub {
     static let swipeGap: CGFloat = DS.Spacing.xs
 }
 
+// MARK: «اليوم» v2 — الاتجاه «أ» «بطاقات العائلة الملوّنة» (اختيار المالك ٢٠٢٦-١١-٢٦، الوحدة V2-1)
+//
+// الرأس الكحلي يحمل كل ما فوق الأقسام (العنوان، التحية والدور، الأزرار، سطر التحية حبّةً، الحلقات، رابطا «في التطبيق» و«خارج
+// العائلة»)، والأقسام مربّعات مسطّحة بلون كل قسم. ألوان الرأس والمربّعات ثابتة في الوضعين (فوق الكحلي أو تعبئة ثابتة).
+// التباين (مقيس على الكحلي بطبقته البيضاء ٨٪ ≈ #2A3F5B): الذهبي `accentLight` ٤٫٠:١ — للخطوط والأسهم والنقاط فقط، ونصوص
+// الذهبي الصغيرة `DS.Color.headerSubtitle` (٦٫٧:١)؛ حلقات الرجال ٤٫٣:١ والنساء ٦٫١:١ (فاحص dataviz: الحسّ العادي ١٧ ✓،
+// عمى الأحمر ٧٫٨ في نطاق «مسموح مع تمييز ثانٍ» — كل حلقة باسمها وعددها تحتها، لا لون وحده).
+extension DS.Hub {
+    /// حلقات «العائلة» على الرأس: ٥٨/٦ والنسبة في الوسط ١٣ شبه عريض أبيض (الاسم والعدد نصّان تحتها)
+    static let bandRing = DS.Ring.Size(side: 58, line: 6, value: .ringSmall, caption: nil)
+    /// ألوان الحلقات الثلاث فوق الكحلي (ثابتة): الإجمالي ذهبي، الرجال أزرق `male` الفاتح، النساء ورديّ `female` الفاتح
+    static let bandRingTotal = DS.Color.accentLight
+    static let bandRingMen = SwiftUI.Color(hex: "#7FA8D6")
+    static let bandRingWomen = censusFemale
+    /// شارة «≈» (نسبة الأحياء تقديرية) على ركن الحلقة: ذهبية بنص كحلي
+    static let bandApproxBadge: CGFloat = 18
+    /// الخطّ الرفيع فوق رابطَي «في التطبيق» و«خارج العائلة»
+    static let bandDivider = SwiftUI.Color.white.opacity(0.10)
+    /// الفراغ بين كتل الرأس (الأزرار ← الحبّة ← الحلقات ← الرابطان)
+    static let bandGap: CGFloat = DS.Spacing.md
+    /// أصغر تصغير لنصّ سطر واحد في الرأس (العنوان، عدد الحلقة) قبل أن يُقصّ
+    static let bandMinScale: CGFloat = 0.8
+    /// سطر التحية حبّةً ٤٤ فوق الكحلي: تعبئة بيضاء خفيفة، إطار ذهبي، نقطة ذهبية
+    static let bandPillFill = SwiftUI.Color.white.opacity(0.08)
+    static let bandPillStroke = DS.Color.accentLight.opacity(0.55)
+    static let bandPillDot: CGFloat = 8
+    /// شارة عدد الجرس الذهبية (ما يحتاج إجراء الآن) — ونصّها وحلقتها كحليان
+    static let bellBadgeGold: CGFloat = 18
+
+    /// مربّع القسم المسطّح: الاسم أبيض، سطر الحال كريمي (أبيض على الذهبي — الكريمي ٤٫٦:١ عليه)، الرمز أبيض ٨٢٪
+    static let tileTitleInk = SwiftUI.Color.white
+    static let tileStateInk = SwiftUI.Color(hex: "#F2EBDD")
+    static let tileIconInk = SwiftUI.Color.white.opacity(0.82)
+    /// هيكل التحميل على المربّع الملوّن: شريط فاتح
+    static let tileSkeleton = SwiftUI.Color.white.opacity(0.35)
+    /// المربّع مضغوطاً: طبقة داكنة خفيفة فوق لونه (الإطار لا يتغيّر)
+    static let tilePressVeil = SwiftUI.Color.black.opacity(0.14)
+    /// حبّة «ما ينتظرك» البيضاء على المربّع: كحلي للانتباه (١٥:١)، أحمر للعاجل (٥٫٩:١) — ثابتة في الوضعين
+    static let tilePillFill = SwiftUI.Color.white
+    static let tilePillInk = SwiftUI.Color(hex: "#172536")
+    static let tilePillUrgent = DS.Color.errorFill
+    static let tilePillHeight: CGFloat = 22
+    static let tilePillDot: CGFloat = 7
+}
+
 extension DS.TextRole {
     /// الرقم داخل الحلقة الصغيرة — Footnote (١٣) عريض
     static let ringSmall = DS.TextRole(.footnote, weight: .semibold)

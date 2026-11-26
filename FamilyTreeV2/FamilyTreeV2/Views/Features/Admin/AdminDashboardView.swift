@@ -20,18 +20,19 @@ enum AdminReviewDestination: Hashable {
 
 // MARK: - لوحة الإدارة ← «اليوم» (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec C.1، mock 1، الوحدة U7)
 //
-// «غرفة تحكّم بيضاء هادئة تقول حالها بالكلمات» — من الأعلى:
-//  • الرأس: رأس التبويبات نفسه (`MainHeaderView` بلا تعديل): «الإدارة» وتحته التحية، ومكبّر الصوت (`canSendNotifications`
-//    و`today.megaphone`) والبحث والجرس بعدده. تحته داخل هذا الملف **سطر التحية الذكي** (`AdminTodayLogic.smartLine`): جملة
-//    واحدة بالأولوية تبدأ بالعاجل، وهو زرّ يفتح بيت حقيقته بهبوطها.
-//  • «العائلة» (`today.census`): حلقات U6 الثلاث وسطرا «في التطبيق» و«خارج العائلة» — كل رقم يفتح بيته بعقد T2
-//    (`AdminCensusRoutes`)، و«الإحصاءات ‹» في طرف العنوان.
-//  • «الأقسام»: مربّع لكل قسم ظاهر لدورك (`AdminRowTile`) بكلمة حال بدل الشارة الحمراء («2 عاجل · 5 بانتظارك»،
-//    «4 مشكلات في الشجرة»، «وفاة لم تُعلن»، «170 في التطبيق»، «الرصيد منخفض»، «يعمل للجميع») من حال مخزنها
+// v2 الاتجاه «أ» «بطاقات العائلة الملوّنة» (اختيار المالك ٢٠٢٦-١١-٢٦، الوحدة V2-1 — `reports/admin-redesign/v2/build-a.md`).
+// من الأعلى:
+//  • **الرأس الكحلي** (`AdminTodayBand`، يتمرّر مع الصفحة) يحمل كل ما فوق الأقسام: «الإدارة»، التحية وكبسولة الدور، دوائر
+//    مكبّر الصوت (`canSendNotifications` × `today.megaphone`) والبحث والجرس — شارته الذهبية = ما يحتاج إجراء الآن وحده
+//    (`AdminTodayBandLogic.bellCount` = «يحتاج إجراء N» في «إشعارات الإدارة»)؛ ثم **سطر التحية الذكي** حبّةً ٤٤
+//    (`AdminTodayLogic.smartLine` — يظهر حين يقول شيئاً، ويفتح بيت حقيقته بهبوطها)؛ ثم حلقات «العائلة» على الكحلي
+//    (`today.census`، `AdminCensusBand`) ورابطا «في التطبيق» و«خارج العائلة» (الأحياء) — كل رقم يفتح بيته بعقد T2.
+//  • «الأقسام»: مربّع مسطّح بلون كل قسم ظاهر لدورك (`AdminRowTile`) بكلمة حال — «5 قوائم للمراجعة»، «لا شيء قريب»،
+//    «الراحلون 502»، «يعمل للجميع ✓»، وما ينتظرك حبّة بيضاء («● 1 بانتظار ردّك»، «⚠ محاولة مريبة») — من حال مخزنها
 //    (`AdminStoreHealth`: هيكل أثناء التحميل، «تعذّر التحميل ↻» عند الفشل — لا كلمة هادئة كاذبة). الضغط يفتح القسم
-//    (`.area(area, hop)`) بهبوط ما تسمّيه الكلمة (`AdminAreaRouter.land`).
+//    (`.area(area, hop)`) بهبوط ما تسمّيه الكلمة (`AdminAreaRouter.land`). تحتها «آخر تحديث 9:41 · اسحب للتحديث».
 //  • «تواريخ الوفاة» أثناء الحملة، و«ذكرى الراحلين» بعدها (DeathDatesSpot.swift).
-//  • «صلاحياتي» (المدير والمراقب والمشرف) ← `AdminMyScopeView`، ثم «آخر تحديث 9:41 · اسحب للتحديث».
+//  • «صلاحياتي» (المدير والمراقب والمشرف) ← `AdminMyScopeView`.
 // التحميل: أرقام «العائلة» و«الوارد» أولاً، ثم مخازن المربّعات بلا انتظار (كلٌّ بمهلة إعادة جلب). الإشعار بلا `request_id`
 // يفتح «الوارد» مصفّى بنوعه (`AdminInboxLanding(pushKind:)`). حارس المكدس: كل رابط خلف `AdminLazyPage { AnyView }`، وكل
 // بطاقة كبيرة نوع مستقل خلف `AnyView` («اليوم» ≤ ٧٢٠ ك.ب — `-tmpStackDepth`).
@@ -78,6 +79,11 @@ struct AdminDashboardView: View {
     /// ذكرى وفاة اليوم (الأسماء المختصرة)، ومتى أقرب ذكرى خلال أسبوع («بعد 3 أيام»)
     @State private var memorialToday: [String] = []
     @State private var nextMemorial: String?
+    /// أعداد قوائم «يحتاج مراجعتك» — كلمة مربّع «العائلة» v2 («5 قوائم للمراجعة»)، من مصدر صفّها في «العائلة» نفسه
+    /// (`AdminReviewHubCounts`). المفتاح الغائب = لم يصل
+    @State private var reviewCounts: [AdminReviewHubLogic.List: Int] = [:]
+    /// ما بُنيت منه آخر مرة — فهرس الأعضاء يُبنى فقط حين يتغيّر (لا مع كل تغيّر في الطلبات)
+    @State private var reviewKey: [Int] = []
 
     // حال المخازن (Autoplan note 2) — كل كلمة ورقم من مخزنه
     @State private var inboxHealth: AdminStoreHealth = .idle
@@ -111,6 +117,8 @@ struct AdminDashboardView: View {
                 // حتى يُغلق التطبيق (بلاغ المالك ٢٠٢٦-١١-٠٨) — يُصفَّر بعد لحظة وما زال الجذر ظاهراً
                 .onAppear {
                     rootVisible = true
+                    // «حي ✓» وما تغيّر في «العائلة» أثناء غيابها — كلمة مربّع «العائلة» (لا يُبنى شيء إن لم يتغيّر)
+                    recalculateReview()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         if rootVisible && !navigationPath.isEmpty { navigationPath = NavigationPath() }
                     }
@@ -484,7 +492,25 @@ struct AdminDashboardView: View {
             if today != memorialToday { memorialToday = today }
             if next != nextMemorial { nextMemorial = next }
         }
+        recalculateReview()
         publishNotices()
+    }
+
+    /// أعداد قوائم «يحتاج مراجعتك» لمربّع «العائلة» — فهرس الأعضاء نفسه الذي تبنيه «العائلة» وصفحة القوائم، ويُعاد بناؤه
+    /// فقط حين يتغيّر الأعضاء أو قوائم الحسابات أو أبناء البنات أو «حي ✓»
+    private func recalculateReview() {
+        guard AdminArea.family.isVisible(for: authVM), !memberVM.allMembers.isEmpty else { return }
+        let accounts = AdminAccountsStore.shared
+        let sons = DaughterSonsIndex.shared.ids
+        let verified = AdminLivingVerifiedStore.shared.ids
+        let key = [memberVM.membersVersion, memberVM.allMembers.count, accounts.loaded ? 1 : 0,
+                   accounts.accounts.count, sons.hashValue, verified.hashValue]
+        guard key != reviewKey else { return }
+        reviewKey = key
+        let index = AdminMembersIndex.build(members: memberVM.allMembers, accounts: accounts.accounts,
+                                            accountsReady: accounts.loaded, daughterSons: sons, branchName: { _ in nil })
+        let counts = AdminReviewHubCounts.make(index: index, verified: verified, members: memberVM.allMembers)
+        if counts != reviewCounts { reviewCounts = counts }
     }
 
     // MARK: - مشتقات
@@ -561,128 +587,104 @@ struct AdminDashboardView: View {
 
     // كل جزء خلف AnyView: نوع الصفحة كاملاً كان عميقاً لدرجة أن حلّه في الجوال (مكدس الخيط الرئيسي ١ ميغا) يفيض
     // فينهار التطبيق عند فتح الإدارة (٢٠٢٦-١٠-٢٠). الحدود تقسم الحلّ إلى أجزاء صغيرة.
+    // v2 (V2-1): الرأس الكحلي يحمل الحلقات فصار أطول من أن يثبت — يتمرّر مع الصفحة كرؤوس صفحات الأقسام (`AdminHubPage`)،
+    // ومنطقة شريط الحالة كحلية ثابتة فوقه (`adminStatusBarCover`)
     private var root: AnyView {
         AnyView(ZStack(alignment: .top) {
             DS.Hub.background.ignoresSafeArea()
-            // الرأس ثابت فوق التمرير كبقية التبويبات، ولونه يغطّي شريط الحالة بنفسه
-            VStack(spacing: 0) {
-                todayHeader
-                ScrollView(showsIndicators: false) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    todayBand
                     todayContent
                 }
-                .refreshable { await loadAllAdminData(force: true) }
-                .adminHideTopEdgeEffect()
-                // السحب للتحديث يكشف لون الرأس لا الأبيض (وأفقياً حتى طرف الشاشة كالرأس)
-                .background(alignment: .top) {
-                    DSHeaderBackground(section: .admin)
-                        .frame(height: AdminTodayMetrics.pullReveal)
-                        .ignoresSafeArea(edges: .horizontal)
-                        .accessibilityHidden(true)
-                }
+            }
+            .refreshable { await loadAllAdminData(force: true) }
+            .adminHideTopEdgeEffect()
+            // السحب للتحديث يكشف لون الرأس لا الأبيض (وأفقياً حتى طرف الشاشة كالرأس)
+            .background(alignment: .top) {
+                DSHeaderBackground(section: .admin)
+                    .frame(height: AdminTodayMetrics.pullReveal)
+                    .ignoresSafeArea(edges: [.top, .horizontal])
+                    .accessibilityHidden(true)
             }
         }
+        .adminStatusBarCover()
         .debugStackProbe("AdminDashboardView", limitKB: DebugStackLimit.today))
     }
 
-    // MARK: - الرأس
+    // MARK: - الرأس الكحلي (V2-1)
 
-    private var todayHeader: AnyView {
-        AnyView(VStack(spacing: 0) {
-            headerBar
-            smartLineStrip
+    /// الرأس كله (spec V2-1 البند ١): «الإدارة» والتحية والدور والأزرار ← سطر التحية حبّةً ← حلقات «العائلة» ورابطاها
+    /// (`today.census`). نوع مستقل خلف `AnyView` (`AdminTodayBand`)، والحلقات نوعها (`AdminCensusBand`)
+    private var todayBand: AnyView {
+        let line = smartLine
+        let target = line?.link.map { $0.home.area }
+        let openLine: (() -> Void)? = line?.link.map { link in { self.open(link) } }
+        let census: AnyView? = authVM.adminSees(.todayCensus)
+            ? AnyView(AdminCensusBand(figures: figures, health: censusHealth, actions: censusActions))
+            : nil
+        return AnyView(AdminTodayBand(greeting: helloLine,
+                                      role: authVM.currentUser.flatMap { RoleGuide.forRole($0.role)?.title },
+                                      buttons: headerButtons, smartLine: line, openSmartLine: openLine,
+                                      smartHint: target.map { L10n.t("يفتح \($0.title)", "Opens \($0.title)") },
+                                      census: census))
+    }
+
+    /// أزرار الرأس دوائر ٤٤: مكبّر الصوت (لمن يرسل للأعضاء — `today.megaphone`)، البحث، وجرس «إشعارات الإدارة» — بيته
+    /// كما هو، وشارته الذهبية = ما يحتاج إجراء الآن وحده (رقم شريحة «يحتاج إجراء N» في صفحته)
+    private var headerButtons: AnyView {
+        let bell = bellCount
+        let canAnnounce = authVM.canSendNotifications && authVM.adminAccess(.todayMegaphone).canEdit
+        return AnyView(HStack(spacing: DS.Spacing.xsm) {
+            // «إعلان جديد» السريع (طلب المالك ٢٠٢٦-١٠-٢٠) — نوع مستقل خلف `AnyView` (حارس المكدس)
+            if canAnnounce {
+                AnyView(AdminAnnounceLauncher())
+            }
+            NavigationLink { AdminLazyPage { AnyView(AdminSearchView()) } } label: {
+                AdminHeaderIcon(symbol: "magnifyingglass")
+            }
+            .buttonStyle(BounceButtonStyle())
+            .accessibilityLabel(L10n.t("بحث في اللوحة", "Search the dashboard"))
+            NavigationLink {
+                // الرجوع باسم الرأس المرئي «الإدارة» كبقية ما يُدفع من «اليوم» (F1 — كانت «اليوم» تُترجم في الصفحة)
+                AdminLazyPage { AnyView(AdminNotificationsPage().adminBackTitle(AdminArea.homeTitle)) }
+            } label: {
+                AdminHeaderIcon(symbol: "bell", count: bell)
+            }
+            .buttonStyle(BounceButtonStyle())
+            .accessibilityLabel(bell > 0
+                ? L10n.t("إشعارات الإدارة، \(bell) تحتاج إجراء", "Admin notifications, \(bell) need action")
+                : L10n.t("إشعارات الإدارة", "Admin notifications"))
         })
     }
 
-    /// رأس التبويبات نفسه (طلب المالك ٢٠٢٦-١٠-٢٥ «حتى الهيدر يكون نفس بقية الهيدرات»): أيقونة القسم، «الإدارة» وتحتها
-    /// التحية، وفي الطرف مكبّر الصوت (لمن يرسل للأعضاء)، البحث، وجرس «إشعارات الإدارة» بعدده. بلا ظلّ — سطر التحية الذكي
-    /// يكمل الكحلي تحته
-    private var headerBar: some View {
-        // العدد = غير المقروء + ما يحتاج إجراء الآن
-        let bell = notificationVM.unreadAdminNoticesCount + derivedNotices.count
-        let canAnnounce = authVM.canSendNotifications && authVM.adminAccess(.todayMegaphone).canEdit
-        return MainHeaderView(selectedTab: $selectedTab, showingNotifications: .constant(false),
-                              title: L10n.t("الإدارة", "Admin"), subtitle: helloLine,
-                              icon: AppSection.admin.symbol, section: .admin, hasDropShadow: false,
-                              hideNotificationBell: true) {
-            AnyView(HStack(spacing: 0) {
-                // «إعلان جديد» السريع (طلب المالك ٢٠٢٦-١٠-٢٠) — نوع مستقل خلف `AnyView` (حارس المكدس)
-                if canAnnounce {
-                    AnyView(AdminAnnounceLauncher())
-                }
-                NavigationLink { AdminLazyPage { AnyView(AdminSearchView()) } } label: {
-                    AdminHeaderIcon(symbol: "magnifyingglass")
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(L10n.t("بحث في اللوحة", "Search the dashboard"))
-                NavigationLink {
-                    // الرجوع باسم الرأس المرئي «الإدارة» كبقية ما يُدفع من «اليوم» (F1 — كانت «اليوم» تُترجم في الصفحة)
-                    AdminLazyPage { AnyView(AdminNotificationsPage().adminBackTitle(AdminArea.homeTitle)) }
-                } label: {
-                    AdminHeaderIcon(symbol: "bell", count: bell)
-                }
-                .buttonStyle(BounceButtonStyle())
-                .accessibilityLabel(bell > 0
-                    ? L10n.t("إشعارات الإدارة، \(bell) جديد", "Admin notifications, \(bell) new")
-                    : L10n.t("إشعارات الإدارة", "Admin notifications"))
-            })
-        }
-    }
-
-    /// سطر التحية الذكي تحت الرأس (spec C.1): سطر واحد ١٣ أبيض، محجوز أثناء التحميل (لا قفزة)، وزرّ بسهم يفتح بيت حقيقته
-    /// حين يكون له بيت — ارتفاعه ٤٤ (لمسه كاملاً)
-    private var smartLineStrip: some View {
-        let line = smartLine
-        let target = line?.link.map { $0.home.area }
-        let face = HStack(spacing: DS.Spacing.xs) {
-            Text(verbatim: line?.text ?? " ")
-                .dsFont(.subtitle)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            if target != nil {
-                Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
-                    .accessibilityHidden(true)
-            }
-            Spacer(minLength: 0)
-        }
-        .foregroundColor(DS.Color.headerTitle)
-        // لمس ٤٤ (owner rule 5) — والسطر بالارتفاع نفسه وهو محجوز أو هادئ، فلا يقفز الرأس حين تصل الأرقام
-        .frame(minHeight: DS.Icon.tapTarget)
-        .contentShape(Rectangle())
-        .opacity(line == nil ? 0 : 1)
-        .animation(DSMotion.fade, value: line == nil)
-        return Group {
-            if let line, let link = line.link, let target {
-                Button { open(link) } label: { face }
-                .buttonStyle(DSPressStyle())
-                .accessibilityLabel(line.text)
-                .accessibilityHint(L10n.t("يفتح \(target.title)", "Opens \(target.title)"))
-            } else {
-                face.accessibilityHidden(line == nil)
-            }
-        }
-        .dsPageMargin()
-        .padding(.bottom, DS.Spacing.xs)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DSHeaderBackground(section: .admin).ignoresSafeArea(edges: .horizontal))
+    /// عدد الجرس: الحالات المشتقة + الإشعارات التي تنتظر قراراً — نفس «يحتاج إجراء N» في «إشعارات الإدارة»
+    /// (`AdminTodayBandLogic.bellCount`)؛ غير المقروء وحده لا يُعدّ
+    private var bellCount: Int {
+        let open = AdminTodayFeed.openRequestIds(adminRequestVM: adminRequestVM, newsVM: newsVM,
+                                                 projectsVM: projectsVM, memberVM: memberVM)
+        let notices = AdminTodayFeed.bellNotices(notificationVM.notifications, me: authVM.currentUser?.id)
+        return AdminTodayBandLogic.bellCount(derived: derivedNotices.count, notices: notices, open: open,
+                                             seesMessages: authVM.adminSees(.inboxMessages))
     }
 
     // MARK: - المحتوى
 
-    /// صفحة بيضاء (spec A.2): ١٦ تحت الرأس ← «العائلة» ← «الأقسام» ← «تواريخ الوفاة»/«ذكرى الراحلين» ← «صلاحياتي» ← آخر
-    /// تحديث — ٢٤ بين الأقسام. كل قسم نوع مستقل خلف `AnyView` (حارس المكدس) ويصعد تباعاً مرة واحدة
+    /// صفحة بيضاء (spec A.2): ١٦ تحت الرأس ← «الأقسام» و«آخر تحديث · اسحب للتحديث» تحتها ← «تواريخ الوفاة»/«ذكرى
+    /// الراحلين» ← «صلاحياتي» — ٢٤ بين الأقسام. «العائلة» صارت في الرأس (V2-1). كل قسم نوع مستقل خلف `AnyView` (حارس
+    /// المكدس) ويصعد تباعاً مرة واحدة
     private var todayContent: AnyView {
         AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionGap) {
-            if authVM.adminSees(.todayCensus) {
-                AnyView(censusSection.dsCardCascade(0, appeared: appeared))
+            AnyView(VStack(alignment: .leading, spacing: DS.Hub.bandGap) {
+                areasSection
+                if let refreshedAt {
+                    footer(refreshedAt)
+                }
             }
-            AnyView(areasSection.dsCardCascade(1, appeared: appeared))
-            AnyView(AdminDeathDatesSpot(openOccasions: occasionsMemorials).dsCardCascade(2, appeared: appeared))
+            .dsCardCascade(0, appeared: appeared))
+            AnyView(AdminDeathDatesSpot(openOccasions: occasionsMemorials).dsCardCascade(1, appeared: appeared))
             if let guide = scopeGuide {
-                AnyView(AdminScopeLink(guide: guide).dsCardCascade(3, appeared: appeared))
-            }
-            if let refreshedAt {
-                AnyView(footer(refreshedAt))
+                AnyView(AdminScopeLink(guide: guide).dsCardCascade(2, appeared: appeared))
             }
         }
         .dsPageMargin()
@@ -704,23 +706,7 @@ struct AdminDashboardView: View {
             .frame(maxWidth: .infinity)
     }
 
-    // MARK: «العائلة»
-
-    /// العنوان و«الإحصاءات ‹»، ثم الحلقات الثلاث وسطرا «في التطبيق» و«خارج العائلة» (U6) — كل رقم يفتح بيته (T2)
-    private var censusSection: some View {
-        VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("العائلة", "Family"), link: statsLink)
-            AdminCensusRings(figures: figures, rows: .appAndOutside, health: censusHealth, actions: censusActions)
-        }
-    }
-
-    private var statsLink: AnyView? {
-        guard AdminArea.metrics.isVisible(for: authVM) else { return nil }
-        return AnyView(Button { openFromToday(.metrics) } label: {
-            AdminCardLinkLabel(title: AdminArea.metrics.title)
-        }
-        .buttonStyle(DSPressStyle()))
-    }
+    // MARK: «العائلة» (في الرأس)
 
     private var censusActions: AdminCensusRingsActions {
         AdminCensusRingsActions(total: censusAction(.total), men: censusAction(.men), women: censusAction(.women),
@@ -795,8 +781,13 @@ struct AdminDashboardView: View {
                                                  fourth: f.kind, fourthCount: f.count)
             return TileModel(state: word.state, health: inboxHealth, retry: retryInbox, landing: word.landing)
         case .family:
-            let word = AdminTodayLogic.familyWord(treeIssues: treeIssuesCount)
-            return TileModel(state: word.state, health: membersHealth, retry: retryCensus, landing: word.landing)
+            // v2: «5 قوائم للمراجعة» — قوائم «يحتاج مراجعتك» التي فيها أحد (رقم صفّها في «العائلة») أو «سليمة»؛ يفتح
+            // «العائلة» حيث صفّ «يحتاج مراجعتك». قوائم الحسابات تنتظر قوائم الحسابات ما دام جلبها جارياً (لا عدد ناقص)
+            let counts = AdminReviewHubLogic.List.allCases.map { reviewCounts[$0] }
+            let word = AdminTodayBandLogic.reviewListsWord(counts: counts)
+            var stores = [membersHealth]
+            if needsFigures, accountsHealth == .idle || accountsHealth == .loading { stores.append(.loading) }
+            return TileModel(state: word?.state, health: .combined(stores), retry: retryCensus, landing: word?.landing)
         case .occasions:
             // وفاة لم تُعلن ومجدول اليوم للمالك والمدير (`unannounced` فارغة لغيرهما)، والذكرى للجميع
             var stores = [membersHealth]
@@ -807,9 +798,9 @@ struct AdminDashboardView: View {
             return TileModel(state: word.state, health: .combined(stores), retry: retryOccasions, landing: word.landing)
         case .metrics:
             guard authVM.adminSees(.metricsFamily) else { return TileModel() }
-            let word = AdminTodayLogic.metricsWord(inApp: figures.inApp)
-            return TileModel(state: word?.state, health: .combined([censusHealth, accountsHealth]), retry: retryCensus,
-                             landing: word?.landing)
+            // v2: «الراحلون 502» ← قسم «الراحلون» (لا رقم من الرأس يتكرّر هنا — 170 في رابط الرأس)
+            let word = AdminTodayBandLogic.departedWord(figures.totalDeceased)
+            return TileModel(state: word?.state, health: censusHealth, retry: retryCensus, landing: word?.landing)
         case .team:
             // `today.system_status` (المالك): حال الدخول والأمان بكلمة — المدير يرى «للاطلاع» وحدها
             guard authVM.adminSees(.todaySystemStatus) else { return TileModel() }

@@ -6,17 +6,17 @@ import SwiftUI
 // MARK: - مربّعات اللوحة (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec A.8 وA.12 وA.16، الوحدة U4)
 //
 // نوعان من المربّعات:
-//  ١) مربّع القسم `AdminRowTile` («اليوم ← الأقسام»): بطاقة بيضاء بخطّ رفيع بلا ظلّ (زاوية ١٢، حشوة ١٢ × ١٠، أقل ارتفاع ٦٠)،
-//     مربّع أيقونة ٣٠ ممتلئ بلون القسم في البداية فوق، الاسم ١٥ متوسط، وتحته **سطر الحالة** ١٣: جملة قصيرة تقول حال القسم
-//     بكلمة بدل الشارات الحمراء (spec E.16) — «2 عاجل»، «4 مشكلات في الشجرة»، «الرصيد منخفض»، «يعمل للجميع».
-//     أربع نغمات (`AdminTileTone`): محايد رمادي · انتباه (`warning` + ⓘ ممتلئة) · عاجل (`error` + الرمز نفسه بنبضة هادئة)
-//     · سليم (رمادي + ✓ `success` في الطرف). والقسم «للاطلاع»: رمز عين بعد الكلمة بلون السطر (لا يلتفّ السطر)، أو كلمة
-//     «للاطلاع» وحدها حين لا كلمة حال — والقارئ الصوتي يقول «للاطلاع» دائماً.
+//  ١) مربّع القسم `AdminRowTile` («اليوم ← الأقسام») — v2 «بطاقات العائلة الملوّنة» (V2-1، ٢٠٢٦-١١-٢٦): مربّع مسطّح بلون
+//     قسمه (`AdminArea.tileFill`، ثابت في الوضعين، زاوية ١٢، حشوة ١٢ × ١٠، أقل ارتفاع ٦٠)، الاسم أبيض ١٥ سطراً واحداً وتحته
+//     **سطر الحالة** ١٣ كريمي، ورمز القسم الأبيض المفرّغ في الطرف. الكلمة بدل الشارات الحمراء (spec E.16) — «لا شيء قريب»،
+//     «5 قوائم للمراجعة»، «الراحلون 502»، «يعمل للجميع ✓». أربع نغمات (`AdminTileTone`): المحايد والسليم (✓) سطر كريمي،
+//     والانتباه والعاجل **حبّة بيضاء** (`AdminTileLine.pill`): نقطة ونصّ كحليان، أو ⚠ ونصّ أحمر بنبضة هادئة. والقسم
+//     «للاطلاع»: رمز عين بعد الكلمة، أو كلمة «للاطلاع» وحدها حين لا كلمة حال — والقارئ الصوتي يقول «للاطلاع» دائماً.
 //     **حال المخزن** (`AdminStoreHealth`، AdminContracts.swift — spec T1): الكلمة الهادئة لا تظهر إلا بعد وصول بياناتها.
-//     التحميل = سطر هيكل رمادي (المربّع يُضغط فوراً)، الفشل بلا بيانات = «تعذّر التحميل» ↻ رمادي والضغط عليه يعيد جلب
+//     التحميل = شريط هيكل فاتح (المربّع يُضغط فوراً)، الفشل بلا بيانات = «تعذّر التحميل» ↻ أبيض والضغط عليه يعيد جلب
 //     مخزنه وحده، الفشل بعد تحميل ناجح = الكلمة + «آخر تحديث 9:12»، المرفوض = لا سطر (أو «للاطلاع»).
 //     الشبكة `AdminRowTileGrid`: عمودان بفراغ ١٠، والعدد الفردي يمدّ آخر مربّع بعرض الصفّ (لا يتيم)، وكل صفّ بطول أطول
-//     مربّعيه؛ ثلاثة أعمدة أفقياً، وعمود واحد من أحجام إمكانية الوصول. الضغط: يصغر ٠٫٩٧ مع تظليل في ١٢٠ م.ث.
+//     مربّعيه؛ ثلاثة أعمدة أفقياً، وعمود واحد من أحجام إمكانية الوصول. الضغط: يصغر ٠٫٩٧ وتغمق طبقته في ١٢٠ م.ث.
 //  ٢) مربّع الأداة `AdminHubTile`/`AdminToolTile` (البحث والأدوات، ومربّع إجراءات شجرة النساء): الأيقونة ٤٤ في الوسط فوق
 //     والاسم تحتها — بقي شكله وأخذ سطح البطاقة الجديد (زاوية ١٢ بلا ظلّ) وضغطة المربّع، وتحذيره سطر بنغمة «انتباه»
 //     لا شارة حمراء. الشبكة `AdminTileGrid` كما هي (٣ أعمدة، ٢ للعددين ٢ و٤ ومع الخط الكبير جداً، صفوف من أحجام
@@ -168,6 +168,25 @@ nonisolated struct AdminTileLine: Hashable {
             let words = [text, readOnlyMark ? AdminTileText.readOnly : nil,
                          staleSince.map { AdminStoreHealthText.updated($0) }].compactMap { $0 }
             return words.joined(separator: L10n.t("، ", ", "))
+        }
+    }
+}
+
+/// v2 (المربّع المسطّح الملوّن — الاتجاه «أ»، V2-1): ما ينتظرك يُرسم حبّةً بيضاء بنصّ ملوّن — الانتباه كحلي بنقطة
+/// («● 1 بانتظار ردّك»)، والعاجل أحمر برمز التنبيه («⚠ محاولة مريبة»). المحايد والسليم و«للاطلاع» سطر عادي كريمي
+nonisolated enum AdminTilePill: Hashable {
+    case attention
+    case urgent
+}
+
+extension AdminTileLine {
+    /// حبّة «ما ينتظرك» لكلمة الانتباه والعاجل وحدهما (بعد وصول بياناتها — الهيكل والفشل لا حبّة لهما)
+    var pill: AdminTilePill? {
+        guard kind == .word else { return nil }
+        switch tone {
+        case .attention:      return .attention
+        case .urgent:         return .urgent
+        case .neutral, .good: return nil
         }
     }
 }
@@ -476,11 +495,14 @@ struct AdminTileRowsLayout: Layout {
     }
 }
 
-/// مربّع القسم (spec A.8): [مربّع ٣٠ ممتلئ] الاسم ١٥ ثم سطر الحالة ١٣ — بلا شارة ولا سهم. يوضع داخل زرّ/`NavigationLink`
-/// بـ`AdminTilePressStyle`، في `AdminRowTileGrid`
+/// مربّع القسم — v2 «بطاقات العائلة الملوّنة» (الاتجاه «أ»، V2-1): مربّع مسطّح بلون قسمه (تعبئة ثابتة في الوضعين، بلا تدرّج
+/// ولا إطار ولا حلقة)، زاوية البطاقة ١٢، أقل ارتفاع ٦٠. في البداية الاسم أبيض ١٥ سطراً واحداً («المناسبات» — `tileTitle`) وتحته
+/// سطر الحال ١٣ كريمي، وفي الطرف رمز القسم الأبيض المفرّغ. ما ينتظرك حبّة بيضاء (`AdminTileLine.pill`): «● 1 بانتظار ردّك»
+/// كحلي، «⚠ محاولة مريبة» أحمر. «للاطلاع» عين بعد الكلمة، التحميل شريط فاتح، الفشل «تعذّر التحميل ↻» أبيض يعيد جلب مخزنه.
+/// بلا شارة ولا سهم. يوضع داخل زرّ بـ`AdminTilePressStyle` (يصغر ٠٫٩٧ وتغمق طبقته)، في `AdminRowTileGrid`
 struct AdminRowTile: View {
     let icon: String
-    /// تعبئة مربّع الأيقونة (ثابتة تحت رمز أبيض — `AdminArea.fill`)
+    /// لون المربّع كله (ثابت تحت نصّ أبيض — `AdminArea.tileFill`)
     let fill: Color
     let title: String
     /// كلمة حال القسم — nil = الاسم وحده (أو «للاطلاع»)
@@ -495,7 +517,10 @@ struct AdminRowTile: View {
     var hint: String?
     /// الاسم الكامل للقارئ الصوتي حين يختصره المربّع (`AdminArea.tileTitle`) — nil = `title`
     var spokenTitle: String? = nil
+    /// لون سطر الحال العادي: كريمي، وأبيض على الذهبي (`AdminArea.tileStateInk`)
+    var stateInk: Color = DS.Hub.tileStateInk
     @Environment(\.adminTilePressed) private var pressed
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     init(icon: String, fill: Color, title: String, state: AdminTileState? = nil, health: AdminStoreHealth? = nil,
          retry: (() -> Void)? = nil, readOnly: Bool = false, hint: String? = nil) {
@@ -509,32 +534,44 @@ struct AdminRowTile: View {
         self.hint = hint
     }
 
-    /// مربّع قسم من `AdminArea`: رمزه ولونه واسمه ووصفه للقارئ الصوتي
+    /// مربّع قسم من `AdminArea`: لونه ورمزه المفرّغ واسمه المختصر، والاسم الكامل ووصفه للقارئ الصوتي
     init(area: AdminArea, state: AdminTileState? = nil, health: AdminStoreHealth? = nil,
          retry: (() -> Void)? = nil, readOnly: Bool = false) {
-        self.init(icon: area.icon, fill: area.fill, title: area.tileTitle, state: state, health: health, retry: retry,
-                  readOnly: readOnly, hint: area.subtitle)
+        self.init(icon: area.tileIcon, fill: area.tileFill, title: area.tileTitle, state: state, health: health,
+                  retry: retry, readOnly: readOnly, hint: area.subtitle)
         spokenTitle = area.title
+        stateInk = area.tileStateInk
     }
 
     var body: some View {
         let line = AdminTileLine.make(state: state, health: health, readOnly: readOnly)
-        HStack(alignment: .top, spacing: AdminTileMetrics.areaIconGap) {
-            AdminIconSquare(symbol: icon, tint: fill, filled: true)
+        let shape = RoundedRectangle(cornerRadius: AdminTileMetrics.radius, style: .continuous)
+        HStack(alignment: .center, spacing: AdminTileMetrics.areaIconGap) {
             VStack(alignment: .leading, spacing: AdminTileMetrics.captionGap) {
                 Text(title)
                     .dsFont(.rowTitle)
-                    .foregroundColor(DS.Color.textPrimary)
+                    .foregroundColor(DS.Hub.tileTitleInk)
                     .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                AdminTileLineView(line: line, retry: retry)
+                    // سطر واحد (طلب المالك «نصغر المربعات»)؛ من أحجام إمكانية الوصول عمود واحد عريض ويلتفّ إن لزم
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                    .minimumScaleFactor(AdminTileMetrics.titleMinScale)
+                    .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
+                AdminFlatTileState(line: line, retry: retry, ink: stateInk)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xl, weight: .regular)
+                .foregroundColor(DS.Hub.tileIconInk)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, DS.Hub.areaTilePadding)
         .padding(.vertical, DS.Hub.areaTilePaddingV)
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.areaTileMinHeight, maxHeight: .infinity, alignment: .topLeading)
-        .modifier(AdminTileSurface(pressed: pressed))
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.areaTileMinHeight, maxHeight: .infinity, alignment: .leading)
+        .background(shape.fill(fill))
+        // مضغوطاً: طبقة داكنة خفيفة فوق لونه (والتصغير من `AdminTilePressStyle`)
+        .overlay(shape.fill(DS.Hub.tilePressVeil).opacity(pressed ? 1 : 0).allowsHitTesting(false))
+        .contentShape(shape)
+        .animation(DS.Hub.tilePress, value: pressed)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([spokenTitle ?? title, line.spoken].filter { !$0.isEmpty }.joined(separator: L10n.t("، ", ", ")))
         .accessibilityHint(hint ?? "")
@@ -543,6 +580,168 @@ struct AdminRowTile: View {
                 Button(AdminStoreHealthText.retry, action: retry)
             }
         }
+    }
+}
+
+/// سطر حال المربّع المسطّح: الكلمة كريمية (✓ للسليم، عين لـ«للاطلاع»)، أو حبّة بيضاء لما ينتظرك، أو شريط هيكل فاتح، أو
+/// «تعذّر التحميل ↻» أبيض (زرّ يعيد جلب مخزنه وحده). القديم بعد فشل: الكلمة + «آخر تحديث 9:12» تحتها
+private struct AdminFlatTileState: View {
+    let line: AdminTileLine
+    var retry: (() -> Void)?
+    let ink: Color
+
+    var body: some View {
+        switch line.kind {
+        case .none:
+            EmptyView()
+        case .skeleton:
+            // شريط فاتح بشكل الكلمة (لا يُقرأ) — لا «تعذّر التحميل» أثناء التحميل أبداً
+            Text(verbatim: line.text)
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Hub.tileSkeleton)
+                .lineLimit(1)
+                .redacted(reason: .placeholder)
+                .accessibilityHidden(true)
+        case .word:
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                HStack(alignment: .center, spacing: DS.Spacing.xs) {
+                    if let pill = line.pill {
+                        AdminTilePillLabel(text: line.text, pill: pill)
+                    } else {
+                        plainWord
+                    }
+                    if line.readOnlyMark {
+                        // «للاطلاع» رمزاً — القارئ الصوتي يقولها من `AdminTileLine.spoken`
+                        Image(dsSymbol: AdminTileText.readOnlyGlyph)
+                            .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                            .foregroundColor(ink)
+                            .accessibilityHidden(true)
+                    }
+                }
+                if let since = line.staleSince {
+                    Text(AdminStoreHealthText.updated(since))
+                        .dsFont(.subtitle)
+                        .foregroundColor(ink)
+                }
+            }
+        case .unknown:
+            if let retry {
+                // لمسه يتّسع بعرض المربّع وفوق السطر وتحته — باقي المربّع يفتح القسم كالعادة
+                Button(action: retry) {
+                    unknownFace
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, AdminTileMetrics.retryHitBleed)
+                        .padding(.horizontal, DS.Hub.areaTilePadding)
+                        .contentShape(Rectangle())
+                        .padding(.vertical, -AdminTileMetrics.retryHitBleed)
+                        .padding(.horizontal, -DS.Hub.areaTilePadding)
+                }
+                .buttonStyle(DSPressStyle())
+            } else {
+                unknownFace
+            }
+        }
+    }
+
+    /// الكلمة العادية: كريمية ١٣ تلتفّ إن ضاقت، و✓ بعد السليمة
+    private var plainWord: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+            Text(verbatim: line.text)
+                .dsFont(.subtitle)
+                .monospacedDigit()
+                .foregroundColor(ink)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            if line.tone == .good {
+                Image(dsSymbol: "checkmark")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(ink)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var unknownFace: some View {
+        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
+            Text(verbatim: line.text)
+                .dsFont(.subtitle)
+                .fixedSize(horizontal: false, vertical: true)
+            Image(dsSymbol: "arrow.clockwise")
+                .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                .accessibilityHidden(true)
+        }
+        .foregroundColor(DS.Hub.tileTitleInk)
+    }
+}
+
+/// حبّة «ما ينتظرك» البيضاء على المربّع الملوّن: نقطة كحلية للانتباه، ورمز تنبيه أحمر (بنبضة هادئة) للعاجل — والنصّ بلونها،
+/// يلتفّ لسطرين إن ضاق المربّع
+private struct AdminTilePillLabel: View {
+    let text: String
+    let pill: AdminTilePill
+
+    private var ink: Color { pill == .urgent ? DS.Hub.tilePillUrgent : DS.Hub.tilePillInk }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DS.Spacing.xs) {
+            switch pill {
+            case .attention:
+                Circle()
+                    .fill(ink)
+                    .frame(width: DS.Hub.tilePillDot, height: DS.Hub.tilePillDot)
+                    .accessibilityHidden(true)
+            case .urgent:
+                Image(dsSymbol: "exclamationmark.triangle")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(ink)
+                    // نبضة العاجل على رمزه وحده (الساعة المشتركة — تقف خارج الشاشة ومع «تقليل الحركة»)
+                    .dsUrgentPulse(ink, active: true, side: DS.Glyph.sm)
+                    .accessibilityHidden(true)
+            }
+            Text(verbatim: text)
+                .dsFont(.chip)
+                .monospacedDigit()
+                .foregroundColor(ink)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .frame(minHeight: DS.Hub.tilePillHeight)
+        .background(RoundedRectangle(cornerRadius: DS.Hub.tilePillHeight / 2, style: .continuous)
+            .fill(DS.Hub.tilePillFill))
+    }
+}
+
+extension AdminArea {
+    /// لون مربّعه في «اليوم» v2 (المسطّح): الوارد بترولي، العائلة نخلي، المناسبات عنّابي، الإحصاءات ذهبي، الفريق والأمان
+    /// كحلي، التطبيق رصاصي — تعبئات العائلة الثابتة (spec V2-1 البند ٣). `fill` باقٍ لما سواه
+    var tileFill: Color {
+        switch self {
+        case .inbox:     return DS.Color.seaFill
+        case .family:    return DS.Color.palmFill
+        case .occasions: return DS.Color.saduFill
+        case .metrics:   return DS.Color.goldFill
+        case .team:      return DS.Color.navyFill
+        case .app:       return DS.Color.slateFill
+        }
+    }
+
+    /// رمز المربّع المفرّغ الأبيض (بلا مربّع ولا حلقة) — قرين `icon` الممتلئ
+    var tileIcon: String {
+        switch self {
+        case .inbox:     return "tray"
+        case .family:    return "person.2"
+        case .occasions: return "calendar"
+        case .metrics:   return "chart.bar"
+        case .team:      return "checkmark.shield"
+        case .app:       return "slider.horizontal.3"
+        }
+    }
+
+    /// سطر الحال العادي: كريمي، وأبيض على الذهبي (الكريمي ٤٫٦:١ عليه، الأبيض ٥٫٤:١)
+    var tileStateInk: Color {
+        self == .metrics ? DS.Hub.tileTitleInk : DS.Hub.tileStateInk
     }
 }
 

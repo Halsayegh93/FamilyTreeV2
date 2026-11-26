@@ -21,6 +21,8 @@ import SwiftUI
 //    الصفر يُعرض ولا يفتح شيئاً (spec A.3/A.10).
 //  • من أحجام إمكانية الوصول كل حلقة صفّ (`DS.Ring.mediumStacked` بجانب الاسم والعدد والنسبة)، وأفقياً الحلقات بعرض عمود القراءة.
 //  • حارس المكدس: جسم `AdminCensusRings` = `AnyView` (والأقسام داخله كذلك) — من يضعها لا يحمل نوعها الكبير.
+//  • «اليوم» v2 (الاتجاه «أ»، V2-1): الحلقات والرابطان على الرأس الكحلي نفسه بلا بطاقة — `AdminCensusBand` (القسم ٦ آخر
+//    الملف) بالعقد نفسه (الأرقام والأفعال والحالات). البطاقة البيضاء باقية لـ«الإحصاءات».
 //
 // T2 «الرقم = القائمة» — ما يجب أن يفتحه كل رقم، وعدد أول ما يُرى هناك يساوي الرقم المضغوط (`AdminCensusRoutes.destination`
 // يكتبه منطقاً، و`AdminCensusFigures.value(of:)` هو الرقم الذي تُقارَن به القائمة):
@@ -217,6 +219,8 @@ nonisolated enum AdminCensusText {
     static var livingTitle: String { L10n.t("أحياء", "Living") }
     static var deceasedTitle: String { L10n.t("متوفون", "Deceased") }
     static var failed: String { L10n.t("تعذّر تحميل الأرقام", "Couldn't load the numbers") }
+    /// قائمة «≈» (كبار السن بلا تاريخ وفاة) — في الضغط المطوّل على الحلقة التقديرية في رأس «اليوم» v2
+    static var estimateList: String { L10n.t("هل ما زالوا أحياء؟", "Are they still alive?") }
     static var opensList: String { L10n.t("يفتح القائمة", "Opens the list") }
     /// سطر «≈» تحت الحلقات (spec C.1)
     static var estimateNote: String {
@@ -241,6 +245,17 @@ nonisolated enum AdminCensusText {
         case 3...10:  return "\(digits) \(few)"
         case 11...99: return "\(digits) \(many)"
         default:      return "\(digits) \(single)"
+        }
+    }
+
+    /// المعدود وحده بعد رقم مكتوب بجانبه (رابطا الرأس الكحلي في «اليوم» v2: «46 حياً»، «3 أحياء») — الرقم نصّ مستقلّ
+    static func livingNoun(_ n: Int) -> String {
+        guard L10n.isArabic else { return "living" }
+        if n == 2 { return "حيّان" }
+        switch n % 100 {
+        case 3...10:  return "أحياء"
+        case 11...99: return "حياً"
+        default:      return "حيّ"
         }
     }
 
@@ -702,6 +717,324 @@ private struct AdminCensusSwatch: View {
             }
             .frame(width: DS.Hub.chartSwatch, height: DS.Hub.chartSwatch)
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - ٦) «العائلة» على الرأس الكحلي — «اليوم» v2 (الاتجاه «أ»، الوحدة V2-1)
+
+/// الحلقات الثلاث ورابطا «في التطبيق» و«خارج العائلة» فوق كحلي رأس «اليوم» — لا بطاقة بيضاء تحته (spec V2-1 البند ١):
+///  • الحلقات `DSRingGauge` بمقاس `DS.Hub.bandRing` (٥٨/٦) فوق مسار الكحلي الشفاف (`DS.Ring.bandTrack`): الإجمالي ذهبي،
+///    الرجال أزرق، النساء ورديّ (`DS.Hub.bandRing*`)، والنسبة في الوسط بيضاء، و«≈» ذهبية على ركن الحلقة ما دامت تقديرية
+///    (الضغط المطوّل/القارئ الصوتي: «هل ما زالوا أحياء؟» — بيت سطر «≈» القديم). تحتها العدد أبيض ١٧ وسهمه ثم الاسم ذهبي ١٣.
+///  • خطّ رفيع، ثم صفّ واحد برابطين: «في التطبيق 170 من 2,489 حياً ‹» و«خارج العائلة 46 حياً ‹» (الأحياء وحدهم، لا متوفين)
+///    — يلتفّان تحت بعض حين يضيق السطر.
+///  • الأرقام والأفعال والحالات عقد البطاقة نفسه (T2، `AdminCensusRingsActions`، `AdminStoreHealth`): «—» قبل الوصول (لا
+///    صفر، والحلقة على مسارها)، الفشل بلا بيانات سطر «تعذّر تحميل الأرقام ↻»، القديم «آخر تحديث» تحت الحلقات، المرفوض لا شيء.
+/// نوع مستقل جسمه `AnyView` (حارس المكدس) — «اليوم» يضعه في رأسه لمن يرى `today.census`.
+struct AdminCensusBand: View {
+    let figures: AdminCensusFigures
+    var health: AdminStoreHealth? = nil
+    var actions = AdminCensusRingsActions()
+
+    init(figures: AdminCensusFigures, health: AdminStoreHealth? = nil,
+         actions: AdminCensusRingsActions = AdminCensusRingsActions()) {
+        self.figures = figures
+        self.health = health
+        self.actions = actions
+    }
+
+    var body: some View {
+        AnyView(AdminCensusBandBody(figures: figures, health: health, actions: actions))
+    }
+}
+
+private struct AdminCensusBandBody: View {
+    let figures: AdminCensusFigures
+    let health: AdminStoreHealth?
+    let actions: AdminCensusRingsActions
+
+    @ObservedObject private var verified = AdminLivingVerifiedStore.shared
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.dsLandscape) private var landscape
+
+    var body: some View {
+        switch health?.look {
+        case .hidden?:
+            EmptyView()
+        case .unknown?:
+            failedLine
+        case .staleWord(let since)?:
+            content(staleSince: since)
+        default:
+            content(staleSince: nil)
+        }
+    }
+
+    private func content(staleSince: Date?) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            rings
+            if let staleSince {
+                Text(AdminStoreHealthText.updated(staleSince))
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Hub.lineZero)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, DS.Spacing.xs)
+            }
+            Rectangle()
+                .fill(DS.Hub.bandDivider)
+                .frame(height: DS.Border.width)
+                .padding(.top, DS.Spacing.sm)
+                .accessibilityHidden(true)
+            links
+        }
+    }
+
+    // MARK: الحلقات
+
+    private var rings: AnyView {
+        // من أحجام إمكانية الوصول كل حلقة صفّ (spec A.17)
+        if typeSize.isAccessibilitySize {
+            return AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                ForEach(AdminCensusRing.allCases, id: \.self) { stackedRing($0) }
+            })
+        }
+        // صفّ واحد؛ أفقياً بعرض عمود القراءة في الوسط
+        return AnyView(HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            ForEach(AdminCensusRing.allCases, id: \.self) { column($0) }
+        }
+        .frame(maxWidth: landscape ? DS.Landscape.maxContentWidth : .infinity)
+        .frame(maxWidth: .infinity))
+    }
+
+    private func tint(_ ring: AdminCensusRing) -> Color {
+        switch ring {
+        case .total: return DS.Hub.bandRingTotal
+        case .men:   return DS.Hub.bandRingMen
+        case .women: return DS.Hub.bandRingWomen
+        }
+    }
+
+    /// الحلقة فوق مسار الكحلي الشفاف، والنسبة بيضاء في وسطها («—» قبل الوصول). قبل الوصول يرسم `DSRingGauge` مساره الفارغ
+    /// (المصنوع للأبيض) — مسار الكحلي تحته فتبقى الحلقة ظاهرة على الرأس
+    private func gauge(_ ring: AdminCensusRing, size: DS.Ring.Size) -> some View {
+        let progress = figures.progress(ring)
+        return DSRingGauge(progress: progress, tint: tint(ring), size: size, track: DS.Ring.bandTrack,
+                           center: size.value == nil ? .none : .percent(figures.livingShare(ring)),
+                           ink: DS.Color.headerTitle)
+            .background(
+                Circle()
+                    .stroke(DS.Ring.bandTrack, lineWidth: size.line)
+                    .opacity(progress == nil ? 1 : 0)
+                    .accessibilityHidden(true)
+            )
+    }
+
+    /// «≈» ذهبية على ركن الحلقة (نسبة الأحياء تقديرية) — القارئ الصوتي يقولها في جملة الحلقة
+    private var approxBadge: some View {
+        Text(verbatim: "≈")
+            .dsFont(.badge)
+            .foregroundColor(DS.Color.bandFill)
+            .fixedSize()
+            .frame(minWidth: DS.Hub.bandApproxBadge, minHeight: DS.Hub.bandApproxBadge)
+            .background(Circle().fill(DS.Color.accentLight))
+            .accessibilityHidden(true)
+    }
+
+    /// الركن الأعلى من جهة البداية (أعلى اليمين في العربية كالنموذج)، خارجاً قليلاً عن الحلقة
+    private var badgeOffset: CGSize {
+        CGSize(width: L10n.isArabic ? DS.Spacing.xs : -DS.Spacing.xs, height: -DS.Spacing.xs)
+    }
+
+    private var chevron: some View {
+        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+            .dsGlyph(DS.Glyph.xs, weight: .semibold)
+            .foregroundColor(DS.Color.accentLight)
+            .accessibilityHidden(true)
+    }
+
+    private func spoken(_ ring: AdminCensusRing, opens: Bool) -> String {
+        AdminCensusText.ringSpoken(ring, count: figures.count(ring), share: figures.livingShare(ring),
+                                   estimated: figures.isEstimated(ring, verified: verified.ids), opens: opens)
+    }
+
+    /// عمود: الحلقة (و«≈»)، ثم العدد أبيض ١٧ وسهمه، ثم الاسم ذهبي ١٣ — العمود كله زرّ واحد (≥ ٤٤)
+    private func column(_ ring: AdminCensusRing) -> some View {
+        let action = actions.ring(ring)
+        let opens = AdminCensusMath.opens(value: figures.count(ring), hasAction: action != nil)
+        let estimated = figures.isEstimated(ring, verified: verified.ids)
+        let face = VStack(spacing: DS.Spacing.xs) {
+            gauge(ring, size: DS.Hub.bandRing)
+                .overlay(alignment: .topLeading) {
+                    if estimated { approxBadge.offset(badgeOffset) }
+                }
+            HStack(spacing: DS.Spacing.xs) {
+                Text(verbatim: AdminCensusText.number(figures.count(ring)))
+                    .dsFont(.statValue)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.headerTitle)
+                    .lineLimit(1)
+                    .minimumScaleFactor(DS.Hub.bandMinScale)
+                if opens { chevron }
+            }
+            Text(AdminCensusText.ringName(ring))
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Color.headerSubtitle)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+        .contentShape(Rectangle())
+        return tappable(face, action: opens ? action : nil, label: spoken(ring, opens: opens),
+                        estimate: estimated ? actions.estimate : nil)
+    }
+
+    /// صفّ (أحجام إمكانية الوصول): حلقة صغيرة بلا رقم داخلها، بجانبها الاسم والعدد ونسبة الأحياء، والسهم في الطرف
+    private func stackedRing(_ ring: AdminCensusRing) -> some View {
+        let action = actions.ring(ring)
+        let opens = AdminCensusMath.opens(value: figures.count(ring), hasAction: action != nil)
+        let estimated = figures.isEstimated(ring, verified: verified.ids)
+        let share = figures.livingShare(ring).map {
+            L10n.t("\(AdminCensusText.percent($0)) أحياء", "\(AdminCensusText.percent($0)) living")
+        }
+        let face = HStack(spacing: DS.Spacing.md) {
+            gauge(ring, size: DS.Ring.mediumStacked)
+                .overlay(alignment: .topLeading) {
+                    if estimated { approxBadge.offset(badgeOffset) }
+                }
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(AdminCensusText.ringName(ring))
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.headerSubtitle)
+                Text(verbatim: AdminCensusText.number(figures.count(ring)))
+                    .dsFont(.statValue)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.headerTitle)
+                if let share {
+                    Text(verbatim: share)
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Hub.onBandMuted)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: DS.Spacing.xs)
+            if opens { chevron }
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+        .contentShape(Rectangle())
+        return tappable(face, action: opens ? action : nil, label: spoken(ring, opens: opens),
+                        estimate: estimated ? actions.estimate : nil)
+    }
+
+    // MARK: الرابطان
+
+    /// «في التطبيق 170 من 2,489 حياً ‹» · «خارج العائلة 46 حياً ‹» — صفّ واحد، أو تحت بعض حين يضيق
+    private var links: some View {
+        let inApp = link(title: AdminCensusText.inAppTitle, value: figures.inApp,
+                         tail: AdminCensusText.inAppSub(living: figures.totalAlive), action: actions.inApp)
+        let outside = link(title: AdminCensusText.outsideTitle, value: figures.outsideLiving,
+                           tail: figures.outsideLiving.map(AdminCensusText.livingNoun), action: actions.outside)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: DS.Spacing.sm) {
+                inApp
+                Spacer(minLength: DS.Spacing.sm)
+                outside
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                inApp
+                outside
+            }
+        }
+    }
+
+    /// رابط: الاسم ذهبي ١٣، العدد أبيض ١٥ شبه عريض، ما بعده ذهبي، والسهم إن فتح — نصّ واحد يلتفّ كفقرة. الصفر باهت بلا
+    /// سهم، و«—» قبل الوصول بلا ضغطة (T2)
+    private func link(title: String, value: Int?, tail: String?, action: (() -> Void)?) -> some View {
+        let opens = AdminCensusMath.opens(value: value, hasAction: action != nil)
+        let dim = (value ?? 0) == 0
+        let gold = dim ? DS.Hub.lineZero : DS.Color.headerSubtitle
+        var text = Text(title).font(DS.Font.role(.subtitle)).foregroundColor(gold)
+            + Text(verbatim: " ")
+            + Text(verbatim: AdminCensusText.number(value)).font(DS.Font.role(.hubLineNumber))
+                .foregroundColor(dim ? DS.Hub.lineZero : DS.Color.headerTitle)
+        if let tail, value != nil {
+            text = text + Text(verbatim: " ") + Text(verbatim: tail).font(DS.Font.role(.subtitle)).foregroundColor(gold)
+        }
+        if opens {
+            text = text + Text(verbatim: " ")
+                + Text(Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right"))
+                    .font(DS.Font.role(.subtitle)).foregroundColor(DS.Color.accentLight)
+        }
+        let face = text
+            .monospacedDigit()
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        let sub: String? = value == nil ? nil : tail
+        return tappable(face, action: opens ? action : nil,
+                        label: AdminCensusText.rowSpoken(title: title, value: value, sub: sub, opens: opens),
+                        estimate: nil)
+    }
+
+    // MARK: الفشل
+
+    /// فشل بلا بيانات: سطر ذهبي «تعذّر تحميل الأرقام ↻» — زرّ يعيد جلب أرقام «العائلة» وحدها
+    @ViewBuilder
+    private var failedLine: some View {
+        let canRetry = health?.canRetry == true && actions.retry != nil
+        let face = HStack(spacing: DS.Spacing.xs) {
+            Text(AdminCensusText.failed)
+                .dsFont(.subtitle)
+                .fixedSize(horizontal: false, vertical: true)
+            if canRetry {
+                Image(systemName: "arrow.clockwise")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .accessibilityHidden(true)
+            }
+        }
+        .foregroundColor(DS.Color.headerSubtitle)
+        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+        .contentShape(Rectangle())
+        if canRetry, let retry = actions.retry {
+            Button(action: retry) { face }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(L10n.t("\(AdminCensusText.failed)، \(AdminStoreHealthText.retry)",
+                                           "\(AdminCensusText.failed), \(AdminStoreHealthText.retry)"))
+        } else {
+            face
+        }
+    }
+
+    // MARK: الضغط
+
+    /// زرّ بجملة واحدة للقارئ الصوتي (يصغر ٠٫٩٧ — `DSPressStyle`)، أو نصّ بلا ضغطة. الحلقة التقديرية تحمل «هل ما زالوا
+    /// أحياء؟» في الضغط المطوّل وإجراءات القارئ الصوتي (بيت سطر «≈» القديم)
+    @ViewBuilder
+    private func tappable<Face: View>(_ face: Face, action: (() -> Void)?, label: String,
+                                      estimate: (() -> Void)?) -> some View {
+        let base = Group {
+            if let action {
+                Button(action: action) { face }
+                    .buttonStyle(DSPressStyle())
+                    .accessibilityLabel(label)
+            } else {
+                face
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(label)
+            }
+        }
+        if let estimate {
+            base
+                .contextMenu {
+                    Button(action: estimate) {
+                        Label(AdminCensusText.estimateList, systemImage: "person.fill.questionmark")
+                    }
+                }
+                .accessibilityAction(named: Text(AdminCensusText.estimateList), estimate)
+        } else {
+            base
+        }
     }
 }
 

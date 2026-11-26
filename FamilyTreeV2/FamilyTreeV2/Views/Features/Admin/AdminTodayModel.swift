@@ -267,6 +267,43 @@ enum AdminTodayFeed {
         }
         return c
     }
+
+    // MARK: عدد الجرس (v2 — ما يحتاج إجراء الآن وحده)
+
+    /// الطلبات المعلّقة الآن — نفس `AdminNotificationsPage.openRequestIds` حرفياً (الإشعار «يحتاج إجراء» ما دام طلبه هنا)،
+    /// فيساوي الجرس شريحة «يحتاج إجراء N» في الصفحة
+    static func openRequestIds(adminRequestVM vm: AdminRequestViewModel, newsVM: NewsViewModel,
+                               projectsVM: ProjectsViewModel, memberVM: MemberViewModel) -> Set<UUID> {
+        var ids = Set<UUID>()
+        for list in [vm.deceasedRequests, vm.childAddRequests, vm.newsReportRequests, vm.photoSuggestionRequests,
+                     vm.nameChangeRequests, vm.treeEditRequests, vm.joinApprovalRequests] {
+            ids.formUnion(list.map(\.id))
+        }
+        ids.formUnion(vm.phoneChangeRequests.map(\.id))
+        ids.formUnion(vm.relativeAddRequests.map(\.id))
+        ids.formUnion(vm.relativeRemoveRequests.map(\.id))
+        ids.formUnion(vm.contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.map(\.id))
+        ids.formUnion(newsVM.pendingNewsRequests.map(\.id))
+        ids.formUnion(projectsVM.pendingProjects.map(\.id))
+        for m in memberVM.allMembers where m.role == .pending { ids.insert(m.id) }
+        return ids
+    }
+
+    /// إشعارات الإدارة بما يحتاجه عدد الجرس (`AdminTodayBandLogic.bellCount`) — التصنيف الواحد `AdminNotices.category`
+    static func bellNotices(_ notifications: [AppNotification], me: UUID?) -> [AdminBellNotice] {
+        notifications.compactMap { n in
+            guard let category = AdminNotices.category(of: n, me: me) else { return nil }
+            return AdminBellNotice(
+                category: category,
+                read: n.read,
+                requestId: AdminNotices.requestId(of: n),
+                suspicious: n.kind == AdminNotices.smsSuspicious,
+                // «تمت إضافة ابن · راجعه» وللابن ملف (`applySelfChild` في الصفحة يشترطه)
+                selfChildReview: category == .changes && n.details?.selfChild == true && n.details?.review == true
+                    && n.subjectMemberId != nil,
+                contactMessage: n.kind == NotificationKind.contactMessage.rawValue)
+        }
+    }
 }
 
 
@@ -327,24 +364,35 @@ enum AdminTodayMetrics {
 
 // MARK: - أزرار الرأس (يقرؤها `AdminAnnounceComposer` أيضاً)
 
-/// زرّ رأس «اليوم» العاري — كأزرار رؤوس التبويبات (جرس الرئيسية و«عن التطبيق»): رمز أبيض بلمس ٤٤، وعدد أحمر على
-/// ركنه (جرس «إشعارات الإدارة»)
+/// زرّ رأس «اليوم» — v2 (الاتجاه «أ»، V2-1): دائرة زجاجية ٤٤ (لمسها كاملة) برمز أبيض مفرّغ، وعلى ركن الجرس شارة ذهبية
+/// صغيرة بنصّ كحلي = ما يحتاج إجراء الآن (`AdminTodayBandLogic.bellCount`) — لا أحمر ولا غير المقروء
 struct AdminHeaderIcon: View {
     let symbol: String
     var count: Int = 0
 
     var body: some View {
         Image(dsSymbol: symbol)
-            .dsGlyph(DS.Glyph.xxl, weight: .semibold)
+            .dsGlyph(DS.Glyph.xl, weight: .medium)
             .foregroundStyle(DS.Color.headerGlyph)
+            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+            .background(Circle().fill(DS.Hub.glass))
+            .overlay(Circle().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
             .overlay(alignment: .topTrailing) {
-                if count > 0 {
-                    AdminTileBadge(kind: .count(count), ring: DS.Color.bandFill)
-                        .offset(x: L10n.isArabic ? -AdminTileMetrics.badgeOffset : AdminTileMetrics.badgeOffset,
-                                y: -AdminTileMetrics.badgeOffset)
+                if let badge = AdminTodayBandLogic.bellBadge(count) {
+                    Text(verbatim: badge)
+                        .dsFont(.badge)
+                        .monospacedDigit()
+                        .foregroundColor(DS.Color.bandFill)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, DS.Spacing.xs)
+                        .frame(minWidth: DS.Hub.bellBadgeGold, minHeight: DS.Hub.bellBadgeGold)
+                        .background(Capsule().fill(DS.Color.accentLight))
+                        .overlay(Capsule().strokeBorder(DS.Color.bandFill, lineWidth: DS.Border.widthBold))
+                        .offset(x: L10n.isArabic ? -DS.Spacing.xxs : DS.Spacing.xxs, y: -DS.Spacing.xxs)
+                        .accessibilityHidden(true)
                 }
             }
-            .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
+            .contentShape(Circle())
     }
 }
