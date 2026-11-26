@@ -257,6 +257,12 @@ private struct AdminAppSettingsGroups: View {
                 AdminInfoRow(icon: "clock.fill", tint: DS.Color.primary, title: L10n.t("آخر تعديل للإعدادات", "Last settings change"),
                              trailing: AnyView(AdminValueChip(text: updated.map { AppVersionText.stamp($0) } ?? L10n.t("غير محدد", "N/A"),
                                                               tint: DS.Color.primary)))
+                // «الأخطاء» (طلب المالك ٢٠٢٦-١١-٢٦): ما يصل Sentry من الآيفون والأندرويد والموقع — `AdminErrorsPage.swift`
+                AdminTapRow(icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
+                            title: AdminErrorsText.pageTitle,
+                            subtitle: L10n.t("ما يصل Sentry من الآيفون والأندرويد والموقع، ووين صار",
+                                             "What reaches Sentry from iPhone, Android and web, and where"),
+                            tap: .page { AnyView(AdminErrorsPage()) })
             }
             // حذف/استعادة خفيف: حبّة حمراء فاتحة بنصّ أحمر (نفس «حذف» الخفيف في المربّعات) بدل الزرّ الأحمر الممتلئ
             Button { showReset = true } label: {

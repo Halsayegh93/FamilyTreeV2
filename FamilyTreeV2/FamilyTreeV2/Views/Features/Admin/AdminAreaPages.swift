@@ -247,6 +247,14 @@ enum AdminToolCatalog {
                                icon: "arrow.down.app.fill", tint: DS.Color.primary,
                                keywords: ["تحديث", "إجباري", "إصدار"],
                                kind: page { AdminForceUpdateView() }))
+            // «الأخطاء» — بيته «التطبيق ← النظام» (`AdminErrorsPage`)
+            t.append(AdminTool(id: "app.errors", area: .app, group: settings,
+                               title: AdminErrorsText.pageTitle,
+                               subtitle: L10n.t("ما يصل Sentry من الآيفون والأندرويد والموقع، ووين صار",
+                                                "What reaches Sentry from iPhone, Android and web, and where"),
+                               icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
+                               keywords: ["أخطاء", "خطأ", "أعطال", "عطل", "تعطل", "مشاكل", "Sentry", "سنتري", "كراش", "crash"],
+                               kind: page { AdminErrorsPage() }))
         }
         // قسم لا يظهر لدورك (جدول «مين يشوف وش» من السيرفر) لا تظهر أدواته في البحث أيضاً
         return t.filter { $0.area.isVisible(for: authVM) }
