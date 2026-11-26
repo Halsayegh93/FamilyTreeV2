@@ -126,7 +126,9 @@ check(one.count, 4, "no empty row when every role has someone")
 // MARK: الاستخدام
 check(L.usageHeadline(active: 96), "96 نشطون", "usage headline")
 check(L.usageHeadline(active: 0), "لا أحد نشط", "no active")
-check(L.usageLine(registered: 170), "من 170 لهم حساب", "usage line")
+check(L.usageBaseLine(accounts: 171), "من 171 حساباً", "usage base line")
+check(L.usageBaseLine(accounts: 2), "من حسابين", "usage base line, two")
+check(L.usageBaseLine(accounts: 0), "لا حسابات بعد", "usage base line, none")
 
 // MARK: الأعداد
 check(L.days(0), "أقل من يوم", "0 days")

@@ -6,11 +6,12 @@ import SwiftUI
 // MARK: - مربّعات اللوحة (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec A.8 وA.12 وA.16، الوحدة U4)
 //
 // نوعان من المربّعات:
-//  ١) مربّع القسم `AdminRowTile` («اليوم ← الأقسام»): بطاقة بيضاء بخطّ رفيع بلا ظلّ (زاوية ١٢، حشوة ١٢، أقل ارتفاع ٧٦)،
+//  ١) مربّع القسم `AdminRowTile` («اليوم ← الأقسام»): بطاقة بيضاء بخطّ رفيع بلا ظلّ (زاوية ١٢، حشوة ١٢ × ١٠، أقل ارتفاع ٦٠)،
 //     مربّع أيقونة ٣٠ ممتلئ بلون القسم في البداية فوق، الاسم ١٥ متوسط، وتحته **سطر الحالة** ١٣: جملة قصيرة تقول حال القسم
 //     بكلمة بدل الشارات الحمراء (spec E.16) — «2 عاجل»، «4 مشكلات في الشجرة»، «الرصيد منخفض»، «يعمل للجميع».
 //     أربع نغمات (`AdminTileTone`): محايد رمادي · انتباه (`warning` + ⓘ ممتلئة) · عاجل (`error` + الرمز نفسه بنبضة هادئة)
-//     · سليم (رمادي + ✓ `success` في الطرف). والقسم «للاطلاع» يُختم سطره بـ«للاطلاع».
+//     · سليم (رمادي + ✓ `success` في الطرف). والقسم «للاطلاع»: رمز عين بعد الكلمة بلون السطر (لا يلتفّ السطر)، أو كلمة
+//     «للاطلاع» وحدها حين لا كلمة حال — والقارئ الصوتي يقول «للاطلاع» دائماً.
 //     **حال المخزن** (`AdminStoreHealth`، AdminContracts.swift — spec T1): الكلمة الهادئة لا تظهر إلا بعد وصول بياناتها.
 //     التحميل = سطر هيكل رمادي (المربّع يُضغط فوراً)، الفشل بلا بيانات = «تعذّر التحميل» ↻ رمادي والضغط عليه يعيد جلب
 //     مخزنه وحده، الفشل بعد تحميل ناجح = الكلمة + «آخر تحديث 9:12»، المرفوض = لا سطر (أو «للاطلاع»).
@@ -88,10 +89,13 @@ nonisolated struct AdminTileState: Hashable {
 
 /// نصوص المربّعات (المكان الواحد)
 nonisolated enum AdminTileText {
-    /// فاصل حقيقتين في سطر واحد، وقبل «للاطلاع»
+    /// فاصل حقيقتين في سطر واحد
     static let separator = " · "
-    /// ختم سطر القسم الذي يشوفه الدور بس — spec A.8
+    /// القسم الذي يشوفه الدور بس — spec A.8: كلمة وحدها حين لا كلمة حال، وإلا رمز `readOnlyGlyph` بعد الكلمة (F2: «170 في
+    /// التطبيق · للاطلاع» كانت تلتفّ لسطرين)، والقارئ الصوتي يقولها دائماً
     static var readOnly: String { L10n.t("للاطلاع", "View only") }
+    /// رمز «للاطلاع» بعد كلمة الحال
+    static let readOnlyGlyph = "eye"
     /// نصّ بطول كلمة عادية تحت هيكل التحميل (لا يُقرأ — `.redacted`)
     static var skeletonSample: String { L10n.t("لا جديد الآن", "Nothing new yet") }
     /// تحذير أداة بلا سطر رقم
@@ -116,20 +120,25 @@ nonisolated struct AdminTileLine: Hashable {
     var tone: AdminTileTone
     /// بيانات قديمة بعد فشل التحديث — «آخر تحديث 9:12» تحت الكلمة
     var staleSince: Date?
+    /// القسم للاطلاع وللسطر كلمة حال: رمز العين بعد الكلمة (لا كلمة «للاطلاع» تُطيل السطر)، والقارئ الصوتي يقول «للاطلاع»
+    var readOnlyMark: Bool = false
 
     /// لا سطر
     static let empty = AdminTileLine(kind: .none, text: "", tone: .neutral, staleSince: nil)
 
     /// - state: كلمة القسم (nil = لا كلمة؛ الاسم وحده أو «للاطلاع»)
     /// - health: حال المخزن الذي تُقرأ منه الكلمة — nil = الكلمة جاهزة (مستدعٍ قديم بلا حال مخزن)
-    /// - readOnly: القسم للاطلاع لهذا الدور — يُختم السطر بـ«للاطلاع»
+    /// - readOnly: القسم للاطلاع لهذا الدور — رمز العين بعد الكلمة، أو «للاطلاع» وحدها حين لا كلمة
     static func make(state: AdminTileState?, health: AdminStoreHealth?, readOnly: Bool) -> AdminTileLine {
         func word(_ since: Date?) -> AdminTileLine {
-            let parts = [state?.text, readOnly ? AdminTileText.readOnly : nil].compactMap { $0 }.filter { !$0.isEmpty }
-            guard !parts.isEmpty else { return .empty }
-            let tone: AdminTileTone = (state?.text.isEmpty ?? true) ? .neutral : (state?.tone ?? .neutral)
-            return AdminTileLine(kind: .word, text: parts.joined(separator: AdminTileText.separator), tone: tone,
-                                 staleSince: since)
+            guard let state, !state.text.isEmpty else {
+                // لا كلمة حال: «للاطلاع» وحدها (محايدة) أو لا سطر
+                return readOnly
+                    ? AdminTileLine(kind: .word, text: AdminTileText.readOnly, tone: .neutral, staleSince: since)
+                    : .empty
+            }
+            return AdminTileLine(kind: .word, text: state.text, tone: state.tone, staleSince: since,
+                                 readOnlyMark: readOnly)
         }
         switch health?.look ?? .word {
         case .word:
@@ -156,8 +165,9 @@ nonisolated struct AdminTileLine: Hashable {
         case .skeleton: return AdminStoreHealthText.loading
         case .unknown:  return AdminStoreHealthText.failed
         case .word:
-            guard let staleSince else { return text }
-            return [text, AdminStoreHealthText.updated(staleSince)].joined(separator: L10n.t("، ", ", "))
+            let words = [text, readOnlyMark ? AdminTileText.readOnly : nil,
+                         staleSince.map { AdminStoreHealthText.updated($0) }].compactMap { $0 }
+            return words.joined(separator: L10n.t("، ", ", "))
         }
     }
 }
@@ -326,7 +336,7 @@ private struct AdminTileLineView: View {
         case .word:
             VStack(alignment: centered ? .center : .leading, spacing: DS.Spacing.xxs) {
                 face(ink: line.tone.textInk, glyph: Self.glyph(line.tone), urgent: line.tone == .urgent,
-                     check: line.tone == .good)
+                     check: line.tone == .good, readOnly: line.readOnlyMark)
                 if let since = line.staleSince {
                     AdminStaleStamp(since: since)
                 }
@@ -353,7 +363,7 @@ private struct AdminTileLineView: View {
 
     /// «تعذّر التحميل» ↻ بلون حبّة الحالة المجهولة (`AdminPillTone.unknown` — رمادي، لا كلمة هادئة)
     private var unknownFace: some View {
-        face(ink: AdminPillTone.unknown.ink, glyph: "arrow.clockwise", urgent: false, check: false)
+        face(ink: AdminPillTone.unknown.ink, glyph: "arrow.clockwise", urgent: false, check: false, readOnly: false)
     }
 
     /// رمز قبل الكلمة: ⓘ ممتلئة للانتباه والعاجل (العلامة ✓ للسليم بعدها — كالعيّنة)
@@ -364,7 +374,7 @@ private struct AdminTileLineView: View {
         }
     }
 
-    private func face(ink: Color, glyph: String?, urgent: Bool, check: Bool) -> some View {
+    private func face(ink: Color, glyph: String?, urgent: Bool, check: Bool, readOnly: Bool) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
             if let glyph {
                 Image(dsSymbol: glyph)
@@ -386,6 +396,13 @@ private struct AdminTileLineView: View {
                 Image(dsSymbol: "checkmark")
                     .dsGlyph(DS.Glyph.sm, weight: .semibold)
                     .foregroundColor(DS.Color.success)
+                    .accessibilityHidden(true)
+            }
+            if readOnly {
+                // «للاطلاع» رمزاً بلون السطر — القارئ الصوتي يقولها من `AdminTileLine.spoken`
+                Image(dsSymbol: AdminTileText.readOnlyGlyph)
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .foregroundColor(ink)
                     .accessibilityHidden(true)
             }
         }
@@ -472,7 +489,7 @@ struct AdminRowTile: View {
     var health: AdminStoreHealth?
     /// إعادة جلب مخزن الكلمة وحده (حين فشل بلا بيانات) — nil = «تعذّر التحميل» بلا ضغطة
     var retry: (() -> Void)?
-    /// القسم للاطلاع لهذا الدور — يُختم السطر بـ«للاطلاع»
+    /// القسم للاطلاع لهذا الدور — عين بعد الكلمة (أو «للاطلاع» وحدها)
     var readOnly: Bool
     /// تلميح القارئ الصوتي (وصف القسم)
     var hint: String?
@@ -498,16 +515,6 @@ struct AdminRowTile: View {
         self.init(icon: area.icon, fill: area.fill, title: area.tileTitle, state: state, health: health, retry: retry,
                   readOnly: readOnly, hint: area.subtitle)
         spokenTitle = area.title
-    }
-
-    /// القديم: سطر صغير + شارة حمراء — الشارة تصير سطر حالة بنغمة «انتباه» والسطر يلحقها (spec E.16)
-    @available(*, deprecated, message: "use AdminRowTile(area:state:health:retry:readOnly:) — a state line, no badge; U21 removes")
-    init(icon: String, ink: Color, title: String, caption: String? = nil, badge: AdminTileBadge.Kind? = nil,
-         badgeSpoken: String? = nil, index: Int = 0, hint: String? = nil) {
-        let badgeText = badge.map { badgeSpoken ?? AdminTileBadge.spoken($0) }
-        let state = AdminTileState.joined([badgeText.map { AdminTileState.attention($0) },
-                                           caption.map { AdminTileState.neutral($0) }].compactMap { $0 })
-        self.init(icon: icon, fill: ink.dsSolidFill, title: title, state: state, hint: hint)
     }
 
     var body: some View {

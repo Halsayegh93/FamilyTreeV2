@@ -48,16 +48,30 @@ check(deniedRead.kind, .word, "denied read-only → «للاطلاع»")
 check(deniedRead.text, "للاطلاع", "denied read-only text")
 check(deniedRead.tone, .neutral, "denied read-only is neutral")
 
-// MARK: «للاطلاع» وبلا حال مخزن (المستدعي القديم)
-check(AdminTileLine.make(state: .neutral("170 في التطبيق"), health: nil, readOnly: true).text,
-      "170 في التطبيق · للاطلاع", "read-only ends the line with «للاطلاع»")
-check(AdminTileLine.make(state: nil, health: nil, readOnly: true).text, "للاطلاع", "read-only alone")
+// MARK: «للاطلاع» وبلا حال مخزن — F2: عين بعد الكلمة (السطر لا يلتفّ)، والكلمة وحدها حين لا كلمة حال
+let readWord = AdminTileLine.make(state: .neutral("170 في التطبيق"), health: nil, readOnly: true)
+check(readWord.text, "170 في التطبيق", "read-only keeps the state word alone (no « · للاطلاع» tail)")
+check(readWord.readOnlyMark, true, "read-only with a word → the eye glyph")
+check(readWord.spoken, "170 في التطبيق، للاطلاع", "VoiceOver still says «للاطلاع»")
+let readAlone = AdminTileLine.make(state: nil, health: nil, readOnly: true)
+check(readAlone.text, "للاطلاع", "read-only alone")
+check(readAlone.readOnlyMark, false, "the word «للاطلاع» alone has no eye")
+check(readAlone.spoken, "للاطلاع", "read-only alone spoken once")
+check(AdminTileLine.make(state: .neutral("170 في التطبيق"), health: nil, readOnly: false).readOnlyMark, false,
+      "editable area → no eye")
+let readStale = AdminTileLine.make(state: urgent, health: .failed(lastGood: earlier), readOnly: true)
+check(readStale.readOnlyMark, true, "stale read-only word keeps the eye")
+check(readStale.spoken.hasPrefix("2 عاجل، للاطلاع، "), true, "stale read-only spoken: word, «للاطلاع», then the time")
 check(AdminTileLine.make(state: nil, health: nil, readOnly: false).kind, .none, "no word → name only")
 check(AdminTileLine.make(state: .attention(""), health: nil, readOnly: false).kind, .none, "empty word → name only")
 check(AdminTileLine.make(state: .attention(""), health: nil, readOnly: true).tone, .neutral,
       "empty word + read-only is neutral")
-check(AdminTileLine.make(state: urgent, health: .loaded(at: earlier), readOnly: true).text, "2 عاجل · للاطلاع",
-      "word + read-only")
+check(AdminTileLine.make(state: .attention(""), health: nil, readOnly: true).text, "للاطلاع",
+      "empty word + read-only → «للاطلاع» alone")
+let urgentRead = AdminTileLine.make(state: urgent, health: .loaded(at: earlier), readOnly: true)
+check(urgentRead.text, "2 عاجل", "word + read-only: the word alone")
+check(urgentRead.tone, .urgent, "word + read-only keeps the word's tone")
+check(urgentRead.readOnlyMark, true, "word + read-only: the eye")
 
 // MARK: حقيقتان في سطر واحد
 let two = AdminTileState.joined([.attention("5 بانتظارك"), .urgent("2 عاجل")])
@@ -86,8 +100,9 @@ check(AdminTileGridMath.itemWidth(rowWidth: 5, items: 2, spacing: 10), 0, "never
 L10n.isArabic = false
 check(AdminTileLine.make(state: nil, health: .failed(lastGood: nil), readOnly: false).text, "Couldn't load",
       "English unknown")
-check(AdminTileLine.make(state: .neutral("170 in the app"), health: nil, readOnly: true).text,
-      "170 in the app · View only", "English read-only")
+check(AdminTileLine.make(state: .neutral("170 in the app"), health: nil, readOnly: true).spoken,
+      "170 in the app, View only", "English read-only (spoken)")
+check(AdminTileLine.make(state: nil, health: nil, readOnly: true).text, "View only", "English read-only alone")
 L10n.isArabic = true
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")

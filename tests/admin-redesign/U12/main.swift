@@ -100,13 +100,6 @@ let stored = AdminWomenLanding(status: .registered, branch: .outside)
 check(W.filters(landing: stored.overridden(by: AdminWomenLanding(status: .all))), F(status: .all, branch: .outside),
       "landing: explicit init field wins over the stored landing")
 
-// الشرائح القديمة (حتى U11)
-check(AdminWomenChip.all.filters, F(status: .all), "legacy chip: all")
-check(AdminWomenChip.recent.filters, F(status: .all, order: .newest), "legacy chip: newest")
-check(AdminWomenChip.accounts.filters.status, .registered, "legacy chip: registered")
-check(AdminWomenChip.outside.filters, F(status: .living, branch: .outside), "legacy chip: outside branch")
-check(AdminWomenChip.outsideDeceased.filters, F(status: .deceased, branch: .outside), "legacy chip: outside deceased")
-
 // «الأحدث»
 let now = Date(timeIntervalSince1970: 1_800_000_000)
 let day: TimeInterval = 86_400

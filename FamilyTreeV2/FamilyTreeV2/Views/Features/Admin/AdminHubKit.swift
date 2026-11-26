@@ -350,13 +350,6 @@ struct AdminHeaderLead<Title: View, Trailing: View>: View {
         self.trailing = trailing
     }
 
-    /// قديم: الرأس الجديد بلا دائرة رمز القسم — الرمز يُتجاهل
-    @available(*, deprecated, message: "use init(backTitle:onBack:subtitle:title:trailing:) — the header has no section symbol; U21 removes")
-    init(backTitle: String? = nil, onBack: (() -> Void)? = nil, symbol: String, subtitle: String? = nil,
-         @ViewBuilder title: @escaping () -> Title, @ViewBuilder trailing: @escaping () -> Trailing) {
-        self.init(backTitle: backTitle, onBack: onBack, subtitle: subtitle, title: title, trailing: trailing)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let onBack, let backTitle {
@@ -377,12 +370,6 @@ struct AdminHeaderLead<Title: View, Trailing: View>: View {
             }
         }
     }
-}
-
-/// قديم: الحلية الذهبية تحت سطر الرأس حُذفت (spec A.3/E.5) — لا ترسم شيئاً
-@available(*, deprecated, message: "the gold ornament is gone (spec A.3); remove the call — U21 removes")
-struct AdminHeaderOrnament: View {
-    var body: some View { EmptyView() }
 }
 
 /// سطر ذهبي صغير فوق الرأس برمزه («للاطلاع فقط — التعديل للمالك» بقفل — spec A.3). كان شارة كبسولة
@@ -607,52 +594,6 @@ struct AdminHeaderLineLayout: Layout {
             x += s.width + spacing
             line = max(line, s.height)
         }
-    }
-}
-
-/// قديم: مربّع رقم زجاجي في الرأس — حلّ محلّه سطر الأرقام (spec A.3/E.6)
-@available(*, deprecated, message: "use AdminHeaderLine with AdminHeaderItem; U21 removes")
-struct AdminKPITile: View {
-    let value: String
-    let label: String
-    let icon: String
-    var tint: Color = DS.Color.textOnPrimary
-    /// نسبة (٠…١) — حلقة مصغّرة موحّدة بجانب الرقم
-    var ring: Double? = nil
-    var ringTint: Color? = nil
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    var body: some View {
-        let wraps = typeSize > .large
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.xsm) {
-                Text(value)
-                    .dsFont(.hubKPI)
-                    .monospacedDigit()
-                    .foregroundColor(tint)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .contentTransition(.numericText())
-                if let ring {
-                    DSRingValue(progress: ring, tint: ringTint ?? tint, track: DS.Ring.bandTrack)
-                }
-            }
-            HStack(alignment: wraps ? .firstTextBaseline : .center, spacing: DS.Spacing.xs) {
-                Image(dsSymbol: icon).dsGlyph(DS.Glyph.sm, weight: .semibold)
-                Text(label)
-                    .dsFont(.subtitle)
-                    .lineLimit(wraps ? 2 : 1, reservesSpace: wraps)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundColor(DS.Hub.onBandMuted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(DS.Hub.kpiPadding)
-        .background(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous).fill(DS.Hub.glass))
-        .overlay(RoundedRectangle(cornerRadius: DS.Hub.kpiRadius, style: .continuous)
-            .strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(value)")
     }
 }
 

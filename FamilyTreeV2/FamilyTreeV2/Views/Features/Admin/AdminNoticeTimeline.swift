@@ -240,7 +240,8 @@ struct AdminNoticeListRow: View {
     }
 }
 
-/// «قراءة الكل» (نصّ كحلي، لمس ٤٤) في البداية و«12 غير مقروء» في الطرف (spec C.15 السطر ٣، mock 11) — تحته إن ضاق
+/// «12 غير مقروء» في البداية و«قراءة الكل» بجانبه في الطرف (spec C.15 السطر ٣، mock 11) — تحته إن ضاق. «قراءة الكل» زرّ
+/// نصّي كحلي بوزن عادي (كرابط البطاقة `AdminCardLinkLabel`، لمس ٤٤) — لا وزن عنوان (F2)
 struct AdminNoticeCaption: View {
     let unread: Int
     let onReadAll: () -> Void
@@ -248,9 +249,10 @@ struct AdminNoticeCaption: View {
     var body: some View {
         let button = Button(action: onReadAll) {
             Text(L10n.t("قراءة الكل", "Mark all read"))
-                .dsFont(.button)
+                .dsFont(.body)
                 .foregroundColor(AppSection.admin.ink)
-                .frame(minHeight: DS.Icon.tapTarget)
+                .padding(.horizontal, DS.Spacing.xsm)
+                .frame(minWidth: DS.Icon.tapTarget, minHeight: DS.Icon.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(DSPressStyle())
@@ -264,9 +266,9 @@ struct AdminNoticeCaption: View {
             .accessibilityElement(children: .combine)
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: DS.Spacing.sm) {
-                button.fixedSize()
-                Spacer(minLength: DS.Spacing.sm)
                 count
+                Spacer(minLength: DS.Spacing.sm)
+                button.fixedSize()
             }
             VStack(alignment: .leading, spacing: 0) {
                 count.frame(minHeight: DS.Icon.tapTarget)

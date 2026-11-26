@@ -289,14 +289,6 @@ nonisolated enum AdminTeamLogic {
         }
     }
 
-    /// «من 170 لهم حساب» — أصحاب الحسابات = نشط + خامل + دخل بلا جهاز (تعريف «عضو مسجّل»)
-    @available(*, deprecated, message: "use usageBaseLine(accounts:) — the base is every account, not the family's registered (F1); U21 removes")
-    static func usageLine(registered: Int) -> String {
-        registered == 0 ? L10n.t("لا أحد له حساب بعد", "No one has an account yet")
-                        : L10n.t("من \(AdminNumberText.grouped(registered)) لهم حساب",
-                                 "of \(AdminNumberText.grouped(registered)) with an account")
-    }
-
     // MARK: الأعداد
 
     /// «5 أيام» · «12 يوماً» · «يوم واحد» · «يومين» · «أقل من يوم»

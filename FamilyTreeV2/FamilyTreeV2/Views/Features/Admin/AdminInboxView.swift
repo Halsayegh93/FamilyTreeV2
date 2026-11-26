@@ -143,28 +143,11 @@ struct AdminInboxView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var authVM: AuthViewModel
 
-    /// قديم: داخل «الوارد» شريحةً بلا رأس — U8 يدفع الصفحة بدلها، وU21 يحذفه
-    private let embedded: Bool
-    /// قديم: بحث «الوارد» الواحد للطلبات والرسائل — nil = بحث الصفحة
-    private let sharedSearch: Binding<String>?
-
-    init() {
-        embedded = false
-        sharedSearch = nil
-    }
-
-    @available(*, deprecated, message: "push AdminInboxView() as its own page; U8 drops this call, U21 removes")
-    init(embedded: Bool, sharedSearch: Binding<String>? = nil) {
-        self.embedded = embedded
-        self.sharedSearch = sharedSearch
-    }
-
-    /// تلميح حقل البحث الواحد في «الوارد» (الطلبات والرسائل) — يقرؤه «الوارد» أيضاً
-    static let searchPlaceholder = L10n.t("بحث في الطلبات والرسائل بالاسم أو الرقم", "Search requests and messages by name or number")
+    init() {}
 
     static var title: String { L10n.t("رسائل الأعضاء", "Members' messages") }
 
-    @State private var ownSearch = ""
+    @State private var search = ""
     @State private var filters = AdminInboxMessageLogic.Filters()
     @State private var showsFilters = false
     /// حال جلب الرسائل (عقد U2): هيكل ← الكلمة، والفشل بعد تحميل ناجح يُبقي الرسائل بـ«آخر تحديث»
@@ -183,8 +166,7 @@ struct AdminInboxView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.adminBackTitle) private var outerBack
 
-    private var searchBinding: Binding<String> { sharedSearch ?? $ownSearch }
-    private var trimmedSearch: String { searchBinding.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var trimmedSearch: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     // MARK: الصلاحية
 
@@ -197,19 +179,13 @@ struct AdminInboxView: View {
 
     // حارس المكدس: الصفحة ثم التأكيدات والمربّع طبقات خلف `AnyView`
     var body: some View {
-        if embedded {
-            AnyView(layered)
-        } else {
-            AnyView(layered)
-                .debugStackProbe("AdminInboxView", limitKB: DebugStackLimit.page)
-        }
+        AnyView(layered)
+            .debugStackProbe("AdminInboxView", limitKB: DebugStackLimit.page)
     }
 
     private var layered: AnyView {
-        guard canSee else { return embedded ? AnyView(lockedCard) : AnyView(lockedPage) }
-        let model = makeModel()
-        let page = embedded ? AnyView(embeddedList(model)) : AnyView(pageView(model))
-        return AnyView(dialogsLayer(page))
+        guard canSee else { return AnyView(lockedPage) }
+        return AnyView(dialogsLayer(AnyView(pageView(makeModel()))))
     }
 
     private func pageView(_ m: Model) -> some View {
@@ -399,7 +375,7 @@ struct AdminInboxView: View {
     private func land(_ status: AdminInboxMessageLogic.Status) {
         withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
             filters = Logic.Filters(status: status)
-            searchBinding.wrappedValue = ""
+            search = ""
         }
     }
 
@@ -412,8 +388,8 @@ struct AdminInboxView: View {
         guard bar || unreadLine else { return nil }
         return AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
             if bar {
-                AdminFilterPanel(set: m.set, selection: $filters, search: searchBinding,
-                                 placeholder: sharedSearch == nil ? AdminFilterText.searchPlaceholder : Self.searchPlaceholder,
+                AdminFilterPanel(set: m.set, selection: $filters, search: $search,
+                                 placeholder: AdminFilterText.searchPlaceholder,
                                  note: L10n.t("الأحدث أولاً", "Newest first"),
                                  showsCaption: filters != Logic.Filters() || !trimmedSearch.isEmpty,
                                  openFilters: { showsFilters = true })
@@ -522,7 +498,7 @@ struct AdminInboxView: View {
                 AdminPageStateCard(.empty(L10n.t("لا نتائج", "No results"),
                                           message: L10n.t("جرّب كلمة أخرى", "Try another word"),
                                           actionTitle: L10n.t("مسح البحث", "Clear search"),
-                                          action: { searchBinding.wrappedValue = "" }))
+                                          action: { search = "" }))
             }
         }
     }
@@ -901,49 +877,6 @@ struct AdminInboxView: View {
     /// الرأس وبطاقة «ليست ضمن صلاحياتك» — بلا جلب ولا أرقام
     private var lockedPage: some View {
         AdminPage(header: AdminPageHeader(back: backTitle, title: Self.title), content: AnyView(lockedCard))
-    }
-
-    // MARK: قديم — داخل «الوارد» (U8 يحذف النداء، وU21 يحذف المسار)
-
-    /// نفس الصفوف والشريط بلا رأس (رأس «الوارد» فوقها) وبحث «الوارد» الواحد، و«تحديد» شريحة فوق الشريط
-    private func embeddedList(_ m: Model) -> some View {
-        List {
-            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                if canEdit && !m.all.isEmpty {
-                    HStack {
-                        Spacer(minLength: 0)
-                        DSChipButton(isSelectMode ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select"),
-                                     icon: isSelectMode ? "xmark.circle" : "checkmark.circle",
-                                     isSelected: isSelectMode, size: .small, action: toggleSelectMode)
-                            .fixedSize()
-                    }
-                }
-                lead(m)
-            }
-            .adminPageRow(top: DS.Spacing.sm)
-
-            rows(m)
-
-            DS.Hub.background
-                .frame(height: DS.Spacing.xxxl)
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(DS.Hub.background)
-                .listRowSeparator(.hidden)
-                .accessibilityHidden(true)
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollDismissesKeyboard(.interactively)
-        .environment(\.defaultMinListRowHeight, 0)
-        .background(DS.Hub.background)
-        .refreshable { await reload(force: true) }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isSelectMode {
-                selectionBar(m)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .adminFilterSheet(isPresented: $showsFilters, set: m.set, selection: $filters)
     }
 }
 

@@ -238,7 +238,7 @@ struct AdminBandRingRow: View {
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
                 ForEach(columns.indices, id: \.self) { i in
                     if i > 0 {
-                        Rectangle().fill(DS.Hub.ringStroke).frame(width: DS.Border.width / 2)
+                        Rectangle().fill(DS.Hub.bandHairline).frame(width: DS.Border.width / 2)
                             .accessibilityHidden(true)
                     }
                     columns[i]
@@ -356,8 +356,9 @@ struct AdminUsageFunnelCard: View {
     private func stepRow(_ step: AdminUsageStep, index: Int, top: Int) -> some View {
         let value = step.count(usage, now: nowLoaded ? now.count : nil)
         let share = value.map { top > 0 ? Double($0) / Double(top) : 0 }
-        // الدرجات تغمق كلما نزلت — نفس اللون (أخضر العائلة)
-        let tint = DS.Color.palm.opacity(0.45 + 0.55 * Double(index) / Double(AdminUsageStep.allCases.count - 1))
+        // الدرجات تغمق كلما نزلت — نفس اللون (أخضر العائلة)، من `usageStepFloor` إلى الكامل
+        let floor = DS.Hub.usageStepFloor
+        let tint = DS.Color.palm.opacity(floor + (1 - floor) * Double(index) / Double(AdminUsageStep.allCases.count - 1))
         // «الحين» وحدها: التطبيق والموقع (كان سطر حلقة الرأس)
         let app = now.filter { $0.source != "web" }.count
         let split: String? = step == .now && nowLoaded && !now.isEmpty
@@ -651,7 +652,7 @@ struct AdminUsageStatusLine: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Circle().fill(ok == false ? DS.Hub.kpiLate : (ok == true ? DS.Hub.statusOk : DS.Hub.ringStroke))
+            Circle().fill(ok == false ? DS.Hub.statusWarn : (ok == true ? DS.Hub.statusOk : DS.Hub.bandHairline))
                 .frame(width: DS.Hub.statusDot, height: DS.Hub.statusDot)
                 .accessibilityHidden(true)
             Text(verbatim: text)

@@ -348,9 +348,9 @@ struct AdminMyScopeView: View {
     @Environment(\.adminBackTitle) private var opener
 
     var body: some View {
-        AdminPage(header: AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"),
+        AdminPage(header: AdminPageHeader(back: opener ?? AdminArea.homeTitle,
                                           title: L10n.t("الصلاحيات · \(guide.title)", "My permissions · \(guide.title)"),
-                                          subtitle: guide.mandate,
+                                          subtitle: guide.mandateForSelf,
                                           glyph: guide.icon),
                   lead: AnyView(AdminRoleGuideCard(guide: guide, showsTitle: false)),
                   content: AnyView(EmptyView()))

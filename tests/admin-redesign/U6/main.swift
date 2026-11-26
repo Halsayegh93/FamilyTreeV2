@@ -15,7 +15,7 @@ L10n.isArabic = true
 let elders = Set((0..<41).map { _ in UUID() })
 let today = AdminCensusFigures(men: 2_729, menAlive: 2_362, women: 262, womenAlive: 127,
                                menAccounts: 123, womenAccounts: 47,
-                               outsideLiving: 50, outsideDeceased: 87, oldLiving: elders)
+                               outsideLiving: 50, oldLiving: elders)
 
 check(today.total, 2_991, "total = men + women")
 check(today.totalAlive, 2_489, "living = 2,362 + 127")
@@ -61,10 +61,7 @@ check(noElders.unverified(verified: []), 0, "no candidates yet → no note")
 
 // MARK: النصوص (spec C.1 / C.12)
 check(AdminCensusText.inAppSub(living: 2_489), "من 2,489 حياً", "in-app sub")
-check(AdminCensusText.outsideSub(deceased: 87), "أحياء، و87 متوفى", "outside sub")
-check(AdminCensusText.outsideSub(deceased: 1), "أحياء، ومتوفى واحد", "outside sub one")
-check(AdminCensusText.outsideSub(deceased: 0), "أحياء", "outside sub none")
-check(AdminCensusText.outsideSub(deceased: nil), "أحياء", "outside sub not loaded")
+check(AdminCensusText.outsideLivingSub, "أحياء", "outside sub = living only (F1)")
 check(AdminCensusText.split(men: 2_362, women: 127), "2,362 رجل و127 امرأة", "living split")
 check(AdminCensusText.split(men: 367, women: 135), "367 رجل و135 امرأة", "deceased split")
 check(AdminCensusText.split(men: 5, women: 2), "5 رجال وامرأتان", "small counts")

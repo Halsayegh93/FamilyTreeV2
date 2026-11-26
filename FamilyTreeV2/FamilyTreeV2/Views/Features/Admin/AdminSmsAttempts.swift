@@ -232,16 +232,16 @@ struct SmsAttemptsCard: View {
     }
 }
 
-/// اليوم / ٧ أيام / ٣٠ يوماً
-private struct SmsAttemptsPeriodSwitch: View {
+/// اليوم / ٧ أيام / ٣٠ يوماً — شرائح فلتر تلتفّ (spec A.9 — لا مبدّل في الإدارة)
+private struct SmsAttemptsPeriodChips: View {
     @ObservedObject var store: SmsLoginAttemptsStore
 
     var body: some View {
-        DSSegmentedSwitch(options: [
-            DSSegmentOption(id: 1, title: SmsAttemptsText.period(1), icon: "sun.max.fill"),
-            DSSegmentOption(id: 7, title: SmsAttemptsText.period(7), icon: "calendar"),
-            DSSegmentOption(id: 30, title: SmsAttemptsText.period(30), icon: "calendar.badge.clock")
-        ], selection: Binding(get: { store.days }, set: { store.select($0) }), size: .regular)
+        DSFilterChips(options: [
+            DSFilterOption(id: 1, title: SmsAttemptsText.period(1)),
+            DSFilterOption(id: 7, title: SmsAttemptsText.period(7)),
+            DSFilterOption(id: 30, title: SmsAttemptsText.period(30))
+        ], selection: Binding(get: { store.days }, set: { store.select($0) }), style: .admin)
     }
 }
 
@@ -556,7 +556,7 @@ private struct SmsAttemptsListContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            SmsAttemptsPeriodSwitch(store: store)
+            SmsAttemptsPeriodChips(store: store)
             if let result = store.current {
                 SmsAttemptsTotalsView(totals: result.totals)
                 let rows = filtered(result.items)

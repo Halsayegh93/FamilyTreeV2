@@ -328,11 +328,12 @@ private struct AdminErrorsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSegmentedSwitch(options: [
-                DSSegmentOption(id: 1, title: L10n.t("اليوم", "Today"), icon: "sun.max.fill"),
-                DSSegmentOption(id: 7, title: L10n.t("7 أيام", "7 days"), icon: "calendar"),
-                DSSegmentOption(id: 30, title: L10n.t("30 يوماً", "30 days"), icon: "calendar.badge.clock")
-            ], selection: Binding(get: { store.days }, set: { store.select($0) }), size: .regular)
+            // الفترة: شرائح فلتر تلتفّ (spec A.9 — لا مبدّل في الإدارة)
+            DSFilterChips(options: [
+                DSFilterOption(id: 1, title: L10n.t("اليوم", "Today")),
+                DSFilterOption(id: 7, title: L10n.t("7 أيام", "7 days")),
+                DSFilterOption(id: 30, title: L10n.t("30 يوماً", "30 days"))
+            ], selection: Binding(get: { store.days }, set: { store.select($0) }), style: .admin)
 
             if store.notConfigured {
                 DSNoteCard(L10n.t("لم يُربط Sentry بهذه الصفحة بعد — يلزمه مفتاح قراءة على السيرفر.",

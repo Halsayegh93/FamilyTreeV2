@@ -2,11 +2,11 @@ import SwiftUI
 
 // MARK: - «تقرير الموافقات» (طلب المالك ٢٠٢٦-١٠-١٦ مسار الموافقات ٢)
 //
-// بيته الوحيد «المؤشرات ← الموافقات» (الدفعة ج، ٢٠٢٦-١٠-٢٠؛ كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع») —
-// للمالك والمدير والمراقب.
+// بيته الوحيد «الإحصاءات ← الموافقات» (الدفعة ج، ٢٠٢٦-١٠-٢٠؛ كان أيضاً في رأس «الوارد» وصفّه ومربّع «منجز هذا الأسبوع») —
+// للمالك والمدير (أُخفي عن المراقب ٢٠٢٦-١٠-٢٤).
 // الفترة (هذا الشهر · الشهر الماضي · ٣ شهور) ← الأرقام ← «وقت كل مرحلة» (أشرطة بالساعات على مقياس واحد) ←
 // «حسب النوع» ← «أداء الإدارة». الأرقام من `approvals_report` على السيرفر.
-// بشكل «اليوم» (٢٠٢٦-١٠-٢٠): الفترة شرائح في الرأس الكحلي وأهم أربعة أرقام مربّعاته، والباقي بطاقات بيضاء.
+// الرأس الكحلي: الفترة شرائح فيه وأهم أربعة أرقام سطر أرقامه (`AdminHeaderLine` — رقم أبيض واسم ذهبي)، والباقي بطاقات بيضاء.
 
 /// أسماء أنواع الطلبات في المسار — مكان واحد للتقرير وإعداد «المسار السريع»
 enum ApprovalTypeTitle {
@@ -63,14 +63,15 @@ struct ApprovalsReportView: View {
         _vm = StateObject(wrappedValue: viewModel ?? ApprovalsReportViewModel())
     }
 
-    /// «المؤشرات» للمالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
+    /// «الإحصاءات ← الموافقات» للمالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
     private var canSee: Bool { authVM.canViewInsights }
 
-    private var periodOptions: [DSSegmentOption<ApprovalsReportPeriod>] {
+    /// الفترة: شرائح فلتر في الرأس الكحلي (`AdminPageChip`)
+    private var periodOptions: [DSFilterOption<ApprovalsReportPeriod>] {
         [
-            DSSegmentOption(id: .thisMonth, title: L10n.t("هذا الشهر", "This month"), icon: "calendar"),
-            DSSegmentOption(id: .lastMonth, title: L10n.t("الشهر الماضي", "Last month"), icon: "calendar.badge.clock"),
-            DSSegmentOption(id: .threeMonths, title: L10n.t("3 شهور", "3 months"), icon: "calendar.day.timeline.left")
+            DSFilterOption(id: .thisMonth, title: L10n.t("هذا الشهر", "This month"), icon: "calendar"),
+            DSFilterOption(id: .lastMonth, title: L10n.t("الشهر الماضي", "Last month"), icon: "calendar.badge.clock"),
+            DSFilterOption(id: .threeMonths, title: L10n.t("3 شهور", "3 months"), icon: "calendar.day.timeline.left")
         ]
     }
 
@@ -105,11 +106,11 @@ struct ApprovalsReportView: View {
                 AdminPageKPI(AdminPageKPI.count(t.submitted, ready: ready), L10n.t("مقدّمة", "Submitted"),
                              icon: "tray.and.arrow.down.fill"),
                 AdminPageKPI(AdminPageKPI.count(t.executed, ready: ready), L10n.t("منفّذة", "Done"),
-                             icon: "checkmark.seal.fill", tint: DS.Hub.kpiMine),
+                             icon: "checkmark.seal.fill"),
                 AdminPageKPI(AdminPageKPI.count(t.pending, ready: ready), L10n.t("معلّقة", "Pending"),
-                             icon: "hourglass", tint: DS.Hub.kpiLate),
+                             icon: "hourglass"),
                 AdminPageKPI(AdminPageKPI.count(t.overdueNow, ready: ready), L10n.t("متأخرة الآن", "Late now"),
-                             icon: "exclamationmark.circle.fill", tint: DS.Hub.kpiHot)
+                             icon: "exclamationmark.circle.fill")
             ] : [],
             chips: canSee ? periodOptions.map { option in
                 AdminPageChip(id: option.id.rawValue, title: option.title, icon: option.icon,
@@ -131,8 +132,8 @@ struct ApprovalsReportView: View {
     private var leadCard: AnyView {
         guard canSee else {
             return AnyView(AdminPageStateCard(.empty(L10n.t("للمالك والمدير", "For the owner and admins"),
-                                                     message: L10n.t("تقرير الموافقات من «المؤشرات».",
-                                                                     "The approvals report lives in Insights."))))
+                                                     message: L10n.t("تقرير الموافقات من «الإحصاءات».",
+                                                                     "The approvals report lives in Statistics."))))
         }
         switch vm.state {
         case .idle:
@@ -148,7 +149,7 @@ struct ApprovalsReportView: View {
         default:
             return AnyView(summaryCard
                 .opacity(vm.state == .loading ? DS.Opacity.disabled : 1)
-                .animation(.easeInOut(duration: 0.2), value: vm.state))
+                .animation(DS.Anim.quick, value: vm.state))
         }
     }
 

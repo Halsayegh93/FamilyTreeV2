@@ -169,11 +169,14 @@ check(Logic.appWord(maintenance: true, notificationsPaused: true).state, AdminTi
 check(Logic.appWord(maintenance: false, notificationsPaused: true).state, AdminTileState.attention("الإشعارات موقوفة"), "paused")
 check(Logic.appWord(maintenance: false, notificationsPaused: false).state, AdminTileState.good("يعمل للجميع"), "open")
 
-// MARK: «للاطلاع» يُختم على سطر القسم المقروء فقط (المدير على «الفريق والأمان»)
+// MARK: «للاطلاع» على سطر القسم المقروء فقط (المدير على «الفريق والأمان») — F2: عين بعد الكلمة، لا ذيل يلفّ السطر
 
 check(AdminTileLine.make(state: nil, health: nil, readOnly: true).text, "للاطلاع", "read-only area with no word")
-check(AdminTileLine.make(state: Logic.metricsWord(inApp: 170)?.state, health: .loaded(at: Date()), readOnly: true).text,
-      "170 في التطبيق · للاطلاع", "read-only metrics")
+let readMetrics = AdminTileLine.make(state: Logic.metricsWord(inApp: 170)?.state, health: .loaded(at: Date()),
+                                     readOnly: true)
+check(readMetrics.text, "170 في التطبيق", "read-only metrics: the word alone, one line")
+check(readMetrics.readOnlyMark, true, "read-only metrics: eye after the word")
+check(readMetrics.spoken, "170 في التطبيق، للاطلاع", "read-only metrics: VoiceOver says «للاطلاع»")
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

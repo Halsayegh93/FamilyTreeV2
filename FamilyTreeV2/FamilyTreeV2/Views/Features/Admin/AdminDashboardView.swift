@@ -168,7 +168,7 @@ struct AdminDashboardView: View {
             return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView()) }.adminArea(.inbox))
         case .inboxItem(let id):
             return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView(focusId: id)) }.adminArea(.inbox))
-        case .sms:               return AnyView(AdminSmsView(backTitle: L10n.t("اليوم", "Today")).adminArea(.team))
+        case .sms:               return AnyView(AdminSmsView(backTitle: AdminArea.homeTitle).adminArea(.team))
         case .smsAttempts:       return AnyView(SmsAttemptsListPage().adminArea(.team))
         case .status(let home):  return home.page
         case .area(let area, let hop): return AnyView(AdminAreaView(area: area).adminAreaHop(hop))
@@ -231,7 +231,7 @@ struct AdminDashboardView: View {
     private var womenPage: AnyView {
         AnyView(AdminAreaGate(area: .family) { [womenLanding] in AnyView(AdminWomenPanel(landing: womenLanding)) }
             .adminArea(.family)
-            .adminBackTitle(L10n.t("اليوم", "Today")))
+            .adminBackTitle(AdminArea.homeTitle))
     }
 
     // MARK: - التحميل
@@ -856,10 +856,11 @@ private struct AdminScopeLink: View {
 
     var body: some View {
         NavigationLink {
-            AdminLazyPage { AnyView(AdminMyScopeView(guide: guide).adminBackTitle(L10n.t("اليوم", "Today"))) }
+            AdminLazyPage { AnyView(AdminMyScopeView(guide: guide).adminBackTitle(AdminArea.homeTitle)) }
         } label: {
+            // صفّ صاحب الدور نفسه: «مجالك: …» (الغائب «مجاله: …» لصفحات «الأدوار» — F2)
             AdminListRow(icon: guide.icon, tint: guide.color, title: L10n.t("صلاحياتي", "My permissions"),
-                         subtitle: guide.mandate)
+                         subtitle: guide.mandateForSelf)
                 .padding(.horizontal, DS.Hub.cardPadding)
                 .padding(.vertical, DS.Spacing.xxs)
         }

@@ -16,8 +16,10 @@ struct RoleGuide: Identifiable {
     let title: String
     let icon: String
     let color: Color
-    /// جملة واحدة تعرّف مجال الدور
+    /// جملة واحدة تعرّف مجال الدور — بضمير الغائب («مجاله: …») لصفحات «الأدوار» وورقة «تغيير الدور»
     let mandate: String
+    /// الجملة نفسها لصاحب الدور («مجالك: …») — صفّ «صلاحياتي» على «اليوم» وصفحته. nil = `mandate` (جملة بلا ضمير)
+    var ownMandate: String? = nil
     let can: [String]
     let cannot: [String]
 
@@ -87,6 +89,7 @@ struct RoleGuide: Identifiable {
                 icon: "person.2.badge.gearshape.fill",
                 color: DS.Color.monitorRole,
                 mandate: L10n.t("مجاله: الشجرة والأعضاء", "Scope: the family tree and members"),
+                ownMandate: L10n.t("مجالك: الشجرة والأعضاء", "Your scope: the family tree and members"),
                 can: [
                     L10n.t("قبول ورفض طلبات الشجرة: الانضمام، الوفاة، إضافة ابن، تعديل الاسم والرقم والميلاد",
                           "Approve and reject tree requests: join, deceased, add child, name/phone/birth edits"),
@@ -121,6 +124,7 @@ struct RoleGuide: Identifiable {
                 icon: "text.badge.checkmark",
                 color: DS.Color.supervisorRole,
                 mandate: L10n.t("مجاله: المحتوى والبلاغات", "Scope: content and reports"),
+                ownMandate: L10n.t("مجالك: المحتوى والبلاغات", "Your scope: content and reports"),
                 can: [
                     L10n.t("متابعة المحتوى المنتظر (الاعتماد للإدارة)",
                           "Follow pending content (approval is for admins)"),
@@ -153,6 +157,7 @@ struct RoleGuide: Identifiable {
                 icon: "person.fill",
                 color: DS.Color.memberRole,
                 mandate: L10n.t("مجاله: نفسه ومحتواه", "Scope: themselves and their own content"),
+                ownMandate: L10n.t("مجالك: نفسك ومحتواك", "Your scope: yourself and your own content"),
                 can: [
                     L10n.t("إضافة خبر أو عنصر مكتبة أو مشروع أو ديوانية — تنتظر موافقة الإدارة",
                           "Add news, library items, projects or diwaniyas — pending admin approval"),
@@ -179,6 +184,9 @@ struct RoleGuide: Identifiable {
             )
         ]
     }
+
+    /// مجال الدور مخاطَباً به صاحبه («مجالك: المحتوى والبلاغات») — «صلاحياتي»
+    var mandateForSelf: String { ownMandate ?? mandate }
 
     /// تعريف الدور المطابق لعضو — nil لغير الأدوار المعروفة
     /// (بالترتيب في `all` لا بالأيقونة — تغيير أيقونة لا يكسر المطابقة)

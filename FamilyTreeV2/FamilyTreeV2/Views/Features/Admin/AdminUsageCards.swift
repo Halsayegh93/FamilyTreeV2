@@ -162,7 +162,7 @@ private struct AdminUsageTrendCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             AdminCardHeader(title: L10n.t("اتجاه النشطين", "Active members trend"))
-            AdminUsagePeriodSwitch(store: store)
+            AdminUsagePeriodChips(store: store)
                 .padding(.bottom, DS.Spacing.xs)
             content
             Text(L10n.t("تُحفظ لقطة كل ليلة 12:00 بتوقيت الكويت", "A snapshot is saved every night at 12:00 Kuwait time"))
@@ -186,16 +186,16 @@ private struct AdminUsageTrendCard: View {
     }
 }
 
-/// المبدّل الواحد: ٧ / ٣٠ / ٩٠ يوماً
-private struct AdminUsagePeriodSwitch: View {
+/// الفترة: ٧ / ٣٠ / ٩٠ يوماً — شرائح فلتر تلتفّ (spec A.9 — لا مبدّل في الإدارة)
+private struct AdminUsagePeriodChips: View {
     @ObservedObject var store: AdminUsageStore
 
     var body: some View {
-        DSSegmentedSwitch(options: [
-            DSSegmentOption(id: 7, title: AdminUsageText.period(7), icon: "calendar"),
-            DSSegmentOption(id: 30, title: AdminUsageText.period(30), icon: "calendar.badge.clock"),
-            DSSegmentOption(id: 90, title: AdminUsageText.period(90), icon: "clock.arrow.circlepath")
-        ], selection: Binding(get: { store.days }, set: { store.select($0) }), size: .regular)
+        DSFilterChips(options: [
+            DSFilterOption(id: 7, title: AdminUsageText.period(7)),
+            DSFilterOption(id: 30, title: AdminUsageText.period(30)),
+            DSFilterOption(id: 90, title: AdminUsageText.period(90))
+        ], selection: Binding(get: { store.days }, set: { store.select($0) }), style: .admin)
     }
 }
 

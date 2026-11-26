@@ -172,14 +172,18 @@ private struct AdminUpdatePreview: View {
     let forceMessage: String
     @State private var tab = 0
 
+    /// ما تعرضه المعاينة — قائمة أصلية «تعرض: المربّع ⌄» (spec A: لا مبدّل في الإدارة)
+    private static let modes = [0, 1]
+    private static func modeTitle(_ mode: Int) -> String {
+        mode == 0 ? L10n.t("المربّع", "Box") : L10n.t("شاشة الإجبار", "Lock screen")
+    }
+
     var body: some View {
         VStack(spacing: DS.Spacing.md) {
-            DSSegmentedSwitch(options: [
-                DSSegmentOption(id: 0, title: L10n.t("المربّع", "Box"), icon: "sparkles"),
-                DSSegmentOption(id: 1, title: L10n.t("شاشة الإجبار", "Lock screen"), icon: "lock.fill")
-            ], selection: $tab, size: .regular)
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.top, DS.Spacing.lg)
+            modeMenu
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.Spacing.lg)
+                .padding(.top, DS.Spacing.lg)
 
             if tab == 0 {
                 AppUpdateSheet(policy: samplePolicy, serverNow: Date(), storeURL: nil, onLater: {})
@@ -195,6 +199,35 @@ private struct AdminUpdatePreview: View {
                     .padding(.bottom, DS.Spacing.lg)
             }
         }
+    }
+
+    /// «تعرض: المربّع ⌄» — نصّ كحلي، لمس ٤٤، والاختيار الحالي بعلامة ✓ في القائمة
+    private var modeMenu: some View {
+        let current = Self.modeTitle(tab)
+        return Menu {
+            Picker(selection: $tab) {
+                ForEach(Self.modes, id: \.self) { mode in
+                    Text(verbatim: Self.modeTitle(mode)).tag(mode)
+                }
+            } label: {
+                EmptyView()
+            }
+        } label: {
+            HStack(spacing: DS.Spacing.xs) {
+                Text(verbatim: L10n.t("تعرض: \(current)", "Showing: \(current)"))
+                    .dsFont(.body)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                Image(systemName: "chevron.down")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .accessibilityHidden(true)
+            }
+            .foregroundColor(DS.Color.primary)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(verbatim: L10n.t("المعاينة، \(current)", "Preview, \(current)")))
+        .accessibilityHint(L10n.t("يفتح الخيارات", "Opens the choices"))
     }
 
     private var samplePolicy: AppUpdatePolicy {

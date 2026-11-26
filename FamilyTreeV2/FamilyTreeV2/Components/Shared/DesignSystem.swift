@@ -2511,10 +2511,6 @@ extension DS {
         /// رأس اللوحة كحلي مسطّح = كحلي رؤوس التطبيق (`DS.Color.gradientBand`، نفس رأس «اليوم») — spec A.1 (كان تدرّجاً
         /// #182E4D ← #29446B)
         static let band = DS.Color.gradientBand
-        /// قديمان: الرأس صار مسطّحاً فكلاهما = لون الرأس نفسه — spec A.1 يحذفهما؛ باقيان حتى تتركهما وحدتا U2/U3
-        /// (`AdminHubKit`/`AdminPageKit`: كشف الكحلي عند السحب لأسفل، حدّ الشارة فوق الرأس)
-        static let bandTop = DS.Color.bandFill
-        static let bandBottom = DS.Color.bandFill
         /// زجاج الرأس (الأزرار الدائرية، مربّعات الأرقام، شرائح الفلتر) وإطاره الداخلي
         static let glass = SwiftUI.Color.white.opacity(0.09)
         static let glassLine = SwiftUI.Color.white.opacity(0.14)
@@ -2526,9 +2522,8 @@ extension DS {
         static let rowPress = DS.Color.cardBackgroundSoft
         /// الصفر في سطر الرأس: يُعرض ولا يفتح شيئاً (أبيض ٥٥٪، تباين ٥٫٧:١ على الكحلي) — spec A.1/A.3
         static let lineZero = SwiftUI.Color.white.opacity(0.55)
-        /// الحلقة الذهبية الساكنة في طرف الرأس وهالتها — spec A.3/A.18 يحذف الحلية (`ring*`)؛ باقية حتى تتركها U2/U3
-        static let ringStroke = DS.Color.accentLight.opacity(0.22)
-        static let ringHalo = DS.Color.accentLight.opacity(0.05)
+        /// خطّ ذهبي خافت فوق الكحلي: الفاصل بين حلقات رأس «الأجهزة ووصول الإشعارات»، ونقطة «جارٍ الفحص» في سطر حكمه
+        static let bandHairline = DS.Color.accentLight.opacity(0.22)
         /// نص ثانوي فوق الرأس (التاريخ، عناوين الأرقام)
         static let onBandMuted = SwiftUI.Color.white.opacity(0.72)
         /// شارة الدور فوق الرأس
@@ -2542,8 +2537,9 @@ extension DS {
         static let kpiLate = SwiftUI.Color(hex: "#F5C46B")
         /// نقطة «جديد» على جرس الرأس (وعدد «إشعارات الإدارة» عليه)
         static let bellDot = SwiftUI.Color(hex: "#F47370")
-        /// نقاط سطر الحالة فوق الكحلي: سليم أخضر فاتح، تنبيه = `kpiLate`، عاجل = `bellDot` (ثابتة في الوضعين)
+        /// نقاط سطر الحالة فوق الكحلي: سليم أخضر فاتح، تنبيه كهرماني، عاجل = `bellDot` (ثابتة في الوضعين)
         static let statusOk = SwiftUI.Color(hex: "#7FD3A2")
+        static let statusWarn = SwiftUI.Color(hex: "#F5C46B")
         /// نص فوق الشريحة الذهبية المختارة
         static let onGold = SwiftUI.Color(hex: "#1B1407")
         /// حلقتا «الرجال» و«النساء» في رأس «العائلة» (فوق الكحلي — ثابتة في الوضعين؛ الإجمالي `DS.Color.accentLight`):
@@ -2633,11 +2629,8 @@ extension DS {
         static let tileIconRadius: CGFloat = 10
         static let typeIcon: CGFloat = 24
         static let typeIconRadius: CGFloat = 7
-        /// الحلقة الذهبية: قطرها، عرض الهالة، وكم تخرج من طرف الرأس
-        static let ringSide: CGFloat = 260
-        static let ringHaloWidth: CGFloat = 28
-        static let ringOffsetX: CGFloat = 60
-        static let ringOffsetY: CGFloat = 90
+        /// سلّم «من العائلة إلى التطبيق» (صفحة الأجهزة): أخضر العائلة يبدأ بهذه الشفافية في الدرجة الأولى ويغمق حتى الكامل
+        static let usageStepFloor: Double = 0.45
         /// أزرار الكبسولة في الصفوف والبطاقات (اشحن، أعلن، رفض…) — بمقاس حبّة التطبيق الموحّدة (`DSBox.chipHeight`)
         /// لا مقاسين خاصّين بالإدارة (كانا ٣٢ و٣٦ — طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
         static let pillHeight: CGFloat = DSBox.chipHeight

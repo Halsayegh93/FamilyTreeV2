@@ -47,11 +47,11 @@ struct AdminDeathDatesSpot: View {
     }
 }
 
-/// صفحة الاستكمال الوحيدة خلف بوابة «العائلة» — رجوعها «اليوم»
+/// صفحة الاستكمال الوحيدة خلف بوابة «العائلة» — رجوعها «الإدارة» (عنوان رأس «اليوم»)
 private func deathDatesPage() -> AnyView {
     AnyView(AdminAreaGate(area: .family) { AnyView(DeathDatesCampaignPage()) }
         .adminArea(.family)
-        .adminBackTitle(L10n.t("اليوم", "Today")))
+        .adminBackTitle(AdminArea.homeTitle))
 }
 
 /// «134 متوفى بلا تاريخ كامل» (متوفى واحد، متوفيان، 3 متوفين) — «—» قبل وصول الأعضاء

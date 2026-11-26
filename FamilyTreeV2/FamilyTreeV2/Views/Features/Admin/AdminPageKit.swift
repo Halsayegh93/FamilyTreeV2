@@ -363,17 +363,6 @@ struct AdminPageBand: View {
     }
 }
 
-/// قديم: زرّ الرجوع الزجاجي — حلّ محلّه الرابط الذهبي بالنص (spec A.3)
-@available(*, deprecated, message: "use AdminBackLink; U21 removes")
-struct AdminPageBackButton: View {
-    let title: String
-    let action: () -> Void
-
-    var body: some View {
-        AdminBackLink(title: title, action: action)
-    }
-}
-
 // MARK: - هيكل الصفحة
 
 /// الصفحة الداخلية (spec A.2): الرأس الكحلي ثم المحتوى على الأرضية البيضاء — ١٦ تحت الرأس، ٢٤ آخرها فوق شريط

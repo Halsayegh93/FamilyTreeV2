@@ -70,10 +70,8 @@ nonisolated struct AdminCensusFigures: Equatable {
     /// الأحياء المسجّلون بتعريف العائلة الواحد (`AdminMemberCounts.setFamilyAccounts`) — رجالاً ونساءً
     var menAccounts: Int? = nil
     var womenAccounts: Int? = nil
-    /// «خارج العائلة» الأحياء (`AdminFamilyCensus.outsideTotal`) ومتوفوه (`outsideDeceased(members:women:)` — لا يُعرض منذ F1:
-    /// أرقام خارج العائلة للأحياء وحدهم بطلب المالك؛ باقٍ لمن يقرؤه حتى U21)
+    /// «خارج العائلة» الأحياء (`AdminFamilyCensus.outsideTotal`) — أرقام خارج العائلة للأحياء وحدهم بطلب المالك (F1)
     var outsideLiving: Int? = nil
-    var outsideDeceased: Int? = nil
     /// مرشّحو «تحقق من الأحياء» قبل استبعاد ما راجعه المستخدم (`AdminMemberCounts.oldLiving`) — رجال فقط
     var oldLiving: Set<UUID>? = nil
 
@@ -278,13 +276,6 @@ nonisolated enum AdminCensusText {
     /// تحت «خارج العائلة»: «أحياء» — أرقام خارج العائلة للأحياء وحدهم (طلب المالك، F1: بلا «و87 متوفى»)
     static var outsideLivingSub: String { L10n.t("أحياء", "Living") }
 
-    /// تحت «خارج العائلة»: «أحياء، و87 متوفى» — «أحياء» وحدها بلا متوفين أو قبل وصولهم
-    @available(*, deprecated, message: "use outsideLivingSub (outside the family = living only, F1); U21 removes")
-    static func outsideSub(deceased: Int?) -> String {
-        guard let deceased, deceased > 0 else { return L10n.t("أحياء", "Living") }
-        return L10n.t("أحياء، و\(Self.deceased(deceased))", "Living, and \(Self.deceased(deceased))")
-    }
-
     /// تحت «أحياء»/«متوفون»: «2,362 رجل و127 امرأة»
     static func split(men: Int?, women: Int?) -> String? {
         guard let men, let women else { return nil }
@@ -330,36 +321,19 @@ nonisolated enum AdminCensusText {
 
 extension AdminCensusFigures {
     /// من أعداد «اليوم»/«الإحصاءات» بعد `setFamilyAccounts` (`AdminMemberCounts.seeded` يستدعيها)
-    init(counts: AdminMemberCounts, outsideLiving: Int?, outsideDeceased: Int? = nil) {
+    init(counts: AdminMemberCounts, outsideLiving: Int?) {
         self.init(men: counts.men, menAlive: counts.menAlive, women: counts.women, womenAlive: counts.womenAlive,
                   menAccounts: counts.menAccounts, womenAccounts: counts.womenAccounts,
-                  outsideLiving: outsideLiving, outsideDeceased: outsideDeceased, oldLiving: counts.oldLiving)
+                  outsideLiving: outsideLiving, oldLiving: counts.oldLiving)
     }
 
-    /// من `AdminFamilyCensus.make` (+ «المسجّلون» بتعريف العائلة `setFamilyAccounts` على نسخة من أعداده، ومتوفو «خارج العائلة»).
+    /// من `AdminFamilyCensus.make` (+ «المسجّلون» بتعريف العائلة `setFamilyAccounts` على نسخة من أعداده).
     /// `women` = صفوف شجرة النساء نفسها التي بُني منها `census` (عادةً `WomenStore.cache`)
     @MainActor
     static func make(census: AdminFamilyCensus, members: [FamilyMember], women: [FamilyMember]) -> AdminCensusFigures {
         var counts = census.counts
         counts.setFamilyAccounts(members: members)
-        return AdminCensusFigures(counts: counts, outsideLiving: census.outsideTotal,
-                                  outsideDeceased: outsideDeceased(members: members, women: women))
-    }
-
-    /// متوفو «خارج العائلة» بقاعدة `AdminFamilyCensus.make` نفسها للأحياء (أبناء البنات المسمَّون بلا حساب المراجعة + صفوف
-    /// شجرة النساء المعلَّمة `is_outside_family` المسمّاة) — فـ«أحياء، و87 متوفى» و«متوفون من خارج العائلة» في «الإحصاءات» رقم
-    /// واحد. nil قبل وصول شجرة النساء
-    @MainActor
-    static func outsideDeceased(members: [FamilyMember], women: [FamilyMember]) -> Int? {
-        guard !women.isEmpty else { return nil }
-        let outside = WomenStore.outsideFamilyIds
-        let sons = DaughterSonsIndex.shared.ids
-        let review = AppConfigValues.shared.reviewAccountIds
-        let sonsDead = members.filter {
-            sons.contains($0.id) && $0.hasName && !review.contains($0.id) && $0.isDeceased == true
-        }.count
-        let rowsDead = women.filter { outside.contains($0.id) && $0.hasName && $0.isDeceased == true }.count
-        return sonsDead + rowsDead
+        return AdminCensusFigures(counts: counts, outsideLiving: census.outsideTotal)
     }
 }
 
@@ -735,11 +709,11 @@ private struct AdminCensusSwatch: View {
 
 #if DEBUG
 private enum AdminCensusPreviewData {
-    /// الإجمالي 2,991 (رجال 2,729 · نساء 262)، الأحياء 2,489 (2,362 · 127)، في التطبيق 170 (123 · 47)، خارج العائلة 50 حياً و87
-    /// متوفى، و41 من كبار السن لم يُراجَعوا («≈»)
+    /// الإجمالي 2,991 (رجال 2,729 · نساء 262)، الأحياء 2,489 (2,362 · 127)، في التطبيق 170 (123 · 47)، خارج العائلة 50 حياً،
+    /// و41 من كبار السن لم يُراجَعوا («≈»)
     static let today = AdminCensusFigures(men: 2_729, menAlive: 2_362, women: 262, womenAlive: 127,
                                           menAccounts: 123, womenAccounts: 47,
-                                          outsideLiving: 50, outsideDeceased: 87,
+                                          outsideLiving: 50,
                                           oldLiving: Set((0..<41).map { _ in UUID() }))
     static let checked: AdminCensusFigures = {
         var f = today

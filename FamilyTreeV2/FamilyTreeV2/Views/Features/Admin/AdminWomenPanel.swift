@@ -149,52 +149,6 @@ nonisolated enum AdminWomenLogic {
     }
 }
 
-// MARK: - القديم (يبقى يُبنى حتى تنقل U11 «العائلة» إلى الصفحة)
-
-@available(*, deprecated, message: "use AdminWomenLogic.Filters with AdminWomenPanel(landing:); U21 removes")
-enum AdminWomenChip: String, CaseIterable, Identifiable {
-    case all, recent, accounts, married, deceased, outside
-    /// متوفو «فرع خارج العائلة» — ليست شريحة: قسم مطويّ بروحه تحت قائمة «فرع خارج العائلة» (طلب المالك ٢٠٢٦-١١-٢٦)
-    case outsideDeceased
-    var id: String { rawValue }
-
-    /// نافذة «الأحدث» بالأيام — أُضيفت عقدتها أو أُنشئ حسابها المربوط خلالها
-    static let recentDays = AdminWomenLogic.recentDays
-
-    var title: String {
-        switch self {
-        case .all:       return L10n.t("الكل", "All")
-        case .recent:    return L10n.t("الأحدث", "Newest")
-        case .accounts:  return L10n.t("مسجّلات", "Registered")
-        case .married:   return L10n.t("متزوجات", "Married")
-        case .deceased:  return L10n.t("متوفيات", "Deceased")
-        case .outside:   return L10n.t("فرع خارج العائلة", "Outside branch")
-        case .outsideDeceased: return L10n.t("المتوفون من خارج العائلة", "Deceased outside the family")
-        }
-    }
-
-    /// الشريحة القديمة بفلاتر الصفحة
-    var filters: AdminWomenLogic.Filters {
-        typealias L = AdminWomenLogic
-        switch self {
-        case .all:             return L.Filters(status: .all, branch: .family, order: .alphabetical)
-        case .recent:          return L.Filters(status: .all, branch: .family, order: .newest)
-        case .accounts:        return L.Filters(status: .registered, branch: .family, order: .alphabetical)
-        case .married:         return L.Filters(status: .married, branch: .family, order: .alphabetical)
-        case .deceased:        return L.Filters(status: .deceased, branch: .family, order: .alphabetical)
-        case .outside:         return L.Filters(status: .living, branch: .outside, order: .alphabetical)
-        case .outsideDeceased: return L.Filters(status: .deceased, branch: .outside, order: .alphabetical)
-        }
-    }
-}
-
-/// طلب شريحة من الصفحة — بمعرّف جديد في كل طلب، فيُطبَّق حتى لو كانت الشريحة نفسها مطلوبة قبل
-@available(*, deprecated, message: "use AdminWomenPanel(landing:) with AdminWomenLanding; U21 removes")
-struct AdminWomenChipRequest: Equatable {
-    let chip: AdminWomenChip
-    let id = UUID()
-}
-
 #if !ADMIN_LOGIC_TEST
 
 // MARK: - الصفّ
@@ -240,21 +194,11 @@ struct AdminWomenEntry: Identifiable {
 
 // MARK: - الصفحة
 
+/// صفحة مدفوعة (spec C.9) — تجلب بياناتها وتفتح ورقة العضو بنفسها
 struct AdminWomenPanel: View {
-    private enum Mode {
-        /// صفحة مدفوعة (spec C.9) — تجلب بياناتها وتفتح ورقة العضو بنفسها
-        case page
-        /// القديم: لوحة داخل «العائلة»
-        case embedded(women: [FamilyMember], reload: () async -> Void, openMember: (_ ids: [UUID], _ start: Int) -> Void)
-    }
-
     private typealias L = AdminWomenLogic
 
-    private let mode: Mode
     private let landing: AdminWomenLanding?
-    /// القديم: شريحة طلبتها «العائلة» (حلقة «خارج العائلة») بفلاتر الصفحة، ومعرّف كل طلب
-    private let requested: L.Filters?
-    private let requestToken: UUID?
 
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -271,8 +215,6 @@ struct AdminWomenPanel: View {
     @State private var selectedWoman: FamilyMember?
     /// قسم متوفي «فرع خارج العائلة» مفتوح؟ (مطويّ بالبداية)
     @State private var showsOutsideDeceased = false
-    /// آخر نسخة وصلت من البيانات — إغلاقات `onChange` ترى قيمة `women` القديمة في اللوحة القديمة، فنبني من الجديدة
-    @State private var latest: [FamilyMember] = []
     // الصفحة:
     @State private var pageWomen: [FamilyMember]
     @State private var health: AdminStoreHealth
@@ -283,37 +225,16 @@ struct AdminWomenPanel: View {
 
     /// الصفحة «نساء العائلة» — `landing` (من رقم أو إشعار) يغلب الهبوط المخزَّن؛ بلا شيء = «الحيّات»
     init(landing: AdminWomenLanding? = nil) {
-        mode = .page
         self.landing = landing
-        requested = nil
-        requestToken = nil
         _filters = State(initialValue: L.filters(landing: landing))
         let cache = WomenStore.cache
         _pageWomen = State(initialValue: cache)
         _health = State(initialValue: cache.isEmpty ? .idle : .loaded(at: Date()))
     }
 
-    /// القديم: لوحة داخل «العائلة» (`AdminMembersPage`) — حتى تدفع U11 الصفحة
-    @available(*, deprecated, message: "use AdminWomenPanel(landing:) pushed as the «نساء العائلة» page; U21 removes")
-    init(women: [FamilyMember], requestedChip: AdminWomenChipRequest? = nil, reload: @escaping () async -> Void,
-         openMember: @escaping (_ ids: [UUID], _ start: Int) -> Void) {
-        mode = .embedded(women: women, reload: reload, openMember: openMember)
-        landing = nil
-        requested = requestedChip?.chip.filters
-        requestToken = requestedChip?.id
-        _filters = State(initialValue: requestedChip?.chip.filters ?? L.pageDefault)
-        _pageWomen = State(initialValue: [])
-        _health = State(initialValue: .loaded(at: Date()))
-    }
-
     static var title: String { L10n.t("نساء العائلة", "Family women") }
 
-    private var isPage: Bool { if case .page = mode { return true } else { return false } }
-
-    private var women: [FamilyMember] {
-        if case .embedded(let w, _, _) = mode { return w }
-        return pageWomen
-    }
+    private var women: [FamilyMember] { pageWomen }
 
     /// تعديل وحذف من مربّع التفاصيل: صلاحية الدور مضروبة بـ«يعدّل» في جدول السيرفر (Autoplan note 7)
     private var canEdit: Bool { authVM.canEditMembers && authVM.adminCanEdit(.family) }
@@ -321,12 +242,8 @@ struct AdminWomenPanel: View {
 
     // حارس المكدس: الصفحة واللوحة طبقات خلف `AnyView`
     var body: some View {
-        if isPage {
-            AnyView(pageBody)
-                .debugStackProbe("AdminWomenPanel")
-        } else {
-            AnyView(panel)
-        }
+        AnyView(pageBody)
+            .debugStackProbe("AdminWomenPanel")
     }
 
     // MARK: الصفحة
@@ -425,17 +342,11 @@ struct AdminWomenPanel: View {
         }
     }
 
-    // MARK: اللوحة (الصفحة والقديم)
+    // MARK: اللوحة
 
     private var panel: some View {
         AnyView(panelContent)
             .onAppear { rebuild() }
-            .onChange(of: requestToken) { _ in
-                guard let requested else { return }
-                filters = requested
-                query = ""
-                limit = Self.pageSize
-            }
             // أي تبدّل في بيانات النساء (تعديل بنفس العدد: وفاة، زوج، حالة) — لا العدد وحده
             .onChange(of: women) { rebuild($0) }
             .onChange(of: sons.ids) { _ in rebuild() }
@@ -451,7 +362,7 @@ struct AdminWomenPanel: View {
                     canDelete: canDelete,
                     canAnnounceDeath: authVM.isAdmin,
                     canModerate: authVM.canModerate,
-                    onChanged: { await reloadWomen(); rebuild() },
+                    onChanged: { await load(force: true) },
                     onOpenMember: { id in
                         selectedWoman = nil
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { selectedWoman = women.first { $0.id == id } }
@@ -462,18 +373,8 @@ struct AdminWomenPanel: View {
             .transaction { t in if selectedWoman != nil { t.disablesAnimations = true } }
     }
 
-    private func reloadWomen() async {
-        switch mode {
-        case .page:                          await load(force: true)
-        case .embedded(_, let reload, _):    await reload()
-        }
-    }
-
     private func openMember(_ ids: [UUID], _ start: Int) {
-        switch mode {
-        case .page:                             memberSheet = AdminMemberSheetContext(ids: ids, start: start)
-        case .embedded(_, _, let openMember):   openMember(ids, start)
-        }
+        memberSheet = AdminMemberSheetContext(ids: ids, start: start)
     }
 
     /// كل ما يرسمه الرسم الواحد — يُحسب مرة
@@ -637,10 +538,9 @@ struct AdminWomenPanel: View {
 
     // MARK: البيانات
 
-    /// `fresh`: القيمة الجديدة من `onChange(of: women)`؛ غيرها يبني من آخر ما وصل
+    /// `fresh`: القيمة الجديدة من `onChange(of: women)` أو الجلب؛ غيرها يبني من بيانات الصفحة الحاضرة
     private func rebuild(_ fresh: [FamilyMember]? = nil) {
-        if let fresh { latest = fresh }
-        let source = latest.isEmpty ? women : latest
+        let source = fresh ?? women
         guard !source.isEmpty else { return }
         rows = buildRows(source)
         built = true

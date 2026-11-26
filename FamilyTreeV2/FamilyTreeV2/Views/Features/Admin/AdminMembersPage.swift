@@ -17,15 +17,6 @@ import SwiftUI
 // أو قائمتها تُدفع فوق الجذر (`AdminMembersLogic.opening`)؛ والهبوط `AdminMembersLanding` من `AdminAreaRouter.take` حين
 // تُفتح بلا معاملات. الصلاحيات كما كانت: التسجيل `canRegisterMembers` (× «يعدّل» في الجدول)، التقارير `isAdmin`.
 
-/// «شجرة العائلة | شجرة النساء» — المفتاح حُذف من «العائلة» (spec E.9)؛ باقٍ لـ`AdminReportsView` وحده حتى U21
-enum AdminFamilyScope: Hashable {
-    case family, women
-    static var options: [DSSegmentOption<AdminFamilyScope>] {
-        [DSSegmentOption(id: .family, title: L10n.t("شجرة العائلة", "Family tree"), icon: AppSection.tree.symbol),
-         DSSegmentOption(id: .women, title: L10n.t("شجرة النساء", "Women's tree"), icon: "figure.stand.dress")]
-    }
-}
-
 /// ورقة العضو مفتوحة على قائمة (السابق/التالي يتنقّلان فيها)
 struct AdminMemberSheetContext: Identifiable {
     let id = UUID()

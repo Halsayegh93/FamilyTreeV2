@@ -8,6 +8,15 @@ struct AdminReportScope {
     let title: String
 }
 
+/// شجرة التقرير: «شجرة العائلة · شجرة النساء» — شريحتا فلتر أعلى الصفحة (المالك والمدير)
+enum AdminFamilyScope: Hashable {
+    case family, women
+    static var options: [DSFilterOption<AdminFamilyScope>] {
+        [DSFilterOption(id: .family, title: L10n.t("شجرة العائلة", "Family tree")),
+         DSFilterOption(id: .women, title: L10n.t("شجرة النساء", "Women's tree"))]
+    }
+}
+
 struct AdminReportsView: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var authVM: AuthViewModel
@@ -300,13 +309,15 @@ struct AdminReportsView: View {
           VStack(spacing: DS.Spacing.md) {
             // «شجرة النساء» للمالك والمدير فقط — مثل صفحة «العائلة»
             if authVM.isAdmin {
-                DSSegmentedSwitch(options: AdminFamilyScope.options, selection: Binding(
+                // شريحتا فلتر تلتفّان (spec A.9 — لا مبدّل في الإدارة)
+                DSFilterChips(options: AdminFamilyScope.options, selection: Binding(
                     get: { treeScope },
                     set: { v in
                         var t = Transaction()
                         t.disablesAnimations = true
                         withTransaction(t) { switchTree(to: v) }
-                    }), size: .regular)
+                    }), style: .admin)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             // الوضع الأفقي: الإعدادات/النتائج/التصدير على عمودين
             AdaptiveCardStack(spacing: DS.Spacing.md, landscapeMinimum: 340) {

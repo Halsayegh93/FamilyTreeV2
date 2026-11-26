@@ -6,8 +6,8 @@ import Supabase
 // كل رقم هنا من بيانات محمّلة أصلاً في التطبيق (الطلبات، مسار الموافقات ٢، الرسائل، الأعضاء) أو من دوال
 // قراءة موجودة على السيرفر (النشطون الآن، تقرير الموافقات، رصيد رسائل الدخول) — بلا أي دالة جديدة. ما لا
 // يتوفّر لا يُرسم (لا أرقام مختلقة). مجال كل دور كما في «الوارد» (`AdminAllRequestsView.tabsForRole`).
-// منطق الكلمات وسطر التحية الخالص في AdminTodayLogic.swift. الأنواع المشتركة التي كانت في AdminTodayPager.swift
-// (`AdminHeaderIcon`، `AdminFamilyStats`، `AdminFamilyStatsPage.aliveText/deceasedText`) نُقلت آخر هذا الملف بأسمائها.
+// منطق الكلمات وسطر التحية الخالص في AdminTodayLogic.swift. زرّ الرأس `AdminHeaderIcon` (كان في AdminTodayPager.swift)
+// آخر هذا الملف.
 
 /// أرقام كلمات «الوارد» في «اليوم» (بانتظارك · عاجل · متأخر · رسائل) — نفس تعريف فلاتر «الوارد»
 struct AdminTodayCounts: Equatable {
@@ -32,7 +32,8 @@ extension AdminStatusPill.Home {
     /// صفحة البيت (كانت `AdminSystemStatusLine.page`): الصيانة ← «التطبيق» (مجموعة «التشغيل»)، الرصيد ← «رسائل رمز
     /// الدخول»، المجدول ← «المناسبات» (القادم)، الأجهزة ← «الأجهزة ووصول الإشعارات»
     var page: AnyView {
-        let today = L10n.t("اليوم", "Today")
+        // يُدفع من «اليوم» — الرجوع باسم رأسه «الإدارة»
+        let today = AdminArea.homeTitle
         switch self {
         case .maintenance: return AnyView(AdminAppAreaPage().adminArea(.app))
         case .sms:         return AnyView(AdminSmsView(backTitle: today).adminArea(.team))
@@ -363,65 +364,5 @@ struct AdminHeaderIcon: View {
             }
             .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
             .contentShape(Rectangle())
-    }
-}
-
-// MARK: - «إحصائيات العائلة» القديمة (كانت الصفحة الثانية من مربّع «اليوم» — بقي ما يقرؤه غيرها)
-
-/// أعداد العائلة من البيانات المحمّلة أصلاً — نفس تعريفات «إحصاء الأفراد» (`AdminMemberCounts`)، والفروع = أبناء رأس
-/// الشجرة المباشرون، و«هذا الشهر» = من قُيّد في الشجرة هذا الشهر. nil = لم يُعرف بعد («—»)
-@available(*, deprecated, message: "use AdminCensusFigures.make(census:members:women:); U21 removes")
-struct AdminFamilyStats: Equatable {
-    var counts = AdminMemberCounts()
-    var branches: Int? = nil
-    var joinedThisMonth: Int? = nil
-    /// «خارج العائلة» — نفس تعريف `AdminFamilyCensus`
-    var outsideMale: Int? = nil
-    var outsideFemale: Int? = nil
-    var outsideTotal: Int? { outsideMale.flatMap { m in outsideFemale.map { m + $0 } } }
-
-    @MainActor
-    static func make(members all: [FamilyMember]) -> AdminFamilyStats {
-        var s = AdminFamilyStats()
-        s.counts = AdminMemberCounts.seeded(members: all)
-        guard !all.isEmpty else { return s }
-        let census = AdminFamilyCensus.make(members: all, women: WomenStore.cache)
-        s.outsideMale = census.outsideMale
-        s.outsideFemale = census.outsideFemale
-
-        let tree = all.filter { $0.role != .pending }
-        if let root = BranchPickerSheet.familyRoot(in: tree) {
-            s.branches = tree.filter { $0.fatherId == root.id && $0.hasName && !$0.isWomanAccount }.count
-        }
-        let calendar = Calendar.current
-        let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
-        s.joinedThisMonth = all.filter { m in
-            guard m.hasName, let created = ApprovalWorkflow.date(m.createdAt) else { return false }
-            return created >= monthStart
-        }.count
-        return s
-    }
-}
-
-/// نصوص «إحصائيات العائلة» القديمة — بطاقتها حُذفت من «اليوم» (spec E.1/E.3)، وبقيت النصوص لمن يقرؤها
-/// (`AdminMembersHeader`) حتى U21
-enum AdminFamilyStatsPage {
-    /// «2,582 حياً» (حيّ واحد، حيّان، 3 أحياء) — «≈» إن كانوا تقديريين
-    @available(*, deprecated, message: "use AdminCensusText.living(_:); U21 removes")
-    static func aliveText(_ n: Int?, estimated: Bool) -> String {
-        guard let n else { return L10n.t("— أحياء", "— living") }
-        let text = L10n.isArabic
-            ? AdminTodayText.arabicCount(n, one: "حيّ واحد", two: "حيّان", few: "أحياء", many: "حياً", single: "حيّ")
-            : "\(n) living"
-        return estimated ? "≈ " + text : text
-    }
-
-    /// «557 متوفى» (متوفى واحد، متوفيان، 3 متوفين)
-    @available(*, deprecated, message: "use AdminCensusText.deceased(_:); U21 removes")
-    static func deceasedText(_ n: Int?) -> String {
-        guard let n else { return L10n.t("— متوفون", "— deceased") }
-        return L10n.isArabic
-            ? AdminTodayText.arabicCount(n, one: "متوفى واحد", two: "متوفيان", few: "متوفين", many: "متوفى", single: "متوفى")
-            : "\(n) deceased"
     }
 }
