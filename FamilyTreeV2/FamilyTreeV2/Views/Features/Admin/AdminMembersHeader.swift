@@ -15,7 +15,8 @@ import SwiftUI
 struct AdminFamilyCensus: Equatable {
     var counts = AdminMemberCounts()
     /// «خارج العائلة» (طلب المالك ٢٠٢٦-١١-٠٨): ذكور = أبناء البنات (`DaughterSonsIndex`) + أزواج البنات من خارج العائلة؛
-    /// إناث = نساء شجرة النساء المعلَّمات `is_outside_family` — لا يدخلون الإجمالي ولا الرجال ولا النساء
+    /// إناث = نساء شجرة النساء المعلَّمات `is_outside_family` — لا يدخلون الإجمالي ولا الرجال ولا النساء.
+    /// الأحياء فقط (٢٠٢٦-١١-٢٦)
     var outsideMale: Int?
     var outsideFemale: Int?
     var outsideTotal: Int? { outsideMale.flatMap { m in outsideFemale.map { m + $0 } } }
@@ -35,9 +36,11 @@ struct AdminFamilyCensus: Equatable {
         let sons = DaughterSonsIndex.shared.ids
         // حساب مراجعة أبل مسجّل كابن بنت — لا يُحسب
         let review = AppConfigValues.shared.reviewAccountIds
-        let sonCount = members.filter { sons.contains($0.id) && $0.hasName && !review.contains($0.id) }.count
+        // «خارج العائلة» الأحياء فقط (طلب المالك ٢٠٢٦-١١-٢٦ «المتوفاة شيل من الاحصائيات خارج العائلة ابى بس الاحياء») —
+        // متوفوه في قسمهم داخل «فرع خارج العائلة» (`AdminWomenPanel`)
+        let sonCount = members.filter { sons.contains($0.id) && $0.hasName && !review.contains($0.id) && $0.isDeceased != true }.count
         if !women.isEmpty {
-            let outsideRows = women.filter { outside.contains($0.id) && $0.hasName }
+            let outsideRows = women.filter { outside.contains($0.id) && $0.hasName && $0.isDeceased != true }
             c.outsideMale = sonCount + outsideRows.filter { !$0.isFemale }.count
             c.outsideFemale = outsideRows.filter(\.isFemale).count
             let linked = WomenStore.linkedUserByWoman

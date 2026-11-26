@@ -3,15 +3,18 @@ import SwiftUI
 // MARK: - «شجرة النساء» في «العائلة» (طلب المالك ٢٠٢٦-١١-٠٨، عينة samples/admin-women)
 //
 // تحت أرقام العائلة مفتاح «شجرة العائلة | شجرة النساء». هنا كل ما يخص النساء وشجرتهن في مكان واحد:
-// مدخل «شجرة النساء» (يفتح تبويب الشجرة عليها) ← بحث باسمها أو اسم أبوها ← شرائح: الكل · المسجّلات · المتزوجات (اسم الزوج
+// بحث باسمها أو اسم أبوها ← شرائح: الكل · المسجّلات · المتزوجات (اسم الزوج
 // تحتها) · متوفيات · فرع خارج العائلة ← القائمة. «الأحدث» بعد «الكل» (طلب المالك ٢٠٢٦-١١-١٣): المضافات أو المربوطات بحساب خلال
 // ٣٠ يوماً، الأحدث أولاً. للمالك والمدير وحدهما (طلب المالك ٢٠٢٦-١١-٠٨). الضغط على امرأة يفتح مربّع تفاصيلها نفسه في شجرة النساء
 // (`WomanDetailSheet`). «فرع خارج العائلة» = أبناء البنات (`DaughterSonsIndex`، يفتح ورقة حسابه) وأزواج البنات من خارج
 // العائلة والنساء من خارجها (زوجات من عوائل ثانية وبنات البنات — ٢٠٢٦-١١-٢٦) (`WomenStore.outsideFamilyIds`) — لا يُعدّون
-// في أي رقم للعائلة ولا يظهرن في شرائح النساء. «شجرة العائلة» بلا أي امرأة (`AdminMembersIndex`).
+// في أي رقم للعائلة ولا يظهرن في شرائح النساء. الأحياء فقط في القائمة، والمتوفون في قسم مطويّ بروحهم تحتها (٢٠٢٦-١١-٢٦).
+// «شجرة العائلة» بلا أي امرأة (`AdminMembersIndex`). مدخل «شجرة النساء» أعلى القسم حُذف (٢٠٢٦-١١-٢٦).
 
 enum AdminWomenChip: String, CaseIterable, Identifiable {
     case all, recent, accounts, married, deceased, outside
+    /// متوفو «فرع خارج العائلة» — ليست شريحة: قسم مطويّ بروحه تحت قائمة «فرع خارج العائلة» (طلب المالك ٢٠٢٦-١١-٢٦)
+    case outsideDeceased
     var id: String { rawValue }
 
     /// نافذة «الأحدث» بالأيام — أُضيفت عقدتها أو أُنشئ حسابها المربوط خلالها
@@ -27,6 +30,7 @@ enum AdminWomenChip: String, CaseIterable, Identifiable {
         case .married:   return L10n.t("متزوجات", "Married")
         case .deceased:  return L10n.t("متوفيات", "Deceased")
         case .outside:   return L10n.t("فرع خارج العائلة", "Outside branch")
+        case .outsideDeceased: return L10n.t("المتوفون من خارج العائلة", "Deceased outside the family")
         }
     }
 }
@@ -58,9 +62,11 @@ struct AdminWomenEntry: Identifiable {
         self.words = NameSearch.words(needle)
     }
 
-    var id: UUID {
+    var id: UUID { member.id }
+
+    var member: FamilyMember {
         switch kind {
-        case .woman(let m), .outsideHusband(let m), .son(let m): return m.id
+        case .woman(let m), .outsideHusband(let m), .son(let m): return m
         }
     }
 }
@@ -86,6 +92,8 @@ struct AdminWomenPanel: View {
     @State private var lists: [AdminWomenChip: [AdminWomenEntry]] = [:]
     @State private var built = false
     @State private var selectedWoman: FamilyMember?
+    /// قسم متوفي «فرع خارج العائلة» مفتوح؟ (مطويّ بالبداية)
+    @State private var showsOutsideDeceased = false
 
     // MARK: البيانات
 
@@ -179,12 +187,20 @@ struct AdminWomenPanel: View {
                                                status: h.isDeceased == true ? (L10n.t("متوفى", "Deceased"), DS.Color.textTertiary) : nil,
                                                needle: ArabicTextNormalizer.normalizeForSearch(name(h))))
         }
-        out[.outside] = outsideRows + outsideWomen
+        // الأحياء في «فرع خارج العائلة»، والمتوفون بروحهم في قسم مطويّ تحته (طلب المالك ٢٠٢٦-١١-٢٦
+        // «ابي اشيل المتوفاة نبي نخليهم بروح») — نفس رقم حلقة «خارج العائلة» (الأحياء فقط)
+        let allOutside = outsideRows + outsideWomen
+        out[.outside] = allOutside.filter { $0.member.isDeceased != true }
+        out[.outsideDeceased] = allOutside.filter { $0.member.isDeceased == true }
         return out
     }
 
     private func rows(_ all: [AdminWomenChip: [AdminWomenEntry]]) -> [AdminWomenEntry] {
-        let base = all[chip] ?? []
+        searched(all[chip] ?? [])
+    }
+
+    /// البحث نفسه على أي قائمة (الشريحة، أو متوفو «فرع خارج العائلة»)
+    private func searched(_ base: [AdminWomenEntry]) -> [AdminWomenEntry] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return base }
         let words = NameSearch.words(q)
@@ -204,7 +220,7 @@ struct AdminWomenPanel: View {
         let all = lists
         let shown = built ? rows(all) : []
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            treeEntry
+            // مدخل «شجرة النساء» حُذف (طلب المالك ٢٠٢٦-١١-٢٦ «ابى اشيل مربع شجرة النساء») — الشجرة من تبويبها
             AdminMembersSearchField(text: $query, placeholder: L10n.t("ابحث باسمها أو اسم أبيها", "Search by her or her father's name"))
             chips(all)
             HStack {
@@ -226,6 +242,9 @@ struct AdminWomenPanel: View {
                 }
             }
             .frame(minHeight: DS.Hub.filterListMinHeight, alignment: .top)
+            if chip == .outside && built {
+                outsideDeceasedSection(searched(all[.outsideDeceased] ?? []))
+            }
         }
         .onAppear {
             if let requestedChip { chip = requestedChip.chip }
@@ -267,25 +286,29 @@ struct AdminWomenPanel: View {
         built = true
     }
 
-    /// مدخل الشجرة نفسها — يفتح تبويب الشجرة على «شجرة النساء» (كحلقة «النساء»)
-    private var treeEntry: some View {
-        Button {
-            TreeTabContainer.openWomenOnAppear = true
-            NotificationCenter.default.post(name: .openWomenTree, object: nil)
-        } label: {
-            AdminListRow(icon: "figure.stand.dress", tint: DS.Color.female,
-                         title: L10n.t("شجرة النساء", "Women's tree"),
-                         subtitle: L10n.t("افتح الشجرة · رتّب الزوجات · أضف أم أو زوجة", "Open the tree · order wives · add a mother or wife"))
+    /// «المتوفون من خارج العائلة · N» — بطاقة مطويّة تحت قائمة الأحياء، تنفتح بقائمتهم (نفس الصفوف والضغط)
+    @ViewBuilder
+    private func outsideDeceasedSection(_ entries: [AdminWomenEntry]) -> some View {
+        if !entries.isEmpty {
+            AdminSectionCard(title: L10n.t("المتوفون من خارج العائلة", "Deceased outside the family"),
+                             tag: AdminMembersFilterBar.grouped(entries.count),
+                             isOpen: $showsOutsideDeceased,
+                             summary: L10n.t("لا يُعدّون في أي رقم — اضغط لعرضهم", "Not counted anywhere — tap to show")) {
+                EmptyView()
+            }
+            if showsOutsideDeceased {
+                list(entries)
+            }
         }
-        .buttonStyle(.plain)
-        .adminCard()
-        .accessibilityHint(L10n.t("يفتح شجرة النساء", "Opens the women's tree"))
     }
 
     private func chips(_ all: [AdminWomenChip: [AdminWomenEntry]]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Spacing.xsm) {
-                ForEach(AdminWomenChip.allCases.filter { $0 != .outside || !(all[.outside] ?? []).isEmpty }) { c in
+                ForEach(AdminWomenChip.allCases.filter { c in
+                    c != .outsideDeceased
+                        && (c != .outside || !(all[.outside] ?? []).isEmpty || !(all[.outsideDeceased] ?? []).isEmpty)
+                }) { c in
                     Button {
                         var t = Transaction()
                         t.disablesAnimations = true
@@ -313,7 +336,7 @@ struct AdminWomenPanel: View {
         let number = AdminMembersFilterBar.grouped(n)
         if !query.trimmingCharacters(in: .whitespaces).isEmpty { return L10n.t("\(number) نتيجة", "\(number) results") }
         switch chip {
-        case .outside: return L10n.t("\(number) · لا يُعدّون في أرقام العائلة", "\(number) · not counted in family numbers")
+        case .outside: return L10n.t("\(number) من الأحياء · لا يُعدّون في أرقام العائلة", "\(number) living · not counted in family numbers")
         case .recent: return L10n.t("\(number) · الأحدث أولاً", "\(number) · newest first")
         default: return L10n.t("\(number) · أبجدياً", "\(number) · A–Z")
         }
