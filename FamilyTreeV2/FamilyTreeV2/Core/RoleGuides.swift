@@ -3,8 +3,10 @@ import SwiftUI
 // MARK: - مجالات الأدوار (تحديث 2026-09-21)
 //
 // مصدر واحد لتعريف كل دور: مجاله، وكل ما يقدر عليه، وكل ما لا يقدر عليه.
-// يُعرض في «الأدوار» بلوحة الإدارة، وفي ورقة «تغيير الدور»، وعند تعيين دور
-// لعضو، وكبانر «مجالك» أعلى لوحة الإدارة — حتى يعرف كل مسؤول حدوده بالضبط.
+// يُعرض في «صلاحيات الأدوار» بلوحة الإدارة، وفي ورقة «تغيير الدور»، وعند تعيين دور
+// لعضو، وفي «صلاحياتي» على «اليوم» — حتى يعرف كل مسؤول حدوده بالضبط.
+// إعادة التصميم ٢٠٢٦-١١-٢٦ (U19): «المؤشرات» صار «الإحصاءات»، وسطر «حالة النظام» حُذف — الحالة كلمات على مربّعي
+// «الفريق والأمان» و«التطبيق» (المالك)، و«مجدول اليوم N» على مربّع «المناسبات» (المدير).
 // تحديث ٢٠٢٦-١١-٠٧ (مقترح «أدوار الإدارة» بموافقة المالك): كل دور يشوف مجاله كامل وما بعده ما يظهر له. ما يظهر
 // لكل دور من الأقسام والبطاقات جدول على السيرفر (`AdminRoleMatrix` ← `app_config.admin_role_matrix`) — هذه النصوص
 // تصف افتراضيه؛ إن غيّره المالك على السيرفر حدّث النصوص هنا.
@@ -29,8 +31,8 @@ struct RoleGuide: Identifiable {
                 mandate: L10n.t("جميع الصلاحيات، والمالكان متساويان فيها", "Everything — both owners alike"),
                 can: [
                     L10n.t("جميع صلاحيات المدير", "Everything an admin can do"),
-                    L10n.t("الأقسام الستة كاملة، وسطر «حالة النظام» في «اليوم»",
-                          "All six sections, and the system status line on Today"),
+                    L10n.t("الأقسام الستة كاملة، وحالة النظام على مربّعي «الفريق والأمان» و«التطبيق»",
+                          "All six sections, and system status on the Team & security and App tiles"),
                     L10n.t("قسم «التطبيق»: كل إعدادات التطبيق والتشغيل", "The App section: every app and operations setting"),
                     L10n.t("قسم «الفريق والأمان»: فريق الإدارة، ورسائل الدخول ومحاولاته، والأجهزة، والتسجيل والمنع",
                           "The Team & security section: the admin team, sign-in messages and attempts, devices, sign-up and blocking"),
@@ -62,8 +64,10 @@ struct RoleGuide: Identifiable {
                     L10n.t("إخفاء وإظهار عناصر المكتبة والمشاريع",
                           "Hide and show library items and projects"),
                     L10n.t("قراءة رسائل الأعضاء «تواصل مع الإدارة» والرد عليها", "Read and answer members' Contact admin messages"),
-                    L10n.t("رؤية «المؤشرات»: إحصاء الأفراد وتقرير الموافقات",
-                          "View Insights: the family census and the approvals report"),
+                    L10n.t("رؤية «الإحصاءات»: أرقام العائلة والموافقات",
+                          "View Statistics: family numbers and approvals"),
+                    L10n.t("رؤية «مجدول اليوم» على مربّع «المناسبات»",
+                          "See “Scheduled today” on the Occasions tile"),
                     L10n.t("الاطلاع على «الفريق والأمان»: فريق الإدارة و«الاستخدام»",
                           "View Team & security: the admin team and Usage"),
                     L10n.t("الاطلاع على «إعدادات مسار الموافقات»", "View the approval path settings")
@@ -71,8 +75,8 @@ struct RoleGuide: Identifiable {
                 cannot: [
                     L10n.t("قسم «التطبيق» (إعدادات التطبيق والتشغيل) — للمالك، ولا حتى للاطلاع",
                           "The App section (app and operations settings) — owner only, not even to view"),
-                    L10n.t("رسائل الدخول ومحاولاته، والأجهزة، والتسجيل والمنع، وسطر «حالة النظام» — للمالك",
-                          "Sign-in messages and attempts, devices, sign-up and blocking, and the system status line — owner only"),
+                    L10n.t("رسائل الدخول ومحاولاته، والأجهزة، والتسجيل والمنع، وحالة النظام — للمالك",
+                          "Sign-in messages and attempts, devices, sign-up and blocking, and system status — owner only"),
                     L10n.t("تعديل إعدادات مسار الموافقات — للمالك", "Change the approval path settings — owner only"),
                     L10n.t("منح الأدوار أو سحبها — للمالك", "Assign or remove roles — owner only"),
                     L10n.t("تغيير دور المالك أو حذفه", "Change or delete the owner")
@@ -91,8 +95,8 @@ struct RoleGuide: Identifiable {
                           "Fix tree health issues (no father, no name, duplicate phones)"),
                     L10n.t("الصور المقترحة لملفات الأعضاء", "Suggested photos for member profiles"),
                     L10n.t("استكمال تواريخ الوفاة", "Complete death dates"),
-                    L10n.t("رؤية «إحصاء الأفراد» في «اليوم» و«المؤشرات ← العائلة»",
-                          "See the family census on Today and in Insights → Family"),
+                    L10n.t("رؤية أرقام العائلة في «اليوم» و«الإحصاءات»",
+                          "See the family numbers on Today and in Statistics"),
                     L10n.t("الاطلاع على «المناسبات»: الذكرى والوفيات التي تاريخها غير مكتمل",
                           "View Occasions: memorials and deaths with incomplete dates")
                 ],
@@ -106,8 +110,8 @@ struct RoleGuide: Identifiable {
                     L10n.t("تسجيل عضو جديد مباشرة", "Register a new member directly"),
                     L10n.t("إرسال الإشعارات أو تصميم بطاقات التهنئة والتعزية", "Send notifications or design greeting and condolence cards"),
                     L10n.t("قراءة رسائل الأعضاء الخاصة — للمالك والمدير", "Read members' private messages — owner and admins"),
-                    L10n.t("«الاستخدام» وتقرير الموافقات — للمالك والمدير",
-                          "Usage and the approvals report — owner and admins"),
+                    L10n.t("«الاستخدام» و«الموافقات» — للمالك والمدير",
+                          "Usage and Approvals — owner and admins"),
                     L10n.t("منح الأدوار، الإعدادات، الأجهزة، منع الأرقام",
                           "Roles, settings, devices, blocked numbers")
                 ]
