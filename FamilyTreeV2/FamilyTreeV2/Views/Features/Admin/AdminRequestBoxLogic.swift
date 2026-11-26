@@ -81,10 +81,10 @@ nonisolated enum AdminRequestBoxLogic {
         return (arabic ? "تعذّر التنفيذ: " : "Couldn't complete it: ") + trimmed
     }
 
-    /// النهاية: «كل الطلبات عولجت» — أو «… بهذه الفلاتر» حين يبقى معلّق خارجها
+    /// النهاية: «كل الطلبات عولجت» — أو «… بهذه التصفية» حين يبقى معلّق خارجها
     static func endTitle(othersOutsideFilter: Bool, arabic: Bool) -> String {
         if othersOutsideFilter {
-            return arabic ? "عولجت كل الطلبات بهذه الفلاتر" : "Every request in these filters is handled"
+            return arabic ? "عولجت كل الطلبات بهذه التصفية" : "Every request in this filter is handled"
         }
         return arabic ? "كل الطلبات عولجت" : "Every request is handled"
     }

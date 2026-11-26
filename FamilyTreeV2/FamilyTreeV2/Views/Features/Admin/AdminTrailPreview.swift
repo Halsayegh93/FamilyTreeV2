@@ -3,9 +3,11 @@ import SwiftUI
 
 // MARK: - معاينة التصميم بلا سيرفر (للتصوير فقط — نسخ التطوير)
 //
-// `-uiPreviewRequestTrail sender|fallback|handled|list|filters|select|buttons` عند التشغيل: مربّع تفاصيل الطلب بـ«المرسل»
-// وأزرار الطلبات الجديدة، أو بلا بيانات مسجّلة (طلب قديم)، أو المربّع المعالَج للعرض فقط، أو صفوف «المنجز»، أو جذر «الوارد»
-// الجديد (U8) بأبوابه وفلاتره وأيامه، أو وضع «تحديد» بشريطه السفلي، أو صفوف الأزرار.
+// `-uiPreviewRequestTrail sender|fallback|handled|list|filters|filtersheet|select|buttons` عند التشغيل: مربّع تفاصيل الطلب
+// بـ«المرسل» وأزرار الطلبات الجديدة، أو بلا بيانات مسجّلة (طلب قديم)، أو المربّع المعالَج للعرض فقط، أو صفوف «المنجز»، أو جذر
+// «الوارد» الجديد (U8) بأبوابه وتصفيته (طقم «تصفية» الحقيقي بأرقام وهمية — F3: ثلاث شرائح، كل واحدة تُزال) وأيامه، أو الجذر
+// نفسه وورقة «تصفية» مفتوحة فوقه (`filtersheet` — الاختيار المتعدّد يُطبَّق فوراً)، أو وضع «تحديد» بشريطه السفلي، أو صفوف
+// الأزرار.
 // أسماء وهمية — لا بيانات أعضاء حقيقية.
 
 enum AdminTrailPreview {
@@ -77,14 +79,32 @@ private enum PreviewData {
     ].compactMap { $0 }
 }
 
-/// جذر «الوارد» الجديد (U8، spec C.2) بأعداد وأسماء وهمية: الرأس بسطر الأرقام، صفّا الأبواب، شريط الفلاتر بشريحة
-/// مفعّلة، الأيام بصفوفها، و«المنجز» — بنفس قطع الصفحة الحقيقية (`AdminInboxBand`، `AdminInboxRow`…). `selecting` = وضع
-/// «تحديد» بشريطه السفلي
+/// جذر «الوارد» الجديد (U8، spec C.2) بأعداد وأسماء وهمية: الرأس بسطر الأرقام، صفّا الأبواب، شريط «تصفية» (الطقم الحقيقي
+/// بورقته — F3) بثلاث شرائح، الأيام بصفوفها، و«المنجز» — بنفس قطع الصفحة الحقيقية (`AdminInboxBand`، `AdminInboxRow`…).
+/// `selecting` = وضع «تحديد» بشريطه السفلي، و`opensSheet` = ورقة «تصفية» مفتوحة
 private struct InboxRootPreview: View {
     var selecting = false
+    var opensSheet = false
     @State private var search = ""
-    @State private var filters = AdminInboxLogic.Filters(group: .tree)
+    @State private var filters = AdminInboxLogic.Filters(statuses: [.waiting], groups: [.members, .tree])
+    @State private var showsFilters = false
     @State private var picked: Set<Int> = [0, 2]
+
+    /// ٢٠ طلباً وهمياً بأنواع ومصادر ومراحل مختلفة — للأعداد في الشرائح والورقة فقط
+    private static let facts: [AdminInboxLogic.Fact] = {
+        typealias F = AdminInboxLogic.Fact
+        let kinds: [AdminInboxLogic.Kind] = [.joinRequests, .children, .treeAdd, .phone, .deceased, .news, .treeEditName,
+                                             .photos, .children, .nameChange, .reports, .treeAddPhoto, .joinRequests,
+                                             .children, .diwaniya, .treeDeceased, .phone, .treeAdd, .archive, .children]
+        let sources: [AdminInboxLogic.Source] = [.registration, .profile, .familyTree, .profile, .familyTree, .content]
+        return kinds.enumerated().map { i, kind in
+            F(kind: kind, source: sources[i % sources.count], inFlow: true, waiting: i % 3 != 1, urgent: i % 7 == 0,
+              late: i % 5 == 4)
+        }
+    }()
+
+    private static let set = AdminAllRequestsView.inboxFilterSet(facts: facts, ready: true, workflowOn: true,
+                                                                 roleKinds: Set(AdminInboxLogic.Kind.allCases))
 
     private struct Day: Identifiable {
         let title: String
@@ -135,19 +155,9 @@ private struct InboxRootPreview: View {
                             AdminInboxDoorRow(icon: "checkmark.shield.fill", tint: DS.Color.accent,
                                               title: "بانتظار المراجعة", subtitle: AdminInboxText.postReviewLine(3)) {}
                         }
-                        AdminFilterBar(search: $search, activeCount: filters.isEmpty ? 0 : 1) {}
-                        if !filters.isEmpty {
-                            Button { filters = AdminInboxLogic.Filters() } label: {
-                                DSAdminChipLabel(title: "الشجرة", count: "3", selected: true, removable: true)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        HStack {
-                            Spacer()
-                            Text(verbatim: "\(AdminInboxText.requests(12)) · الأحدث أولاً")
-                                .dsFont(.subtitle)
-                                .foregroundColor(DS.Color.textSecondary)
-                        }
+                        AdminFilterPanel(set: Self.set, selection: $filters, search: $search,
+                                         note: L10n.t("الأحدث أولاً", "Newest first"),
+                                         openFilters: { showsFilters = true })
                     }
                     ForEach(days) { day in
                         VStack(alignment: .leading, spacing: DSNoticeMetrics.headerGap) {
@@ -186,6 +196,12 @@ private struct InboxRootPreview: View {
             }
         }
         .background(DS.Hub.background.ignoresSafeArea())
+        .adminFilterSheet(isPresented: $showsFilters, set: Self.set, selection: $filters)
+        .task {
+            guard opensSheet, !showsFilters else { return }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            showsFilters = true
+        }
     }
 }
 
@@ -227,6 +243,8 @@ struct AdminTrailPreviewScreen: View {
             DS.Hub.background.ignoresSafeArea()
             if mode == "filters" {
                 InboxRootPreview()
+            } else if mode == "filtersheet" {
+                InboxRootPreview(opensSheet: true)
             } else if mode == "select" {
                 InboxRootPreview(selecting: true)
             } else if mode == "buttons" {
@@ -292,7 +310,8 @@ struct AdminTrailPreviewScreen: View {
                 }
             }
         }
-        .dsCenterBox(isPresented: Binding(get: { open && !["list", "buttons", "filters", "select"].contains(mode) }, set: { open = $0 })) {
+        .dsCenterBox(isPresented: Binding(get: { open && !["list", "buttons", "filters", "filtersheet", "select"].contains(mode) },
+                                          set: { open = $0 })) {
             box
         }
     }

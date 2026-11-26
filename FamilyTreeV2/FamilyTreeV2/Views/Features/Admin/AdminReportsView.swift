@@ -1444,12 +1444,12 @@ private enum MembersPDFBuilder {
         border.setStroke()
         separator.stroke()
 
-        // (6) سطر التفاصيل: العدد + الفلتر + الحقول
+        // (6) سطر التفاصيل: العدد + التصفية + الحقول
         let metaY = separatorY + 6
         var metaParts: [String] = []
         metaParts.append("👥 العدد: \(context.count) عضو")
         if let f = context.filterLabel, !f.isEmpty {
-            metaParts.append("🏷️ الفلتر: \(f)")
+            metaParts.append("🏷️ التصفية: \(f)")
         }
         if let fields = context.fieldLabels, !fields.isEmpty {
             metaParts.append("📋 الحقول: \(fields)")

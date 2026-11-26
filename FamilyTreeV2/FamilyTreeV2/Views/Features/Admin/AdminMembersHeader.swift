@@ -12,14 +12,12 @@ import SwiftUI
 // مطويّاً (حين يصعد الحقل تحت سطر الرأس): سطر واحد مثبّت فوق التمرير (`AdminMembersCompactBar`): ‹ · «العائلة ⌄ ·
 // 2,729» · بحث (يرجع للحقل ويضع المؤشر فيه) · «تصفية» بعدده — والشرائح المفعّلة تحته على الأبيض.
 
-/// نصوص «العائلة» — «تصفية» (كلمة الآيفون العربية، طلب المالك ٢٠٢٦-١١-٢٦) بدل «الفلاتر» في ما تملكه هذه الصفحة.
-/// ورقة الطقم المشتركة (`AdminFilterSheet`) يغيّر عنوانها مكانها الواحد
+/// نصوص «العائلة» — «تصفية» (كلمة الآيفون العربية، طلب المالك ٢٠٢٦-١١-٢٦) من مكان الطقم الواحد (`AdminFilterText`، F3)
 enum AdminMembersText {
-    static var filter: String { L10n.t("تصفية", "Filter") }
-    static func filterOn(_ n: Int) -> String { L10n.t("تصفية، \(n) مفعّلة", "Filter, \(n) on") }
-    static var filterHint: String { L10n.t("يفتح لوحة التصفية", "Opens the filter") }
-    static var noResults: String { L10n.t("لا نتائج بهذه التصفية", "No results with this filter") }
-    static var clear: String { L10n.t("مسح التصفية", "Clear filter") }
+    static var filter: String { AdminFilterText.filters }
+    static func filterOn(_ n: Int) -> String { AdminFilterText.on(n) }
+    static var filterHint: String { AdminFilterText.openHint }
+    static var noResults: String { AdminFilterText.noResults }
 }
 
 /// أرقام رأس «العائلة» — نفس تعريفات «إحصاء الأفراد» (`AdminMemberCounts`): الرجال = الشجرة بلا طلبات الانضمام، النساء =

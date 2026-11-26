@@ -8,15 +8,15 @@ import Supabase
 //
 // صفحة مستقلة تُدفع من صفّ «رسائل الأعضاء» في «الوارد» (لم تعد شريحة داخله): رأس الصفحات الداخلية (`AdminPage`) —
 // «‹ الوارد» · «رسائل الأعضاء» · «تحديد» نصّاً في الطرف · سطر الأرقام «7 غير مقروءة ‹» «2 بانتظار الرد ‹» (كل رقم يضبط
-// فلتر «الحالة» فيكون أول رقم تحت الشريط هو نفسه) ← شريط الفلاتر (البحث + «الفلاتر»: «الحالة» و«النوع» في الورقة،
-// الشرائح المفعّلة تحته) ← «● 7 رسائل جديدة … تحديد الكل كمقروء» ← الأيام (اليوم · أمس · التاريخ)، كل يوم بطاقة من
+// «الحالة» فيكون أول رقم تحت الشريط هو نفسه) ← شريط التصفية (البحث + «تصفية»: «الحالة» و«النوع» في الورقة، اختيار
+// متعدّد يُطبَّق فوراً — F3، وشريحة لكل اختيار تحته) ← «● 7 رسائل جديدة … تحديد الكل كمقروء» ← الأيام (اليوم · أمس · التاريخ)، كل يوم بطاقة من
 // صفوفها (`DSNoticeKit`). السحب: «مقروء» و«تمّت المعالجة» من البداية، «حذف» من الطرف (يسأل أولاً)؛ والضغط المطوّل
 // القائمة نفسها؛ و«تحديد» ← شريط سفلي «تحديد الكل · N محدّدة · حذف».
 // المربّع: المرسل · الرسالة · «الرد على العضو» (واتساب / اتصال / بريد) · «تمّت المعالجة» · «إغلاق» · حذف (يسأل أولاً).
 //
 // الصلاحية: `inbox.messages` في جدول السيرفر (المالك والمدير). غيرهما يصل الصفحة (رابط قديم) فيرى الرأس وبطاقة «ليست ضمن
 // صلاحياتك» بلا جلب. «يعدّل» (`adminCanEdit`) شرط الحذف و«تمّت المعالجة» و«تحديد»؛ «مقروء» حال شخصية لكل مشرف.
-// الحالات (spec A.12/T5): هيكل صفوف · «لا رسائل» · «لا رسائل بهذه الفلاتر» + «مسح الفلاتر» · خطأ + «أعد المحاولة» (والرسائل
+// الحالات (spec A.12/T5): هيكل صفوف · «لا رسائل» · «لا رسائل بهذه التصفية» + «تعديل التصفية» · خطأ + «أعد المحاولة» (والرسائل
 // القديمة تبقى بـ«آخر تحديث»). الكتابة كلها تمرّ بـ`DebugAdminProbe.dryRun` (T0) — بنجاح مصطنع أثناء تجربة دور.
 //
 // الجزء الأول منطق خالص (Foundation) يُفحص بلا محاكي:
@@ -26,10 +26,10 @@ import Supabase
 // MARK: - المنطق الخالص
 
 nonisolated enum AdminInboxMessageLogic {
-    /// «الكل» في مجموعة «النوع»
+    /// «الكل» في مجموعة «النوع» — قيمة الاختيار الواحد في `Filters(kind:)` (لا اختيار)
     static let allKinds = "*"
 
-    /// مجموعة «الحالة» في ورقة الفلاتر — اختيار واحد. «تمّت المعالجة» باقية من فلتر الصفحة القديم (لا يضيع عرض المعالَج)
+    /// مجموعة «الحالة» في ورقة التصفية — اختيار متعدّد (F3). «تمّت المعالجة» باقية من فلتر الصفحة القديم (لا يضيع عرض المعالَج)
     enum Status: String, CaseIterable, Hashable {
         case all, unread, awaiting, today, handled
 
@@ -44,10 +44,23 @@ nonisolated enum AdminInboxMessageLogic {
         }
     }
 
-    /// حالة فلاتر الصفحة — «مسح الفلاتر» يرجع إلى `Filters()`
+    /// حالة تصفية الصفحة (F3): اختيار متعدّد في «الحالة» و«النوع» — فارغة = «الكل»، وأيّ المختار داخل المجموعة (OR)،
+    /// والمجموعتان معاً (AND)
     struct Filters: Equatable {
-        var status: Status = .all
-        var kind: String = AdminInboxMessageLogic.allKinds
+        var statuses: Set<Status>
+        var kinds: Set<String>
+
+        /// اختيار واحد لكل مجموعة (رقم الرأس) — «الكل»/`allKinds` = لا اختيار
+        init(status: Status = .all, kind: String = AdminInboxMessageLogic.allKinds) {
+            self.init(statuses: status == .all ? [] : [status], kinds: kind == AdminInboxMessageLogic.allKinds ? [] : [kind])
+        }
+
+        init(statuses: Set<Status>, kinds: Set<String> = []) {
+            self.statuses = statuses.subtracting([.all])
+            self.kinds = kinds.subtracting([AdminInboxMessageLogic.allKinds])
+        }
+
+        var isEmpty: Bool { self == Filters() }
     }
 
     /// ما يحتاجه الفلتر من الرسالة (يُحسب مرة لكل رسم)
@@ -73,7 +86,8 @@ nonisolated enum AdminInboxMessageLogic {
     }
 
     static func matches(_ fact: Fact, _ filters: Filters) -> Bool {
-        matches(fact, status: filters.status) && (filters.kind == allKinds || fact.kind == filters.kind)
+        (filters.statuses.isEmpty || filters.statuses.contains { matches(fact, status: $0) })
+            && (filters.kinds.isEmpty || filters.kinds.contains(fact.kind))
     }
 
     static func count(_ facts: [Fact], _ filters: Filters) -> Int {
@@ -314,25 +328,26 @@ struct AdminInboxView: View {
         }
     }
 
-    /// ورقة «الفلاتر»: «الحالة» و«النوع» بأعدادهما لأي حالة (بعد البحث)، و«النتيجة الآن» = القائمة نفسها
+    /// ورقة «تصفية»: «الحالة» و«النوع» اختيار متعدّد (F3) بأعدادهما لأي حالة (بعد البحث) — عدد الخيار = النتيجة لو اختير
+    /// وحده في مجموعته مع اختيارات الأخرى، و«النتيجة الآن» = القائمة نفسها
     private static func filterSet(facts: [AdminInboxMessageLogic.Fact],
                                   ready: Bool) -> AdminFilterSet<AdminInboxMessageLogic.Filters> {
         typealias L = AdminInboxMessageLogic
         let fixed = ["استفسار", "اقتراح", "شكوى", "أخرى"].map { ContactCategoryInfo.from(raw: $0).title }
         let kinds = L.kindOrder(fixed: fixed, facts: facts)
         let count: (L.Filters) -> Int? = { ready ? L.count(facts, $0) : nil }
-        return AdminFilterSet(reset: L.Filters(), noun: L.noun, resultCount: count) { s in
-            let statuses = L.Status.allCases.map { status -> AdminFilterOption<L.Status> in
-                AdminFilterOption(status, status.title, count: count(L.Filters(status: status, kind: s.kind)))
+        return AdminFilterSet(noun: L.noun, resultCount: count) { s in
+            let statuses = L.Status.allCases.filter { $0 != .all }.map { status -> AdminFilterOption<L.Status> in
+                AdminFilterOption(status, status.title, count: count(L.Filters(statuses: [status], kinds: s.kinds)))
             }
-            let kindOptions = [AdminFilterOption(L.allKinds, L10n.t("الكل", "All"),
-                                                 count: count(L.Filters(status: s.status, kind: L.allKinds)))]
-                + kinds.map { kind in
-                    AdminFilterOption(kind, kind, count: count(L.Filters(status: s.status, kind: kind)))
-                }
+            // نوع مختار لم يعد في الرسائل (حُذفت) يبقى خياراً — شريحته تُزال
+            let shownKinds = kinds + s.kinds.filter { !kinds.contains($0) }.sorted()
+            let kindOptions = shownKinds.map { kind in
+                AdminFilterOption(kind, kind, count: count(L.Filters(statuses: s.statuses, kinds: [kind])))
+            }
             let groups: [AdminFilterGroup<L.Filters>] = [
-                .choices("status", title: L10n.t("الحالة", "Status"), value: \.status, all: .all, options: statuses),
-                .choices("kind", title: L10n.t("النوع", "Type"), value: \.kind, all: L.allKinds, options: kindOptions),
+                .choices("status", title: L10n.t("الحالة", "Status"), values: \.statuses, options: statuses),
+                .choices("kind", title: L10n.t("النوع", "Type"), values: \.kinds, options: kindOptions),
             ]
             return groups
         }
@@ -391,7 +406,7 @@ struct AdminInboxView: View {
                 AdminFilterPanel(set: m.set, selection: $filters, search: $search,
                                  placeholder: AdminFilterText.searchPlaceholder,
                                  note: L10n.t("الأحدث أولاً", "Newest first"),
-                                 showsCaption: filters != Logic.Filters() || !trimmedSearch.isEmpty,
+                                 showsCaption: !filters.isEmpty || !trimmedSearch.isEmpty,
                                  openFilters: { showsFilters = true })
             }
             if unreadLine {
@@ -487,13 +502,13 @@ struct AdminInboxView: View {
         }
     }
 
-    /// فلاتر بلا نتيجة: «لا رسائل بهذه الفلاتر» + «مسح الفلاتر»؛ بحث بلا نتيجة: «لا نتائج» + «مسح البحث»
+    /// تصفية بلا نتيجة: «لا رسائل بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح تُزال واحدة واحدة)؛ بحث بلا
+    /// نتيجة: «لا نتائج» + «مسح البحث»
     private var filteredEmpty: some View {
         Group {
-            if filters != Logic.Filters() {
-                AdminFilterEmptyCard(title: L10n.t("لا رسائل بهذه الفلاتر", "No messages with these filters")) {
-                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filters = Logic.Filters() }
-                }
+            if !filters.isEmpty {
+                AdminFilterEmptyCard(title: L10n.t("لا رسائل بهذه التصفية", "No messages with this filter"),
+                                     editFilters: { showsFilters = true })
             } else {
                 AdminPageStateCard(.empty(L10n.t("لا نتائج", "No results"),
                                           message: L10n.t("جرّب كلمة أخرى", "Try another word"),

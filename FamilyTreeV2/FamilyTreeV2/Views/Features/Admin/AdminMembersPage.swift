@@ -4,10 +4,10 @@ import SwiftUI
 //
 // الرأس الكحلي (`AdminMembersHeader.swift`): «‹ الإدارة» · «العائلة ⌄» · «＋» · «⋯ التقارير (PDF)» ← «كل العائلة» (أو اسم
 // الفرع) ← مربّعات «2,729 رجل · 262 امرأة ‹ · 46 حياً خارج العائلة ‹» ← حقل البحث بالاسم أو الرقم + «تصفية (n)» (فلاتر
-// المالك «ب»: حقل واحد + زرّ واحد). ورقة التصفية (طقم U5): «الحساب» (الكل · لهم حساب · بلا حساب) ← «الحالة» (الكل ·
-// الأحياء · المتوفون) ← «الفرع» (صفّ يفتح قائمة الفروع داخل الورقة)، والأعداد تتبع بقية الاختيارات
-// (`AdminMembersLogic.Tally`). تحت الرأس على الأبيض:
-//  ١) شرائح التصفية المفعّلة بـ✕ (`AdminActiveFilterChips` — كل شريحة تلغي فلترها وحده) وسطر «123 رجل · أبجدياً» مع
+// المالك «ب»: حقل واحد + زرّ واحد). ورقة التصفية (طقم U5، F3 اختيار متعدّد يُطبَّق فوراً): «الحساب» (الكل · لهم حساب ·
+// بلا حساب) ← «الحالة» (الكل · الأحياء · المتوفون) ← «الفرع» (الكل، أو صفّ يفتح قائمة الفروع داخل الورقة — اختيار واحد)،
+// والأعداد تتبع بقية الاختيارات (`AdminMembersLogic.Tally`). تحت الرأس على الأبيض:
+//  ١) شريحة لكل اختيار بـ✕ (`AdminActiveFilterChips` — كل شريحة تزيل اختيارها وحده، F3) وسطر «123 رجل · أبجدياً» مع
 //     التصفية أو البحث فقط.
 //  ٢) بطاقة «يحتاج مراجعتك» («363 تواريخ وفاة ناقصة» / «هل ما زالوا أحياء؟» · «5 قوائم») ← صفحة «يحتاج مراجعتك»
 //     (`AdminReviewHubPage`، U12). تختفي حين تصل كل القوائم صفراً.
@@ -26,28 +26,38 @@ struct AdminMemberSheetContext: Identifiable {
     let start: Int
 }
 
-/// فلاتر «العائلة» (spec C.7): الحساب · الحالة · الفرع — و«القائمة» فلتر إضافي من رابط قديم وحده
+/// تصفية «العائلة» (spec C.7، F3): «الحساب» و«الحالة» اختيار متعدّد (فارغة = «الكل»)، و«الفرع» اختيار واحد (منتقٍ شجري)،
+/// و«القائمة» تصفية إضافية من رابط قديم وحده
 struct AdminMembersFilters: Equatable {
-    var account: AdminAccountFilter = .all
-    var life: AdminLifeFilter = .all
+    /// لهم حساب · بلا حساب (بلا `.all`)
+    var accounts: Set<AdminAccountFilter> = []
+    /// الأحياء · المتوفون (بلا `.all`)
+    var lives: Set<AdminLifeFilter> = []
     /// رأس الفرع (بأي مستوى) — nil = كل الفروع
     var branch: UUID? = nil
-    /// شريحة فرعية قديمة لا تقابلها قائمة مراجعة («لا تصله الإشعارات»…) — شريحة تُلغى
+    /// شريحة فرعية قديمة لا تقابلها قائمة مراجعة («لا تصله الإشعارات»…) — شريحة تُزال
     var sub: AdminMemberSub? = nil
 
     var isEmpty: Bool { self == AdminMembersFilters() }
 
+    /// اختيار واحد لكل مجموعة — «الكل» = لا اختيار
     init(account: AdminAccountFilter = .all, life: AdminLifeFilter = .all, branch: UUID? = nil, sub: AdminMemberSub? = nil) {
-        self.account = account
-        self.life = life
+        self.accounts = account == .all ? [] : [account]
+        self.lives = life == .all ? [] : [life]
         self.branch = branch
         self.sub = sub
     }
 
+    /// الروابط القديمة والهبوط: كل اختيار فيها شريحة تحت الشريط تُزال (`AdminMembersLogic.picks`)
     init(_ o: AdminMembersLogic.Opening) {
-        self.init(account: AdminAccountFilter(o.account), life: AdminLifeFilter(o.life), branch: o.branch,
-                  sub: o.sub.flatMap(AdminMemberSub.init(rawValue:)))
+        self.accounts = Set(AdminMembersLogic.picks(o.account).map { AdminAccountFilter($0) })
+        self.lives = Set(AdminMembersLogic.picks(o.life).map { AdminLifeFilter($0) })
+        self.branch = o.branch
+        self.sub = o.sub.flatMap(AdminMemberSub.init(rawValue:))
     }
+
+    var accountLogic: Set<AdminMembersLanding.Account> { Set(accounts.map(\.logic)) }
+    var lifeLogic: Set<AdminMembersLanding.Life> { Set(lives.map(\.logic)) }
 }
 
 /// ما يُدفع فوق جذر «العائلة» (وجهة واحدة)
@@ -361,8 +371,8 @@ struct AdminMembersPage: View {
         let q = trimmedQuery
         guard !filters.isEmpty || !q.isEmpty else { return nil }
         var parts: [String] = []
-        if filters.account != .all { parts.append(filters.account.title) }
-        if filters.life != .all { parts.append(filters.life.title) }
+        parts += AdminAccountFilter.allCases.filter(filters.accounts.contains).map(\.title)
+        parts += AdminLifeFilter.allCases.filter(filters.lives.contains).map(\.title)
         if let sub = filters.sub { parts.append(sub.title) }
         if let b = filters.branch { parts.append(branchTitle(b)) }
         if !q.isEmpty { parts.append("«\(q)»") }
@@ -406,8 +416,8 @@ struct AdminMembersPage: View {
 
     private func makeModel() -> AdminMembersListModel {
         let base = scope(branch: filters.branch, sub: filters.sub)
-        let account = filters.account, life = filters.life
-        let rows = base.rows.filter { index.matches($0, account: account, life: life) }
+        let accounts = filters.accounts, lives = filters.lives
+        let rows = base.rows.filter { index.matches($0, accounts: accounts, lives: lives) }
         let set = filterSet(base: base)
         let searching = !trimmedQuery.isEmpty
         let order = AdminMembersLogic.Order.make(filtered: !filters.isEmpty, searching: searching)
@@ -457,11 +467,11 @@ struct AdminMembersPage: View {
         return hits.map(\.row)
     }
 
-    /// العدد لحالة فلاتر (يشمل البحث — نفس ما يُرى) — nil قبل وصول الحسابات لخيار «الحساب»
+    /// العدد لحالة تصفية (يشمل البحث — نفس ما يُرى) — nil قبل وصول الحسابات لخيار «الحساب»
     private func resultCount(_ s: AdminMembersFilters) -> Int? {
         guard index.built else { return nil }
         return scope(branch: s.branch, sub: s.sub).tally
-            .shown(account: s.account.logic, life: s.life.logic, accountsReady: index.accountsReady)
+            .shown(accounts: s.accountLogic, lives: s.lifeLogic, accountsReady: index.accountsReady)
     }
 
     /// اسم الفرع في صفّ «الفرع» وشريحته: الاسم المخصّص من «أسماء العوائل والفروع» إن وُجد، وإلا الاسم المختصر لرأسه
@@ -472,42 +482,49 @@ struct AdminMembersPage: View {
         return m.map { $0.shortFullName.isEmpty ? $0.fullName : $0.shortFullName } ?? L10n.t("فرع", "Branch")
     }
 
-    /// ورقة التصفية (spec C.7، mock 5): الحساب ← الحالة ← الفرع (و«القائمة» حين جاءت من رابط)
+    /// ورقة التصفية (spec C.7، mock 5، F3): الحساب ← الحالة (اختيار متعدّد) ← الفرع (منتقٍ، اختيار واحد) — و«القائمة» حين
+    /// جاءت من رابط. عدد كل خيار = النتيجة لو اختير وحده في مجموعته مع بقية الاختيارات
     private func filterSet(base: AdminMembersScope) -> AdminFilterSet<AdminMembersFilters> {
         let ready = index.accountsReady
         let members = memberVM.allMembers
-        let all = L10n.t("الكل", "All")
         return AdminFilterSet(
-            reset: AdminMembersFilters(),
             noun: { _ in L10n.t("رجل", "men") },
             resultCount: { s in resultCount(s) },
             groups: { s in
                 let tally = index.built ? scope(branch: s.branch, sub: s.sub).tally : AdminMembersLogic.Tally()
-                func count(_ a: AdminAccountFilter, _ l: AdminLifeFilter) -> Int? {
-                    index.built ? tally.shown(account: a.logic, life: l.logic, accountsReady: ready) : nil
+                func count(_ a: Set<AdminAccountFilter>, _ l: Set<AdminLifeFilter>) -> Int? {
+                    index.built ? tally.shown(accounts: Set(a.map(\.logic)), lives: Set(l.map(\.logic)),
+                                              accountsReady: ready) : nil
                 }
+                let accounts = AdminAccountFilter.allCases.filter { $0 != .all }
+                let lives = AdminLifeFilter.allCases.filter { $0 != .all }
                 var groups: [AdminFilterGroup<AdminMembersFilters>] = [
-                    .choices("account", title: L10n.t("الحساب", "Account"), value: \.account, all: .all,
-                             options: AdminAccountFilter.allCases.map { AdminFilterOption($0, $0.title, count: count($0, s.life)) }),
-                    .choices("life", title: L10n.t("الحالة", "Status"), value: \.life, all: .all,
-                             options: AdminLifeFilter.allCases.map { AdminFilterOption($0, $0.title, count: count(s.account, $0)) }),
+                    .choices("account", title: L10n.t("الحساب", "Account"), values: \.accounts,
+                             options: accounts.map { AdminFilterOption($0, $0.title, count: count([$0], s.lives)) }),
+                    .choices("life", title: L10n.t("الحالة", "Status"), values: \.lives,
+                             options: lives.map { AdminFilterOption($0, $0.title, count: count(s.accounts, [$0])) }),
                     .picker("branch", title: L10n.t("الفرع", "Branch"), value: \.branch, all: nil,
-                            valueTitle: s.branch.map(branchTitle) ?? L10n.t("كل الفروع", "All branches"),
-                            count: s.branch == nil ? nil : count(s.account, s.life), ownsHeader: true) { current, pick in
+                            allTitle: L10n.t("كل الفروع", "All branches"), valueTitle: s.branch.map(branchTitle),
+                            chooseTitle: L10n.t("اختر فرعاً", "Pick a branch"),
+                            count: s.branch == nil ? nil : count(s.accounts, s.lives), ownsHeader: true) { current, pick in
                         AnyView(BranchPickerSheet(allMembers: members, selectedId: current, allLevels: true,
                                                   onSelect: { pick($0) }))
                     },
                 ]
                 if let sub = s.sub {
-                    var cleared = s
-                    cleared.sub = nil
-                    groups.append(.choices("list", title: L10n.t("القائمة", "List"), value: \.sub, all: nil, options: [
-                        AdminFilterOption<AdminMemberSub?>(nil, all, count: resultCount(cleared)),
-                        AdminFilterOption<AdminMemberSub?>(sub, sub.title, count: count(s.account, s.life)),
+                    groups.append(.single("list", title: L10n.t("القائمة", "List"), value: \.sub, neutral: nil, options: [
+                        AdminFilterOption<AdminMemberSub?>(nil, AdminFilterText.all, count: resultCount(cleared(s))),
+                        AdminFilterOption<AdminMemberSub?>(sub, sub.title, count: count(s.accounts, s.lives)),
                     ]))
                 }
                 return groups
             })
+    }
+
+    private func cleared(_ s: AdminMembersFilters) -> AdminMembersFilters {
+        var next = s
+        next.sub = nil
+        return next
     }
 
     // MARK: المحتوى
@@ -567,11 +584,11 @@ struct AdminMembersPage: View {
 
     @ViewBuilder
     private func listSection(_ model: AdminMembersListModel) -> some View {
-        if filters.account != .all && !index.accountsReady {
+        if !filters.accounts.isEmpty && !index.accountsReady {
             // «لهم حساب/بلا حساب» قبل وصول قوائم الحسابات: لا قائمة فارغة مضلِّلة
             if accounts.health.look == .unknown {
                 AdminPageStateCard(.error(L10n.t("تعذّر تحميل الحسابات", "Couldn't load the accounts"),
-                                          message: L10n.t("فلتر «الحساب» يحتاجها", "The «Account» filter needs them"),
+                                          message: L10n.t("تصفية «الحساب» تحتاجها", "The «Account» filter needs them"),
                                           retry: { Task { await accounts.refresh(force: true) } }))
             } else {
                 AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الحسابات…", "Loading accounts…"), rows: 4))
@@ -581,9 +598,7 @@ struct AdminMembersPage: View {
                 AdminPageStateCard(.empty(L10n.t("لا أحد بهذا الاسم أو الرقم", "Nobody with this name or number"),
                                           actionTitle: L10n.t("مسح البحث", "Clear search"), action: { query = "" }))
             } else if !filters.isEmpty {
-                AdminFilterEmptyCard(title: AdminMembersText.noResults, clearTitle: AdminMembersText.clear) {
-                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filters = AdminMembersFilters() }
-                }
+                AdminFilterEmptyCard(title: AdminMembersText.noResults, editFilters: { showFilters = true })
             } else {
                 AdminPageStateCard(.empty(L10n.t("لا أحد هنا الآن", "Nobody here right now")))
             }

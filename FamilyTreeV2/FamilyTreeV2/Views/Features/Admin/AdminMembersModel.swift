@@ -805,6 +805,14 @@ struct AdminMembersIndex {
                                          account: account.logic, life: life.logic)
     }
 
+    /// اختيار متعدّد (F3): «الحساب» و«الحالة» مجموعتان (فارغة = «الكل») — الحساب لا يُعرف قبل وصول قوائم الحسابات
+    func matches(_ i: Int, accounts: Set<AdminAccountFilter>, lives: Set<AdminLifeFilter>) -> Bool {
+        if !accounts.isEmpty && !accountsReady { return false }
+        let e = entries[i]
+        return AdminMembersLogic.matches(deceased: e.member.isDeceased == true, hasLogin: Self.hasLogin(e),
+                                         accounts: Set(accounts.map(\.logic)), lives: Set(lives.map(\.logic)))
+    }
+
     /// له حساب دخول لفلتر «الحساب» (وحساب المرأة وابن البنت مسجّلان بطبيعتهما)
     static func hasLogin(_ e: Entry) -> Bool { e.hasLogin || e.status == .registered }
     func count(_ chip: AdminMemberChip, _ sub: AdminMemberSub = .all) -> Int { rows(chip, sub).count }

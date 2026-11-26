@@ -7,7 +7,8 @@ import SwiftUI
 //
 // لا مسار أقسام ولا صفوف شرائح بعد اليوم (spec E.7/E.8): «رسائل الأعضاء» و«بانتظار المراجعة» و«طلبات الخصوصية» و«المنجز»
 // صفوف أبواب تفتح صفحاتها، والفلاتر الأربعة («الحالة» · «المجموعة» · «النوع» · «المصدر») في ورقة «الفلاتر» الواحدة (U5)،
-// وسطر أرقام الرأس «5 بانتظار قرارك ‹ · 2 عاجل ‹ · 1 متأخر ‹» يضبط «الحالة» بلمسة.
+// وسطر أرقام الرأس «5 بانتظار قرارك ‹ · 2 عاجل ‹ · 1 متأخر ‹» يضبط «الحالة» بلمسة. F3: اختيار متعدّد في كل مجموعة، وتطبيق
+// فوري، وشريحة لكل اختيار.
 // هنا:
 //   ١) المنطق الخالص (Foundation) — حالة الفلاتر بقيم عقد الهبوط (`AdminInboxLanding`)، المطابقة والأعداد، مخازن القوائم
 //      وحالها (فشل جزئي/كلي/قديم)، وقرار «الطلب المطلوب» (`focusId`)، ونصوص الأعداد بالعربية الصحيحة.
@@ -26,28 +27,40 @@ nonisolated enum AdminInboxLogic {
     typealias Kind = AdminInboxLanding.Kind
     typealias Source = AdminInboxLanding.Source
 
-    /// حالة فلاتر «الوارد» — بقيم عقد الهبوط نفسها (`RequestTab`/`RequestSection`/`ApprovalListFilter`/`AdminRequestSourceKind`
-    /// بالقيم الخام ذاتها). «مسح الفلاتر» يرجع إلى `Filters()`
+    /// حالة تصفية «الوارد» — بقيم عقد الهبوط نفسها (`RequestTab`/`RequestSection`/`ApprovalListFilter`/`AdminRequestSourceKind`
+    /// بالقيم الخام ذاتها). اختيار متعدّد في كل مجموعة (F3): فارغة = «الكل»، وأي عدد = ما يطابق أيّها (OR)، والمجموعات معاً
+    /// (AND). «النوع» يضيّق مجموعته وحدها: نوع مختار من «الشجرة» لا يخفي «أعضاء» المختارة معها.
     struct Filters: Equatable {
-        var status: Status
-        var group: Group?
-        /// نوع داخل المجموعة — يجرّ مجموعته معه
-        var kind: Kind?
-        var source: Source?
+        var statuses: Set<Status>
+        var groups: Set<Group>
+        /// أنواع داخل المجموعات المختارة — كل نوع يجرّ مجموعته معه
+        var kinds: Set<Kind>
+        var sources: Set<Source>
 
+        /// اختيار واحد لكل مجموعة (الهبوط، رقم الرأس، `initialFilter`) — «الكل»/nil = لا اختيار
         init(status: Status = .all, group: Group? = nil, kind: Kind? = nil, source: Source? = nil) {
-            self.status = status
-            self.group = kind?.group ?? group
-            self.kind = kind
-            self.source = source
+            self.init(statuses: status == .all ? [] : [status],
+                      groups: group.map { [$0] } ?? [],
+                      kinds: kind.map { [$0] } ?? [],
+                      sources: source.map { [$0] } ?? [])
         }
 
-        /// من الهبوط (بعد قصّه على أنواع الدور)
+        init(statuses: Set<Status>, groups: Set<Group> = [], kinds: Set<Kind> = [], sources: Set<Source> = []) {
+            self.statuses = statuses.subtracting([.all])
+            self.groups = groups.union(kinds.map(\.group))
+            self.kinds = kinds
+            self.sources = sources
+        }
+
+        /// من الهبوط (بعد قصّه على أنواع الدور) — كل حقل فيه اختيار واحد يظهر شريحةً تُزال
         init(landing: AdminInboxLanding) {
             self.init(status: landing.status ?? .all, group: landing.group, kind: landing.kind, source: landing.source)
         }
 
         var isEmpty: Bool { self == Filters() }
+
+        /// عدد الاختيارات (شريحة لكل واحد)
+        var pickCount: Int { statuses.count + groups.count + kinds.count + sources.count }
     }
 
     /// ما يحتاجه الفلتر من الطلب — يُحسب مرة لكل رسم
@@ -73,20 +86,58 @@ nonisolated enum AdminInboxLogic {
         }
     }
 
+    /// المجموعات معاً (AND)، وداخل كل مجموعة أيّ المختار (OR). «النوع» يضيّق مجموعته وحدها
     static func matches(_ fact: Fact, _ filters: Filters, workflowOn: Bool) -> Bool {
-        matches(fact, status: filters.status, workflowOn: workflowOn)
-            && (filters.group == nil || fact.kind.group == filters.group)
-            && (filters.kind == nil || fact.kind == filters.kind)
-            && (filters.source == nil || fact.source == filters.source)
+        guard filters.statuses.isEmpty
+                || filters.statuses.contains(where: { matches(fact, status: $0, workflowOn: workflowOn) }) else { return false }
+        guard matchesKind(fact.kind, groups: filters.groups, kinds: filters.kinds) else { return false }
+        guard filters.sources.isEmpty || fact.source.map(filters.sources.contains) == true else { return false }
+        return true
+    }
+
+    /// «المجموعة» و«النوع»: الطلب في إحدى المجموعات المختارة، وإن اختير نوع من مجموعته فهو أحد المختار منها
+    static func matchesKind(_ kind: Kind, groups: Set<Group>, kinds: Set<Kind>) -> Bool {
+        let group = kind.group
+        if !groups.isEmpty && !groups.contains(group) { return false }
+        let narrowed = kinds.filter { $0.group == group }
+        return narrowed.isEmpty || narrowed.contains(kind)
     }
 
     static func count(_ facts: [Fact], _ filters: Filters, workflowOn: Bool) -> Int {
         facts.reduce(0) { $0 + (matches($1, filters, workflowOn: workflowOn) ? 1 : 0) }
     }
 
-    /// بعد كل اختيار: نوع لم يعد من المجموعة المختارة (أو بلا مجموعة) يرجع «الكل»
+    /// بعد كل اختيار: نوع لم تعد مجموعته مختارة يُزال (إزالة شريحة «الشجرة» تزيل أنواعها)
     static func normalize(_ filters: inout Filters) {
-        if let kind = filters.kind, kind.group != filters.group { filters.kind = nil }
+        filters.kinds = filters.kinds.filter { filters.groups.contains($0.group) }
+    }
+
+    /// عدد خيار واحد في الورقة = النتيجة لو اختير وحده في مجموعته مع بقية الاختيارات (F3: «الأعداد تتبع بقية المجموعات»).
+    /// المجموعة: هي وحدها مع أنواعها المختارة؛ النوع: هو وحده في مجموعته
+    static func probe(_ filters: Filters, status: Status) -> Filters {
+        var next = filters
+        next.statuses = status == .all ? [] : [status]
+        return next
+    }
+
+    static func probe(_ filters: Filters, group: Group) -> Filters {
+        var next = filters
+        next.groups = [group]
+        next.kinds = filters.kinds.filter { $0.group == group }
+        return next
+    }
+
+    static func probe(_ filters: Filters, kind: Kind) -> Filters {
+        var next = filters
+        next.groups = [kind.group]
+        next.kinds = [kind]
+        return next
+    }
+
+    static func probe(_ filters: Filters, source: Source) -> Filters {
+        var next = filters
+        next.sources = [source]
+        return next
     }
 
     /// أرقام سطر الرأس — من كل طلبات المجال بلا بحث ولا فلاتر، فلمسة الرقم تفتح قائمة بالعدد نفسه (T2)

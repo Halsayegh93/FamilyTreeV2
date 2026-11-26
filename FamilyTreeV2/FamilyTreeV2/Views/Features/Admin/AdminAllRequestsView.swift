@@ -767,67 +767,66 @@ struct AdminAllRequestsView: View {
         Set(relevantStores.filter { storeHealth[$0]?.canRetry == true })
     }
 
-    // MARK: - ورقة الفلاتر (spec A.13 + C.2): الحالة · المجموعة · النوع (بعد المجموعة) · المصدر (الموجود فقط)
+    // MARK: - ورقة «تصفية» (spec A.13 + C.2، F3): الحالة · المجموعة · النوع (بعد المجموعة) · المصدر (الموجود فقط)
 
     private func filterSet(facts: [AdminInboxLogic.Fact], ready: Bool,
                            workflowOn: Bool) -> AdminFilterSet<AdminInboxLogic.Filters> {
+        let roleKinds = Set(tabsForRole(RequestTab.allCases).compactMap { AdminInboxLogic.Kind(rawValue: $0.rawValue) })
+        return Self.inboxFilterSet(facts: facts, ready: ready, workflowOn: workflowOn, roleKinds: roleKinds)
+    }
+
+    /// المجموعات الأربع، كلها اختيار متعدّد (F3) — عدد كل خيار = النتيجة لو اختير وحده في مجموعته مع بقية الاختيارات
+    /// (`AdminInboxLogic.probe`). ثابتة لتستعملها معاينة التصوير (`AdminTrailPreview`) بأرقام وهمية
+    static func inboxFilterSet(facts: [AdminInboxLogic.Fact], ready: Bool, workflowOn: Bool,
+                               roleKinds: Set<AdminInboxLogic.Kind>) -> AdminFilterSet<AdminInboxLogic.Filters> {
         typealias L = AdminInboxLogic
         let count: (L.Filters) -> Int? = { ready ? L.count(facts, $0, workflowOn: workflowOn) : nil }
-        let roleKinds = Set(tabsForRole(RequestTab.allCases).compactMap { L.Kind(rawValue: $0.rawValue) })
         let roleGroups = L.Group.allCases.filter { g in roleKinds.contains { $0.group == g } }
         let presentSources = L.Source.allCases.filter { s in facts.contains { $0.source == s } }
-        return AdminFilterSet(reset: L.Filters(), noun: AdminInboxText.requestsNoun, normalize: L.normalize,
-                              resultCount: count) { s in
+        return AdminFilterSet(noun: AdminInboxText.requestsNoun, normalize: L.normalize, resultCount: count) { s in
             var groups: [AdminFilterGroup<L.Filters>] = []
-            // الحالة: «عاجل» و«متأخر» من مسار الموافقات — مطفأ = لا تظهران (إلا المختارة من رابط)
-            var statuses: [L.Status] = workflowOn ? L.Status.allCases : [.all, .waiting]
-            if !statuses.contains(s.status) { statuses.append(s.status) }
-            groups.append(.choices("status", title: L10n.t("الحالة", "Status"), value: \.status, all: .all,
+            // الحالة: «عاجل» و«متأخر» من مسار الموافقات — مطفأ = لا تظهران (إلا المختارة من رابط: تبقى شريحةً تُزال)
+            var statuses: [L.Status] = workflowOn ? [.waiting, .urgent, .late] : [.waiting]
+            statuses += L.Status.allCases.filter { s.statuses.contains($0) && !statuses.contains($0) }
+            groups.append(.choices("status", title: L10n.t("الحالة", "Status"), values: \.statuses,
+                                   allTitle: statusTitle(.all),
                                    options: statuses.map { status in
-                                       var next = s
-                                       next.status = status
-                                       return AdminFilterOption(status, Self.statusTitle(status), count: count(next))
+                                       AdminFilterOption(status, statusTitle(status), count: count(L.probe(s, status: status)))
                                    }))
-            // المجموعة — حين يرى الدور أكثر من مجموعة
-            if roleGroups.count > 1 || s.group != nil {
-                let all = L.Filters(status: s.status, source: s.source)
-                let options = [AdminFilterOption<L.Group?>(nil, L10n.t("الكل", "All"), count: count(all))]
-                    + roleGroups.map { g in
-                        AdminFilterOption<L.Group?>(g, Self.groupTitle(g),
-                                                    count: count(L.Filters(status: s.status, group: g, source: s.source)))
-                    }
-                groups.append(.choices("group", title: L10n.t("المجموعة", "Group"), value: \.group, all: nil,
-                                       options: options))
+            // المجموعة — حين يرى الدور أكثر من مجموعة (أو فيها اختيار من رابط)
+            var shownGroups = roleGroups
+            shownGroups += L.Group.allCases.filter { s.groups.contains($0) && !shownGroups.contains($0) }
+            if roleGroups.count > 1 || !s.groups.isEmpty {
+                groups.append(.choices("group", title: L10n.t("المجموعة", "Group"), values: \.groups,
+                                       options: shownGroups.map { g in
+                                           AdminFilterOption(g, groupTitle(g), count: count(L.probe(s, group: g)))
+                                       }))
             }
-            // النوع — بعد اختيار مجموعة: «كل المجموعة» ثم ما فيه طلبات (والمختار)
-            if let g = s.group {
-                let base = L.Filters(status: s.status, group: g, source: s.source)
+            // النوع — بعد اختيار مجموعة: أنواع المجموعات المختارة التي فيها طلبات (والمختار). يضيّق مجموعته وحدها
+            if !s.groups.isEmpty {
+                let chosen = L.Group.allCases.filter(s.groups.contains)
                 let kinds = L.Kind.allCases.filter { k in
-                    k.group == g && roleKinds.contains(k)
-                        && ((count(L.Filters(status: s.status, kind: k, source: s.source)) ?? 1) > 0 || s.kind == k)
+                    s.groups.contains(k.group)
+                        && ((roleKinds.contains(k) && (count(L.probe(s, kind: k)) ?? 1) > 0) || s.kinds.contains(k))
                 }
-                let options = [AdminFilterOption<L.Kind?>(nil, L10n.t("كل \(Self.groupTitle(g))", "All \(Self.groupTitle(g))"),
-                                                          count: count(base))]
-                    + kinds.map { k in
-                        AdminFilterOption<L.Kind?>(k, Self.kindTitle(k),
-                                                   count: count(L.Filters(status: s.status, kind: k, source: s.source)))
-                    }
-                groups.append(.choices("kind", title: L10n.t("النوع", "Type"), value: \.kind, all: nil, options: options))
+                let short = chosen == [.tree]
+                let allTitle = chosen.count == 1
+                    ? L10n.t("كل \(groupTitle(chosen[0]))", "All \(groupTitle(chosen[0]))")
+                    : L10n.t("كل الأنواع", "All types")
+                groups.append(.choices("kind", title: L10n.t("النوع", "Type"), values: \.kinds, allTitle: allTitle,
+                                       options: kinds.map { k in
+                                           AdminFilterOption(k, kindTitle(k, short: short), count: count(L.probe(s, kind: k)),
+                                                             chipTitle: kindTitle(k, short: false))
+                                       }))
             }
-            // المصدر — المصادر الموجودة فقط (اثنان فأكثر، أو المختار)
+            // المصدر — المصادر الموجودة فقط (اثنان فأكثر، أو فيها اختيار)
             var sources = presentSources
-            if let chosen = s.source, !sources.contains(chosen) { sources.append(chosen) }
-            if sources.count >= 2 || s.source != nil {
-                var all = s
-                all.source = nil
-                let options = [AdminFilterOption<L.Source?>(nil, L10n.t("الكل", "All"), count: count(all))]
-                    + sources.map { src in
-                        var next = s
-                        next.source = src
-                        return AdminFilterOption<L.Source?>(src, Self.sourceTitle(src), count: count(next))
-                    }
-                groups.append(.choices("source", title: L10n.t("المصدر", "Source"), value: \.source, all: nil,
-                                       options: options))
+            sources += L.Source.allCases.filter { s.sources.contains($0) && !sources.contains($0) }
+            if sources.count >= 2 || !s.sources.isEmpty {
+                groups.append(.choices("source", title: L10n.t("المصدر", "Source"), values: \.sources,
+                                       options: sources.map { src in
+                                           AdminFilterOption(src, sourceTitle(src), count: count(L.probe(s, source: src)))
+                                       }))
             }
             return groups
         }
@@ -846,9 +845,10 @@ struct AdminAllRequestsView: View {
         RequestSection(rawValue: g.rawValue)?.title ?? g.rawValue
     }
 
-    private static func kindTitle(_ k: AdminInboxLogic.Kind) -> String {
+    /// `short`: داخل «الشجرة» وحدها لا حاجة لتكرار «(شجرة)» — والشريحة تحت الشريط بالاسم الكامل
+    private static func kindTitle(_ k: AdminInboxLogic.Kind, short: Bool = true) -> String {
         guard let tab = RequestTab(rawValue: k.rawValue) else { return k.rawValue }
-        guard tab.section == .tree else { return tab.title }
+        guard short, tab.section == .tree else { return tab.title }
         // داخل «الشجرة» لا حاجة لتكرار «(شجرة)»
         return tab.title.replacingOccurrences(of: " (شجرة)", with: "").replacingOccurrences(of: "Tree · ", with: "")
     }
@@ -945,7 +945,7 @@ struct AdminAllRequestsView: View {
         guard let landing = AdminAreaRouter.take(.inbox, hop: areaHop) else { return }
         let allowed = Set(tabsForRole(RequestTab.allCases).map(\.rawValue))
         var next = AdminInboxLogic.Filters(landing: landing.clamped(toKinds: allowed))
-        if explicitStatus { next.status = filters.status }
+        if explicitStatus { next.statuses = filters.statuses }
         filters = next
     }
 
@@ -1420,10 +1420,9 @@ struct AdminAllRequestsView: View {
     private var approveAllChildrenCount: Int? {
         let n = adminRequestVM.childAddRequests.count
         guard n > 1, !adminRequestVM.approvalsWorkflowOn, !isSelectMode, !isSearching, canApprove(.children),
-              filters.status == .all || filters.status == .waiting,
-              filters.group == nil || filters.group == .tree,
-              filters.kind == nil || filters.kind == .children,
-              filters.source == nil else { return nil }
+              filters.statuses.isSubset(of: [.waiting]),
+              AdminInboxLogic.matchesKind(.children, groups: filters.groups, kinds: filters.kinds),
+              filters.sources.isEmpty else { return nil }
         return n
     }
 
@@ -1509,13 +1508,13 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// فلاتر بلا نتيجة: «لا طلبات بهذه الفلاتر» + «مسح الفلاتر»؛ بحث بلا نتيجة: «لا نتائج» + «مسح البحث»
+    /// تصفية بلا نتيجة: «لا طلبات بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح فوق تُزال واحدة واحدة)؛ بحث بلا
+    /// نتيجة: «لا نتائج» + «مسح البحث»
     private var filteredEmpty: some View {
         Group {
             if !filters.isEmpty {
-                AdminFilterEmptyCard(title: L10n.t("لا طلبات بهذه الفلاتر", "No requests with these filters")) {
-                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filters = AdminInboxLogic.Filters() }
-                }
+                AdminFilterEmptyCard(title: L10n.t("لا طلبات بهذه التصفية", "No requests with this filter"),
+                                     editFilters: { showsFilters = true })
             } else {
                 AdminPageStateCard(.empty(L10n.t("لا نتائج", "No results"),
                                           message: L10n.t("لا طلب يطابق «\(searchText)»", "No request matches “\(searchText)”"),

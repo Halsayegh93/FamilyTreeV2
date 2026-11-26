@@ -43,23 +43,24 @@ check(L.count(facts, F(group: .tree), workflowOn: true), 3, "tree group: tree ad
 check(L.count(facts, F(group: .members), workflowOn: true), 2, "members group: join + phone")
 check(L.count(facts, F(group: .content), workflowOn: true), 3, "content group: news + report + photo")
 check(L.count(facts, F(kind: .children), workflowOn: true), 1, "kind")
-check(F(kind: .children).group, .tree, "a kind brings its group")
+check(F(kind: .children).groups, [.tree], "a kind brings its group")
 check(L.count(facts, F(source: .profile), workflowOn: true), 2, "source")
 check(L.count(facts, F(status: .waiting, group: .tree), workflowOn: true), 1, "status × group combine")
 check(L.count(facts, F(group: .content, source: .content), workflowOn: true), 2, "group × source combine")
 
 // MARK: تطبيع بعد الاختيار
+// F3: الحالة اختيارات (مجموعات) — نفس القواعد على `groups`/`kinds`
 var f = F(kind: .children)
-f.group = .content
+f.groups = [.content]
 L.normalize(&f)
-check(f.kind, nil, "kind outside the chosen group resets")
+check(f.kinds, [], "kind outside the chosen group resets")
 f = F(kind: .children)
-f.group = nil
+f.groups = []
 L.normalize(&f)
-check(f.kind, nil, "no group → no kind")
+check(f.kinds, [], "no group → no kind")
 f = F(kind: .treeAdd)
 L.normalize(&f)
-check(f.kind, .treeAdd, "kind inside its group stays")
+check(f.kinds, [.treeAdd], "kind inside its group stays")
 check(F().isEmpty, true, "fresh filters are empty")
 check(F(status: .urgent).isEmpty, false, "a status is a filter")
 
