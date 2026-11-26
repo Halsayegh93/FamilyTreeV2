@@ -1,71 +1,37 @@
 import SwiftUI
 
-// MARK: - «الإعلانات عند الفتح» في «المناسبات والإعلانات» (العينة launch-announcements، الشاشة ٣) — المالك والمدير
+// MARK: - «الإعلانات عند الفتح» في «المناسبات والإعلانات» (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec C.11 البند ٣، الوحدة U14)
 //
-// «تظهر الحين · N»: كل إعلان لم ينتهِ (مصغّرة الصورة، لمن «الكل»/«N عضو»، «لين <اليوم والوقت>»، نوع الزرّ) بحبّة حمراء
-// «إيقاف» (تأكيد ← stopped_at = الآن)، ثم «انتهت» (آخر ١٠). يُنشأ الإعلان من «＋ إعلان جديد» في عنوان البطاقة
-// (المنشئ بوضع `launchOnly`)، أو من مكبّر الصوت ← «إرسال إشعار» ← «يظهر عند فتح التطبيق؟».
+// المالك والمدير. صفّ لكل إعلان لم ينتهِ: مصغّرة الصورة · لمن «الكل»/«32 عضو» · «حتى الخميس 9:00 م · زر «حدّث الآن»»
+// وحبّة «إيقاف» (تأكيد ← stopped_at = الآن)، ثم «انتهت» (آخر ١٠) سطر عنوان داخل البطاقة بلا أزرار.
+// **لا إنشاء هنا** (spec E.16): الإعلان عند الفتح يُنشأ من «＋ إنشاء» ← «إرسال إشعار» ← «يظهر عند فتح التطبيق؟» وحده.
+// «إيقاف» = المالك والمدير × «يعدّل» القسم (`canStop`)، وأثناء تجربة دور لا كتابة (`DebugAdminProbe.dryRun`).
+// الحالات: هيكل أول التحميل، «تعذّر التحميل» + «أعد المحاولة»، وبعد فشل تحديث تبقى الصفوف و«آخر تحديث» تحتها.
 
 struct AdminLaunchAnnouncementsCard: View {
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var memberVM: MemberViewModel
-    @EnvironmentObject private var newsVM: NewsViewModel
-    @EnvironmentObject private var notificationVM: NotificationViewModel
+    /// «إيقاف» (المالك والمدير × «يعدّل» القسم)
+    var canStop: Bool = true
+    /// سطر الفراغ يدلّ على «＋ إنشاء» لمن يملكه
+    var canCreate: Bool = true
+    /// كل تغيّر = إعادة جلب (سحب الصفحة للتحديث)
+    var refreshToken: Int = 0
+
     @State private var rows: [LaunchAnnouncement]? = nil
-    @State private var failed = false
+    @State private var health: AdminStoreHealth = .idle
     @State private var stopTarget: LaunchAnnouncement? = nil
     @State private var stoppingId: UUID? = nil
     @State private var stopFailed = false
+    /// أُوقفت أثناء تجربة دور (لا كتابة) — تُعرض منتهية
+    @State private var dryStopped: Set<UUID> = []
 
     private static let endedLimit = 10
 
     var body: some View {
-        let now = Date()
-        let all = rows ?? []
-        let live = all.filter { !$0.isOver(at: now) }.sorted { ($0.starts ?? now) < ($1.starts ?? now) }
-        let ended = Array(all.filter { $0.isOver(at: now) }
-            .sorted { Self.endDate($0) > Self.endDate($1) }
-            .prefix(Self.endedLimit))
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            // «＋ إعلان جديد» — المدخل الواضح (المالك ٢٠٢٦-١١-١٢: كان مخفياً في مكبّر الصوت ← «إرسال إشعار»)
-            AdminOccasionsSectionTitle(title: L10n.t("الإعلانات عند الفتح", "Shown when the app opens"),
-                                       actionTitle: authVM.isAdmin ? L10n.t("＋ إعلان جديد", "＋ New") : nil,
-                                       onAction: openComposer)
-            if rows == nil && !failed {
-                AdminPageStateCard(.loading(L10n.t("جارٍ التحميل…", "Loading…")))
-            } else if failed && rows == nil {
-                AdminOccasionsQuietLine(icon: "exclamationmark.triangle",
-                                        text: L10n.t("تعذّر تحميل الإعلانات عند الفتح", "Couldn't load the announcements"))
-            } else if all.isEmpty {
-                AdminOccasionsQuietLine(icon: "rectangle.portrait.on.rectangle.portrait",
-                                        text: L10n.t("لا توجد إعلانات تظهر الآن", "No announcements are showing now"))
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    groupLabel(L10n.t("تظهر الآن", "Showing now"), count: live.count)
-                    if live.isEmpty {
-                        Text(L10n.t("لا توجد إعلانات تظهر الآن", "No announcements are showing now"))
-                            .dsFont(.footnote)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .padding(.vertical, DS.Spacing.sm)
-                    }
-                    ForEach(Array(live.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { AdminRowDivider() }
-                        row(item, now: now, live: true)
-                    }
-                    if !ended.isEmpty {
-                        AdminRowDivider()
-                        groupLabel(L10n.t("انتهت", "Ended"), count: nil)
-                        ForEach(Array(ended.enumerated()), id: \.element.id) { index, item in
-                            if index > 0 { AdminRowDivider() }
-                            row(item, now: now, live: false)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .adminCard()
-            }
+        AdminOccasionsSectionStack(title: L10n.t("الإعلانات عند الفتح", "Shown when the app opens")) {
+            content
         }
         .task { await load() }
+        .onChange(of: refreshToken) { _ in Task { await load() } }
         .onReceive(NotificationCenter.default.publisher(for: .launchAnnouncementsChanged)) { _ in
             Task { await load() }
         }
@@ -76,12 +42,7 @@ struct AdminLaunchAnnouncementsCard: View {
             Button(L10n.t("إيقاف", "Stop"), role: .destructive) {
                 guard let item = stopTarget else { return }
                 stopTarget = nil
-                Task {
-                    stoppingId = item.id
-                    let ok = await LaunchAnnouncementsService.stop(item.id)
-                    stoppingId = nil
-                    if !ok { stopFailed = true }
-                }
+                stop(item)
             }
             Button(L10n.t("تراجع", "Keep it"), role: .cancel) { stopTarget = nil }
         } message: {
@@ -94,18 +55,81 @@ struct AdminLaunchAnnouncementsCard: View {
         }
     }
 
-    /// المنشئ نفسه بوضع «إعلان عند فتح التطبيق» وحده — بعد الحفظ `launchAnnouncementsChanged` يعيد جلب البطاقة
-    private func openComposer() {
-        AdminCreateWindow.open(.announcement, announce: AdminAnnounceDraft(launchOnly: true), chooser: false,
-                               authVM: authVM, newsVM: newsVM, notificationVM: notificationVM, memberVM: memberVM)
+    @ViewBuilder private var content: some View {
+        let now = Date()
+        let all = rows ?? []
+        let live = all.filter { !isOver($0, now) }.sorted { ($0.starts ?? now) < ($1.starts ?? now) }
+        let ended = Array(all.filter { isOver($0, now) }
+            .sorted { Self.endDate($0) > Self.endDate($1) }
+            .prefix(Self.endedLimit))
+        if rows == nil {
+            switch health.look {
+            case .unknown:
+                AdminPageStateCard(.error(L10n.t("تعذّر تحميل الإعلانات عند الفتح", "Couldn't load the announcements"),
+                                          retry: { Task { await load() } }))
+            default:
+                AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الإعلانات عند الفتح…", "Loading the announcements…"), rows: 1))
+            }
+        } else if all.isEmpty {
+            AdminOccasionsQuietLine(icon: "rectangle.portrait.on.rectangle.portrait",
+                                    text: canCreate
+                                        ? L10n.t("لا إعلان عند الفتح. أنشئه من ＋ إنشاء.", "Nothing shows when the app opens. Create one from ＋ Create.")
+                                        : L10n.t("لا إعلان عند الفتح.", "Nothing shows when the app opens."))
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                if live.isEmpty {
+                    Text(L10n.t("لا إعلان يظهر الآن", "Nothing is showing now"))
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeight, alignment: .leading)
+                }
+                ForEach(Array(live.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { AdminRowDivider(inset: Self.textInset) }
+                    row(item, now: now, live: true)
+                }
+                if !ended.isEmpty {
+                    AdminRowDivider()
+                    groupLine(L10n.t("انتهت", "Ended"))
+                    ForEach(Array(ended.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { AdminRowDivider(inset: Self.textInset) }
+                        row(item, now: now, live: false)
+                    }
+                }
+                if case .failed(let since?) = health {
+                    AdminStaleStamp(since: since)
+                        .padding(.vertical, DS.Spacing.sm)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
+        }
+    }
+
+    private func isOver(_ item: LaunchAnnouncement, _ now: Date) -> Bool {
+        dryStopped.contains(item.id) || item.isOver(at: now)
     }
 
     private func load() async {
+        health = health.beginning()
         if let list = await LaunchAnnouncementsService.fetchAll() {
             rows = list
-            failed = false
+            health = health.ending(success: true)
         } else {
-            failed = true
+            health = health.ending(success: false)
+        }
+    }
+
+    /// «إيقاف» بعد التأكيد — أثناء تجربة دور لا كتابة ويُصطنع النجاح محلياً
+    private func stop(_ item: LaunchAnnouncement) {
+        if DebugAdminProbe.dryRun("stop launch announcement \(item.id)") {
+            withAnimation(DS.Anim.quick) { _ = dryStopped.insert(item.id) }
+            return
+        }
+        Task {
+            stoppingId = item.id
+            let ok = await LaunchAnnouncementsService.stop(item.id)
+            stoppingId = nil
+            if !ok { stopFailed = true }
         }
     }
 
@@ -113,50 +137,35 @@ struct AdminLaunchAnnouncementsCard: View {
         item.stopped ?? item.ends ?? .distantPast
     }
 
-    private func groupLabel(_ title: String, count: Int?) -> some View {
-        HStack {
-            Text(title)
-                .dsFont(.label)
-                .foregroundColor(DS.Color.textSecondary)
-            Spacer(minLength: 0)
-            if let count {
-                Text(verbatim: "\(count)")
-                    .dsFont(.caption)
-                    .foregroundColor(DS.Color.textTertiary)
-            }
-        }
-        .padding(.top, DS.Spacing.xs)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+    /// بداية الفاصل = بداية النص بعد المصغّرة
+    private static var textInset: CGFloat { DS.LaunchCard.rowThumbWidth + DS.Spacing.md }
+
+    /// «انتهت» — عنوان مجموعة داخل البطاقة (spec A.5: سطر لا صندوق)
+    private func groupLine(_ title: String) -> some View {
+        Text(title)
+            .dsFont(.sectionTitle)
+            .foregroundColor(DS.Color.textSecondary)
+            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: الصفّ
 
     private func row(_ item: LaunchAnnouncement, now: Date, live: Bool) -> some View {
-        HStack(spacing: DS.Spacing.md) {
+        AdminOccasionsRow(title: audience(item), subtitle: details(item, now: now, live: live)) {
             thumbnail(item)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(audience(item))
-                    .dsFont(.hubRow)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(verbatim: details(item, now: now, live: live))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .combine)
-            Spacer(minLength: DS.Spacing.xs)
-            if live {
+        } trailing: {
+            if live && canStop {
                 if stoppingId == item.id {
-                    ProgressView().scaleEffect(DS.Spinner.chipScale)
+                    AdminStatePill(title: L10n.t("جارٍ الإيقاف", "Stopping"), tone: .off, isBusy: true)
                 } else {
                     AdminPillButton(title: L10n.t("إيقاف", "Stop"), style: .reject) { stopTarget = item }
-                        .accessibilityHint(L10n.t("لن يظهر عند فتح التطبيق", "It won't show when the app opens"))
+                        .accessibilityHint(L10n.t("يسأل قبل الإيقاف — لن يظهر عند فتح التطبيق",
+                                                  "Asks first — it won't show when the app opens"))
                 }
             }
         }
-        .padding(.vertical, DS.Spacing.smd)
-        .frame(minHeight: DS.Icon.tapTarget)
+        .accessibilityElement(children: .contain)
     }
 
     /// مصغّرة ٤:٥ كحلية والصورة ملاءمة داخلها (موقّعة عبر `CachedAsyncImage`)
@@ -184,7 +193,7 @@ struct AdminLaunchAnnouncementsCard: View {
         return AdminAnnounceKit.membersCount(ids.count)
     }
 
-    /// «لين الخميس 9:00 م · زر «حدّث الحين»» / «تبدأ بكرة 9:00 ص · …» / «انتهت 10 نوفمبر» / «أُوقف 10 نوفمبر»
+    /// «حتى الخميس 9:00 م · زر «حدّث الآن»» / «تبدأ غداً 9:00 ص · …» / «انتهى 10 نوفمبر» / «أُوقف 10 نوفمبر»
     private func details(_ item: LaunchAnnouncement, now: Date, live: Bool) -> String {
         var parts: [String] = []
         if live {
@@ -196,6 +205,8 @@ struct AdminLaunchAnnouncementsCard: View {
             }
         } else if let stopped = item.stopped {
             parts.append(L10n.t("أُوقف \(AdminOccasionsText.shortDate(stopped))", "stopped \(AdminOccasionsText.shortDate(stopped))"))
+        } else if dryStopped.contains(item.id) {
+            parts.append(L10n.t("أُوقف \(AdminOccasionsText.shortDate(now))", "stopped \(AdminOccasionsText.shortDate(now))"))
         } else if let e = item.ends {
             parts.append(L10n.t("انتهى \(AdminOccasionsText.shortDate(e))", "ended \(AdminOccasionsText.shortDate(e))"))
         }

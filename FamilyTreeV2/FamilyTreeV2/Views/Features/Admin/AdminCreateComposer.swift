@@ -9,10 +9,13 @@ import SwiftUI
 //   • إعلان وفاة — اختيار المتوفى (وفيات آخر ٣٠ يوماً لم يُعلن عنها) ثم مربّع `DeathAnnouncementBox` نفسه (`announce_death`).
 //   • بطاقة تهنئة أو تعزية — مصمّم البطاقات نفسه (`OccasionComposerView`) يُفتح فوق المربّع.
 //   • إعلان تحديث التطبيق — ما الجديد في الإصدار (`sendNotification(kind: app_update)` كما كانت صفحته).
-// البيت الوحيد: زرّ «إنشاء» في رأس «المناسبات والإعلانات»؛ ومكبّر الصوت في رأس «اليوم» (طلب المالك) يفتح المربّع نفسه
-// على «إعلان». يُعرض في نافذة مستقلّة (حارس المكدس — «اليوم» على سقف مكدس الجوال، كما كان `AdminAnnounceWindow`).
+// البيت الوحيد: «＋ إنشاء» في رأس «المناسبات والإعلانات» (إعادة التصميم ٢٠٢٦-١١-٢٦، الوحدة U14 — بدل زرّي «إرسال إشعار»
+// و«تصميم إعلان»؛ «ماذا تنشئ؟» بأنواع دورك وحدها، والصفحة تمرّر `kinds:` بخانة `occasions.announce`)؛ ومكبّر الصوت في رأس
+// «اليوم» (طلب المالك) يفتح المربّع نفسه على «إعلان». والإعلان عند فتح التطبيق يُنشأ هنا وحده («إرسال إشعار» ← «يظهر عند
+// فتح التطبيق؟»). يُعرض في نافذة مستقلّة (حارس المكدس — «اليوم» على سقف مكدس الجوال، كما كان `AdminAnnounceWindow`).
 // الصلاحيات كما كانت: الإعلان والتحديث `canSendNotifications`، إعلان الوفاة `isAdmin`، البطاقة `canModerate` + خانة `occasions.cards` في الجدول.
-// لا منطق إرسال جديد — كل نوع يستدعي مساره الموجود، وحارس السيرفر يبقى الحَكَم.
+// لا منطق إرسال جديد — كل نوع يستدعي مساره الموجود، وحارس السيرفر يبقى الحَكَم. الكتابة تمرّ بـ`DebugAdminProbe.dryRun` (T0).
+// الشكل من عُدّة اللوحة (`DSComposer`، `AdminChoiceChip` — spec C.11: «restyled by the kit only»).
 
 /// نوع ما يُنشأ
 enum AdminCreateKind: String, CaseIterable, Identifiable {
@@ -84,13 +87,15 @@ enum AdminCreateWindow {
 
     /// `start` النوع المفتوح أولاً (إن كان متاحاً للدور)، و`death` متوفى جاهز لـ«إعلان وفاة» (من «القادم»)،
     /// و`announce` مسودّة «إعلان» (تعديل إشعار مجدول من «القادم» — المربّع وحده بلا «ماذا تنشئ؟»)
-    /// `chooser: false` = المربّع وحده بلا «ماذا تنشئ؟» (أزرار قسم «المناسبات والإعلانات» — كل زر يفتح نوعه بس،
-    /// المالك ٢٠٢٦-١١-٠٨)؛ و«تصميم إعلان» بإعلان جاهز (`cardTemplate`) بلا اختيار يفتح المصمّم مباشرة على إعلانه
+    /// `chooser: false` = المربّع وحده بلا «ماذا تنشئ؟» («بطاقة» على فرح، «تعديل» مجدول)؛ و«تصميم إعلان» بإعلان جاهز
+    /// (`cardTemplate`) بلا اختيار يفتح المصمّم مباشرة على إعلانه.
+    /// `kinds` = يقصر «ماذا تنشئ؟» على هذه الأنواع من أنواع دورك («＋ إنشاء» يمرّر خانة `occasions.announce`) — nil = كل أنواع دورك
     static func open(_ start: AdminCreateKind = .announcement, death: DeathAnnouncementTarget? = nil,
                      announce: AdminAnnounceDraft? = nil, cardTemplate: String? = nil, chooser: Bool = true,
+                     kinds: [AdminCreateKind]? = nil,
                      authVM: AuthViewModel, newsVM: NewsViewModel, notificationVM: NotificationViewModel,
                      memberVM: MemberViewModel) {
-        let allowed = AdminCreateKind.allowed(for: authVM)
+        let allowed = AdminCreateKind.allowed(for: authVM).filter { kinds?.contains($0) ?? true }
         guard window == nil, !allowed.isEmpty, let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive })
@@ -177,7 +182,7 @@ struct AdminCreateRoot: View {
                             insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.96)),
                             removal: .opacity))
                 }
-                .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.82), value: kind)
+                .animation(reduceMotion ? nil : DS.Anim.smooth, value: kind)
             }
         }
         .fullScreenCover(item: $designing, onDismiss: { if directCard { onClose() } }) { target in
@@ -390,14 +395,22 @@ struct AdminCreateCardForm: View {
         .animation(DS.Anim.smooth, value: linksOpen)
     }
 
-    /// زرّ «رابط الموقع» — أيقونة صغيرة تفتح مربّعه
+    /// زرّ «رابط الموقع» — أيقونة صغيرة تفتح مربّعه: تُرسم بمقاس الحبّة الصغيرة ولمسها ٤٤ (spec A.17/T6)
     private var siteLinksButton: some View {
-        DSIconButton(icon: "link", size: 28, iconSize: 13, iconColor: DS.Color.accent,
-                     fillColor: DS.Color.accent.opacity(DS.Opacity.tintFillSoft),
-                     borderColor: DS.Color.accent.opacity(DS.Opacity.border), borderWidth: DS.Border.width) {
+        let side = DSBox.chipHeightSmall
+        return Button {
             UISelectionFeedbackGenerator().selectionChanged()
             linksOpen = true
+        } label: {
+            Image(dsSymbol: "link")
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
+                .foregroundColor(DS.Color.accent)
+                .frame(width: side, height: side)
+                .background(Circle().fill(DS.Color.accent.opacity(DS.Opacity.tintFillSoft)))
+                .overlay(Circle().strokeBorder(DS.Color.accent.opacity(DS.Opacity.border), lineWidth: DS.Border.width))
+                .dsTapArea(width: side, height: side)
         }
+        .buttonStyle(DSPressStyle())
         .accessibilityLabel(L10n.t("رابط الموقع", "Website link"))
         .accessibilityHint(L10n.t("المولّد على الموقع لمن لديه الرابط", "The website generator, for whoever has the link"))
     }
@@ -680,6 +693,11 @@ struct AdminAppUpdateComposer: View {
 
     private func publish() async {
         guard !isSending else { return }
+        // تجربة دور: لا كتابة، ونجاح مصطنع (T0)
+        if DebugAdminProbe.dryRun("publish app_update notice «\(finalTitle)»") {
+            sent = true
+            return
+        }
         isSending = true
         defer { isSending = false }
         let ok = await notificationVM.sendNotification(title: finalTitle, body: trimmed(summary),
