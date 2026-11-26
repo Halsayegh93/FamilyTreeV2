@@ -10,7 +10,7 @@ import Foundation
 //     غير المقروء وحده لم يعد يُعدّ على الجرس.
 //  ٢) **كلمة مربّع «العائلة»**: «5 قوائم للمراجعة» = قوائم «يحتاج مراجعتك» التي فيها أحد (`AdminReviewHubCounts` — رقم
 //     صفّها في «العائلة» نفسه)، أو «سليمة» حين تصل كلها صفراً. القوائم لا تحمل أعداد الأفراد (لا 2,991 ولا 170).
-//  ٣) **كلمة مربّع «الإحصاءات»**: «الراحلون 502» ← قسم «الراحلون».
+//  ٣) **كلمة مربّع «الإحصاءات»**: «الراحلون 502» ← قسم «العائلة» (صفّ «متوفون 502» — F4، V16).
 //  ٤) **سطر التحية حبّةً**: يُرسم حين يقول شيئاً فقط — لا أثناء التحميل ولا «ما في طلبات — يوم هادئ».
 //
 // يُفحص بلا محاكي (`tests/admin-redesign/V2/main.swift` — أمر `swiftc` في رأسه).
@@ -87,11 +87,12 @@ nonisolated enum AdminTodayBandLogic {
         return "\(what) للمراجعة"
     }
 
-    /// «الإحصاءات»: «الراحلون 502» ← قسم «الراحلون». nil قبل وصول الأعداد
+    /// «الإحصاءات»: «الراحلون 502» ← قسم «العائلة» أول الصفحة، حيث صفّ «متوفون 502» نفسه (F4، V16: قسم «الراحلون»
+    /// متوسط الأعمار وأطولها — لا 502 فيه). nil قبل وصول الأعداد
     static func departedWord(_ deceased: Int?) -> AdminTodayWord? {
         guard let deceased else { return nil }
         let n = AdminNumberText.grouped(deceased)
-        return AdminTodayWord(state: .neutral(L10n.t("الراحلون \(n)", "Departed \(n)")), landing: .stats(.departed))
+        return AdminTodayWord(state: .neutral(L10n.t("الراحلون \(n)", "Departed \(n)")), landing: .stats(.family))
     }
 
     // MARK: سطر التحية

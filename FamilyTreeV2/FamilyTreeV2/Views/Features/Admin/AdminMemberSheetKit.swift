@@ -61,23 +61,28 @@ extension AdminMemberSheetLogic.Missing {
 
 // MARK: - «إغلاق» — ثابت فوق المحتوى على الكحلي
 
+/// F4 (فحص المدير على المحاكي ٢٠٢٦-١١-٢٦: لمسة «إغلاق» لا تغلق، السحب وحده يغلق): كان الزرّ يبدأ ٨ نقاط تحت حافة
+/// الورقة — داخل شريط مقبض السحب (`presentationDragIndicator`) الذي يأخذ اللمسات أعلى الورقة، فتضيع لمسة النصف
+/// الأعلى. الآن الزرّ يبدأ تحت ذلك الشريط (`DS.Spacing.xl`)، ومنطقة لمسه ٤٤ على الأقل وتمتدّ حتى حافة الورقة، وفوق
+/// المحتوى المتمرّر (`zIndex` في الورقة)
 struct AdminMemberCloseBar: View {
     let close: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 0) {
             Button(action: close) {
                 Text(L10n.t("إغلاق", "Close"))
                     .dsFont(.button)
                     .foregroundColor(DS.Color.accentLight)
-                    .frame(minWidth: DS.Icon.tapTarget, minHeight: DS.Icon.tapTarget, alignment: .leading)
+                    .padding(.horizontal, DS.Spacing.lg)
+                    .frame(minWidth: DS.Icon.tapTarget + DS.Spacing.lg, minHeight: DS.Icon.tapTarget, alignment: .leading)
                     .contentShape(Rectangle())
             }
             .buttonStyle(DSPressStyle())
+            .accessibilityHint(Text(L10n.t("يغلق بيانات العضو", "Closes the member details")))
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.top, DS.Spacing.sm)
+        .padding(.top, DS.Spacing.xl)
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
         .frame(maxWidth: .infinity)
         .background(DS.Hub.band.ignoresSafeArea(edges: .top))

@@ -2701,6 +2701,8 @@ extension DS {
         /// زرّ «حذف العضو نهائياً»: إطار أحمر خافت وزاويته
         static let memberDeleteStroke = DS.Color.error.opacity(DS.Opacity.tintStroke)
         static let memberDeleteRadius: CGFloat = familyControlRadius
+        /// F4: إطار بطاقة «إجراءات الإدارة» — كحلي يفصل أوامر الإدارة عن معلومات العضو (طلب المالك ٢٠٢٦-١١-٢٦)
+        static let memberAdminStroke = DS.Color.primary.opacity(DS.Opacity.selectedStroke)
         // MARK: ── V2-3 ورقة العضو — نهاية ──
     }
 }

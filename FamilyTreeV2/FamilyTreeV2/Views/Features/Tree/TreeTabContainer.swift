@@ -32,7 +32,8 @@ struct TreeTabContainer: View {
     var body: some View {
         Group {
             // أول رسم قبل `onAppear`: حساب المرأة يرى النساء مباشرة بلا ومضة شجرة الرجال
-            if (treeTab == 1 || (!pickedDefaultTab && isWomanAccount)) && womenTreeEnabled {
+            // طلب «في الشجرة» منتظر (V36) يغلب بداية حساب المرأة بشجرة النساء
+            if (treeTab == 1 || (!pickedDefaultTab && isWomanAccount && TreeFocusRequest.pending == nil)) && womenTreeEnabled {
                 WomenTreeView(selectedTab: $selectedTab, treeTab: $treeTab)
             } else {
                 // مخفية: شجرة العائلة وحدها بلا مبدّل «العائلة/النساء»
@@ -50,12 +51,13 @@ struct TreeTabContainer: View {
             if !pickedDefaultTab {
                 pickedDefaultTab = true
                 // حساب المرأة يبدأ بشجرة النساء (والشجرة تتمركز على عقدتها — `autoLocate`)، والرجال كما كانوا
-                if isWomanAccount && womenTreeEnabled { treeTab = 1 }
+                if isWomanAccount && womenTreeEnabled && TreeFocusRequest.pending == nil { treeTab = 1 }
             }
             if Self.openWomenOnAppear {
                 Self.openWomenOnAppear = false
-                if womenTreeEnabled { treeTab = 1 }
+                if womenTreeEnabled && TreeFocusRequest.pending == nil { treeTab = 1 }
             }
+            if TreeFocusRequest.pending != nil { treeTab = 0 }
             guard !chromeAppeared else { return }
             chromeAppeared = true
         }

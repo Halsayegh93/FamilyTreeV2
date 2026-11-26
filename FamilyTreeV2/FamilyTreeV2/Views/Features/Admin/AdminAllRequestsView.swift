@@ -683,6 +683,8 @@ struct AdminAllRequestsView: View {
         /// بعد البحث والفلاتر — بالأيام
         let days: [DSDayGroup<Entry>]
         let visible: [Entry]
+        /// بعد البحث وحده — سبب «لا نتائج» (F4 V7)
+        let searchedCount: Int
         let filterSet: AdminFilterSet<AdminInboxLogic.Filters>
         let header: AdminInboxLogic.HeaderCounts
         let phase: AdminInboxLogic.Phase
@@ -703,6 +705,7 @@ struct AdminAllRequestsView: View {
         return InboxModel(entries: entries,
                           days: dayGroups(visible),
                           visible: visible,
+                          searchedCount: searched.count,
                           filterSet: filterSet(facts: searched.map(\.fact), ready: ready, workflowOn: workflowOn),
                           header: L.headerCounts(entries.map(\.fact), workflowOn: workflowOn),
                           phase: phase)
@@ -802,12 +805,13 @@ struct AdminAllRequestsView: View {
                                            AdminFilterOption(g, groupTitle(g), count: count(L.probe(s, group: g)))
                                        }))
             }
-            // النوع — بعد اختيار مجموعة: أنواع المجموعات المختارة التي فيها طلبات (والمختار). يضيّق مجموعته وحدها
+            // النوع — بعد اختيار مجموعة: أنواع المجموعات المختارة التي فيها طلبات (والمختار). يضيّق مجموعته وحدها.
+            // وجود الصفّ من طلبات النوع وحده (`only`)، وعدده = النتيجة بعد لمسه (`probe` يُبقي المجموعات الأخرى — F4 V2)
             if !s.groups.isEmpty {
                 let chosen = L.Group.allCases.filter(s.groups.contains)
                 let kinds = L.Kind.allCases.filter { k in
                     s.groups.contains(k.group)
-                        && ((roleKinds.contains(k) && (count(L.probe(s, kind: k)) ?? 1) > 0) || s.kinds.contains(k))
+                        && ((roleKinds.contains(k) && (count(L.only(s, kind: k)) ?? 1) > 0) || s.kinds.contains(k))
                 }
                 let short = chosen == [.tree]
                 let allTitle = chosen.count == 1
@@ -1493,7 +1497,7 @@ struct AdminAllRequestsView: View {
                                                   tint: DS.Color.success)))
                     .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
             } else if m.visible.isEmpty {
-                AnyView(filteredEmpty)
+                AnyView(filteredEmpty(m))
                     .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
             } else {
                 ForEach(m.days) { day in
@@ -1508,11 +1512,13 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// تصفية بلا نتيجة: «لا طلبات بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح فوق تُزال واحدة واحدة)؛ بحث بلا
-    /// نتيجة: «لا نتائج» + «مسح البحث»
-    private var filteredEmpty: some View {
-        Group {
-            if !filters.isEmpty {
+    /// بحث بلا نتيجة (البحث وحده لا يطابق شيئاً): «لا نتائج» + «مسح البحث» ولو كانت تصفية (F4 V7)؛ تصفية تخفي ما وجده البحث
+    /// أو بلا بحث: «لا طلبات بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح فوق تُزال واحدة واحدة)
+    private func filteredEmpty(_ m: InboxModel) -> some View {
+        let cause = AdminInboxLogic.emptyCause(searching: isSearching, searchedCount: m.searchedCount,
+                                               filtersActive: !filters.isEmpty)
+        return Group {
+            if cause == .filters {
                 AdminFilterEmptyCard(title: L10n.t("لا طلبات بهذه التصفية", "No requests with this filter"),
                                      editFilters: { showsFilters = true })
             } else {
@@ -2992,7 +2998,8 @@ struct AdminAllRequestsView: View {
         switch route {
         case .person(let id):
             // ورقة العضو داخل مكدس المربّع (لا ورقة فوق ورقة) — عضو واحد = بلا شريط «السابق · التالي»
-            return AnyView(AdminMemberSheet(ids: [id], start: 0)
+            // داخل مربّع الطلب: بلا «في الشجرة» ورابط شجرة النساء (F4، V8)
+            return AnyView(AdminMemberSheet(ids: [id], start: 0, inBox: true)
                 .toolbar(.hidden, for: .navigationBar)
                 .background(DS.Hub.background.ignoresSafeArea()))
         case .place:

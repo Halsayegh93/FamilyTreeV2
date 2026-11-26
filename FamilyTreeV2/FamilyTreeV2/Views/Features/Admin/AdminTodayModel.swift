@@ -272,9 +272,11 @@ enum AdminTodayFeed {
 
     /// الطلبات المعلّقة الآن — نفس `AdminNotificationsPage.openRequestIds` حرفياً (الإشعار «يحتاج إجراء» ما دام طلبه هنا)،
     /// فيساوي الجرس شريحة «يحتاج إجراء N» في الصفحة
+    /// - pendingContent: الديوانيات وعناصر المكتبة وصور المعرض المعلّقة (`AdminPendingContentStore` — F4، V34)
     static func openRequestIds(adminRequestVM vm: AdminRequestViewModel, newsVM: NewsViewModel,
-                               projectsVM: ProjectsViewModel, memberVM: MemberViewModel) -> Set<UUID> {
-        var ids = Set<UUID>()
+                               projectsVM: ProjectsViewModel, memberVM: MemberViewModel,
+                               pendingContent: Set<UUID> = []) -> Set<UUID> {
+        var ids = pendingContent
         for list in [vm.deceasedRequests, vm.childAddRequests, vm.newsReportRequests, vm.photoSuggestionRequests,
                      vm.nameChangeRequests, vm.treeEditRequests, vm.joinApprovalRequests] {
             ids.formUnion(list.map(\.id))

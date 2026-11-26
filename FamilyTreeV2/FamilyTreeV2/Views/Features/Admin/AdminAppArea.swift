@@ -550,23 +550,16 @@ private struct AdminPhotoReminderRow: View {
 
         func subtitle(_ v: Int) -> String {
             switch self {
+            // العدد والمعدود (F4، V32): «بعد 7 أيام» · «بعد 14 يوماً» · «كل 11 يوماً» · «حتى 11 تذكيراً»
             case .popupDays:
                 return v == 0 ? L10n.t("«كمّل ملفك بصورة» مطفأ", "«Add a photo» prompt off")
-                              : L10n.t("«كمّل ملفك بصورة» يرجع بعد \(v) يوم", "«Add a photo» returns after \(v) days")
+                              : L10n.t("«كمّل ملفك بصورة» يرجع \(PhotoNudgeLogic.afterDaysText(v))",
+                                       "«Add a photo» returns \(PhotoNudgeLogic.afterDaysText(v))")
             case .remindDays:
-                switch v {
-                case 0:  return L10n.t("بلا تذكير", "No reminders")
-                case 1:  return L10n.t("التذكير كل يوم", "Remind every day")
-                case 2:  return L10n.t("التذكير كل يومين", "Remind every 2 days")
-                default: return L10n.t("التذكير كل \(v) أيام", "Remind every \(v) days")
-                }
+                return v == 0 ? L10n.t("بلا تذكير", "No reminders")
+                              : L10n.t("التذكير \(PhotoNudgeLogic.everyDaysText(v))", "Remind \(PhotoNudgeLogic.everyDaysText(v))")
             case .maxReminders:
-                switch v {
-                case 0:  return L10n.t("بلا تذكير", "No reminders")
-                case 1:  return L10n.t("تذكير واحد", "1 reminder")
-                case 2:  return L10n.t("حتى تذكيرين", "Up to 2 reminders")
-                default: return L10n.t("حتى \(v) تذكيرات", "Up to \(v) reminders")
-                }
+                return v == 0 ? L10n.t("بلا تذكير", "No reminders") : PhotoNudgeLogic.remindersLimitText(v)
             }
         }
     }

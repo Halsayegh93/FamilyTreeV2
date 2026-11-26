@@ -37,6 +37,8 @@ nonisolated enum PhotoNudgeLogic {
         let isOwner: Bool
         /// «نبّههم كلهم» — المالك والمدير (`isAdmin`) × «يعدّل» «العائلة»
         let canBulk: Bool
+        /// F4 (S-4): يقرأ `photo_change_requests` (RLS: المالك والمدير والمراقب) — غيره يرى «—» لا «لم يُنبَّه بعد»
+        var canReadStatus: Bool = true
     }
 
     /// العضو كما تراه الإدارة
@@ -89,6 +91,12 @@ nonisolated enum PhotoNudgeLogic {
         canAct(viewer, m) && m.hasPhoto
     }
 
+    /// F4 (V10): «إلغاء التنبيه» — لا على ورقتك (طلب الإدارة لك لا تلغيه بنفسك). يبقى للمتوفى ولمن فقد حسابه (طلبه
+    /// المفتوح يُغلق من هنا)، وعلى ورقة المالك كما كان (السيرفر يسمح للطاقم)
+    static func canCancel(_ viewer: Viewer, _ m: Member) -> Bool {
+        viewer.canEdit && m.id != viewer.id
+    }
+
     // MARK: حالات الصفّ
 
     enum Row: Equatable {
@@ -119,9 +127,10 @@ nonisolated enum PhotoNudgeLogic {
 
     static func row(viewer: Viewer, member m: Member, open: Open?, maxReminders: Int,
                     now: Date = Date(), calendar: Calendar = .current) -> Row {
-        guard viewer.canEdit, !m.isDeceased else { return .hidden }
+        guard viewer.canEdit else { return .hidden }
         if let open {
-            let eligible = m.hasPhoto ? canAskChange(viewer, m) : canNudge(viewer, m)
+            // F4 (V24): المتوفى بطلب مفتوح (قبل ترحيل 20261126200000 الذي يغلقه) — السطر و«إلغاء التنبيه» بلا تذكير
+            let eligible = !m.isDeceased && (m.hasPhoto ? canAskChange(viewer, m) : canNudge(viewer, m))
             let ready = canRemindNow(open, now: now)
             let reason = open.reason.trimmingCharacters(in: .whitespacesAndNewlines)
             return .pending(Pending(
@@ -130,8 +139,9 @@ nonisolated enum PhotoNudgeLogic {
                 reason: m.hasPhoto && !reason.isEmpty ? reason : nil,
                 canRemind: eligible && ready,
                 remindAt: eligible && !ready ? open.lastNotice.map { $0.addingTimeInterval(remindCooldown) } : nil,
-                canCancel: true))
+                canCancel: canCancel(viewer, m)))
         }
+        guard !m.isDeceased else { return .hidden }
         if m.hasPhoto { return canAskChange(viewer, m) ? .askChange : .hidden }
         return canNudge(viewer, m) ? .nudge : .hidden
     }
@@ -201,9 +211,112 @@ nonisolated enum PhotoNudgeLogic {
         guard remindDays > 0, maxReminders > 0 else {
             return L10n.t("يصله إشعار يطلب منه إضافة صورته", "They get a notification asking for a photo")
         }
-        let every = remindDays == 1 ? L10n.t("كل يوم", "every day") : L10n.t("كل \(remindDays) أيام", "every \(remindDays) days")
-        let times = maxReminders == 1 ? L10n.t("مرة واحدة", "once") : L10n.t("حتى \(maxReminders) مرات", "up to \(maxReminders) times")
+        let every = everyDaysText(remindDays)
+        let times = timesText(maxReminders)
         return L10n.t("يصله إشعار، ثم تذكير \(every) \(times)", "They get a notification, then a reminder \(every), \(times)")
+    }
+
+    // MARK: العدد والمعدود (F4، V32) — «كل يومين» لا «كل 2 أيام»، «14 يوماً» لا «14 أيام»
+
+    private static let days = AdminCountForms(one: "يوم", two: "يومين", few: "أيام", many: "يوماً", single: "يوم")
+
+    /// «كل يوم» · «كل يومين» · «كل 3 أيام» · «كل 11 يوماً»
+    static func everyDaysText(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "every day" : "every \(n) days" }
+        return "كل \(days.text(n))"
+    }
+
+    /// «بعد يوم» · «بعد يومين» · «بعد 7 أيام» · «بعد 14 يوماً» · «بعد 100 يوم» (معدّل «تنبيه الصورة»)
+    static func afterDaysText(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "after 1 day" : "after \(n) days" }
+        return "بعد \(days.text(n))"
+    }
+
+    /// «مرة واحدة» · «حتى مرتين» · «حتى 3 مرات» · «حتى 11 مرة»
+    static func timesText(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "once" : "up to \(n) times" }
+        if n == 1 { return "مرة واحدة" }
+        return "حتى " + AdminCountForms(one: "مرة", two: "مرتين", few: "مرات", many: "مرة", single: "مرة").text(n)
+    }
+
+    /// «تذكير واحد» · «حتى تذكيرين» · «حتى 5 تذكيرات» · «حتى 11 تذكيراً» (معدّل «حدّ التذكيرات»)
+    static func remindersLimitText(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "1 reminder" : "Up to \(n) reminders" }
+        if n == 1 { return "تذكير واحد" }
+        return "حتى " + AdminCountForms(one: "تذكير", two: "تذكيرين", few: "تذكيرات", many: "تذكيراً", single: "تذكير").text(n)
+    }
+
+    /// سطر صفّ القائمة: «—» قبل وصول الطلبات ولمن لا يقرؤها (المشرف — RLS يرجع لا شيء فكان يقول «لم يُنبَّه بعد»)
+    static func listLine(_ open: Open?, known: Bool, viewer: Viewer, maxReminders: Int, now: Date,
+                         calendar: Calendar = .current) -> String {
+        guard known, viewer.canReadStatus else { return "—" }
+        return shortLine(open, maxReminders: maxReminders, now: now, calendar: calendar)
+    }
+
+    // MARK: «ذكّره الحين» الصادق (F4، V15) والبيانات القديمة (V11)
+
+    /// السيرفر لا يعيد الإشعار خلال دقيقة من آخره ولا يخطئ — النجاح = تغيّر notified_at (قبل وبعد من السيرفر نفسه، فلا
+    /// أثر لفرق ساعة الجهاز). بلا قراءة بعده: نصدّق قبول السيرفر
+    static func reminderLanded(before: Date?, after: Date?) -> Bool {
+        guard let after else { return true }
+        guard let before else { return true }
+        return after > before
+    }
+
+    static var tooSoonText: String { L10n.t("أُرسل له قبل أقل من دقيقة", "Sent to them less than a minute ago") }
+    /// «نبّهه» رُفض لأن له صورة الآن (السيرفر يطلب سبباً لمن له صورة) — البيانات عندنا قديمة
+    static var staleText: String { L10n.t("أضاف صورته — حدّثنا البيانات", "They added a photo — the data is refreshed") }
+
+    enum Failure: Equatable {
+        /// له صورة الآن: حدّث العضو وقل `staleText`
+        case stale
+        case message(String)
+    }
+
+    /// رسالة رفض السيرفر حسب `hint` — `nudging`: «نبّهه»/«ذكّره» بلا سبب
+    static func failure(hint: String?, missingFunction: Bool, nudging: Bool, cancelling: Bool = false) -> Failure {
+        if missingFunction { return .message(L10n.t("هذه الميزة تحتاج تحديث السيرفر.", "This feature needs a server update.")) }
+        switch hint {
+        case "bad_reason" where nudging:
+            return .stale
+        case "photo_pending":
+            return .message(L10n.t("أرسل صورته وهي بانتظار الموافقة — راجعها من «الوارد».",
+                                   "They sent a photo that awaits approval — review it in the Inbox."))
+        case "account_frozen":
+            return .message(L10n.t("حسابه موقوف أو غير مفعّل — لا يصله التنبيه.",
+                                   "Their account is suspended or not active — the notice won't reach them."))
+        case "female_no_photo":
+            return .message(L10n.t("لا صور للإناث في التطبيق.", "Women's profiles don't have photos in the app."))
+        case "not_allowed":
+            return .message(L10n.t("هذا الإجراء للمالك والمدير والمراقب فقط.", "Only the owner, admins and monitors can do this."))
+        case "no_account":
+            return .message(L10n.t("ليس لهذا العضو حساب في التطبيق.", "This member has no app account."))
+        case "deceased":
+            return .message(L10n.t("لا يُرسل الطلب إلى عضو متوفى.", "The request can't be sent for a deceased member."))
+        case "member_not_found":
+            return .message(L10n.t("العضو غير موجود.", "Member not found."))
+        case "own_profile":
+            return .message(L10n.t("لا يُرسل الطلب إلى نفسك — غيّر صورتك من «حسابي».",
+                                   "You can't send this to yourself — change your photo in My Account."))
+        case "owner_protected":
+            return .message(L10n.t("لا يُرسل هذا الطلب إلى المالك.", "This request can't be sent to the owner."))
+        case "bad_reason":
+            return .message(L10n.t("يرجى كتابة السبب (حتى ٢٠٠ حرف).", "Please enter the reason (up to 200 characters)."))
+        default:
+            return .message(cancelling
+                ? L10n.t("تعذّر إلغاء الطلب. تحقق من الاتصال ثم حاول مرة أخرى.", "Couldn't cancel the request. Check your connection and try again.")
+                : L10n.t("تعذّر إرسال الطلب. تحقق من الاتصال ثم حاول مرة أخرى.", "Couldn't send the request. Check your connection and try again."))
+        }
+    }
+
+    // MARK: الدمج بعد الجلب (F4، V31)
+
+    /// نتيجة جلب كل المفتوح مدموجةً مع ما كُتب محلياً بعد بدء الجلب: العضو الذي نُبّه أو أُلغي تنبيهه أثناءه يبقى كما
+    /// كتبناه (موجوداً أو غائباً)، والباقي من الجلب (ما أُغلق في مكان آخر يختفي)
+    static func merged<V>(fetched: [UUID: V], current: [UUID: V], writtenSince: Set<UUID>) -> [UUID: V] {
+        var out = fetched
+        for id in writtenSince { out[id] = current[id] }
+        return out
     }
 
     // MARK: قائمة «مسجّلون بلا صورة» (نفس قاعدة السيرفر في `request_photo_add_all`)

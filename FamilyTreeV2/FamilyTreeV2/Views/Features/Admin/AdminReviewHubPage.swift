@@ -7,7 +7,7 @@ import SwiftUI
 //
 // صفّ واحد في جذر «العائلة» (U11) يفتح هذه الصفحة: كل قوائم المراجعة بعددها في بطاقتين — «الشجرة والبيانات» (مشكلات في
 // الشجرة · هل ما زالوا أحياء؟ · تواريخ وفاة ناقصة · بيانات ناقصة) و«الحسابات» (لم يفتحوا التطبيق بعد · لم يدخلوا منذ 21
-// يوماً). كل صفّ يفتح قائمته (`AdminReviewListPage(review:)`)، و«تواريخ وفاة ناقصة» بيتها الواحد `DeathDatesCampaignPage`
+// يوماً · مسجّلون بلا صورة — F4/V13). كل صفّ يفتح قائمته (`AdminReviewListPage(review:)`)، و«تواريخ وفاة ناقصة» بيتها الواحد `DeathDatesCampaignPage`
 // (spec E.19). الرقم في الصفّ = أول رقم في القائمة التي يفتحها (T2): نفس `AdminMemberReview.rows`، وتواريخ الوفاة من
 // `DeathDatesCampaign` (رقم صفحتها نفسها). الصفر رمادي «0» بلا سهم وسطره «لا شيء»؛ قبل وصول الأرقام «—» والصفّ يُضغط.
 //
@@ -20,11 +20,13 @@ import SwiftUI
 
 nonisolated enum AdminReviewHubLogic {
     /// قوائم الصفحة بترتيبها (نفس قيم `AdminMemberReview`)
+    /// F4 (V13): «مسجّلون بلا صورة» (P1) قائمة سابعة — تدخل «سليمة» و«N قوائم» وكلمة «اليوم» وإخفاء البطاقة مثل
+    /// غيرها، بنفس قاعدة قائمتها (`AdminPhotoNudgeList.rows`)
     enum List: String, CaseIterable, Hashable {
-        case problems, living, death, gaps, notOpened, inactive
+        case problems, living, death, gaps, notOpened, inactive, photos
 
         /// قوائم «الحسابات» — أرقامها تنتظر قوائم الحسابات (`AdminAccountsStore`)
-        var isUsage: Bool { self == .notOpened || self == .inactive }
+        var isUsage: Bool { self == .notOpened || self == .inactive || self == .photos }
 
         /// نصّ الصفّ (spec C.8)
         var title: String {
@@ -35,13 +37,42 @@ nonisolated enum AdminReviewHubLogic {
             case .gaps:      return L10n.t("بيانات ناقصة", "Missing data")
             case .notOpened: return L10n.t("لم يفتحوا التطبيق بعد", "Haven't opened the app yet")
             case .inactive:  return L10n.t("لم يدخلوا منذ 21 يوماً", "Away for 21+ days")
+            case .photos:    return L10n.t("مسجّلون بلا صورة", "Registered, no photo")
+            }
+        }
+
+        /// صيغ العدد والمعدود لسطر بطاقة «العائلة» الأول (V22) — nil = العنوان كما هو بعد الرقم
+        var forms: AdminCountForms? {
+            switch self {
+            case .problems:
+                return AdminCountForms(one: "مشكلة واحدة في الشجرة", two: "مشكلتان في الشجرة", few: "مشكلات في الشجرة",
+                                       many: "مشكلةً في الشجرة", single: "مشكلة في الشجرة")
+            case .death:
+                return AdminCountForms(one: "تاريخ وفاة واحد ناقص", two: "تاريخا وفاة ناقصان", few: "تواريخ وفاة ناقصة",
+                                       many: "تاريخ وفاة ناقصاً", single: "تاريخ وفاة ناقص")
+            case .photos:
+                return AdminCountForms(one: "مسجّل واحد بلا صورة", two: "مسجّلان بلا صورة", few: "مسجّلين بلا صورة",
+                                       many: "مسجّلاً بلا صورة", single: "مسجّل بلا صورة")
+            case .living, .gaps, .notOpened, .inactive:
+                return nil
             }
         }
     }
 
+    /// F4 (V30): مفتاح ذاكرة أعداد القوائم في «اليوم» — فئة استخدام كل حساب (لا عددها وحده: عضو انتقل من «نشط» إلى
+    /// «غير نشط» لا يغيّر العدد ويغيّر القوائم). `A` = فئة الحساب (`AppUsageCategory` في التطبيق)
+    struct CacheKey<A: Equatable>: Equatable {
+        let membersVersion: Int
+        let members: Int
+        let accountsLoaded: Bool
+        let accounts: [UUID: A]
+        let daughterSons: Set<UUID>
+        let verified: Set<UUID>
+    }
+
     /// بطاقتا الصفحة
     static let treeAndData: [List] = [.problems, .living, .death, .gaps]
-    static let accounts: [List] = [.notOpened, .inactive]
+    static let accounts: [List] = [.notOpened, .inactive, .photos]
 
     /// شكل الرقم في طرف الصفّ
     struct Look: Equatable {
@@ -97,7 +128,8 @@ nonisolated enum AdminReviewHubLogic {
 extension AdminReviewHubLogic.List {
     /// القائمة التي يفتحها الصفّ — «تواريخ وفاة ناقصة» بيتها `DeathDatesCampaignPage` (`AdminReviewListPage(.death)`
     /// يحوّل إليها أيضاً)
-    var review: AdminMemberReview {
+    /// nil = «مسجّلون بلا صورة» (بيتها `AdminPhotoNudgePage`، لا قائمة مراجعة)
+    var review: AdminMemberReview? {
         switch self {
         case .problems:  return .problems
         case .living:    return .living
@@ -105,13 +137,14 @@ extension AdminReviewHubLogic.List {
         case .gaps:      return .gaps
         case .notOpened: return .notOpened
         case .inactive:  return .inactive
+        case .photos:    return nil
         }
     }
 
     /// الشرح تحت العنوان (سطر ١٣ رمادي)
-    var subtitle: String { review.subtitle }
+    var subtitle: String { review?.subtitle ?? AdminPhotoNudgeList.subtitle }
 
-    var icon: String { review.icon }
+    var icon: String { review?.icon ?? AdminPhotoNudgeList.icon }
 
     /// لون مربّع الأيقونة: «الشجرة والبيانات» بلون قسم «العائلة»، و«الحسابات» بلون التواصل — لا أحمر ولا كهرماني لقائمة
     /// (الكلمات الهادئة، spec A.0)
@@ -121,8 +154,9 @@ extension AdminReviewHubLogic.List {
 @MainActor
 enum AdminReviewHubCounts {
     /// عدد كل قائمة — المفتاح الغائب = لم يصل بعد («—»). نفس ما تعدّه صفحة كل قائمة (T2)
+    /// - photos: من ينظر (قاعدة «مسجّلون بلا صورة» تستثنيه والمالك لغير المالك) — nil = لا يُحسب (القائمة غائبة فلا «سليمة»)
     static func make(index: AdminMembersIndex, verified: Set<UUID>,
-                     members: [FamilyMember]) -> [AdminReviewHubLogic.List: Int] {
+                     members: [FamilyMember], photos: PhotoNudgeLogic.Viewer? = nil) -> [AdminReviewHubLogic.List: Int] {
         guard index.built else { return [:] }
         var out: [AdminReviewHubLogic.List: Int] = [:]
         for list in AdminReviewHubLogic.List.allCases {
@@ -130,10 +164,13 @@ enum AdminReviewHubCounts {
             case .death:
                 // رقم صفحة «تواريخ الوفاة» نفسه (نطاق «ذكرى الراحلين»، بلا «غير معروف»)
                 out[list] = DeathDatesCampaign.stats(members).incomplete
+            case .photos:
+                // نفس قاعدة القائمة وعددها (`AdminPhotoNudgeList.rows`) — nil قبل وصول الحسابات
+                if let photos, let rows = AdminPhotoNudgeList.rows(in: index, viewer: photos) { out[list] = rows.count }
             case .notOpened, .inactive:
-                if index.accountsReady { out[list] = list.review.rows(in: index, verified: verified).count }
+                if index.accountsReady, let review = list.review { out[list] = review.rows(in: index, verified: verified).count }
             default:
-                out[list] = list.review.rows(in: index, verified: verified).count
+                if let review = list.review { out[list] = review.rows(in: index, verified: verified).count }
             }
         }
         return out
@@ -152,8 +189,6 @@ struct AdminReviewHubPage: View {
 
     @State private var index = AdminMembersIndex.empty
     @State private var counts: [AdminReviewHubLogic.List: Int] = [:]
-    /// «مسجّلون بلا صورة» (P1) — nil قبل وصول الحسابات
-    @State private var photoCount: Int?
 
     init() {}
 
@@ -196,8 +231,8 @@ struct AdminReviewHubPage: View {
                                             accountsReady: accounts.loaded, daughterSons: sons.ids,
                                             branchName: { names.branchName(for: $0) })
         index = built
-        counts = AdminReviewHubCounts.make(index: built, verified: verified.ids, members: memberVM.allMembers)
-        photoCount = AdminPhotoNudgeList.rows(in: built, viewer: .init(authVM: authVM))?.count
+        counts = AdminReviewHubCounts.make(index: built, verified: verified.ids, members: memberVM.allMembers,
+                                           photos: .init(authVM: authVM))
     }
 
     // MARK: المحتوى
@@ -210,9 +245,8 @@ struct AdminReviewHubPage: View {
                                           retry: { Task { await reload(force: true) } }))
             } else {
                 AnyView(section(L10n.t("الشجرة والبيانات", "Tree and data"), AdminReviewHubLogic.treeAndData))
-                // + «مسجّلون بلا صورة» (P1، `AdminPhotoNudgeHubRow` ← `AdminPhotoNudgePage`)
-                AnyView(section(L10n.t("الحسابات", "Accounts"), AdminReviewHubLogic.accounts,
-                                extra: AnyView(AdminPhotoNudgeHubRow(count: photoCount))))
+                // «مسجّلون بلا صورة» قائمة سابعة في «الحسابات» (F4، V13) ← `AdminPhotoNudgePage`
+                AnyView(section(L10n.t("الحسابات", "Accounts"), AdminReviewHubLogic.accounts))
                 if counts.count == AdminReviewHubLogic.List.allCases.count,
                    AdminReviewHubLogic.isAllClear(counts) {
                     Text(L10n.t("كل القوائم فارغة الآن — لا شيء ينتظرك.", "Every list is empty right now — nothing is waiting for you."))
@@ -226,14 +260,13 @@ struct AdminReviewHubPage: View {
     }
 
     /// عنوان ١٥ ثم بطاقة صفوفها مفصولة بخط يبدأ من النص (spec A.4/A.5)
-    private func section(_ title: String, _ lists: [AdminReviewHubLogic.List], extra: AnyView? = nil) -> some View {
+    private func section(_ title: String, _ lists: [AdminReviewHubLogic.List]) -> some View {
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
             AdminSectionLabel(title: title)
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
                 ForEach(lists, id: \.self) { list in
                     row(list)
                 }
-                if let extra { extra }
             }
         }
     }
@@ -263,7 +296,7 @@ struct AdminReviewHubPage: View {
         if list == .death {
             return .page { AnyView(DeathDatesCampaignPage()) }
         }
-        let review = list.review
+        guard let review = list.review else { return .page { AnyView(AdminPhotoNudgePage()) } }
         return .page { AnyView(AdminReviewListPage(review: review, branchSet: nil)) }
     }
 }

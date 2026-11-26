@@ -659,8 +659,9 @@ struct AdminSenderSection: View {
             }
             DSTileGrid(tiles)
         }
+        // فوق مربّع الطلب: بلا «في الشجرة» ورابط شجرة النساء (F4، V8 — الإغلاق يُرجع للمربّع لا للتبويبات)
         .dsTallBox(item: $openSender) { context in
-            AdminMemberSheet(ids: context.ids, start: context.start)
+            AdminMemberSheet(ids: context.ids, start: context.start, inBox: true)
         }
     }
 

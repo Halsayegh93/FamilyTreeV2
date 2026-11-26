@@ -429,6 +429,7 @@ struct AdminNotificationsPage: View {
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @ObservedObject private var store = AdminNoticeStore.shared
     @ObservedObject private var sms = SmsBalanceStore.shared
+    @ObservedObject private var pendingContent = AdminPendingContentStore.shared
     @Environment(\.adminBackTitle) private var opener
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -490,6 +491,7 @@ struct AdminNotificationsPage: View {
             .task {
                 appeared = true
                 await store.load(using: notificationVM)
+                await pendingContent.refresh()
             }
     }
 
@@ -514,7 +516,8 @@ struct AdminNotificationsPage: View {
 
     /// الطلبات التي ما زالت معلّقة (الإشعار يحتاج إجراء ما دام طلبه هنا)
     private var openRequestIds: Set<UUID> {
-        var ids = Set<UUID>()
+        // الديوانيات والمكتبة والمعرض المعلّقة (F4، V34) — نفس الجرس
+        var ids = pendingContent.ids
         let vm = adminRequestVM
         for list in [vm.deceasedRequests, vm.childAddRequests, vm.newsReportRequests, vm.photoSuggestionRequests,
                      vm.nameChangeRequests, vm.treeEditRequests, vm.joinApprovalRequests] {

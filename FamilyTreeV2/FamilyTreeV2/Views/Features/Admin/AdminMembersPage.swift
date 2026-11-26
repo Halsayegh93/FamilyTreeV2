@@ -300,7 +300,8 @@ struct AdminMembersPage: View {
 
     /// أعداد قوائم «يحتاج مراجعتك» — المصدر الواحد مع صفحتها (`AdminReviewHubCounts`)
     private func refreshReviews() {
-        reviewCounts = AdminReviewHubCounts.make(index: index, verified: verified.ids, members: memberVM.allMembers)
+        reviewCounts = AdminReviewHubCounts.make(index: index, verified: verified.ids, members: memberVM.allMembers,
+                                                 photos: .init(authVM: authVM))
     }
 
     private func open(_ p: AdminMembersPush) {
@@ -561,7 +562,7 @@ struct AdminMembersPage: View {
     private var reviewRow: AnyView? {
         // «تواريخ وفاة ناقصة» تتصدّر (حملة المالك — رقمها خرج من مربّع «المناسبات» إلى هنا)
         let lists = AdminReviewHubLogic.List.allCases.map {
-            AdminMembersLogic.ReviewList($0.title, reviewCounts[$0], leads: $0 == .death)
+            AdminMembersLogic.ReviewList($0.title, reviewCounts[$0], leads: $0 == .death, forms: $0.forms)
         }
         switch AdminMembersLogic.reviewState(lists, accountsFailed: accounts.health.look == .unknown) {
         case .hidden:          return nil

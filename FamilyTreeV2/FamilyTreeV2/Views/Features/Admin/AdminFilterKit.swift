@@ -241,6 +241,8 @@ struct AdminFilterSet<S: Equatable> {
     let noun: (Int) -> String
     /// يُصلح الحالة بعد كل اختيار (مثل: نوع لم تعد مجموعته مختارة يُزال)
     let normalize: (inout S) -> Void
+    /// معدود يتغيّر بالحالة نفسها («نساء العائلة»: «امرأة»، و«فرع خارج العائلة» «فرد») — nil = `noun` لكل حالة (F4 V39)
+    var stateNoun: ((S, Int) -> String)? = nil
 
     init(noun: @escaping (Int) -> String = { AdminFilterText.resultsNoun($0) },
          normalize: @escaping (inout S) -> Void = { _ in },
@@ -284,6 +286,26 @@ struct AdminFilterSet<S: Equatable> {
     func resultPhrase(_ count: Int?) -> String {
         guard let count else { return "—" }
         return "\(AdminNumberText.grouped(count)) \(noun(count))"
+    }
+
+    /// ✕ شريحة قد تزيل غيرها (الإصلاح بعد اللمسة: إزالة «الشجرة» تزيل أنواعها) — أسماء كل الشرائح التي تختفي، هي أولاً
+    /// (F4 V3). شريحة أُزيل خيارها = ✕ها بعد اللمسة لا يغيّر شيئاً. حالات فقط، بلا أعداد
+    func removedTitles(by item: AdminFilterSnapshot<S>.Item, among items: [AdminFilterSnapshot<S>.Item],
+                       in state: S) -> [String] {
+        let next = applying(item.remove, to: state)
+        let alsoGone = items.filter { $0.id != item.id && applying($0.remove, to: next) == next }
+        return [item.title] + alsoGone.map(\.title)
+    }
+
+    /// المعدود لحالة بعينها — `stateNoun` إن وُجد، وإلا `noun` (F4 V39)
+    func noun(for state: S, _ n: Int) -> String {
+        stateNoun?(state, n) ?? noun(n)
+    }
+
+    /// «123 رجل» للحالة المعدودة نفسها — القارئ الصوتي بعد لمسة يعدّ الحالة الجديدة بطقم رُسم للقديمة، فالمعدود منها (F4 V39)
+    func resultPhrase(for state: S) -> String {
+        guard let count = resultCount(state) else { return "—" }
+        return "\(AdminNumberText.grouped(count)) \(noun(for: state, count))"
     }
 
     /// ملخّص حالة واحدة لما تحت الشريط — يُحسب مرة لكل رسم (المجموعات قد تعدّ آلاف الأعضاء)
@@ -362,6 +384,28 @@ enum AdminFilterText {
         case 11...99: return many
         default: return one
         }
+    }
+
+    /// أسماء بالعطف: «الشجرة وإضافة ابن وإضافة للشجرة» · "Tree, Add son and Add to tree"
+    static func joined(_ titles: [String]) -> String {
+        guard L10n.isArabic else {
+            guard titles.count > 1 else { return titles.first ?? "" }
+            return titles.dropLast().joined(separator: ", ") + " and " + (titles.last ?? "")
+        }
+        guard let first = titles.first else { return "" }
+        return titles.dropFirst().reduce(first) { "\($0) و\($1)" }
+    }
+
+    /// القارئ الصوتي بعد ✕ شريحة أزالت غيرها معها (F4 V3: ✕ «الشجرة» تزيل أنواعها) — «أُزيل الشجرة وإضافة ابن. النتيجة
+    /// الآن: 12 طلباً». شريحة واحدة = `removed(_:result:)` نفسها
+    static func removed(_ titles: [String], result: String) -> String {
+        removed(joined(titles), result: result)
+    }
+
+    /// تلميح ✕ الشريحة: «يزيل هذا الاختيار وحده»، أو حين تأخذ غيرها معها «يزيل الشجرة وإضافة ابن» (F4 V3)
+    static func removalHint(_ titles: [String]) -> String {
+        guard titles.count > 1 else { return removeHint }
+        return L10n.t("يزيل \(joined(titles))", "Removes \(joined(titles))")
     }
 
     /// المعدود الافتراضي: «نتيجة»
@@ -469,7 +513,9 @@ struct AdminActiveFilterChips<S: Equatable>: View {
                     .accessibilityLabel(item.count.map {
                         L10n.t("\(item.groupTitle): \(item.title)، \($0)", "\(item.groupTitle): \(item.title), \($0)")
                     } ?? L10n.t("\(item.groupTitle): \(item.title)", "\(item.groupTitle): \(item.title)"))
-                    .accessibilityHint(AdminFilterText.removeHint)
+                    // F4 V3: ✕ تأخذ معها غيرها («الشجرة» وأنواعها) — التلميح يسمّيها كلها
+                    .accessibilityHint(AdminFilterText.removalHint(
+                        set.removedTitles(by: item, among: snapshot.items, in: selection)))
                 }
             }
             .transition(.opacity)
@@ -477,12 +523,14 @@ struct AdminActiveFilterChips<S: Equatable>: View {
     }
 
     private func remove(_ item: AdminFilterSnapshot<S>.Item) {
-        let next = set.applying(item.remove, to: selection)
+        let before = selection
+        let next = set.applying(item.remove, to: before)
         UISelectionFeedbackGenerator().selectionChanged()
         withAnimation(reduceMotion ? nil : DS.Anim.snappy) { selection = next }
-        // الشريحة تختفي من تحت إصبع القارئ — يُقال ما حدث والنتيجة الجديدة
+        // الشريحة تختفي من تحت إصبع القارئ — يُقال كل ما أُزيل (F4 V3) والنتيجة الجديدة بمعدودها (F4 V39)
         guard UIAccessibility.isVoiceOverRunning else { return }
-        let phrase = AdminFilterText.removed(item.title, result: set.resultPhrase(set.resultCount(next)))
+        let gone = set.removedTitles(by: item, among: snapshot.items, in: before)
+        let phrase = AdminFilterText.removed(gone, result: set.resultPhrase(for: next))
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             UIAccessibility.post(notification: .announcement, argument: phrase)
         }
@@ -709,7 +757,7 @@ struct AdminFilterSheet<S: Equatable>: View {
         let number = Text(verbatim: count.map { DSNumber.grouped($0) } ?? "—")
             .font(DS.Font.role(.sectionTitle))
             .foregroundColor(DS.Color.textPrimary)
-        let noun = count.map { Text(verbatim: " \(set.noun($0))") } ?? Text(verbatim: "")
+        let noun = count.map { Text(verbatim: " \(set.noun(for: state, $0))") } ?? Text(verbatim: "")
         return (Text(verbatim: "\(AdminFilterText.resultNow) ") + number + noun)
             .dsFont(.subtitle)
             .foregroundColor(DS.Color.textSecondary)
@@ -870,7 +918,7 @@ struct AdminFilterSheet<S: Equatable>: View {
         UISelectionFeedbackGenerator().selectionChanged()
         withAnimation(reduceMotion ? nil : DS.Anim.quick) { selection = next }
         guard UIAccessibility.isVoiceOverRunning else { return }
-        let phrase = "\(AdminFilterText.resultNow) \(set.resultPhrase(set.resultCount(next)))"
+        let phrase = "\(AdminFilterText.resultNow) \(set.resultPhrase(for: next))"
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             UIAccessibility.post(notification: .announcement, argument: phrase)
         }

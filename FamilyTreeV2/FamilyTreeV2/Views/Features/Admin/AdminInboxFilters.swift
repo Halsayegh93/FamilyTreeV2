@@ -113,7 +113,7 @@ nonisolated enum AdminInboxLogic {
     }
 
     /// عدد خيار واحد في الورقة = النتيجة لو اختير وحده في مجموعته مع بقية الاختيارات (F3: «الأعداد تتبع بقية المجموعات»).
-    /// المجموعة: هي وحدها مع أنواعها المختارة؛ النوع: هو وحده في مجموعته
+    /// المجموعة: هي وحدها مع أنواعها المختارة؛ النوع: هو وحده بين أنواع مجموعته
     static func probe(_ filters: Filters, status: Status) -> Filters {
         var next = filters
         next.statuses = status == .all ? [] : [status]
@@ -127,11 +127,30 @@ nonisolated enum AdminInboxLogic {
         return next
     }
 
+    /// النوع: هو وحده بين أنواع مجموعته، والمجموعات الأخرى وأنواعها باقية (F4 V2) — فالعدد = النتيجة بعد لمسه حين لا أخ له
+    /// مختاراً. كان يضع `groups = [kind.group]` فيُسقط «أعضاء» المختارة معها والعدد أقل من النتيجة بعد اللمس
     static func probe(_ filters: Filters, kind: Kind) -> Filters {
+        var next = filters
+        next.groups.insert(kind.group)
+        next.kinds = filters.kinds.filter { $0.group != kind.group }.union([kind])
+        return next
+    }
+
+    /// طلبات النوع وحده (مع «الحالة» و«المصدر») — هل له صفّ في الورقة. `probe` يعدّ المجموعات الأخرى معه فلا يصلح لهذا
+    static func only(_ filters: Filters, kind: Kind) -> Filters {
         var next = filters
         next.groups = [kind.group]
         next.kinds = [kind]
         return next
+    }
+
+    /// سبب «لا نتائج» (F4 V7): البحث أولاً كصفحة «تواريخ الوفاة» — حين لا يطابق البحث وحده شيئاً فـ«مسح البحث» هو الحل ولو
+    /// كانت تصفية؛ وحين يجد البحث ما تخفيه التصفية فـ«تعديل التصفية»
+    enum EmptyCause: Equatable { case search, filters }
+
+    static func emptyCause(searching: Bool, searchedCount: Int, filtersActive: Bool) -> EmptyCause {
+        guard searching else { return .filters }
+        return searchedCount == 0 || !filtersActive ? .search : .filters
     }
 
     static func probe(_ filters: Filters, source: Source) -> Filters {

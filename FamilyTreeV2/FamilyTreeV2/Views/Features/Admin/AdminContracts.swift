@@ -385,6 +385,28 @@ nonisolated enum AdminNumberText {
     }
 }
 
+/// العدد والمعدود بالعربية (F4، V21/V22/V32) — صيغ المعدود الخمس، والرقم لاتيني بفاصل الآلاف:
+/// ١ `one` كاملة («تاريخ وفاة واحد ناقص») · ٢ `two` كاملة («تاريخا وفاة ناقصان») · ٣–١٠ «N few» · ١١–٩٩ «N many»
+/// · ١٠٠ وما ينتهي بـ٠٠–٠٢ «N single». (١٠١ و١٠٢ بالرقم أيضاً — لا «واحد» بعد المئة)
+nonisolated struct AdminCountForms: Equatable {
+    let one: String
+    let two: String
+    let few: String
+    let many: String
+    let single: String
+
+    func text(_ n: Int) -> String {
+        if n == 1 { return one }
+        if n == 2 { return two }
+        let digits = AdminNumberText.grouped(n)
+        switch n % 100 {
+        case 3...10:  return "\(digits) \(few)"
+        case 11...99: return "\(digits) \(many)"
+        default:      return "\(digits) \(single)"
+        }
+    }
+}
+
 // MARK: - ٤) سطر أرقام الرأس — شكل العنصر (منطق خالص)
 
 /// ما يرسمه عنصر في سطر الرأس: الصفر والتحميل والفشل لا تظهر رقماً عادياً أبداً

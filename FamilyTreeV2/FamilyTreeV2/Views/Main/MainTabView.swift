@@ -202,11 +202,13 @@ struct MainTabView: View {
         }
         // «في الشجرة» من ورقة العضو في الإدارة (V2-3): تاب الشجرة ← شجرة العائلة ← العضو في الوسط بمساره
         // (`.openMemberInTree` الذي تعالجه `TreeView` — نفس اختيار عضو من بحث الشجرة)
+        // F4 (V36): الطلب ينتظر في `TreeFocusRequest` و`TreeView` تنفّذه حين تجهز (بعد إعداد البداية) — لا مهلة ثابتة؛
+        // و`TreeTabContainer` يفتح شجرة العائلة ولو كانت النساء ستُفتح أولاً
         .onReceive(NotificationCenter.default.publisher(for: .requestMemberInTree)) { note in
             let info = note.userInfo
-            let alreadyOnTree = selectedTab == 1
+            if let id = info?["memberId"] as? UUID { TreeFocusRequest.pending = id }
             DSScreenCrossfade.run { selectedTab = 1 }
-            DispatchQueue.main.asyncAfter(deadline: .now() + (alreadyOnTree ? 0.15 : 0.6)) {
+            DispatchQueue.main.async {
                 NotificationCenter.default.post(name: .openMemberInTree, object: nil, userInfo: info)
             }
         }

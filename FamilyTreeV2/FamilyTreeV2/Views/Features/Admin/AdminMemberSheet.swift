@@ -6,12 +6,15 @@ import Supabase
 // ورقة طويلة (`dsTallBox`) تتمرّر بلا تبويبات، من الأعلى:
 //   «إغلاق» ذهبي ثابت على الكحلي ← الرأس الكحلي المختصر (الصورة ٥٦، الاسم كاملاً يلتفّ، «الحالة · الفرع» ذهبياً) وتحته
 //   حتى أربعة أزرار: «الملف الكامل» · «في الشجرة» · «اتصال» · «واتساب» (الأخيران للرقم الظاهر لك فقط — `dsVisiblePhone`؛
-//   شبكة ٢×٢ مع الخط الكبير) ← رقاقة كريمية لكل ناقص («⚠ تاريخ الوفاة غير مكتمل · أكمل ‹») ← «البيانات» (شريط كحلي) ←
-//   «النسب» (أخضر) ← «الحساب» (بترولي، للأحياء) ← «حذف العضو نهائياً» زرّ أحمر بإطار ← سطر القفل على ورقتك/ورقة المالك
-//   ← شريط «السابق · 3 من 123 · التالي» أسفل الورقة داخل القائمة التي فُتحت منها فقط.
+//   شبكة ٢×٢ مع الخط الكبير) ← رقاقة كريمية لكل ناقص («⚠ تاريخ الوفاة غير مكتمل · أكمل ‹») ← «العضو» معلومات فقط:
+//   «البيانات» (شريط كحلي) ← «النسب» (أخضر) ← «الحساب» (بترولي، للأحياء: الهاتف، «مسجّل ✓»/«غير مسجّل»، آخر دخول، عدد
+//   الأجهزة) ← «إجراءات الإدارة» بطاقة مستقلة بإطار كحلي فيها كل أمر (الصورة، «تسجيل في التطبيق»، الأجهزة بـ«تسجيل
+//   خروج»، الإيقاف، منع الرقم، و«حذف العضو نهائياً» آخرها بالأحمر — F4، طلب المالك «نفصل الأمور الادارية عن الاعضاء»؛
+//   لا تُرسم على ورقتك) ← سطر القفل على ورقتك/ورقة المالك ← شريط «السابق · 3 من 123 · التالي» أسفل الورقة داخل
+//   القائمة التي فُتحت منها فقط (معطّل أثناء أمر جارٍ، وكل نتيجة تُكتب للعضو الذي طلبها فقط — V27).
 // القيم في الصفوف بالاسم الأول وحده — الاسم الكامل مرة واحدة في الرأس. القطع في `AdminMemberSheetKit.swift`، صفّ الصورة
-// بحالات P1 في `AdminMemberPhotoRow.swift`، و«الحساب» في `AdminMemberAccountSection.swift`؛ المنطق في
-// `AdminMemberSheetLogic` (فحصه tests/admin-redesign/U13 وV2c).
+// وأوامرها (حالات P1) في `AdminMemberPhotoRow.swift`، و«الحساب» و«إجراءات الإدارة» في `AdminMemberAccountSection.swift`؛
+// المنطق في `AdminMemberSheetLogic` (فحصه tests/admin-redesign/U13 وV2c وF4).
 // كل أمر هو نفسه السابق بصلاحيته ونداء سيرفره — تغيّر الشكل والترتيب فقط، والتعديل بالمربّعات الموجودة:
 //   تاريخ الميلاد `EditBirthDateSheet` · الجنس `EditGenderSheet` · الصورة `EditMemberPhotoSheet` · الوفاة
 //   `EditDeathDateSheet` (بلا تاريخ) / `DeceasedDateBox` (سنة فقط/هجري) · الأب `LinkFatherSheet` · الاسم `EditNameSheet` ·
@@ -19,8 +22,9 @@ import Supabase
 //   · «تسجيل في التطبيق» `activateAccount` · الإيقاف `setMemberSuspension` (`canFreezeMembers`) · الأجهزة
 //   `fetchDevicesForMember` (عرض `canViewSystemSettings`) وتسجيل خروجها `removeDeviceByAdmin` (`canManageDevices`) · الإخفاء
 //   `is_hidden_from_tree` · مسح الرقم المكرر `clearPhoneNumber` · الحذف `deleteMember` (`canDeleteMembers`، لا المالك ولا النفس).
-// «في الشجرة»: `.requestMemberInTree` ← `MainTabView` (تبويب الشجرة) و`TreeTabContainer` (شجرة العائلة) ← `.openMemberInTree`
-//   الذي تعالجه `TreeView` أصلاً (نفس اختيار عضو من بحث الشجرة: المسار مفتوح والعضو مظلّل والكاميرا عليه).
+// «في الشجرة»: `.requestMemberInTree` ← `MainTabView` (تبويب الشجرة، والطلب في `TreeFocusRequest`) و`TreeTabContainer`
+//   (شجرة العائلة) ← `.openMemberInTree` الذي تعالجه `TreeView` حين تجهز (نفس اختيار عضو من بحث الشجرة: المسار مفتوح
+//   والعضو مظلّل والكاميرا عليه). يظهر لمن يُرسم من الرأس الأول فقط (V33)، ولا يظهر فوق مربّع (`inBox` — V8).
 // «منع الرقم من التسجيل» بيته الوحيد صفحة «التسجيل والمنع» (spec B.7/T4): الصفّ هنا يفتحها برقم العضو مطبَّعاً
 //   (`KuwaitPhone.normalizedForStorage`، لا رقم مخفي أبداً) ومربّع المنع هناك مملوء لا يُرسل وحده؛ رفع المنع من قائمتها.
 // كل أمر = صلاحية الدور × «يعدّل» في جدول السيرفر لقسم «العائلة» (`adminCanEdit(.family)`، Autoplan note 7).
@@ -31,6 +35,9 @@ import Supabase
 
 struct AdminMemberSheet: View {
     let ids: [UUID]
+    /// F4 (V8): الورقة فوق مربّع آخر (مربّع الطلب، مسار المرسل) — «في الشجرة» ورابط شجرة النساء لا يظهران (الإغلاق
+    /// يُرجع للمربّع لا للتبويبات، فكانت الشجرة تُفتح خلفه)
+    let inBox: Bool
     @State private var position: Int
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
@@ -38,6 +45,8 @@ struct AdminMemberSheet: View {
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject private var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var accounts = AdminAccountsStore.shared
+    /// صفّ الصورة في «إجراءات الإدارة» يتبع الطلب المفتوح (يظهر ويختفي معه)
+    @ObservedObject private var photoStore = PhotoChangeRequestStore.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -49,6 +58,10 @@ struct AdminMemberSheet: View {
     @State private var devicesFailed = false
     @State private var devicesOpen = false
     @State private var tree: AdminMemberFacts.TreeContext?
+    /// رأس شجرة العائلة الأول (`FamilyTreeLayoutEngine.index`) — «في الشجرة» لمن يصل إليه فقط (V33)
+    @State private var treeRoot: UUID?
+    /// صفّ الصورة يرسل الآن — «السابق/التالي» معطّلان حتى ينتهي (V27)
+    @State private var photoWorking = false
 
     @State private var box: AdminMemberBox?
     @State private var tall: AdminMemberTallBox?
@@ -59,14 +72,18 @@ struct AdminMemberSheet: View {
     @State private var busy: String?
     @State private var failure: String?
 
-    init(ids: [UUID], start: Int) {
+    init(ids: [UUID], start: Int, inBox: Bool = false) {
         self.ids = ids
+        self.inBox = inBox
         _position = State(initialValue: AdminMemberSheetLogic.clampedStart(start, count: ids.count))
     }
 
+    /// معرّف العضو المعروض الآن — كل نتيجة غير متزامنة تُكتب فقط إن بقي هو نفسه (V27)
+    private var currentId: UUID? { ids.indices.contains(position) ? ids[position] : nil }
+
     private var member: FamilyMember? {
-        guard ids.indices.contains(position) else { return nil }
-        return memberVM.member(byId: ids[position])
+        guard let currentId else { return nil }
+        return memberVM.member(byId: currentId)
     }
 
     // MARK: الصلاحيات — صلاحية الدور × «يعدّل» في جدول «العائلة»
@@ -90,9 +107,9 @@ struct AdminMemberSheet: View {
             .background(AdminMemberSheetBackdrop(band: member != nil))
             .modifier(AdminMemberSheetBoxes(box: $box, tall: $tall, bans: $bans, onBansClosed: bansClosed))
             .modifier(AdminMemberSheetAlerts(confirm: $confirm, failure: $failure, suspendReason: $suspendReason, run: run))
-            .onAppear { tree = AdminMemberFacts.TreeContext(memberVM.allMembers) }
-            .onChange(of: memberVM.membersVersion) { _ in tree = AdminMemberFacts.TreeContext(memberVM.allMembers) }
-            .task(id: ids.indices.contains(position) ? ids[position] : nil) { await refresh() }
+            .onAppear { rebuildTree() }
+            .onChange(of: memberVM.membersVersion) { _ in rebuildTree() }
+            .task(id: currentId) { await refresh() }
             .toolbar(.hidden, for: .navigationBar)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .debugStackProbe("AdminMemberSheet")
@@ -104,6 +121,7 @@ struct AdminMemberSheet: View {
     private var page: AnyView {
         AnyView(VStack(spacing: 0) {
             AdminMemberCloseBar { dismiss() }
+                .zIndex(1)
             ScrollViewReader { proxy in
                 ScrollView(showsIndicators: false) {
                     content
@@ -131,7 +149,7 @@ struct AdminMemberSheet: View {
                                           account: accounts.info(m.id), accountsReady: accounts.loaded,
                                           liveStatus: liveStatus, daughterSon: DaughterSonsIndex.shared.contains(m.id))
         let phone = m.dsVisiblePhone(viewerId: authVM.currentUser?.id, viewerCanModerate: authVM.canModerate)
-        let actions = AdminMemberSheetLogic.headerActions(canEdit: canEdit, inTree: m.isCountable,
+        let actions = AdminMemberSheetLogic.headerActions(canEdit: canEdit, inTree: !inBox && drawnInTree(m),
                                                           isDeceased: m.isDeceased == true, visiblePhone: phone)
         return AnyView(VStack(spacing: 0) {
             AnyView(AdminMemberSheetHeader(member: m, facts: facts, branch: facts.branchTitle(appSettingsVM),
@@ -140,7 +158,8 @@ struct AdminMemberSheet: View {
         })
     }
 
-    /// تحت الرأس: الرقاقات ← «البيانات» ← «النسب» ← «الحساب» ← الحذف ← سطر القفل (أرضية بيضاء)
+    /// تحت الرأس (F4، القسم A): «العضو» معلومات — الرقاقات ← «البيانات» ← «النسب» ← «الحساب» (حقائق) — ثم «إجراءات الإدارة»
+    /// بطاقة مستقلة بإطار كحلي فيها كل أمر (الصورة، التسجيل، الأجهزة، الإيقاف، المنع، والحذف آخرها) ← سطر القفل
     private func sections(_ m: FamilyMember, _ facts: AdminMemberSheetFacts) -> some View {
         let chips = AdminMemberSheetLogic.missingChips(
             gaps: facts.gaps.compactMap { AdminMemberSheetLogic.Missing(rawValue: $0.rawValue) },
@@ -157,30 +176,29 @@ struct AdminMemberSheet: View {
         let lock = AdminMemberSheetLogic.lockNote(memberId: m.id, viewerId: authVM.currentUser?.id,
                                                   memberIsOwner: m.role == .owner, isDeceased: !living,
                                                   viewerCanAct: canEdit || canFreeze || canBan || canDelete)
+        let showsDevices = authVM.canViewSystemSettings && facts.status != .treeOnly
+        let hasLogin = facts.account != nil
+        let card = AdminMemberSheetLogic.adminCard(
+            isSelf: m.id == authVM.currentUser?.id, living: living,
+            photo: AdminMemberPhotoActions.state(member: m, hasLogin: hasLogin, viewer: .init(authVM: authVM)) != .hidden,
+            register: AdminMemberAccountSection.canRegister(member: m, facts: facts, canEdit: canEdit, isOther: other,
+                                                            liveStatus: liveStatus),
+            devices: canSignOutDevices && showsDevices && !devicesFailed && (devices?.isEmpty == false),
+            commands: commands)
+        let openWomen: (() -> Void)? = inBox ? nil : { openWomenTree() }
+        let lineage = AnyView(AdminMemberLineageSection(member: m, facts: facts, canEdit: canEdit,
+                                                        canManageChildren: canManageChildren, busy: busy,
+                                                        open: openTall, ask: { confirm = $0 }, openWomen: openWomen))
+        let account: AnyView? = living ? accountSection(m, facts, showsDevices: showsDevices) : nil
+        let admin: AnyView? = card.map { adminSection(m, facts, card: $0, banPrefill: banPrefill) }
         return VStack(alignment: .leading, spacing: DS.Hub.memberSectionGap) {
             if !chips.isEmpty {
                 AnyView(AdminMemberMissingChips(items: chips, busy: busy) { fix($0, m) })
             }
-            AnyView(AdminMemberDataSection(member: m, facts: facts, canEdit: canEdit, noDevices: noDevices(facts),
-                                           open: openBox, openTall: openTall))
-            AnyView(AdminMemberLineageSection(member: m, facts: facts, canEdit: canEdit,
-                                              canManageChildren: canManageChildren, busy: busy,
-                                              open: openTall, ask: { confirm = $0 },
-                                              openWomen: openWomenTree))
-            if living {
-                AnyView(AdminMemberAccountSection(
-                    member: m, facts: facts, canEdit: canEdit, isOther: other, commands: commands, banPrefill: banPrefill,
-                    liveStatus: liveStatus, ban: ban, devices: devices, devicesFailed: devicesFailed,
-                    devicesOpen: $devicesOpen,
-                    showsDevices: authVM.canViewSystemSettings && facts.status != .treeOnly,
-                    canSignOutDevices: canSignOutDevices, busy: busy,
-                    openBox: openBox, ask: ask, openBans: { bans = AdminMemberBanPrefill(phone: $0) },
-                    retryDevices: { Task { await loadDevices(m) } }))
-            }
-            // آخر الورقة: أحمر بإطار، ويسأل قبل الحذف (spec A.6/A.14)
-            if commands.delete {
-                AnyView(AdminMemberDeleteButton(busy: busy == AdminMemberConfirm.delete.id) { confirm = .delete })
-            }
+            AnyView(AdminMemberDataSection(member: m, facts: facts, canEdit: canEdit, open: openBox, openTall: openTall))
+            lineage
+            if let account { account }
+            if let admin { admin }
             if let lock {
                 AnyView(AdminMemberLockNote(note: lock))
             }
@@ -191,6 +209,38 @@ struct AdminMemberSheet: View {
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth)
         .frame(maxWidth: .infinity)
         .background(DS.Hub.background)
+    }
+
+    /// «الحساب» حقائق — `.id` يبدأ حالته من جديد مع كل عضو (V29)
+    private func accountSection(_ m: FamilyMember, _ facts: AdminMemberSheetFacts, showsDevices: Bool) -> AnyView {
+        AnyView(AdminMemberAccountSection(
+            member: m, facts: facts, canEdit: canEdit, devices: devices, devicesFailed: devicesFailed,
+            devicesOpen: $devicesOpen, showsDevices: showsDevices, canSignOutDevices: canSignOutDevices,
+            registerNote: AdminMemberAccountSection.registerNote(member: m, facts: facts),
+            openBox: { openBox($0) }, retryDevices: { Task { await loadDevices(m) } })
+            .id(m.id))
+    }
+
+    /// «إجراءات الإدارة» — `.id` يبدأ حالة صفّ الصورة من جديد مع كل عضو (V29)
+    private func adminSection(_ m: FamilyMember, _ facts: AdminMemberSheetFacts, card: AdminMemberSheetLogic.AdminCard,
+                              banPrefill: String?) -> AnyView {
+        AnyView(AdminMemberAdminSection(
+            member: m, facts: facts, card: card, banPrefill: banPrefill, ban: ban, devices: devices,
+            noDevices: noDevices(facts), busy: busy, ask: { ask($0) }, openBox: { openBox($0) },
+            openBans: { bans = AdminMemberBanPrefill(phone: $0) }, photoWorking: $photoWorking)
+            .id(m.id))
+    }
+
+    /// يُرسم في شجرة العائلة: سلسلة آبائه حتى الرأس الأول وكلهم مرسومون (V33)
+    private func drawnInTree(_ m: FamilyMember) -> Bool {
+        AdminMemberSheetLogic.reachable(m.id, root: treeRoot,
+                                        father: { memberVM.member(byId: $0)?.fatherId },
+                                        drawable: { memberVM.member(byId: $0)?.isCountable == true })
+    }
+
+    private func rebuildTree() {
+        tree = AdminMemberFacts.TreeContext(memberVM.allMembers)
+        treeRoot = FamilyTreeLayoutEngine.index(memberVM.allMembers).roots.first?.id
     }
 
     /// لا جهاز مسجّل له: الأجهزة حين جُلبت (المالك)، وإلا فئة الاستخدام «دخل بلا جهاز» (`AdminAccountsStore`)
@@ -210,7 +260,8 @@ struct AdminMemberSheet: View {
         }
     }
 
-    /// «في الشجرة»: تغلق الورقة، وتبويب الشجرة يفتح على شجرة العائلة والعضو في وسطها بمساره مفتوحاً ومظلّلاً
+    /// «في الشجرة»: تغلق الورقة، وتبويب الشجرة يفتح على شجرة العائلة والعضو في وسطها بمساره مفتوحاً ومظلّلاً. الطلب
+    /// ينتظر في `TreeFocusRequest` حتى تجهز شجرة العائلة (V36) — لا مهلة ثابتة
     private func openInTree(_ m: FamilyMember) {
         dismiss()
         NotificationCenter.default.post(name: .requestMemberInTree, object: nil, userInfo: ["memberId": m.id])
@@ -274,7 +325,9 @@ struct AdminMemberSheet: View {
     }
 
     private func stepButton(next: Bool) -> some View {
-        let enabled = AdminMemberSheetLogic.canStep(next: next, position: position, count: ids.count)
+        // أثناء أمر جارٍ لا تنقّل — نتيجته تخصّ هذا العضو (V27)
+        let enabled = AdminMemberSheetLogic.canStep(next: next, position: position, count: ids.count,
+                                                    busy: busy != nil || photoWorking)
         return Button {
             position = AdminMemberSheetLogic.stepped(next: next, position: position, count: ids.count)
         } label: {
@@ -318,7 +371,8 @@ struct AdminMemberSheet: View {
         guard let m = member else { return }
         Task {
             await refreshBan(m)
-            if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
+            let status = await memberVM.fetchMemberStatus(memberId: m.id)
+            if let status, currentId == m.id { liveStatus = status }
         }
     }
 
@@ -328,32 +382,42 @@ struct AdminMemberSheet: View {
         return KuwaitPhone.normalizedForStorage(country: parts.country, rawLocalDigits: parts.localDigits)
     }
 
+    /// كل نتيجة تُكتب فقط إن بقي العضو نفسه ولم يُلغَ الجلب (V27: «التالي» أثناءه كان يكتب حال العضو السابق وأجهزته
+    /// على التالي — و«تسجيل خروج» يعمل على جهاز غيره)
     private func refresh() async {
         liveStatus = nil
         ban = nil
         devices = nil
         devicesFailed = false
         if !accounts.loaded { await accounts.refresh() }
-        guard let m = member, m.isDeceased != true else { return }
-        // «طلب تغيير الصورة» المعلّق (السيرفر القديم: لا شيء)
+        guard let m = member else { return }
+        // «طلب تغيير الصورة» المعلّق (السيرفر القديم: لا شيء) — وللمتوفى أيضاً: طلبه المفتوح يُلغى من هنا (V24)
         if authVM.canEditMembers { await PhotoChangeRequestStore.shared.refresh(memberId: m.id) }
-        if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
+        guard m.isDeceased != true, isCurrent(m) else { return }
+        let status = await memberVM.fetchMemberStatus(memberId: m.id)
+        guard isCurrent(m) else { return }
+        if let status { liveStatus = status }
         await refreshBan(m)
-        if authVM.canViewSystemSettings {
+        if authVM.canViewSystemSettings, isCurrent(m) {
             await loadDevices(m)
         }
     }
 
+    private func isCurrent(_ m: FamilyMember) -> Bool { !Task.isCancelled && currentId == m.id }
+
     /// تعذّر الجلب ≠ «لا أجهزة» — «تعذّر التحميل» بإعادة المحاولة بدل «لا تصله الإشعارات»
     private func loadDevices(_ m: FamilyMember) async {
         let list = await notificationVM.fetchDevicesForMember(m.id)
+        guard currentId == m.id else { return }
         devicesFailed = list == nil
         devices = list ?? []
     }
 
     private func refreshBan(_ m: FamilyMember) async {
         guard canBan, !AdminMemberFacts.isBlank(m.phoneNumber) else { return }
-        ban = await authVM.activeBan(for: (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+        let found = await authVM.activeBan(for: (m.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
+        guard currentId == m.id else { return }
+        ban = found
     }
 
     private func run(_ action: AdminMemberConfirm) {
@@ -380,12 +444,13 @@ struct AdminMemberSheet: View {
                     adminRequestVM.errorMessage = nil
                     failure = reason
                 }
-                if let status = await memberVM.fetchMemberStatus(memberId: m.id) { liveStatus = status }
+                let status = await memberVM.fetchMemberStatus(memberId: m.id)
+                if let status, currentId == m.id { liveStatus = status }
             case .suspend, .unsuspend:
                 let target: FamilyMember.MemberStatus = action == .suspend ? .frozen : .active
                 ok = await memberVM.setMemberSuspension(memberId: m.id, suspend: action == .suspend,
                                                         reason: action == .suspend ? suspendReason : nil)
-                if ok { liveStatus = target } else { failure = memberVM.errorMessage }
+                if ok { if currentId == m.id { liveStatus = target } } else { failure = memberVM.errorMessage }
             case .hide, .show:
                 ok = await AdminMemberSheet.setHidden(m.id, hidden: action == .hide, memberVM: memberVM)
             case .clearPhone:
@@ -582,8 +647,6 @@ struct AdminMemberDataSection: View {
     let member: FamilyMember
     let facts: AdminMemberSheetFacts
     let canEdit: Bool
-    /// لا جهاز مسجّل له — سطر صفّ الصورة مع «نبّهه يضيف صورة»
-    var noDevices: Bool = false
     let open: (AdminMemberBox) -> Void
     let openTall: (AdminMemberTallBox) -> Void
 
@@ -683,10 +746,9 @@ struct AdminMemberDataSection: View {
                 verb: AdminMemberFacts.isBlank(m.gender) ? L10n.t("تحديد", "Set") : L10n.t("تغيير", "Change")) {
                 if AdminMemberFacts.isBlank(m.gender) { open(.gender(m)) } else { openTall(.editAll(m)) }
             }
-            // صفّ واحد بحالات P1 («نبّهه يضيف صورة»، التذكير، «طلب تغيير الصورة») وسهمه للإضافة/التبديل —
-            // لا صور للإناث في التطبيق (طلب المالك ٢٠٢٦-١١-٢٤): المصغّرة للذكور فقط
-            AdminMemberPhotoRow(member: m, hasLogin: facts.account != nil, canEdit: canEdit, noDevices: noDevices,
-                                openPhoto: { open(.photo(m)) }, askChange: { open(.photoRequest(m)) })
+            // معلومة فقط: «موجودة/بلا صورة» وسهمه للإضافة/التبديل — أوامر الصورة («نبّهه»، التذكير، «طلب تغيير الصورة»)
+            // في «إجراءات الإدارة» (F4). لا صور للإناث في التطبيق (طلب المالك ٢٠٢٦-١١-٢٤): المصغّرة للذكور فقط
+            AdminMemberPhotoRow(member: m, canEdit: canEdit, openPhoto: { open(.photo(m)) })
             row(AdminMemberRow(icon: "doc.text.fill", tint: DS.Color.accent, title: L10n.t("السيرة", "Biography"),
                                subtitle: latestBioLine, value: bioCountText(bio)),
                 verb: bio == 0 ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit")) { openTall(.editAll(m)) }
@@ -706,7 +768,8 @@ struct AdminMemberLineageSection: View {
     let busy: String?
     let open: (AdminMemberTallBox) -> Void
     let ask: (AdminMemberConfirm) -> Void
-    let openWomen: () -> Void
+    /// nil = الورقة فوق مربّع (V8) — «الأم والزوجة» معلومة بلا رابط
+    let openWomen: (() -> Void)?
 
     /// الأب بالاسم الأول؛ بلا أب «غير مرتبط بأب»
     private var fatherText: String {
@@ -735,9 +798,14 @@ struct AdminMemberLineageSection: View {
             } else {
                 children
             }
-            AdminMemberTapRow(hint: L10n.t("يفتح شجرة النساء", "Opens the women's tree"), action: openWomen) {
+            if let openWomen {
+                AdminMemberTapRow(hint: L10n.t("يفتح شجرة النساء", "Opens the women's tree"), action: openWomen) {
+                    AdminMemberRow(icon: "heart.fill", tint: DS.Color.palm, title: L10n.t("الأم والزوجة", "Mother and wife"),
+                                   subtitle: L10n.t("تُدار من شجرة النساء", "Managed in the women's tree"), showsChevron: true)
+                }
+            } else {
                 AdminMemberRow(icon: "heart.fill", tint: DS.Color.palm, title: L10n.t("الأم والزوجة", "Mother and wife"),
-                               subtitle: L10n.t("تُدار من شجرة النساء", "Managed in the women's tree"), showsChevron: true)
+                               subtitle: L10n.t("تُدار من شجرة النساء", "Managed in the women's tree"))
             }
             visibilityRow
         }

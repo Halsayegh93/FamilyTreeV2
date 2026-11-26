@@ -22,7 +22,9 @@ extension PhotoNudgeLogic.Viewer {
         self.init(id: authVM.currentUser?.id,
                   canEdit: authVM.canEditMembers && family,
                   isOwner: authVM.currentUser?.role == .owner,
-                  canBulk: authVM.isAdmin && family)
+                  canBulk: authVM.isAdmin && family,
+                  // RLS: المالك والمدير والمراقب يقرؤون الطلبات (S-4)
+                  canReadStatus: authVM.canEditMembers)
     }
 }
 
@@ -287,6 +289,8 @@ struct AdminPhotoNudgePage: View {
     @State private var sendingAll = false
     @State private var busy: Set<UUID> = []
     @State private var failure: String?
+    /// «أُرسل له قبل أقل من دقيقة» — ليس خطأً
+    @State private var info: String?
     @State private var now = Date()
 
     init() {}
@@ -315,6 +319,12 @@ struct AdminPhotoNudgePage: View {
                 Button(L10n.t("حسناً", "OK")) { failure = nil }
             } message: {
                 Text(failure ?? "")
+            }
+            .dsAlert(L10n.t("لم يُرسل الآن", "Not sent now"),
+                     isPresented: Binding(get: { info != nil }, set: { if !$0 { info = nil } })) {
+                Button(L10n.t("حسناً", "OK")) { info = nil }
+            } message: {
+                Text(info ?? "")
             }
             .debugStackProbe("AdminPhotoNudgePage")
     }
@@ -485,9 +495,10 @@ struct AdminPhotoNudgePage: View {
     private func row(_ i: Int, ids: [UUID], position: Int) -> some View {
         let entry = index.entries[i]
         let open = store.open(for: entry.id)?.nudgeOpen
-        let known = store.allOpenHealth.hasData
-        let line = known ? PhotoNudgeLogic.shortLine(open, maxReminders: PhotoNudgeConfig.maxReminders, now: now)
-                         : AdminStoreHealthText.placeholder
+        // المشرف لا يقرأ الطلبات (RLS يرجع لا شيء): «—» لا «لم يُنبَّه بعد» (F4، S-4)
+        let known = store.allOpenHealth.hasData && viewer.canReadStatus
+        let line = PhotoNudgeLogic.listLine(open, known: store.allOpenHealth.hasData, viewer: viewer,
+                                            maxReminders: PhotoNudgeConfig.maxReminders, now: now)
         let state = PhotoNudgeLogic.row(viewer: viewer, member: .init(entry.member, hasLogin: entry.hasLogin),
                                         open: open, maxReminders: PhotoNudgeConfig.maxReminders, now: now)
         return HStack(spacing: DS.Spacing.sm) {
@@ -510,13 +521,13 @@ struct AdminPhotoNudgePage: View {
             switch state {
             case .nudge:
                 AdminPillButton(title: L10n.t("نبّهه", "Notify"), icon: "bell", style: .soft, height: DS.Hub.pillHeightCard) {
-                    send(entry.id, success: L10n.t("وصله التنبيه", "Notice sent")) { await store.nudge(memberId: entry.id) }
+                    send(entry.id, success: L10n.t("وصله التنبيه", "Notice sent")) { await store.nudgeOutcome(memberId: entry.id) }
                 }
                 .fixedSize()
                 .accessibilityLabel(Text(verbatim: "\(L10n.t("نبّهه يضيف صورة", "Ask for a photo")): \(entry.member.fourPartName)"))
             case .pending(let p) where p.canRemind:
                 AdminPillButton(title: L10n.t("ذكّره", "Remind"), icon: "bell", style: .soft, height: DS.Hub.pillHeightCard) {
-                    send(entry.id, success: L10n.t("وصله التذكير", "Reminder sent")) { await store.remind(memberId: entry.id) }
+                    send(entry.id, success: L10n.t("وصله التذكير", "Reminder sent")) { await store.remindOutcome(memberId: entry.id) }
                 }
                 .fixedSize()
                 .accessibilityLabel(Text(verbatim: "\(L10n.t("ذكّره الحين", "Remind now")): \(entry.member.fourPartName)"))
@@ -545,28 +556,40 @@ struct AdminPhotoNudgePage: View {
 
     // MARK: الإجراءات
 
-    private func send(_ id: UUID, success: String, _ call: @escaping () async -> String?) {
+    /// النتيجة الصادقة (F4): وصله فعلاً · أُرسل قبل أقل من دقيقة (V15) · له صورة الآن ← تحديث العضو (V11) · الخطأ
+    private func send(_ id: UUID, success: String, _ call: @escaping () async -> PhotoNudgeOutcome) {
         guard !busy.contains(id) else { return }
         busy.insert(id)
         Task {
-            let error = await call()
+            let outcome = await call()
+            if outcome == .stale {
+                await memberVM.fetchSingleMember(id: id)
+                await store.refresh(memberId: id)
+            }
             busy.remove(id)
             now = Date()
-            if let error {
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
-                failure = error
-            } else {
+            switch outcome {
+            case .sent:
                 DSMomentToast.show(success, moment: .success)
+            case .tooSoon:
+                info = PhotoNudgeLogic.tooSoonText
+            case .stale:
+                DSMomentToast.show(PhotoNudgeLogic.staleText, moment: .success)
+            case .failed(let message):
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                failure = message
             }
         }
     }
 
     private func sendAll() {
         let expected = bulkCount
-        guard expected > 0, !sendingAll else { return }
+        guard expected > 0, !sendingAll, let rows else { return }
+        // المعروضون في القائمة — السيرفر يعيد فحص كل واحد بقاعدتها (F4، S-1)
+        let shown = rows.map { index.entries[$0].id }
         sendingAll = true
         Task {
-            let result = await store.requestAll(expected: expected)
+            let result = await store.requestAll(expected: expected, memberIds: shown)
             sendingAll = false
             now = Date()
             switch result {

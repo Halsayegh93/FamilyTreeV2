@@ -87,8 +87,18 @@ private struct NotificationKindStyle {
         labelAr: "وفاة", labelEn: "Obituary"
     )
 
+    /// «أضف صورتك الشخصية» (طلب إضافة لا تغيير — F4، S-3)
+    private static let photoAdd = NotificationKindStyle(
+        icon: "person.crop.circle.badge.plus", gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,
+        labelAr: "طلب إضافة صورة", labelEn: "Photo Request"
+    )
+
     static func style(for notification: AppNotification) -> NotificationKindStyle {
-        notification.isDeathAnnouncement ? deathAnnouncement : style(for: notification.kind)
+        if notification.isDeathAnnouncement { return deathAnnouncement }
+        if notification.kind == NotificationKind.photoChangeRequest.rawValue, notification.details?.photoAdd == true {
+            return photoAdd
+        }
+        return style(for: notification.kind)
     }
 
     /// لون رأس مربّع التفاصيل — درجات غامقة تبقى الكتابة البيضاء واضحة عليها في

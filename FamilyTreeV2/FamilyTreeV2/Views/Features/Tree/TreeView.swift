@@ -10,6 +10,13 @@ extension Notification.Name {
     static let openMemberInTree = Notification.Name("openMemberInTree")
 }
 
+/// «في الشجرة» من ورقة العضو في الإدارة (F4، V36): الطلب ينتظر هنا حتى تجهز شجرة العائلة — كان يُرسل بعد ٠٫٦ ث ثابتة
+/// فيمسحه إعداد البداية (`resetToTopRoot`) في أول فتح، أو يضيع حين تُبنى شجرة النساء أولاً (حساب المرأة)
+@MainActor
+enum TreeFocusRequest {
+    static var pending: UUID?
+}
+
 // MARK: - ثوابت الشجرة
 /// ملاءمة «مجموعة» (الأب + أبنائه) في الشجرتين — مكان واحد للمساحة الظاهرة (طلب المالك ٢٠٢٦-١١-١٠):
 /// تحت الهيدر وبطاقة الأدوات، فوق الشريط السفلي، وبعيداً عن عمود الأزرار العائمة (+ / − / ↻) بعرضه المقيس —
@@ -478,6 +485,8 @@ struct TreeView: View {
     @State private var drawProgress: CGFloat = 1
     // MARK: - بيانات مُخزنة مؤقتاً لتجنب إعادة الحساب كل render
     @State private var cachedVisibleMembers: [FamilyMember] = []
+    /// انتهى إعداد البداية — طلب «في الشجرة» يُنفَّذ الآن، وقبله ينتظر في `TreeFocusRequest` (V36)
+    @State private var focusReady = false
     @State private var cachedMemberById: [UUID: FamilyMember] = [:]
     @State private var cachedRootMembers: [FamilyMember] = []
     @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
@@ -787,6 +796,9 @@ struct TreeView: View {
                     try? await Task.sleep(nanoseconds: TreeConst.shortDelay)
                     resetToTopRoot(animated: false)
                 }
+                // «في الشجرة» من الإدارة ينتظر حتى هنا (بعد إعداد البداية) — V36
+                focusReady = true
+                consumeFocusRequest()
             }
             .onDisappear {
                 // إلغاء أي highlight tasks عالقة لتفادي memory leaks عند التنقل السريع
@@ -820,9 +832,14 @@ struct TreeView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openMemberInTree)) { note in
                 // مزامنة الشجرة مع الشيت — التحريك فقط دون لمس selectedMember
                 // (الشيت يبقى مفتوح ومحتواه يتحدث داخلياً عبر currentMemberId)
-                guard let info = note.userInfo,
-                      let memberId = info["memberId"] as? UUID,
-                      let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
+                guard let info = note.userInfo, let memberId = info["memberId"] as? UUID else { return }
+                // قبل انتهاء إعداد البداية يُحفظ الطلب (كان `resetToTopRoot` يمسحه) — V36
+                guard focusReady else {
+                    TreeFocusRequest.pending = memberId
+                    return
+                }
+                if TreeFocusRequest.pending == memberId { TreeFocusRequest.pending = nil }
+                guard let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
                 selectMemberFromSearch(target)
             }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
@@ -953,6 +970,14 @@ struct TreeView: View {
                 withAnimation(.easeOut(duration: 0.3)) { searchedMemberID = nil }
             }
         }
+    }
+
+    /// طلب «في الشجرة» المنتظر (V36) — يُنفَّذ مرة ثم يُمسح
+    private func consumeFocusRequest() {
+        guard let id = TreeFocusRequest.pending else { return }
+        TreeFocusRequest.pending = nil
+        guard let target = cachedMemberById[id] ?? memberVM.member(byId: id) else { return }
+        selectMemberFromSearch(target)
     }
 
     private func resetToTopRoot(animated: Bool = true) {

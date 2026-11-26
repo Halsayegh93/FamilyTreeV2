@@ -130,10 +130,13 @@ extension AppNotification {
         let selfChild: Bool?
         /// السيرفر يشكّ في الابن المضاف (اسم كامل أو ميلاد يطابق غيره) — «راجعه»
         let review: Bool?
+        /// «أضف صورتك الشخصية» (`photo_change_request` لعضو بلا صورة — P1) — التسمية «طلب إضافة صورة» (F4، S-3)
+        let photoAdd: Bool?
 
         enum CodingKeys: String, CodingKey {
             case v, changes, type, sender, action, tree, subject, actor, review
             case selfChild = "self_child"
+            case photoAdd = "photo_add"
             case memberId = "member_id"
             case newsId = "news_id"
             case workflowRequestId = "request_id"
@@ -257,6 +260,7 @@ extension AppNotification {
             self.actor = nil
             self.selfChild = nil
             self.review = nil
+            self.photoAdd = nil
         }
 
         /// حمولة «ما الذي تغيّر» أو حمولة نوع خاص (إعلان وفاة) — الغائب يأخذ قيمة فارغة
@@ -275,6 +279,7 @@ extension AppNotification {
             actor = try? c.decodeIfPresent(Person.self, forKey: .actor)
             selfChild = try? c.decodeIfPresent(Bool.self, forKey: .selfChild)
             review = try? c.decodeIfPresent(Bool.self, forKey: .review)
+            photoAdd = try? c.decodeIfPresent(Bool.self, forKey: .photoAdd)
             if let version = try? c.decodeIfPresent(Int.self, forKey: .v) {
                 v = version
             } else if type != nil || sender != nil || !changes.isEmpty {

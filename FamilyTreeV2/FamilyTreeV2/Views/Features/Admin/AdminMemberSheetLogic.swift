@@ -20,9 +20,9 @@ nonisolated enum AdminMemberSheetLogic {
         count > 1
     }
 
-    /// يُضغط «التالي»/«السابق»؟ — لا في طرفي القائمة ولا بلا شريط
-    static func canStep(next: Bool, position: Int, count: Int) -> Bool {
-        guard showsStepBar(count: count), position >= 0, position < count else { return false }
+    /// يُضغط «التالي»/«السابق»؟ — لا في طرفي القائمة ولا بلا شريط، ولا أثناء أمر جارٍ (F4، V27: نتيجته تخصّ هذا العضو)
+    static func canStep(next: Bool, position: Int, count: Int, busy: Bool = false) -> Bool {
+        guard !busy, showsStepBar(count: count), position >= 0, position < count else { return false }
         return next ? position < count - 1 : position > 0
     }
 
@@ -157,6 +157,62 @@ nonisolated enum AdminMemberSheetLogic {
         case selfAccount
         /// «حساب المالك: …» (مالك آخر)
         case ownerAccount
+    }
+
+    // MARK: «في الشجرة» (F4، V33)
+
+    /// العضو يُرسم في شجرة العائلة: سلسلة آبائه تصل إلى الرأس الأول وكلهم مرسومون (لا مخفي ولا موقوف ولا ابن بنت) —
+    /// اليتيم وجذر ثانٍ ومن تحت أب مخفي لا «في الشجرة» (كان الضغط يطوي الشجرة على لا شيء). حلقة الآباء لا تعلّق
+    static func reachable(_ id: UUID, root: UUID?, father: (UUID) -> UUID?, drawable: (UUID) -> Bool,
+                          limit: Int = 300) -> Bool {
+        guard let root else { return false }
+        var current = id
+        for _ in 0..<limit {
+            guard drawable(current) else { return false }
+            if current == root { return true }
+            guard let next = father(current) else { return false }
+            current = next
+        }
+        return false
+    }
+
+    // MARK: «إجراءات الإدارة» (F4 القسم A — «اهم شي نفصل الأمور الادارية عن الاعضاء»)
+
+    /// أوامر الإدارة بترتيب بطاقتها، والحذف آخرها
+    enum AdminItem: String, CaseIterable, Equatable {
+        /// «نبّهه يضيف صورة» / السطر المعلّق بـ«ذكّره الحين» و«إلغاء التنبيه» / «طلب تغيير الصورة»
+        case photo
+        /// «تسجيل في التطبيق»
+        case register
+        /// الأجهزة بـ«تسجيل خروج»
+        case devices
+        /// «إيقاف الحساب» / «رفع الإيقاف»
+        case suspend
+        /// «منع الرقم من التسجيل»
+        case ban
+        /// «حذف العضو نهائياً» — أحمر، آخر البطاقة
+        case delete
+    }
+
+    struct AdminCard: Equatable {
+        let items: [AdminItem]
+    }
+
+    /// بطاقة «إجراءات الإدارة» تحت معلومات العضو — nil = لا بطاقة: على ورقتك (يبقى سطر القفل)، أو لا أمر لك هنا.
+    /// للمتوفى: طلب الصورة المفتوح (لإلغائه) والحذف فقط
+    static func adminCard(isSelf: Bool, living: Bool, photo: Bool, register: Bool, devices: Bool,
+                          commands: AccountCommands) -> AdminCard? {
+        guard !isSelf else { return nil }
+        var items: [AdminItem] = []
+        if photo { items.append(.photo) }
+        if living {
+            if register { items.append(.register) }
+            if devices { items.append(.devices) }
+            if commands.suspend { items.append(.suspend) }
+            if commands.ban { items.append(.ban) }
+        }
+        if commands.delete { items.append(.delete) }
+        return items.isEmpty ? nil : AdminCard(items: items)
     }
 
     /// للحيّ فقط، ولمن يملك أمراً من أوامر الورقة (يعدّل أو يوقف أو يمنع أو يحذف) — غيره لا يحتاج شرحاً

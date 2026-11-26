@@ -243,8 +243,25 @@ nonisolated enum AdminMembersLogic {
         filtered || searching
     }
 
-    /// كلمة «حياً» الصغيرة بعد رقم «خارج العائلة» (الأحياء وحدهم — طلب المالك ٢٠٢٦-١١-٢٦)
+    /// كلمة «حياً» الصغيرة بعد رقم «خارج العائلة» (الأحياء وحدهم — طلب المالك ٢٠٢٦-١١-٢٦). ثابتة — يقرؤها مربّع الرأس
+    /// الذي تنقله F5 إلى «تصفية»؛ الصحيح بالعدد `livingUnit(_:)`
     static var livingUnit: String { L10n.t("حياً", "living") }
+
+    /// F4 (V21): المعدود بعد رقم الأحياء — «حيّ واحد» · «حيّان» · «5 أحياء» · «50 حياً» · «100 حيّ» (نفس «اليوم»
+    /// `AdminCensusText.living`). بالإنجليزية «living»
+    static func livingUnit(_ n: Int) -> String {
+        guard L10n.isArabic else { return "living" }
+        switch n {
+        case 1: return "حيّ واحد"
+        case 2: return "حيّان"
+        default:
+            switch n % 100 {
+            case 3...10:  return "أحياء"
+            case 11...99: return "حياً"
+            default:      return "حيّ"
+            }
+        }
+    }
 
     // الاسم في صفّ العضو: أول كلمتين عريضتان والباقي عادي، سطر واحد يُقصّ في آخره
 
@@ -271,11 +288,15 @@ nonisolated enum AdminMembersLogic {
         /// تتصدّر البطاقة متى كان فيها أحد: «تواريخ وفاة ناقصة» — حملة المالك البارزة، ورقمها انتقل إلى هنا من مربّع
         /// «المناسبات» (V2-1 البند ٤)
         let leads: Bool
+        /// F4 (V22): صيغ العدد والمعدود للسطر الأول («تاريخ وفاة واحد ناقص» · «363 تاريخ وفاة ناقصاً») — nil = العنوان
+        /// كما هو بعد الرقم من ٣ («12 بيانات ناقصة»)، و«العنوان (1)» لواحد واثنين
+        let forms: AdminCountForms?
 
-        init(_ title: String, _ count: Int?, leads: Bool = false) {
+        init(_ title: String, _ count: Int?, leads: Bool = false, forms: AdminCountForms? = nil) {
             self.title = title
             self.count = count
             self.leads = leads
+            self.forms = forms
         }
     }
 
@@ -316,11 +337,16 @@ nonisolated enum AdminMembersLogic {
     }
 
     /// «363 تواريخ وفاة ناقصة» — والسؤال يبقى أولاً «هل ما زالوا أحياء؟ 41» (رقم قبل سؤال لا يُقرأ)
+    /// F4 (V22): بصيغ العدد حين تُعطى («تاريخ وفاة واحد ناقص»، «تاريخا وفاة ناقصان»)، وإلا «بيانات ناقصة (2)» لواحد
+    /// واثنين — لا «1 تواريخ وفاة ناقصة»
     static func reviewLine(_ list: ReviewList) -> String {
         guard let n = list.count, n > 0 else { return list.title }
         let number = AdminNumberText.grouped(n)
         let asks = list.title.hasSuffix("؟") || list.title.hasSuffix("?")
-        return asks ? "\(list.title) \(number)" : "\(number) \(list.title)"
+        if asks { return "\(list.title) \(number)" }
+        if L10n.isArabic, let forms = list.forms { return forms.text(n) }
+        if L10n.isArabic && n <= 2 { return "\(list.title) (\(number))" }
+        return "\(number) \(list.title)"
     }
 
     /// «قائمة واحدة» · «قائمتان» · «5 قوائم» · «11 قائمةً» · «100 قائمة»

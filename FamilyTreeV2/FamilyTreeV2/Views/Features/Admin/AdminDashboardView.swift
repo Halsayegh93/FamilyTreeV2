@@ -49,6 +49,8 @@ struct AdminDashboardView: View {
     @ObservedObject private var sms = SmsBalanceStore.shared
     /// «الأجهزة ووصول الإشعارات» — نفس مخزن صفحتها (رقم واحد بتعريف واحد)
     @ObservedObject private var devices = AdminDeviceReachStore.shared
+    /// الديوانيات والمكتبة والمعرض المعلّقة — إشعاراتها تُعدّ على الجرس ما دامت تنتظر (V34)
+    @ObservedObject private var pendingContent = AdminPendingContentStore.shared
     /// جدول «مين يشوف وش» يصل من السيرفر (`app_config.admin_role_matrix`) — تتحدّث «اليوم» حين يصل
     @ObservedObject private var config = AppConfigValues.shared
     @Binding var selectedTab: Int
@@ -83,7 +85,8 @@ struct AdminDashboardView: View {
     /// (`AdminReviewHubCounts`). المفتاح الغائب = لم يصل
     @State private var reviewCounts: [AdminReviewHubLogic.List: Int] = [:]
     /// ما بُنيت منه آخر مرة — فهرس الأعضاء يُبنى فقط حين يتغيّر (لا مع كل تغيّر في الطلبات)
-    @State private var reviewKey: [Int] = []
+    /// F4 (V30): فئة كل حساب في المفتاح — انتقال عضو بين «نشط» و«غير نشط» (العدد نفسه) يعيد الحساب
+    @State private var reviewKey: AdminReviewHubLogic.CacheKey<AppUsageCategory>?
 
     // حال المخازن (Autoplan note 2) — كل كلمة ورقم من مخزنه
     @State private var inboxHealth: AdminStoreHealth = .idle
@@ -285,12 +288,17 @@ struct AdminDashboardView: View {
         await memberVM.fetchAllMembers(force: force)
         membersFetch = AdminTodayLogic.membersFetchEnded(hasMembers: !memberVM.allMembers.isEmpty,
                                                          loadFailed: memberVM.membersLoadFailed)
-        guard needsFigures else { return }
+        // قوائم الحسابات لكل من يرى «العائلة» (قوائم «يحتاج مراجعتك» الثلاث تنتظرها — F4، V18)، وشجرة النساء لأرقام الرأس
+        let needsAccounts = needsFigures || seesFamily
+        guard needsFigures || needsAccounts else { return }
         await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in await loadWomen(force: force) }
-            group.addTask { @MainActor in await loadAccounts(force: force) }
+            if needsFigures { group.addTask { @MainActor in await loadWomen(force: force) } }
+            if needsAccounts { group.addTask { @MainActor in await loadAccounts(force: force) } }
         }
     }
+
+    /// يرى قسم «العائلة» (مربّعه في «اليوم» يقول قوائمه)
+    private var seesFamily: Bool { AdminArea.family.isVisible(for: authVM) }
 
     /// شجرة النساء (نساء العائلة و«خارج العائلة») — الكاش يكفي حتى السحب. `-tmpFailStores census` يُفشلها
     private func loadWomen(force: Bool) async {
@@ -352,6 +360,7 @@ struct AdminDashboardView: View {
                 group.addTask { @MainActor in await adminRequestVM.fetchPolicyRequests() }
                 group.addTask { @MainActor in await projectsVM.fetchPendingProjects() }
                 group.addTask { @MainActor in pendingArchiveCount = await FamilyArchiveViewModel.pendingCount() }
+                group.addTask { @MainActor in await AdminPendingContentStore.shared.refresh(force: true) }
             }
         }
         inboxHealth = inboxHealth.ending(success: !injected && NetworkMonitor.shared.isConnected)
@@ -503,13 +512,16 @@ struct AdminDashboardView: View {
         let accounts = AdminAccountsStore.shared
         let sons = DaughterSonsIndex.shared.ids
         let verified = AdminLivingVerifiedStore.shared.ids
-        let key = [memberVM.membersVersion, memberVM.allMembers.count, accounts.loaded ? 1 : 0,
-                   accounts.accounts.count, sons.hashValue, verified.hashValue]
+        let key = AdminReviewHubLogic.CacheKey(membersVersion: memberVM.membersVersion, members: memberVM.allMembers.count,
+                                               accountsLoaded: accounts.loaded,
+                                               accounts: accounts.accounts.mapValues(\.usage),
+                                               daughterSons: sons, verified: verified)
         guard key != reviewKey else { return }
         reviewKey = key
         let index = AdminMembersIndex.build(members: memberVM.allMembers, accounts: accounts.accounts,
                                             accountsReady: accounts.loaded, daughterSons: sons, branchName: { _ in nil })
-        let counts = AdminReviewHubCounts.make(index: index, verified: verified, members: memberVM.allMembers)
+        let counts = AdminReviewHubCounts.make(index: index, verified: verified, members: memberVM.allMembers,
+                                               photos: .init(authVM: authVM))
         if counts != reviewCounts { reviewCounts = counts }
     }
 
@@ -662,7 +674,8 @@ struct AdminDashboardView: View {
     /// (`AdminTodayBandLogic.bellCount`)؛ غير المقروء وحده لا يُعدّ
     private var bellCount: Int {
         let open = AdminTodayFeed.openRequestIds(adminRequestVM: adminRequestVM, newsVM: newsVM,
-                                                 projectsVM: projectsVM, memberVM: memberVM)
+                                                 projectsVM: projectsVM, memberVM: memberVM,
+                                                 pendingContent: pendingContent.ids)
         let notices = AdminTodayFeed.bellNotices(notificationVM.notifications, me: authVM.currentUser?.id)
         return AdminTodayBandLogic.bellCount(derived: derivedNotices.count, notices: notices, open: open,
                                              seesMessages: authVM.adminSees(.inboxMessages))
@@ -785,8 +798,8 @@ struct AdminDashboardView: View {
             // «العائلة» حيث صفّ «يحتاج مراجعتك». قوائم الحسابات تنتظر قوائم الحسابات ما دام جلبها جارياً (لا عدد ناقص)
             let counts = AdminReviewHubLogic.List.allCases.map { reviewCounts[$0] }
             let word = AdminTodayBandLogic.reviewListsWord(counts: counts)
-            var stores = [membersHealth]
-            if needsFigures, accountsHealth == .idle || accountsHealth == .loading { stores.append(.loading) }
+            // F4 (V18): حال قوائم الحسابات نفسها — فشلها «تعذّر التحميل ↻» بإعادة المحاولة (كان المربّع فارغاً بلا كلمة)
+            let stores = [membersHealth, accountsHealth]
             return TileModel(state: word?.state, health: .combined(stores), retry: retryCensus, landing: word?.landing)
         case .occasions:
             // وفاة لم تُعلن ومجدول اليوم للمالك والمدير (`unannounced` فارغة لغيرهما)، والذكرى للجميع
@@ -798,7 +811,7 @@ struct AdminDashboardView: View {
             return TileModel(state: word.state, health: .combined(stores), retry: retryOccasions, landing: word.landing)
         case .metrics:
             guard authVM.adminSees(.metricsFamily) else { return TileModel() }
-            // v2: «الراحلون 502» ← قسم «الراحلون» (لا رقم من الرأس يتكرّر هنا — 170 في رابط الرأس)
+            // v2: «الراحلون 502» ← قسم «العائلة» حيث «متوفون 502» (F4، V16 — لا رقم من الرأس يتكرّر هنا)
             let word = AdminTodayBandLogic.departedWord(figures.totalDeceased)
             return TileModel(state: word?.state, health: censusHealth, retry: retryCensus, landing: word?.landing)
         case .team:

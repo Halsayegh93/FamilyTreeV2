@@ -131,11 +131,16 @@ nonisolated enum AdminWomenLogic {
         return s.statuses.isEmpty || s.statuses.contains { matches(f, status: $0) }
     }
 
-    /// القسم المطويّ «المتوفون من خارج العائلة» تحت قائمة «فرع خارج العائلة» (مع «الكل» أو مع «الحيّات» بلا «متوفيات»)
+    /// القسم المطويّ «المتوفون من خارج العائلة» تحت قائمة «فرع خارج العائلة» (بلا «متوفيات» — معها يدخلون القائمة).
+    /// «الكل» و«الحيّات» تطويهم كلهم، وبقية «الحالة» (أيّ المختار) تطوي من يطابقها منهم: «مسجّلات» = المسجّلات المتوفيات —
+    /// كانت تُخفيهن ولا تظهرن في أي مكان (F4 V5)
     static func inOutsideDeceased(_ f: Fact, _ s: Filters) -> Bool {
-        s.branch == .outside && !s.statuses.contains(.deceased) && (s.statuses.isEmpty || s.statuses.contains(.living))
-            && f.outside && f.deceased
+        guard s.branch == .outside, !s.statuses.contains(.deceased), f.outside, f.deceased else { return false }
+        return s.statuses.isEmpty || s.statuses.contains(.living) || s.statuses.contains { matches(f, status: $0) }
     }
+
+    /// القائمة تعدّ أفراداً (رجالاً ونساءً) في «فرع خارج العائلة»، ونساءً في غيره — المعدود من الحالة المعدودة نفسها (F4 V39)
+    static func countsPeople(_ s: Filters) -> Bool { s.branch == .outside }
 
     static func count(_ facts: [Fact], _ s: Filters) -> Int {
         facts.reduce(0) { $0 + (inList($1, s) ? 1 : 0) }
@@ -424,8 +429,7 @@ struct AdminWomenPanel: View {
             visible = L.newestOrder(dated.map(\.date)).map { dated[$0] }
         }
         let outsideDeceased = searched.filter { L.inOutsideDeceased($0.fact, current) }
-        let outside = current.branch == .outside
-        let set = AdminFilterSet<L.Filters>(noun: { n in outside ? Self.peopleNoun(n) : Self.womenNoun(n) },
+        var set = AdminFilterSet<L.Filters>(noun: { n in Self.resultNoun(current, n) },
                                             resultCount: count) { s in
             // عدد كل حالة = النتيجة لو اختيرت وحدها مع الفرع
             let statuses = L.Status.allCases.filter { $0 != .all }.map { status -> AdminFilterOption<L.Status> in
@@ -446,12 +450,19 @@ struct AdminWomenPanel: View {
             ]
             return groups
         }
+        // F4 V39: القارئ الصوتي بعد لمسة «الفرع» يعدّ الحالة الجديدة — المعدود منها لا من الفرع الذي رُسم به الطقم
+        set.stateNoun = { s, n in Self.resultNoun(s, n) }
         var note: String?
         if current.order == .newest {
             let recent = L.recentCount(visible.map(\.date))
             note = L10n.t("\(recent) جديدة خلال \(L.recentDays) يوماً", "\(recent) new in \(L.recentDays) days")
         }
         return Model(visible: visible, outsideDeceased: outsideDeceased, set: set, note: note)
+    }
+
+    /// معدود النتيجة لحالة بعينها: «فرد» في «فرع خارج العائلة» (رجال ونساء)، وإلا «امرأة»
+    static func resultNoun(_ s: AdminWomenLogic.Filters, _ n: Int) -> String {
+        AdminWomenLogic.countsPeople(s) ? peopleNoun(n) : womenNoun(n)
     }
 
     /// «امرأة» · «امرأتان» · «نساء» · «امرأةً»

@@ -198,12 +198,15 @@ struct ApprovalHoursStepper: View {
         case .points:  return L10n.t("\(value) نقطة", "\(value) pts")
         case .seconds: return L10n.t("\(value) ث", "\(value) s")
         case .count:   return "\(value)"
-        case .days:    return L10n.t("\(value) يوم", "\(value) d")
+        case .days:    return L10n.isArabic ? Self.days.text(value) : "\(value) d"
         case .minutes:
             if value >= 60, value % 60 == 0 { return L10n.t("\(value / 60) س", "\(value / 60) h") }
             return L10n.t("\(value) د", "\(value) min")
         }
     }
+
+    /// العدد والمعدود (F4، V32): «يوم» · «يومان» · «7 أيام» · «14 يوماً» · «100 يوم» — لا «14 يوم»
+    private static let days = AdminCountForms(one: "يوم", two: "يومان", few: "أيام", many: "يوماً", single: "يوم")
 
     private var spokenText: String {
         if value == 0, let zeroText { return zeroText }
@@ -212,7 +215,7 @@ struct ApprovalHoursStepper: View {
         case .points:  return L10n.t("\(value) نقطة", "\(value) points")
         case .seconds: return L10n.t("\(value) ثانية", "\(value) seconds")
         case .count:   return "\(value)"
-        case .days:    return L10n.t("\(value) يوم", "\(value) days")
+        case .days:    return L10n.isArabic ? Self.days.text(value) : "\(value) days"
         case .minutes:
             if value >= 60, value % 60 == 0 { return L10n.t("\(value / 60) ساعة", "\(value / 60) hours") }
             return L10n.t("\(value) دقيقة", "\(value) minutes")

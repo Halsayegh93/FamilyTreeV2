@@ -69,8 +69,8 @@ struct DeathDatesCampaignPage: View {
     @State private var filters = Filters()
     /// الآباء والأبناء — مرة لكل تغيّر في الأعضاء
     @State private var tree = AdminFamilyTree.empty
-    /// ذرّية الفرع المطبَّق (`filters.branch`) — مرة لكل تغيّر فيه
-    @State private var branchSet: Set<UUID>?
+    /// ذرّية الفرع المطبَّق — مرة لكل تغيّر فيه. تُقرأ عبر `appliedSubtree` (بمعرّف فرعها) فلا رسم بفرع قديم (F4 V4)
+    @State private var branchSet: (branch: UUID, members: Set<UUID>)?
     @State private var query = ""
     /// المتوفون بلا تاريخ كامل — أبجدياً
     @State private var entries: [DeathDatesEntry] = []
@@ -109,7 +109,7 @@ struct DeathDatesCampaignPage: View {
             .onChange(of: query) { _ in limit = Self.pageSize }
             .onChange(of: filters) { f in
                 limit = Self.pageSize
-                branchSet = f.branch.map { tree.subtree(of: $0) }
+                branchSet = f.branch.map { ($0, tree.subtree(of: $0)) }
             }
             .onChange(of: target?.id) { id in
                 // أُغلق المربّع: من اكتمل تاريخه — لحظة «اكتمل»
@@ -134,9 +134,18 @@ struct DeathDatesCampaignPage: View {
             .reduce(into: [UUID: Int]()) { $0[$1.element.id] = $1.offset }
         entries = list.sorted { (order[$0.id] ?? 0) < (order[$1.id] ?? 0) }
         stats = DeathDatesCampaign.stats(all)
-        tree = AdminFamilyTree(all)
-        branchSet = filters.branch.map { tree.subtree(of: $0) }
+        let fresh = AdminFamilyTree(all)
+        tree = fresh
+        branchSet = filters.branch.map { ($0, fresh.subtree(of: $0)) }
         built = !all.isEmpty
+    }
+
+    /// ذرّية الفرع المختار من `filters` نفسها: المخزَّنة إن كانت لهذا الفرع، وإلا تُحسب الآن — الرسم الذي يسبق
+    /// `onChange(of: filters)` كان يصفّي بالفرع السابق (F4 V4)
+    private var appliedSubtree: Set<UUID>? {
+        guard let branch = filters.branch else { return nil }
+        if let cached = branchSet, cached.branch == branch { return cached.members }
+        return tree.subtree(of: branch)
     }
 
     /// «أدخل» ومربّع التاريخ: صلاحية الدور مضروبة بـ«يعدّل» في جدول السيرفر (Autoplan note 7)
@@ -191,7 +200,7 @@ struct DeathDatesCampaignPage: View {
         let entries = self.entries
         let tree = self.tree
         let applied = filters.branch
-        let appliedSet = branchSet
+        let appliedSet = appliedSubtree
         let words = NameSearch.words(trimmedQuery)
         let members = memberVM.allMembers
         let name: (UUID) -> String = { id in self.branchTitle(id) }
@@ -247,7 +256,7 @@ struct DeathDatesCampaignPage: View {
     private var visible: [DeathDatesEntry] {
         // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
         let q = NameSearch.words(trimmedQuery)
-        let set = branchSet
+        let set = appliedSubtree
         let current = filters
         return entries.filter { e in
             current.matches(e) && (set?.contains(e.id) ?? true)

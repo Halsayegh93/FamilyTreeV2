@@ -74,6 +74,15 @@ struct PhotoNudgeError: Error, Equatable {
     init(_ message: String) { self.message = message }
 }
 
+/// نتيجة «نبّهه»/«ذكّره الحين» (F4): وصله فعلاً، أو أُرسل قبل أقل من دقيقة (السيرفر لم يُعد الإشعار — V15)، أو له
+/// صورة الآن (البيانات قديمة — V11)، أو رسالة الخطأ
+enum PhotoNudgeOutcome: Equatable {
+    case sent
+    case tooSoon
+    case stale
+    case failed(String)
+}
+
 /// الأسباب الجاهزة في مربّع الطلب
 enum PhotoChangeReason: String, CaseIterable, Identifiable {
     case unclear, inappropriate, notOwner, other
@@ -121,7 +130,18 @@ final class PhotoChangeRequestStore: ObservableObject {
 
     private var supabase: SupabaseClient { SupabaseConfig.client }
 
+    /// F4 (V31): رقم كل كتابة محلية في `openByMember` — جلب الكل يدمج ولا يمحو ما كُتب بعد بدئه
+    private var writeSeq = 0
+    private var lastWrite: [UUID: Int] = [:]
+
     func open(for memberId: UUID) -> PhotoChangeRequest? { openByMember[memberId] }
+
+    /// كتابة محلية لعضو واحد (تُسجَّل برقمها)
+    private func setOpen(_ request: PhotoChangeRequest?, for memberId: UUID) {
+        writeSeq += 1
+        lastWrite[memberId] = writeSeq
+        openByMember[memberId] = request
+    }
 
     // MARK: القراءة
 
@@ -160,13 +180,15 @@ final class PhotoChangeRequestStore: ObservableObject {
     /// كل الطلبات المفتوحة (الطاقم — RLS) لقائمة «مسجّلون بلا صورة». الفشل يُبقي آخر قيمة ويقوله `allOpenHealth`
     func refreshAllOpen() async {
         let before = allOpenHealth
+        let startSeq = writeSeq
         allOpenHealth = allOpenHealth.beginning()
         do {
             let rows = try await fetchRows(memberId: nil)
             var map: [UUID: PhotoChangeRequest] = [:]
             for row in rows { map[row.memberId] = row }
-            // من لم يعد له طلب مفتوح يُمسح (أُغلق أو أُلغي من جهاز آخر)
-            openByMember = map
+            // من لم يعد له طلب مفتوح يُمسح (أُغلق أو أُلغي من جهاز آخر) — إلا من نُبّه أو أُلغي هنا أثناء الجلب (V31)
+            let written = Set(lastWrite.filter { $0.value > startSeq }.keys)
+            openByMember = PhotoNudgeLogic.merged(fetched: map, current: openByMember, writtenSince: written)
             allOpenHealth = allOpenHealth.ending(success: true)
         } catch {
             // إلغاء (الصفحة أُغلقت، جلب أحدث) ليس فشلاً
@@ -183,7 +205,7 @@ final class PhotoChangeRequestStore: ObservableObject {
     func refresh(memberId: UUID) async {
         do {
             let found = try await fetchOpen(memberId: memberId)
-            openByMember[memberId] = found
+            setOpen(found, for: memberId)
         } catch {
             if ErrorHelper.isCancellation(error) { return }
             Log.warning("[PhotoChange] refresh \(memberId): \(ErrorHelper.description(error))")
@@ -214,35 +236,66 @@ final class PhotoChangeRequestStore: ObservableObject {
 
     // MARK: الإرسال والإلغاء (الإدارة)
 
-    /// يرسل الطلب (أو يحدّث المفتوح) — يرجع رسالة الخطأ أو nil عند النجاح.
-    /// `nudging`: «نبّهه»/«ذكّره» بلا سبب — رفض السبب الفارغ = سيرفر قبل الترحيل («تحتاج تحديث السيرفر»)
+    /// يرسل الطلب (أو يحدّث المفتوح) — يرجع رسالة الخطأ أو nil عند النجاح (مربّع السبب «طلب تغيير الصورة»).
+    /// `nudging`: «نبّهه»/«ذكّره» بلا سبب
     func request(memberId: UUID, reason: String, hide: Bool, nudging: Bool = false) async -> String? {
+        switch await deliver(memberId: memberId, reason: reason, hide: hide, nudging: nudging) {
+        case .sent, .tooSoon: return nil
+        case .stale: return PhotoNudgeLogic.staleText
+        case .failed(let message): return message
+        }
+    }
+
+    /// الإرسال بنتيجته (F4): notified_at قبل النداء وبعده من السيرفر نفسه — لم يتغيّر = أُرسل قبل أقل من دقيقة (V15)؛
+    /// رفض السبب الفارغ = له صورة الآن (V11، المستدعي يحدّث العضو)
+    func deliver(memberId: UUID, reason: String, hide: Bool, nudging: Bool) async -> PhotoNudgeOutcome {
         if DebugAdminProbe.dryRun("request_photo_change \(memberId) reason=«\(reason)» hide=\(hide)") {
             fakeSent(memberId: memberId, reason: reason, hide: hide)
-            return nil
+            return .sent
         }
-        guard NetworkMonitor.shared.requireOnline() else { return Self.offlineMessage }
+        guard NetworkMonitor.shared.requireOnline() else { return .failed(Self.offlineMessage) }
         struct Params: Encodable {
             let p_member: String
             let p_reason: String
             let p_hide: Bool
+        }
+        // قبل النداء: من السيرفر (الذاكرة قد تكون قديمة — E-6)، وإلا آخر قيمة معروفة
+        let before: Date?
+        do {
+            before = try await fetchOpen(memberId: memberId)?.notifiedAt
+        } catch {
+            before = openByMember[memberId]?.notifiedAt
         }
         do {
             _ = try await supabase
                 .rpc("request_photo_change", params: Params(p_member: memberId.uuidString, p_reason: reason, p_hide: hide))
                 .execute()
             Log.info("[PhotoChange] طلب تغيير صورة: \(memberId)")
-            await refresh(memberId: memberId)
-            return nil
         } catch {
             Log.error("[PhotoChange] request: \(ErrorHelper.description(error))")
-            return Self.message(for: error, cancelling: false, nudging: nudging)
+            switch Self.failure(for: error, cancelling: false, nudging: nudging) {
+            case .stale: return .stale
+            case .message(let message): return .failed(message)
+            }
         }
+        // بعده: قراءة واحدة — فشلها لا يكذّب قبول السيرفر
+        let after: PhotoChangeRequest?
+        do {
+            after = try await fetchOpen(memberId: memberId)
+        } catch {
+            return .sent
+        }
+        setOpen(after, for: memberId)
+        return PhotoNudgeLogic.reminderLanded(before: before, after: after?.notifiedAt) ? .sent : .tooSoon
     }
 
     /// «نبّهه يضيف صورة» — بلا سبب ولا إخفاء
     func nudge(memberId: UUID) async -> String? {
         await request(memberId: memberId, reason: "", hide: false, nudging: true)
+    }
+
+    func nudgeOutcome(memberId: UUID) async -> PhotoNudgeOutcome {
+        await deliver(memberId: memberId, reason: "", hide: false, nudging: true)
     }
 
     /// «ذكّره الحين» — نفس الطلب بسببه (السيرفر يعيد الإشعار بعد دقيقة ويعدّه تذكيراً)
@@ -251,12 +304,29 @@ final class PhotoChangeRequestStore: ObservableObject {
         return await request(memberId: memberId, reason: reason, hide: false, nudging: reason.isEmpty)
     }
 
-    /// «نبّههم كلهم» (المالك والمدير) — عدد من وصله، أو رسالة الخطأ. `expected` = العدد المعروض (للتجربة فقط)
-    func requestAll(expected: Int) async -> Result<Int, PhotoNudgeError> {
-        if DebugAdminProbe.dryRun("request_photo_add_all (\(expected) expected)") { return .success(expected) }
+    func remindOutcome(memberId: UUID) async -> PhotoNudgeOutcome {
+        let reason = openByMember[memberId]?.reason ?? ""
+        return await deliver(memberId: memberId, reason: reason, hide: false, nudging: reason.isEmpty)
+    }
+
+    /// «نبّههم كلهم» (المالك والمدير) — عدد من وصله، أو رسالة الخطأ. `expected` = العدد المعروض (للتجربة فقط).
+    /// F4 (S-1): `memberIds` = من عرضتهم القائمة — السيرفر يعيد فحص كل واحد بقاعدتها (`20261126200000`)؛ قبل الترحيل
+    /// «تحتاج تحديث السيرفر» بدل نداء القاعدة القديمة (كانت تشمل أبناء البنات ومن بلا رقم)
+    func requestAll(expected: Int, memberIds: [UUID]? = nil) async -> Result<Int, PhotoNudgeError> {
+        if DebugAdminProbe.dryRun("request_photo_add_all (\(expected) expected, \(memberIds?.count ?? 0) ids)") {
+            return .success(expected)
+        }
         guard NetworkMonitor.shared.requireOnline() else { return .failure(PhotoNudgeError(Self.offlineMessage)) }
+        struct Params: Encodable { let p_member_ids: [String] }
         do {
-            let sent: Int = try await supabase.rpc("request_photo_add_all").execute().value
+            let sent: Int
+            if let memberIds {
+                sent = try await supabase
+                    .rpc("request_photo_add_all", params: Params(p_member_ids: memberIds.map(\.uuidString)))
+                    .execute().value
+            } else {
+                sent = try await supabase.rpc("request_photo_add_all").execute().value
+            }
             Log.info("[PhotoChange] نبّههم كلهم: \(sent)")
             await refreshAllOpen()
             return .success(sent)
@@ -270,23 +340,23 @@ final class PhotoChangeRequestStore: ObservableObject {
     private func fakeSent(memberId: UUID, reason: String, hide: Bool) {
         let now = ISO8601DateFormatter().string(from: Date())
         let old = openByMember[memberId]
-        openByMember[memberId] = PhotoChangeRequest(
+        setOpen(PhotoChangeRequest(
             id: old?.id ?? UUID(), memberId: memberId, reason: reason, hidePhoto: hide || (old?.hidePhoto ?? false),
             requestedAtRaw: now, notifiedAtRaw: now,
-            remindersSent: old.map { ($0.remindersSent ?? 0) + 1 } ?? 0)
+            remindersSent: old.map { ($0.remindersSent ?? 0) + 1 } ?? 0), for: memberId)
     }
 
     /// يلغي الطلب المفتوح — يرجع رسالة الخطأ أو nil عند النجاح
     func cancel(memberId: UUID) async -> String? {
         if DebugAdminProbe.dryRun("cancel_photo_change \(memberId)") {
-            openByMember[memberId] = nil
+            setOpen(nil, for: memberId)
             return nil
         }
         guard NetworkMonitor.shared.requireOnline() else { return Self.offlineMessage }
         struct Params: Encodable { let p_member: String }
         do {
             _ = try await supabase.rpc("cancel_photo_change", params: Params(p_member: memberId.uuidString)).execute()
-            openByMember[memberId] = nil
+            setOpen(nil, for: memberId)
             Log.info("[PhotoChange] إلغاء طلب تغيير صورة: \(memberId)")
             return nil
         } catch {
@@ -299,36 +369,19 @@ final class PhotoChangeRequestStore: ObservableObject {
         L10n.t("لا يوجد اتصال بالإنترنت. يرجى المحاولة لاحقاً.", "No internet connection. Try again later.")
     }
 
-    /// رسائل رفض السيرفر حسب `hint`
+    /// رسائل رفض السيرفر حسب `hint` (النصوص في `PhotoNudgeLogic.failure`)
     static func message(for error: Error, cancelling: Bool, nudging: Bool = false) -> String {
+        switch failure(for: error, cancelling: cancelling, nudging: nudging) {
+        case .stale: return PhotoNudgeLogic.staleText
+        case .message(let message): return message
+        }
+    }
+
+    static func failure(for error: Error, cancelling: Bool, nudging: Bool) -> PhotoNudgeLogic.Failure {
         let pg = error as? PostgrestError
         let raw = ErrorHelper.description(error)
-        if pg?.code == "PGRST202" || raw.localizedCaseInsensitiveContains("could not find the function")
-            || (nudging && pg?.hint == "bad_reason") {
-            return L10n.t("هذه الميزة تحتاج تحديث السيرفر.", "This feature needs a server update.")
-        }
-        switch pg?.hint {
-        case "female_no_photo":
-            return L10n.t("لا صور للإناث في التطبيق.", "Women's profiles don't have photos in the app.")
-        case "not_allowed":
-            return L10n.t("هذا الإجراء للمالك والمدير والمراقب فقط.", "Only the owner, admins and monitors can do this.")
-        case "no_account":
-            return L10n.t("ليس لهذا العضو حساب في التطبيق.", "This member has no app account.")
-        case "deceased":
-            return L10n.t("لا يُرسل الطلب إلى عضو متوفى.", "The request can't be sent for a deceased member.")
-        case "member_not_found":
-            return L10n.t("العضو غير موجود.", "Member not found.")
-        case "own_profile":
-            return L10n.t("لا يُرسل الطلب إلى نفسك — غيّر صورتك من «حسابي».", "You can't send this to yourself — change your photo in My Account.")
-        case "owner_protected":
-            return L10n.t("لا يُرسل هذا الطلب إلى المالك.", "This request can't be sent to the owner.")
-        case "bad_reason":
-            return L10n.t("يرجى كتابة السبب (حتى ٢٠٠ حرف).", "Please enter the reason (up to 200 characters).")
-        default:
-            return cancelling
-                ? L10n.t("تعذّر إلغاء الطلب. تحقق من الاتصال ثم حاول مرة أخرى.", "Couldn't cancel the request. Check your connection and try again.")
-                : L10n.t("تعذّر إرسال الطلب. تحقق من الاتصال ثم حاول مرة أخرى.", "Couldn't send the request. Check your connection and try again.")
-        }
+        let missing = pg?.code == "PGRST202" || raw.localizedCaseInsensitiveContains("could not find the function")
+        return PhotoNudgeLogic.failure(hint: pg?.hint, missingFunction: missing, nudging: nudging, cancelling: cancelling)
     }
 
     // MARK: ما أُرسل للموافقة (العضو تجاوز ٣ تغييرات) — لا يعود المربّع لهذا الطلب على هذا الجهاز

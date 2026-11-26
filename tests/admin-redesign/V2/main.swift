@@ -86,7 +86,7 @@ check(Band.listsText(11), "11 قائمة للمراجعة", "11 lists (single no
 // MARK: ٣) مربّع «الإحصاءات»: «الراحلون 502»
 
 check(Band.departedWord(502)?.state, AdminTileState.neutral("الراحلون 502"), "departed word")
-check(Band.departedWord(502)?.landing, .stats(.departed), "opens the «الراحلون» section")
+check(Band.departedWord(502)?.landing, .stats(.family), "opens «العائلة» where «متوفون 502» is (F4, V16)")
 check(Band.departedWord(1_502)?.state.text, "الراحلون 1,502", "thousands separator")
 check(Band.departedWord(nil), nil, "before the numbers → no word (skeleton)")
 

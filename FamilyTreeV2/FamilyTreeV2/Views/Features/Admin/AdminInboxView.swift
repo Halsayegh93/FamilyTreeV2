@@ -214,6 +214,9 @@ struct AdminInboxView: View {
                 }
             }
             .adminFilterSheet(isPresented: $showsFilters, set: m.set, selection: $filters)
+            // F4 V1: تصفية أو بحث جديد يُسقط المحدّد الذي خرج من القائمة — «حذف» لا يمسّ رسالة لا تُرى
+            .onChange(of: filters) { _ in pruneSelection() }
+            .onChange(of: search) { _ in pruneSelection() }
     }
 
     /// تأكيدا الحذف، والتحميل الأول، ومربّع تفاصيل الرسالة
@@ -415,8 +418,10 @@ struct AdminInboxView: View {
         })
     }
 
-    /// الشريط مع التحميل (يمسك المكان) ومع وجود رسائل — لا شريط فوق «لا رسائل» ولا فوق خطأ بلا رسائل
+    /// الشريط مع التحميل (يمسك المكان) ومع وجود رسائل — لا شريط فوق «لا رسائل» ولا فوق خطأ بلا رسائل، ولا أثناء «تحديد»
+    /// (كـ«الوارد»: التصفية لا تتغيّر والتحديد قائم — F4 V1)
     private func showsFilterBar(_ m: Model) -> Bool {
+        guard !isSelectMode else { return false }
         if m.ready { return !m.all.isEmpty }
         return !health.canRetry
     }
@@ -487,7 +492,7 @@ struct AdminInboxView: View {
                     .adminPageRow(top: DS.Spacing.xs)
             }
             if m.visible.isEmpty {
-                AnyView(filteredEmpty)
+                AnyView(filteredEmpty(m))
                     .adminPageRow(top: DS.Spacing.xs)
             } else {
                 ForEach(DSDayBuckets.group(m.visible) { $0.date ?? .distantPast }) { day in
@@ -502,11 +507,13 @@ struct AdminInboxView: View {
         }
     }
 
-    /// تصفية بلا نتيجة: «لا رسائل بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح تُزال واحدة واحدة)؛ بحث بلا
-    /// نتيجة: «لا نتائج» + «مسح البحث»
-    private var filteredEmpty: some View {
-        Group {
-            if !filters.isEmpty {
+    /// بحث بلا نتيجة (البحث وحده لا يطابق شيئاً): «لا نتائج» + «مسح البحث» ولو كانت تصفية (F4 V7)؛ تصفية تخفي ما وجده البحث
+    /// أو بلا بحث: «لا رسائل بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح تُزال واحدة واحدة)
+    private func filteredEmpty(_ m: Model) -> some View {
+        let cause = AdminInboxLogic.emptyCause(searching: !trimmedSearch.isEmpty, searchedCount: m.searched.count,
+                                               filtersActive: !filters.isEmpty)
+        return Group {
+            if cause == .filters {
                 AdminFilterEmptyCard(title: L10n.t("لا رسائل بهذه التصفية", "No messages with this filter"),
                                      editFilters: { showsFilters = true })
             } else {
@@ -779,6 +786,15 @@ struct AdminInboxView: View {
             isSelectMode.toggle()
             if !isSelectMode { selectedIDs.removeAll() }
         }
+    }
+
+    /// يُبقي من المحدّد ما بقي ظاهراً بعد التصفية والبحث الجديدين (F4 V1) — رقم «N محدّدة» و«حذف» على ما يُرى فقط
+    private func pruneSelection() {
+        guard !selectedIDs.isEmpty else { return }
+        let shown = Set(makeModel().visible.map(\.id))
+        let kept = selectedIDs.intersection(shown)
+        guard kept != selectedIDs else { return }
+        withAnimation(DS.Anim.quick) { selectedIDs = kept }
     }
 
     /// شريط وضع التحديد: «تحديد الكل» · العدد · «حذف» (يسأل قبل الحذف) — أبيض بخطّ رفيع فوقه

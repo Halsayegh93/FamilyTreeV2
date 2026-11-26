@@ -63,8 +63,15 @@ check(L.row(viewer: admin, member: member(photo: true), open: nil, maxReminders:
       "row: has photo, no request → «طلب تغيير الصورة»")
 check(L.row(viewer: readOnly, member: member(), open: open(ago(days: 1)), maxReminders: 3, now: now, calendar: kuwait), .hidden,
       "row: read-only viewer → no row at all")
-check(L.row(viewer: admin, member: member(deceased: true), open: open(ago(days: 1)), maxReminders: 3, now: now, calendar: kuwait), .hidden,
-      "row: deceased → hidden")
+// F4 (V24): المتوفى بطلب مفتوح يُرى ويُلغى (بلا تذكير) — بلا طلب لا صفّ
+check(L.row(viewer: admin, member: member(deceased: true), open: nil, maxReminders: 3, now: now, calendar: kuwait), .hidden,
+      "row: deceased without a request → hidden")
+if case .pending(let p) = L.row(viewer: admin, member: member(deceased: true), open: open(ago(days: 1)), maxReminders: 3,
+                                now: now, calendar: kuwait) {
+    check(p.canRemind || !p.canCancel, false, "row: deceased with an open request → cancel only (F4, V24)")
+} else {
+    check(false, true, "row: deceased with an open request → pending (F4, V24)")
+}
 check(L.row(viewer: admin, member: member(female: true), open: nil, maxReminders: 3, now: now, calendar: kuwait), .hidden,
       "row: woman without photo → hidden")
 check(L.row(viewer: admin, member: member(login: false), open: nil, maxReminders: 3, now: now, calendar: kuwait), .hidden,

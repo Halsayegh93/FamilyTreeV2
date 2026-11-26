@@ -1,75 +1,54 @@
 import SwiftUI
 
-// MARK: - «الحساب» في ورقة العضو «أ3» (الوحدة V2-3) — قسم مستقل (حارس المكدس)
+// MARK: - «الحساب» و«إجراءات الإدارة» في ورقة العضو (V2-3، وفصل F4 — طلب المالك ٢٠٢٦-١١-٢٦: «اهم شي نفصل الأمور
+// الادارية عن الاعضاء»)
 //
-// شريط بترولي ثم بطاقة: الهاتف (كما يعيده السيرفر، مخفياً لمن لا يراه) · «تسجيل في التطبيق» (حبّة «مسجّل ✓» أو «سجّل»
-// بتأكيد) · آخر دخول (وتحته استخدامه للتطبيق) · الأجهزة (العدد ⌄ — تنفتح تحته بـ«تسجيل خروج» لكل جهاز، `canManageDevices`)
-// · «إيقاف الحساب» ‹ (`canFreezeMembers`) · «منع الرقم من التسجيل» ‹ (`canManageBannedPhones` — يفتح «التسجيل والمنع» برقمه).
-// للأحياء كلهم كما كان: «تسجيل في التطبيق» وتعديل الرقم بيتهما هنا (العضو بلا حساب يُسجَّل من هذا القسم).
-// الإيقاف والمنع لغيرك فقط (لا ورقتك ولا ورقة المالك — `AdminMemberSheetLogic.accountCommands`)، والحذف زرّ مستقل آخر الورقة.
-// كل فعل يمرّ بالورقة (`ask` = التأكيد، `openBox` = المربّعات، `openBans` = الصفحة) — نفس النداءات السابقة.
+// ١) `AdminMemberAccountSection` — «الحساب» (بترولي) حقائق فقط: الهاتف (يُعدَّل بمربّعه لمن يعدّل — تعديل بيانات) ·
+//    «تسجيل في التطبيق» حبّة الحال («مسجّل ✓» / «غير مسجّل» / «موقوف») · آخر دخول (وتحته استخدامه) · الأجهزة بعددها
+//    (لمن يراها ولا يسجّل خروجها: تنفتح أسماؤها تحته للاطلاع). لا زرّ أمر هنا.
+// ٢) `AdminMemberAdminSection` — «إجراءات الإدارة»: عنوان بشريط كحلي وبطاقة بإطار كحلي، فيها كل أمر بترتيبه
+//    (`AdminMemberSheetLogic.adminCard`): الصورة (`AdminMemberPhotoActions`) · «تسجيل في التطبيق» («سجّل» بتأكيد) ·
+//    الأجهزة بـ«تسجيل خروج» لكل جهاز (`canManageDevices`) · «إيقاف الحساب»/«رفع الإيقاف» (`canFreezeMembers`) · «منع الرقم
+//    من التسجيل» (`canManageBannedPhones` — يفتح «التسجيل والمنع» برقمه) · «حذف العضو نهائياً» آخرها بالأحمر
+//    (`canDeleteMembers`). على ورقتك لا تُرسم البطاقة أصلاً (يبقى سطر القفل).
+// الصلاحيات والنداءات كما هي: كل فعل يمرّ بالورقة (`ask` = التأكيد، `openBox` = المربّعات، `openBans` = الصفحة).
 
 struct AdminMemberAccountSection: View {
     let member: FamilyMember
     let facts: AdminMemberSheetFacts
     let canEdit: Bool
-    let isOther: Bool
-    let commands: AdminMemberSheetLogic.AccountCommands
-    /// الرقم المطبَّع لصفحة «التسجيل والمنع» (nil = مخفي أو غير صالح)
-    let banPrefill: String?
-    let liveStatus: FamilyMember.MemberStatus?
-    /// منع رقمه الساري (للعرض فقط)
-    let ban: BannedPhone?
     let devices: [NotificationViewModel.LinkedDevice]?
     let devicesFailed: Bool
     @Binding var devicesOpen: Bool
     /// الأجهزة لمن له حساب دخول، وللمالك (`canViewSystemSettings`)
     let showsDevices: Bool
+    /// يسجّل خروجها؟ — حينها قائمتها في «إجراءات الإدارة» والعدد وحده هنا
     let canSignOutDevices: Bool
-    let busy: String?
+    /// لا يُسجَّل في التطبيق: حاجته («يحتاج رقم هاتف أولاً») — nil بلا سطر
+    let registerNote: String?
     let openBox: (AdminMemberBox) -> Void
-    let ask: (AdminMemberConfirm) -> Void
-    let openBans: (String) -> Void
     let retryDevices: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var phone: String { (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var frozen: Bool { facts.status == .frozen }
 
     var body: some View {
         AdminMemberSheetSection(title: L10n.t("الحساب", "Account"), bar: DS.Color.sea) {
             phoneRow
-            registerRow
+            AdminMemberRow(icon: "iphone", tint: DS.Color.sea, title: L10n.t("تسجيل في التطبيق", "Registered in the app"),
+                           subtitle: registerNote) {
+                AdminStatePill(title: Self.registerWord(facts.status), tone: Self.registerTone(facts.status),
+                               icon: facts.status == .registered ? "checkmark" : nil)
+            }
             AdminMemberRow(icon: "clock.fill", tint: DS.Color.sea, title: L10n.t("آخر دخول", "Last sign-in"),
                            subtitle: facts.usageLine, value: facts.lastSeenText)
             // الأجهزة لمن له حساب دخول (من بلا حساب لا جهاز له)
             if showsDevices {
                 devicesRow
-                if devicesOpen, let devices, !devicesFailed {
-                    ForEach(devices) { device in deviceRow(device) }
-                }
-            }
-            if commands.suspend {
-                AdminMemberTapRow(hint: frozen ? L10n.t("يسأل قبل رفع الإيقاف", "Asks before lifting")
-                                               : L10n.t("يسأل قبل الإيقاف", "Asks before suspending"),
-                                  action: { ask(frozen ? .unsuspend : .suspend) }) {
-                    AdminMemberRow(icon: frozen ? "play.fill" : "pause.fill", tint: DS.Color.slate,
-                                   title: frozen ? L10n.t("رفع الإيقاف", "Lift the suspension")
-                                                 : L10n.t("إيقاف الحساب", "Suspend account"),
-                                   subtitle: frozen ? L10n.t("الحساب موقوف الآن", "The account is suspended")
-                                                    : L10n.t("يسأل قبل الإيقاف، والسبب اختياري", "Asks first; the reason is optional"),
-                                   showsChevron: true,
-                                   busy: busy == AdminMemberConfirm.suspend.id || busy == AdminMemberConfirm.unsuspend.id)
-                }
-            }
-            if commands.ban, let banPrefill {
-                AdminMemberTapRow(hint: L10n.t("يفتح «التسجيل والمنع» برقمه", "Opens sign-up and blocking with this number"),
-                                  action: { openBans(banPrefill) }) {
-                    AdminMemberRow(icon: "lock.fill", tint: DS.Color.slate,
-                                   title: L10n.t("منع الرقم من التسجيل", "Block the number from signing up"),
-                                   subtitle: ban == nil ? L10n.t("يفتح «التسجيل والمنع» برقمه", "Opens sign-up and blocking with this number")
-                                                        : L10n.t("الرقم ممنوع من التسجيل الآن", "The number is blocked now"),
-                                   showsChevron: true)
+                if !canSignOutDevices, devicesOpen, let devices, !devicesFailed {
+                    ForEach(devices) { device in
+                        AdminMemberDeviceRow(device: device, canSignOut: false, busy: false, signOut: {})
+                    }
                 }
             }
         }
@@ -91,29 +70,7 @@ struct AdminMemberAccountSection: View {
         }
     }
 
-    /// «تسجيل في التطبيق»: حبّة الحالة، أو حبّة «سجّل» حين يمكن (بتأكيد) — نفس شرط الزرّ السابق
-    private var registerRow: some View {
-        let canRegister = canEdit && isOther && !frozen && !phone.isEmpty && member.role != .pending
-            && (liveStatus ?? member.status) != .active && facts.status != .registered
-        let note: String? = {
-            guard !canRegister, facts.status == .treeOnly else { return nil }
-            if phone.isEmpty { return L10n.t("يحتاج رقم هاتف أولاً", "Needs a phone number first") }
-            return nil
-        }()
-        return AdminMemberRow(icon: "iphone", tint: DS.Color.sea, title: L10n.t("تسجيل في التطبيق", "Registered in the app"),
-                              subtitle: note, busy: busy == AdminMemberConfirm.register.id) {
-            if canRegister {
-                AdminPillButton(title: L10n.t("سجّل", "Register"), style: .navy) { ask(.register) }
-                    .accessibilityLabel(L10n.t("تسجيل في التطبيق", "Register in the app"))
-                    .accessibilityHint(L10n.t("يسأل قبل التسجيل", "Asks first"))
-            } else {
-                AdminStatePill(title: Self.registerWord(facts.status), tone: Self.registerTone(facts.status),
-                               icon: facts.status == .registered ? "checkmark" : nil)
-            }
-        }
-    }
-
-    private static func registerWord(_ status: AdminMemberStatus?) -> String {
+    static func registerWord(_ status: AdminMemberStatus?) -> String {
         switch status {
         case .registered: return L10n.t("مسجّل", "Registered")
         case .frozen: return L10n.t("موقوف", "Suspended")
@@ -123,7 +80,7 @@ struct AdminMemberAccountSection: View {
         }
     }
 
-    private static func registerTone(_ status: AdminMemberStatus?) -> AdminPillTone {
+    static func registerTone(_ status: AdminMemberStatus?) -> AdminPillTone {
         switch status {
         case .registered: return .ok
         case .frozen: return .error
@@ -131,7 +88,24 @@ struct AdminMemberAccountSection: View {
         }
     }
 
-    /// «الأجهزة · 2 ⌄» يفتح أجهزته تحته (و«تسجيل خروج» للمالك) — التحميل «—»، والفشل «تعذّر التحميل» يعيد الجلب
+    /// يُسجَّل في التطبيق من «إجراءات الإدارة»؟ — نفس شرط الزرّ السابق حرفياً
+    @MainActor
+    static func canRegister(member: FamilyMember, facts: AdminMemberSheetFacts, canEdit: Bool, isOther: Bool,
+                            liveStatus: FamilyMember.MemberStatus?) -> Bool {
+        let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return canEdit && isOther && facts.status != .frozen && !phone.isEmpty && member.role != .pending
+            && (liveStatus ?? member.status) != .active && facts.status != .registered
+    }
+
+    /// «يحتاج رقم هاتف أولاً» تحت «تسجيل في التطبيق» لغير المسجّل بلا رقم
+    @MainActor
+    static func registerNote(member: FamilyMember, facts: AdminMemberSheetFacts) -> String? {
+        let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard facts.status == .treeOnly, phone.isEmpty else { return nil }
+        return L10n.t("يحتاج رقم هاتف أولاً", "Needs a phone number first")
+    }
+
+    /// «الأجهزة · 2» — التحميل «—»، والفشل «تعذّر التحميل» يعيد الجلب. لمن لا يسجّل خروجها: «⌄» يفتح أسماءها للاطلاع
     @ViewBuilder
     private var devicesRow: some View {
         let title = L10n.t("الأجهزة", "Devices")
@@ -146,13 +120,14 @@ struct AdminMemberAccountSection: View {
                 AdminMemberRow(icon: "iphone.slash", tint: DS.Color.sea, title: title,
                                subtitle: L10n.t("لا تصله الإشعارات", "Gets no notifications"),
                                value: L10n.t("لا أجهزة", "None"))
+            } else if canSignOutDevices {
+                AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title,
+                               value: "\(devices.count)", valueIsNumber: true)
             } else {
                 AdminMemberTapRow(hint: devicesOpen ? L10n.t("يطوي الأجهزة", "Hides the devices")
                                                     : L10n.t("يعرض الأجهزة", "Shows the devices"),
                                   action: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { devicesOpen.toggle() } }) {
                     AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title,
-                                   subtitle: canSignOutDevices && !devicesOpen
-                                       ? L10n.t("افتحها لتسجيل خروج أي جهاز", "Open to sign out any device") : nil,
                                    value: "\(devices.count)", valueIsNumber: true) {
                         Image(systemName: "chevron.down")
                             .dsGlyph(DS.Glyph.sm)
@@ -168,9 +143,16 @@ struct AdminMemberAccountSection: View {
                 .accessibilityValue(AdminStoreHealthText.loading)
         }
     }
+}
 
-    /// جهاز تحت «الأجهزة»: مزاح بعرض مربّع الأيقونة، الاسم و«آخر استخدام …»، و«تسجيل خروج» حمراء بإطار
-    private func deviceRow(_ device: NotificationViewModel.LinkedDevice) -> some View {
+/// جهاز: الاسم و«آخر استخدام …»، و«تسجيل خروج» حمراء بإطار لمن يملكها
+struct AdminMemberDeviceRow: View {
+    let device: NotificationViewModel.LinkedDevice
+    let canSignOut: Bool
+    let busy: Bool
+    let signOut: () -> Void
+
+    var body: some View {
         HStack(spacing: DS.Spacing.md) {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(verbatim: device.displayName)
@@ -185,12 +167,12 @@ struct AdminMemberAccountSection: View {
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: DS.Spacing.sm)
-            if busy == AdminMemberConfirm.signOut(device).id {
+            if busy {
                 ProgressView()
                     .scaleEffect(DS.Spinner.chipScale)
                     .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
-            } else if canSignOutDevices {
-                AdminPillButton(title: L10n.t("تسجيل خروج", "Sign out"), style: .reject) { ask(.signOut(device)) }
+            } else if canSignOut {
+                AdminPillButton(title: L10n.t("تسجيل خروج", "Sign out"), style: .reject, action: signOut)
                     .fixedSize()
                     .accessibilityLabel(L10n.t("تسجيل خروج \(device.displayName)", "Sign out \(device.displayName)"))
                     .accessibilityHint(L10n.t("يسأل قبل الخروج", "Asks first"))
@@ -199,5 +181,104 @@ struct AdminMemberAccountSection: View {
         .padding(.leading, AdminRowDivider.iconInset)
         .padding(.vertical, DS.Spacing.xsm)
         .frame(minHeight: DS.Hub.rowMinHeightTwoLines)
+    }
+}
+
+// MARK: - «إجراءات الإدارة»
+
+struct AdminMemberAdminSection: View {
+    let member: FamilyMember
+    let facts: AdminMemberSheetFacts
+    let card: AdminMemberSheetLogic.AdminCard
+    /// الرقم المطبَّع لصفحة «التسجيل والمنع» (nil = مخفي أو غير صالح — لا صفّ)
+    let banPrefill: String?
+    /// منع رقمه الساري (للعرض فقط)
+    let ban: BannedPhone?
+    let devices: [NotificationViewModel.LinkedDevice]?
+    let noDevices: Bool
+    let busy: String?
+    let ask: (AdminMemberConfirm) -> Void
+    let openBox: (AdminMemberBox) -> Void
+    let openBans: (String) -> Void
+    @Binding var photoWorking: Bool
+
+    private var frozen: Bool { facts.status == .frozen }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+            AdminMemberSectionTitle(title: Self.title, bar: DS.Color.primary)
+            AdminRowsCardBody {
+                ForEach(card.items, id: \.self) { item in
+                    row(item)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(DS.Hub.cardPadding)
+            .background(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous).fill(DS.Color.cardBackground))
+            .overlay(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous)
+                .strokeBorder(DS.Hub.memberAdminStroke, lineWidth: DS.Border.widthBold))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(Self.title))
+        }
+    }
+
+    static var title: String { L10n.t("إجراءات الإدارة", "Admin actions") }
+
+    @ViewBuilder
+    private func row(_ item: AdminMemberSheetLogic.AdminItem) -> some View {
+        switch item {
+        case .photo:
+            AdminMemberPhotoActions(member: member, hasLogin: facts.account != nil, noDevices: noDevices,
+                                    askChange: { openBox(.photoRequest(member)) }, working: $photoWorking)
+        case .register:
+            AdminMemberRow(icon: "iphone", tint: DS.Color.sea, title: L10n.t("تسجيل في التطبيق", "Register in the app"),
+                           subtitle: L10n.t("يتمكن من الدخول برقمه", "They can sign in with their number"),
+                           busy: busy == AdminMemberConfirm.register.id) {
+                AdminPillButton(title: L10n.t("سجّل", "Register"), style: .navy) { ask(.register) }
+                    .accessibilityLabel(L10n.t("تسجيل في التطبيق", "Register in the app"))
+                    .accessibilityHint(L10n.t("يسأل قبل التسجيل", "Asks first"))
+            }
+        case .devices:
+            VStack(spacing: 0) {
+                AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: L10n.t("أجهزته", "Their devices"),
+                               subtitle: L10n.t("«تسجيل خروج» يزيل الجهاز من حسابه", "«Sign out» removes the device from the account"))
+                ForEach(devices ?? []) { device in
+                    AdminRowDivider(inset: AdminRowDivider.iconInset)
+                    AdminMemberDeviceRow(device: device, canSignOut: true,
+                                         busy: busy == AdminMemberConfirm.signOut(device).id) { ask(.signOut(device)) }
+                }
+            }
+        case .suspend:
+            AdminMemberTapRow(hint: frozen ? L10n.t("يسأل قبل رفع الإيقاف", "Asks before lifting")
+                                           : L10n.t("يسأل قبل الإيقاف", "Asks before suspending"),
+                              action: { ask(frozen ? .unsuspend : .suspend) }) {
+                AdminMemberRow(icon: frozen ? "play.fill" : "pause.fill", tint: DS.Color.slate,
+                               title: frozen ? L10n.t("رفع الإيقاف", "Lift the suspension")
+                                             : L10n.t("إيقاف الحساب", "Suspend account"),
+                               subtitle: frozen ? L10n.t("الحساب موقوف الآن", "The account is suspended")
+                                                : L10n.t("يسأل قبل الإيقاف، والسبب اختياري", "Asks first; the reason is optional"),
+                               showsChevron: true,
+                               busy: busy == AdminMemberConfirm.suspend.id || busy == AdminMemberConfirm.unsuspend.id)
+            }
+        case .ban:
+            if let banPrefill {
+                AdminMemberTapRow(hint: L10n.t("يفتح «التسجيل والمنع» برقمه", "Opens sign-up and blocking with this number"),
+                                  action: { openBans(banPrefill) }) {
+                    AdminMemberRow(icon: "lock.fill", tint: DS.Color.slate,
+                                   title: L10n.t("منع الرقم من التسجيل", "Block the number from signing up"),
+                                   subtitle: ban == nil ? L10n.t("يفتح «التسجيل والمنع» برقمه", "Opens sign-up and blocking with this number")
+                                                        : L10n.t("الرقم ممنوع من التسجيل الآن", "The number is blocked now"),
+                                   showsChevron: true)
+                }
+            }
+        case .delete:
+            // آخر البطاقة بالأحمر، ويسأل قبل الحذف (spec A.6/A.14)
+            AdminMemberTapRow(hint: L10n.t("يسأل قبل الحذف", "Asks before deleting"), action: { ask(.delete) }) {
+                AdminMemberRow(icon: "trash", title: L10n.t("حذف العضو نهائياً", "Delete member permanently"),
+                               subtitle: L10n.t("لا يمكن التراجع", "This can't be undone"),
+                               destructive: true, busy: busy == AdminMemberConfirm.delete.id)
+            }
+            .disabled(busy == AdminMemberConfirm.delete.id)
+        }
     }
 }
