@@ -470,6 +470,93 @@ struct AdminRequestDecisionAids: View {
     }
 }
 
+// MARK: - «البيانات المطلوبة» و«فحص تلقائي» بشكل المربّع الجديد (U9، spec A.4–A.6)
+
+/// «البيانات المطلوبة»: صفّ لكل تغيير — العنوان ثم «الحالي ← المطلوب»
+struct AdminRequestChangesCard: View {
+    let changes: [AdminRequestChange]
+
+    var body: some View {
+        if !changes.isEmpty {
+            AdminBoxSection(title: L10n.t("البيانات المطلوبة", "Requested data")) {
+                AdminRowsCard {
+                    ForEach(changes) { change in
+                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                            Text(change.label)
+                                .dsFont(.subtitle)
+                                .foregroundColor(DS.Color.textTertiary)
+                            HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+                                Text(change.current ?? "—")
+                                    .dsFont(.body)
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .lineLimit(2)
+                                Image(systemName: L10n.isArabic ? "arrow.left" : "arrow.right")
+                                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                                    .foregroundColor(DS.Color.accent)
+                                    .accessibilityHidden(true)
+                                Text(change.requested)
+                                    .dsFont(.rowTitle)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .lineLimit(3)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .padding(.vertical, DS.Spacing.sm)
+                        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeightTwoLines, alignment: .leading)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(change.label + ": " + (change.current ?? L10n.t("لا شيء", "nothing"))
+                                            + L10n.t(" إلى ", " to ") + change.requested)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// «فحص تلقائي»: كل فحص صفّ برمز حالته (✓ · ⚠︎ · ⓘ) وكلمته
+struct AdminRequestChecksCard: View {
+    let checks: [AdminRequestCheck]
+
+    var body: some View {
+        if !checks.isEmpty {
+            AdminBoxSection(title: L10n.t("فحص تلقائي", "Automatic checks")) {
+                AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                    ForEach(checks) { check in
+                        let look = Self.look(check.tone)
+                        HStack(alignment: .top, spacing: DS.Spacing.md) {
+                            AdminIconSquare(symbol: look.icon, tint: look.tint, filled: false)
+                            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                                Text(check.text)
+                                    .dsFont(.body)
+                                    .foregroundColor(DS.Color.textPrimary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if let detail = check.detail {
+                                    Text(verbatim: detail)
+                                        .dsFont(.subtitle)
+                                        .foregroundColor(DS.Color.textTertiary)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, DS.Spacing.sm)
+                        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeight, alignment: .leading)
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+    }
+
+    private static func look(_ tone: AdminRequestCheck.Tone) -> (icon: String, tint: Color) {
+        switch tone {
+        case .ok: return ("checkmark.circle.fill", DS.Color.success)
+        case .warning: return ("exclamationmark.triangle.fill", DS.Color.warning)
+        case .info: return ("info.circle.fill", DS.Color.info)
+        }
+    }
+}
+
 // MARK: - بناء البيانات المطلوبة والفحص من الطلب
 
 enum AdminRequestInsights {
@@ -767,16 +854,168 @@ struct AdminRequestContext {
 struct AdminRequestContextPanel<Notes: View>: View {
     let context: AdminRequestContext
     let index: Int
+    /// شكل مربّع «الوارد» الجديد (U9): أقسام بعناوين وبطاقات صفوف، و«السجل» يعرضه المربّع نفسه مطويّاً
+    let card: Bool
+    /// في الشكل الجديد: المرسل يُدفع داخل مكدس المربّع
+    let onOpenPerson: ((UUID) -> Void)?
     let notes: () -> Notes
     @ObservedObject private var store = AdminRequesterStatsStore.shared
 
-    init(context: AdminRequestContext, index: Int = 3, @ViewBuilder notes: @escaping () -> Notes) {
+    init(context: AdminRequestContext, index: Int = 3, card: Bool = false, onOpenPerson: ((UUID) -> Void)? = nil,
+         @ViewBuilder notes: @escaping () -> Notes) {
         self.context = context
         self.index = index
+        self.card = card
+        self.onOpenPerson = onOpenPerson
         self.notes = notes
     }
 
     var body: some View {
+        Group {
+            if card { cardBody } else { composerBody }
+        }
+        .task(id: context.requestId) {
+            guard let id = context.requestId, let sender = context.sender else { return }
+            await store.load(requestId: id, requesterId: sender.id, memberId: context.memberId)
+        }
+    }
+
+    // MARK: الشكل الجديد (U9)
+
+    private var cardBody: some View {
+        VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
+            notes()
+            if let sender = context.sender {
+                AdminBoxSection(title: L10n.t("المرسل", "Sender")) {
+                    AdminRowsCard(dividerInset: 0) {
+                        senderRow(sender)
+                        statsRow(sender)
+                    }
+                }
+            }
+            AdminSenderSection(info: context.senderInfo, index: index + 1,
+                               title: L10n.t("من أين وصل", "Where it came from"), showsSender: context.sender == nil,
+                               card: true, onOpenPerson: onOpenPerson)
+            if let id = context.requestId, let items = store.related[id], !items.isEmpty {
+                AdminBoxSection(title: L10n.t("طلبات مرتبطة", "Related requests"), trailing: "\(items.count)") {
+                    AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                        ForEach(items) { relatedCardRow($0) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// الاسم الرباعي (يفتح ورقته) · «أمّها · عضو · عضو منذ 2025-03» · اتصال/واتساب
+    private func senderRow(_ sender: FamilyMember) -> some View {
+        let phone = sender.dsVisiblePhone(viewerId: context.viewerId, viewerCanModerate: context.viewerCanModerate)
+        let since = sender.createdAt.flatMap { raw -> String? in
+            raw.count >= 7 ? L10n.t("عضو منذ ", "Member since ") + "\u{2066}" + String(raw.prefix(7)) + "\u{2069}" : nil
+        }
+        let line = [context.relation, AdminTrailText.roleName(sender.role), since].compactMap { $0 }.joined(separator: " · ")
+        let identity = HStack(spacing: DS.Spacing.md) {
+            DSMemberAvatar(name: sender.fullName, avatarUrl: sender.avatarUrl, size: DS.Icon.avatar,
+                           roleColor: AppSection.admin.ink)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(sender.fourPartName)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .dsNameLines()
+                if !line.isEmpty {
+                    Text(line)
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: DS.Spacing.xs)
+            if onOpenPerson != nil { DSChevron() }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        return HStack(spacing: DS.Spacing.sm) {
+            if let onOpenPerson {
+                Button { onOpenPerson(sender.id) } label: { identity }
+                    .buttonStyle(AdminRowPressStyle())
+                    .accessibilityHint(L10n.t("يفتح بياناته", "Opens their details"))
+            } else {
+                identity
+            }
+            if let phone {
+                if let tel = KuwaitPhone.telURL(phone) {
+                    contactButton(icon: "phone.fill", label: L10n.t("اتصال", "Call"), url: tel)
+                }
+                if let wa = KuwaitPhone.whatsappURL(phone) {
+                    contactButton(icon: "message.fill", label: L10n.t("واتساب", "WhatsApp"), url: wa)
+                }
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+    }
+
+    /// طلباته: الكل · مقبولة · مرفوضة · معلّقة — أرقام ١٥ شبه عريضة فوق أسمائها
+    private func statsRow(_ sender: FamilyMember) -> some View {
+        let s = store.stats[sender.id]
+        return HStack(spacing: 0) {
+            statCell(s?.total, L10n.t("طلبات", "Requests"), DS.Color.textPrimary)
+            statCell(s?.approved, L10n.t("مقبولة", "Approved"), DS.Color.success)
+            statCell(s?.rejected, L10n.t("مرفوضة", "Rejected"), DS.Color.error)
+            statCell(s?.pending, L10n.t("معلّقة", "Pending"), DS.Color.warning)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+    }
+
+    private func statCell(_ value: Int?, _ label: String, _ tint: Color) -> some View {
+        VStack(spacing: DS.Spacing.xxs) {
+            Text(verbatim: value.map { "\($0)" } ?? "—")
+                .dsFont(.hubValue)
+                .foregroundColor(value == nil ? DS.Color.textTertiary : tint)
+            Text(label)
+                .dsFont(.subtitle)
+                .foregroundColor(DS.Color.textTertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func relatedCardRow(_ item: AdminRequesterStatsStore.Related) -> some View {
+        let r = item.request
+        let status: (String, AdminPillTone) = {
+            switch r.status {
+            case ApprovalStatus.approved.rawValue: return (L10n.t("مقبول", "Approved"), .ok)
+            case ApprovalStatus.rejected.rawValue: return (L10n.t("مرفوض", "Rejected"), .error)
+            case ApprovalStatus.pending.rawValue: return (L10n.t("معلّق", "Pending"), .warn)
+            default: return (L10n.t("مغلق", "Closed"), .off)
+            }
+        }()
+        let whose = item.sameSender ? L10n.t("من نفس المرسل", "Same sender") : L10n.t("عن نفس العضو", "About the same member")
+        let when = DateHelper.displayDate(r.createdAt) ?? ""
+        return HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: AdminTrailText.typeIcon(r), tint: DS.Color.slate, filled: true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(AdminTrailText.typeTitle(r))
+                    .dsFont(.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(2)
+                Text([whose, when].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: DS.Spacing.xs)
+            AdminStatePill(title: status.0, tone: status.1).fixedSize()
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(minHeight: DS.Hub.rowMinHeightTwoLines)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: الشكل السابق
+
+    private var composerBody: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             if let sender = context.sender {
                 senderCard(sender)
@@ -803,10 +1042,6 @@ struct AdminRequestContextPanel<Notes: View>: View {
                     .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
                 }
             }
-        }
-        .task(id: context.requestId) {
-            guard let id = context.requestId, let sender = context.sender else { return }
-            await store.load(requestId: id, requesterId: sender.id, memberId: context.memberId)
         }
     }
 

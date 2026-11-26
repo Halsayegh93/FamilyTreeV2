@@ -885,6 +885,11 @@ struct ApprovalRequestBox<Details: View>: View {
 
     private func runHousekeeping(_ action: ApprovalAction) {
         housekeepingError = nil
+        // تجربة الدور (T0): لا كتابة على السيرفر
+        if DebugAdminProbe.dryRun("approval box \(action.rawValue) \(flow.requestId)") {
+            UISelectionFeedbackGenerator().selectionChanged()
+            return
+        }
         housekeeping = action
         Task {
             let error = await adminRequestVM.advanceApproval(flow, action: action, note: nil)
@@ -941,6 +946,10 @@ struct ApprovalRequestBox<Details: View>: View {
         let fields = ApprovalInfoField.askable.filter(askFields.contains)
         guard !fields.isEmpty || !text.isEmpty else {
             askError = L10n.t("اختر الناقص أو اكتب سؤالك للعضو.", "Choose what's missing or write your question.")
+            return
+        }
+        if DebugAdminProbe.dryRun("approval box request_info \(flow.requestId)") {
+            onClose()
             return
         }
         busy = true
@@ -1045,6 +1054,10 @@ struct ApprovalRequestBox<Details: View>: View {
     }
 
     private func advance(_ action: ApprovalAction, note text: String) {
+        if DebugAdminProbe.dryRun("approval box \(action.rawValue) \(flow.requestId)") {
+            onClose()
+            return
+        }
         busy = true
         Task {
             let error = await adminRequestVM.advanceApproval(flow, action: action, note: text)
@@ -1061,6 +1074,122 @@ struct ApprovalRequestBox<Details: View>: View {
                 onClose()
             }
         }
+    }
+}
+
+// MARK: من يقدر على ماذا الآن (مربّع «الوارد» الجديد — U9)
+
+/// قواعد أزرار طلب بالمسار في مكان واحد — نفس قواعد `ApprovalRequestBox` حرفياً (المختص يوصي ويسأل وينفّذ، والمدير
+/// يعتمد ويرفض ويرجّع، وما استلمه غيرك مقفول، وطلبك لا تراجعه). المربّع الجديد يقرؤها، والنداءات كما هي
+/// (`advanceApproval`، ومسارا الموافقة/الرفض القديمان للتنفيذ والرفض)
+struct ApprovalDecisionRoles {
+    enum Primary { case recommend, approve, execute }
+
+    /// اللقطة الحيّة (بعد الاستلام أو تغيير الأولوية)
+    let flow: ApprovalSnapshot
+    let isOwn: Bool
+    /// استلمه غيرك — قرارات المرحلة له
+    let isLocked: Bool
+    /// المختص (أو المالك/المدير والطلب متصعّد له، أو لا مختص نشط)
+    let isSpecialist: Bool
+    let isManager: Bool
+
+    init(_ vm: AdminRequestViewModel, snapshot: ApprovalSnapshot) {
+        let live = vm.liveApprovalSnapshot(requestId: snapshot.requestId) ?? snapshot
+        flow = live
+        isOwn = vm.isOwnApprovalRequest(live)
+        isLocked = vm.isApprovalDecisionLocked(live)
+        isSpecialist = !isOwn && !isLocked && vm.canActAsApprovalSpecialist(live)
+        isManager = !isOwn && vm.isApprovalManager
+    }
+
+    /// القرار الرئيسي في هذه المرحلة لهذا الدور
+    var primary: Primary? {
+        switch flow.stage {
+        case .review: return isSpecialist ? .recommend : nil
+        case .approve: return isManager && !isLocked ? .approve : nil
+        case .execute: return isSpecialist ? .execute : nil
+        case .info: return nil
+        }
+    }
+
+    /// «رفض» المدير — في أي مرحلة (في الاعتماد: ما لم يستلمه مدير آخر)
+    var canReject: Bool { isManager && (flow.stage != .approve || !isLocked) }
+    /// «إرجاع للمختص» — المدير في الاعتماد
+    var canReturn: Bool { flow.stage == .approve && isManager && !isLocked }
+    /// «اطلب معلومات من العضو» — المختص في المراجعة (لا لطلب الانضمام)
+    var canAsk: Bool { flow.stage == .review && isSpecialist && ApprovalWorkflow.canAskRequester(flow.requestType) }
+}
+
+// MARK: ملاحظات المسار في بطاقة (مربّع «الوارد» الجديد — U9)
+
+/// توصية المختص · ما طلبه من العضو وردّ العضو · ملاحظة المدير — صفوفاً في بطاقة (spec A.5/A.6). لا شيء = لا بطاقة
+struct ApprovalFlowNotesCard: View {
+    let flow: ApprovalSnapshot
+
+    static func hasContent(_ flow: ApprovalSnapshot) -> Bool {
+        flow.recommendsApproval != nil || clean(flow.approvalNote) != nil || flow.stage == .info
+            || !flow.infoReply.values.isEmpty
+    }
+
+    var body: some View {
+        if Self.hasContent(flow) {
+            AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                if let approves = flow.recommendsApproval {
+                    row(icon: approves ? "hand.thumbsup.fill" : "hand.thumbsdown.fill",
+                        tint: approves ? DS.Color.success : DS.Color.reject,
+                        title: approves ? L10n.t("توصية المختص: الموافقة", "Specialist recommends: approve")
+                                        : L10n.t("توصية المختص: الرفض", "Specialist recommends: reject"),
+                        text: Self.clean(flow.recommendationNote) ?? L10n.t("بدون ملاحظة", "No note"))
+                }
+                if flow.stage == .info {
+                    VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                        row(icon: "questionmark.bubble.fill", tint: DS.Color.composerDiwaniya,
+                            title: L10n.t("المختص يطلب من العضو", "The specialist asks the member"),
+                            text: Self.clean(flow.infoRequest) ?? L10n.t("بانتظار ردّ العضو", "Waiting for the member's reply"))
+                        if !flow.infoFields.isEmpty {
+                            ApprovalRequestedFields(fields: flow.infoFields,
+                                                    title: L10n.t("المطلوب من العضو", "Asked from the member"))
+                                .padding(.leading, AdminRowDivider.iconInset)
+                                .padding(.bottom, DS.Spacing.sm)
+                        }
+                    }
+                } else if !flow.infoReply.values.isEmpty {
+                    ApprovalInfoReplyCard(snapshot: flow)
+                        .padding(.vertical, DS.Spacing.sm)
+                }
+                if let note = Self.clean(flow.approvalNote) {
+                    row(icon: "text.bubble.fill", tint: DS.Color.warning,
+                        title: L10n.t("ملاحظة المدير", "Manager's note"), text: note)
+                }
+            }
+        }
+    }
+
+    private func row(icon: String, tint: Color, title: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: icon, tint: tint, filled: true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(title)
+                    .dsFont(.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(text)
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeightTwoLines, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private static func clean(_ s: String?) -> String? {
+        let t = s?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return t.isEmpty ? nil : t
     }
 }
 
@@ -1109,6 +1238,8 @@ struct ApprovalInternalNotes: View {
     @ObservedObject var adminRequestVM: AdminRequestViewModel
     @ObservedObject var memberVM: MemberViewModel
     let requestId: UUID
+    /// شكل مربّع «الوارد» الجديد (U9): الملاحظات صفوفاً في بطاقة والحقل تحتها، والعنوان من القسم الذي يحتويها
+    var card: Bool = false
 
     @State private var draft = ""
     @State private var sending = false
@@ -1121,6 +1252,67 @@ struct ApprovalInternalNotes: View {
 
     var body: some View {
         if adminRequestVM.approvalNotesAvailable == true {
+            if card { cardBody } else { plainBody }
+        }
+    }
+
+    /// المربّع الجديد: بطاقة صفوف (النص ١٥ ثم «الاسم · الوقت» ١٣) ثم سطر الإدخال
+    private var cardBody: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if !notes.isEmpty {
+                AdminRowsCard {
+                    ForEach(notes) { cardRow($0) }
+                }
+            }
+            inputRow
+            if let error {
+                Text(error)
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.error)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func cardRow(_ note: AdminRequestNote) -> some View {
+        let mine = note.authorId != nil && note.authorId == me
+        let name = mine ? L10n.t("أنت", "You")
+            : (note.authorId.flatMap { memberVM.member(byId: $0)?.firstName } ?? L10n.t("مسؤول", "Admin"))
+        let when = ApprovalWorkflow.date(note.createdAt).map { DateHelper.relativeTime(from: $0) }
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(note.body)
+                    .dsFont(.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                Text(verbatim: [name, when].compactMap { $0 }.joined(separator: " · "))
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            if mine {
+                Button {
+                    if DebugAdminProbe.dryRun("approval note delete \(note.id)") { return }
+                    Task { error = await adminRequestVM.deleteApprovalNote(note) }
+                } label: {
+                    Image(systemName: "trash")
+                        .dsGlyph(DS.Glyph.md)
+                        .foregroundColor(DS.Color.error)
+                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(L10n.t("حذف ملاحظتك", "Delete your note"))
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(minHeight: DS.Hub.rowMinHeightTwoLines)
+    }
+
+    private var plainBody: some View {
+        Group {
             // شكل مربّع الإشعار: عنوان صغير ثم الملاحظات والحقل (٢٠٢٦-١١-٠١)
             VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 NotifBoxLabel(text: notes.isEmpty
@@ -1167,6 +1359,7 @@ struct ApprovalInternalNotes: View {
             .accessibilityElement(children: .combine)
             if mine {
                 Button {
+                    if DebugAdminProbe.dryRun("approval note delete \(note.id)") { return }
                     Task {
                         error = await adminRequestVM.deleteApprovalNote(note)
                     }
@@ -1227,6 +1420,10 @@ struct ApprovalInternalNotes: View {
     private func send() {
         guard canSend else { return }
         error = nil
+        if DebugAdminProbe.dryRun("approval note add \(requestId)") {
+            draft = ""
+            return
+        }
         sending = true
         let text = draft
         Task {

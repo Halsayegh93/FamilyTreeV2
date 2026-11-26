@@ -353,3 +353,73 @@ final class JoinTierCache {
         return f
     }
 }
+
+// MARK: - صفّ مطابق داخل مربّع الطلب الجديد (U9، spec C.3 البند ٥)
+
+/// «يطابق في الشجرة»: حلقة صغيرة بعمق التطابق · الاسم ١٥ متوسط · السبب والميلاد ١٣ رمادي · «ربط» (حبّة كحلية ٣٤ ولمسها ٤٤).
+/// جسم الصفّ يعرض هذا المطابق في «مكانه في الشجرة»، و«ربط» = تأكيد الدمج نفسه
+struct JoinBoxMatchRow: View {
+    let name: String
+    let reason: String
+    var birth: String? = nil
+    /// كم جزءاً تطابق بالترتيب، من كم
+    let depth: Int
+    let total: Int
+    var isRegistration: Bool = false
+    /// المطابق المعروض في «مكانه في الشجرة»
+    var isPlaced: Bool = false
+    let onShowPlace: () -> Void
+    /// nil = لا «ربط» لهذا الدور (المعاينة وحدها)
+    let onLink: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            Button(action: onShowPlace) {
+                HStack(spacing: DS.Spacing.md) {
+                    DSRingGauge(progress: min(1, Double(depth) / Double(max(total, 1))), tint: AppSection.admin.ink,
+                                size: DS.Ring.small, center: .count(depth), ink: AppSection.admin.ink)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        HStack(spacing: DS.Spacing.xs) {
+                            if isPlaced {
+                                Image(systemName: "mappin.circle.fill")
+                                    .dsGlyph(DS.Glyph.md)
+                                    .foregroundColor(DS.Color.accent)
+                                    .accessibilityHidden(true)
+                            }
+                            Text(name)
+                                .dsFont(.rowTitle)
+                                .foregroundColor(DS.Color.textPrimary)
+                                .lineLimit(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Text(line)
+                            .dsFont(.subtitle)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(AdminRowPressStyle())
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(isPlaced ? [.isButton, .isSelected] : .isButton)
+            .accessibilityHint(L10n.t("يعرض مكانه في الشجرة", "Shows its place in the tree"))
+            if let onLink {
+                AdminPillButton(title: L10n.t("ربط", "Link"), style: .navy, action: onLink)
+                    .accessibilityLabel(L10n.t("ربط بـ \(name)", "Link to \(name)"))
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeightTwoLines, alignment: .leading)
+    }
+
+    /// «الاسم الأول + الأب + الجد · مواليد 1990 · تسجيل»
+    private var line: String {
+        var parts = [reason]
+        if let birth, !birth.isEmpty { parts.append(birth) }
+        if isRegistration { parts.append(L10n.t("تسجيل", "Registration")) }
+        return parts.joined(separator: " · ")
+    }
+}

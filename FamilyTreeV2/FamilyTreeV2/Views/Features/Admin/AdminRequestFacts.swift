@@ -185,6 +185,82 @@ struct AdminRequestFactRows: View {
     }
 }
 
+/// الصفوف الثلاثة داخل بطاقة «التفاصيل» في مربّع الطلب الجديد (U9، spec A.6): «نوع الطلب» بحبّة كلمة · «القرابة» ·
+/// «مقدّم الطلب» ‹ — والضغط يدفع ورقة العضو داخل مكدس المربّع (`onOpenPerson`) بدل ورقة فوق ورقة
+struct AdminRequestFactList: View {
+    let facts: AdminRequestFacts
+    /// nil = الصفّ للعرض فقط
+    var onOpenPerson: ((UUID) -> Void)? = nil
+    @EnvironmentObject var memberVM: MemberViewModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            row(icon: "tag.fill", tint: facts.kind.tint, label: AdminRequestFactText.kind) {
+                AdminStatePill(title: facts.kind.title, tone: facts.kind.pillTone).fixedSize()
+            }
+            if let relation = facts.relation {
+                AdminRowDivider(inset: AdminRowDivider.iconInset)
+                row(icon: "person.2.fill", tint: DS.Color.palm, label: AdminRequestFactText.relation) {
+                    valueText(relation)
+                }
+            }
+            AdminRowDivider(inset: AdminRowDivider.iconInset)
+            let requester = facts.requesterId.flatMap { memberVM.member(byId: $0) }
+            if let requester, let onOpenPerson {
+                Button { onOpenPerson(requester.id) } label: {
+                    row(icon: "person.fill", tint: AppSection.admin.ink, label: AdminRequestFactText.requester, chevron: true) {
+                        valueText(facts.requester)
+                    }
+                }
+                .buttonStyle(AdminRowPressStyle())
+                .accessibilityHint(L10n.t("يفتح بياناته", "Opens their details"))
+            } else {
+                row(icon: "person.fill", tint: AppSection.admin.ink, label: AdminRequestFactText.requester) {
+                    valueText(facts.requester)
+                }
+            }
+        }
+    }
+
+    private func valueText(_ text: String) -> some View {
+        Text(text)
+            .dsFont(.body)
+            .foregroundColor(DS.Color.textSecondary)
+            .multilineTextAlignment(.trailing)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func row<Value: View>(icon: String, tint: Color, label: String, chevron: Bool = false,
+                                  @ViewBuilder value: () -> Value) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: icon, tint: tint, filled: true)
+            Text(label)
+                .dsFont(.body)
+                .foregroundColor(DS.Color.textPrimary)
+                .layoutPriority(1)
+            Spacer(minLength: DS.Spacing.sm)
+            value()
+            if chevron { DSChevron() }
+        }
+        .padding(.vertical, DS.Spacing.xsm)
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeight, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension AdminRequestKind {
+    /// نغمة الحبّة في المربّع الجديد: إضافة ✓ · حذف أحمر · تعديل/انضمام رمادي (كلمة دائماً — spec A.7)
+    var pillTone: AdminPillTone {
+        switch self {
+        case .add: return .ok
+        case .delete: return .error
+        case .edit, .join: return .off
+        }
+    }
+}
+
 /// شريحة نوع الطلب الصغيرة (قبل العنوان في القوائم)
 struct AdminRequestKindChip: View {
     let kind: AdminRequestKind

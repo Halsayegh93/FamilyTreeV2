@@ -595,10 +595,50 @@ struct AdminSenderSection: View {
     var title: String = L10n.t("المرسل", "Sender")
     /// خانة «أرسله» — تختفي حين تعرضه بطاقة «المرسل» فوقه
     var showsSender: Bool = true
+    /// شكل مربّع «الوارد» الجديد (U9): عنوان القسم ثم بطاقة صفوف (المسار · أرسله ‹ · الجهاز · الوقت)
+    var card: Bool = false
+    /// في الشكل الجديد: «أرسله» يدفع ورقة العضو داخل مكدس المربّع (لا ورقة فوق ورقة)
+    var onOpenPerson: ((UUID) -> Void)? = nil
     /// ورقة المرسل («أرسله» ←)
     @State private var openSender: AdminMemberSheetContext?
 
     var body: some View {
+        if card { cardBody } else { composerBody }
+    }
+
+    private var cardBody: some View {
+        let sep = L10n.isArabic ? " ‹ " : " › "
+        let path = info.steps.map { AdminRequestSourceStrip.short($0.title) }.joined(separator: sep)
+        return AdminBoxSection(title: title) {
+            AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                if !path.isEmpty {
+                    AdminDetailLongTextRow(icon: "point.topleft.down.to.point.bottomright.curvepath",
+                                           label: L10n.t("المسار", "Path"), text: path)
+                }
+                if let chosenName = info.chosenName, let chosenLabel = info.chosenLabel {
+                    AdminDetailInfoRow(icon: "person.fill", label: chosenLabel, value: chosenName, color: DS.Color.female)
+                }
+                if showsSender {
+                    AdminDetailInfoRow(icon: "paperplane.fill", label: L10n.t("أرسله", "Sent by"),
+                                       value: info.sender ?? L10n.t("غير معروف", "Unknown"), color: AppSection.admin.ink,
+                                       open: info.senderId.flatMap { id in onOpenPerson.map { open in { open(id) } } })
+                }
+                AdminDetailInfoRow(icon: AdminSenderSection.deviceIcon(info.device), label: L10n.t("الجهاز", "Device"),
+                                   value: info.device, color: DS.Color.slate)
+                AdminDetailInfoRow(icon: "clock.fill", label: L10n.t("الوقت", "Time"), value: info.time, color: DS.Color.slate)
+            }
+        }
+    }
+
+    /// رمز الجهاز من نصّه («آيفون …» / «أندرويد …» / «الموقع»)
+    static func deviceIcon(_ text: String) -> String {
+        if text.contains("آيفون") || text.lowercased().contains("iphone") { return "iphone" }
+        if text.contains("أندرويد") || text.lowercased().contains("android") { return "candybarphone" }
+        if text.contains("الموقع") || text.lowercased().contains("web") { return "globe" }
+        return "questionmark.circle"
+    }
+
+    private var composerBody: some View {
         DSComposerSection(title: title,
                           icon: "paperplane.fill",
                           tint: AppSection.admin.ink,
