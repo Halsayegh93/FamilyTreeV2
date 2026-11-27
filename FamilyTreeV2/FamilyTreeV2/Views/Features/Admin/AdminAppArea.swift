@@ -101,6 +101,16 @@ final class AdminAppAreaModel: ObservableObject {
     @Published private(set) var configOverride: [String: String] = [:]
     /// آخر قيمة طُلبت لكل إعداد — «أعد المحاولة» يعيدها
     private var lastAttempt: [AdminAppSetting: AdminAppValue] = [:]
+    /// حقل «سبب الصيانة» (طلب المالك ٢٠٢٦-١١-٢٨) — يُبذر من المحفوظ ما لم يكتب المالك فيه، ويُحفظ مع تشغيل الصيانة
+    /// (تحديث واحد) أو بـ«حفظ» حين تكون مفعّلة
+    @Published var maintenanceDraft = "" {
+        didSet {
+            let clamped = MaintenanceLogic.clampedDraft(maintenanceDraft)
+            if clamped != maintenanceDraft { maintenanceDraft = clamped }
+        }
+    }
+    /// آخر فشل في الصيانة كان حفظ السبب وحده (فـ«أعد المحاولة» يعيد السبب لا المفتاح)
+    private var lastMaintenanceWasMessage = false
 
     private weak var settingsVM: AppSettingsViewModel?
     private weak var authVM: AuthViewModel?
@@ -129,6 +139,49 @@ final class AdminAppAreaModel: ObservableObject {
         settingsHealth = AdminAppLogic.seeded(settingsHealth, hasData: vm.settings.updatedAt != nil).beginning()
         await vm.fetchSettings()
         settingsHealth = settingsHealth.ending(success: vm.settings.updatedAt != nil && NetworkMonitor.shared.isConnected)
+        seedMaintenanceDraft()
+    }
+
+    /// الحقل = المحفوظ، إلا إن كتب فيه المالك شيئاً لم يُحفظ بعد
+    func seedMaintenanceDraft(force: Bool = false) {
+        guard let vm = settingsVM else { return }
+        if force || !MaintenanceLogic.isDirty(draft: maintenanceDraft, saved: maintenanceSavedAtSeed) {
+            maintenanceDraft = vm.settings.maintenanceMessage ?? ""
+        }
+        maintenanceSavedAtSeed = vm.settings.maintenanceMessage
+    }
+
+    /// المحفوظ حين بُذر الحقل آخر مرة (لمعرفة هل كتب المالك فيه)
+    private var maintenanceSavedAtSeed: String?
+
+    /// الحقل يختلف عن المحفوظ؟
+    var maintenanceDraftDirty: Bool {
+        MaintenanceLogic.isDirty(draft: maintenanceDraft, saved: settingsVM?.settings.maintenanceMessage)
+    }
+
+    /// «حفظ» السبب والصيانة مفعّلة — نفس حال الحفظ (دوّارة على صفّ الصيانة، والفشل سطره تحته)
+    func saveMaintenanceMessage() {
+        guard let vm = settingsVM, save.begin(.maintenance) else { return }
+        lastMaintenanceWasMessage = true
+        let draft = maintenanceDraft
+        Task {
+            let ok: Bool
+            if DebugAdminProbe.dryRun("app_settings maintenance_message=\(MaintenanceLogic.sanitized(draft) ?? "null")") {
+                vm.settings.maintenanceMessage = MaintenanceLogic.sanitized(draft)
+                ok = true
+            } else {
+                vm.errorMessage = nil
+                ok = await vm.updateMaintenance(on: nil, message: draft, updatedBy: authVM?.currentUser?.id)
+            }
+            save.finish(.maintenance, success: ok)
+            if ok {
+                seedMaintenanceDraft(force: true)
+                DSMomentToast.show(L10n.t("حُفظ سبب الصيانة", "Maintenance reason saved"), moment: .success)
+            } else {
+                UIAccessibility.post(notification: .announcement,
+                                     argument: AdminAppLogic.failedAnnouncement(L10n.t("سبب الصيانة", "Maintenance reason")))
+            }
+        }
     }
 
     /// حبّة الرأس «تعذّر التحميل ↻»
@@ -170,7 +223,9 @@ final class AdminAppAreaModel: ObservableObject {
 
     /// «لم يُحفظ. أعد المحاولة» — نفس الطلب (وما يسأل يسأل من جديد)
     func retry(_ setting: AdminAppSetting) {
-        if setting.store == .command {
+        if setting == .maintenance && lastMaintenanceWasMessage {
+            saveMaintenanceMessage()
+        } else if setting.store == .command {
             request(setting, to: nil)
         } else if let value = lastAttempt[setting] {
             request(setting, to: value)
@@ -180,6 +235,7 @@ final class AdminAppAreaModel: ObservableObject {
     private func write(_ setting: AdminAppSetting, _ value: AdminAppValue?) async {
         guard save.begin(setting) else { return }
         if let value { lastAttempt[setting] = value }
+        if setting == .maintenance { lastMaintenanceWasMessage = false }
         let ok: Bool
         switch setting.store {
         case .settings: ok = await writeSettings(setting, value)
@@ -198,9 +254,20 @@ final class AdminAppAreaModel: ObservableObject {
     private func writeSettings(_ setting: AdminAppSetting, _ value: AdminAppValue?) async -> Bool {
         guard let vm = settingsVM, let key = setting.serverKey, let value,
               let old = vm.settings.adminAppValue(setting) else { return false }
-        if DebugAdminProbe.dryRun("app_settings \(key)=\(value.logText)") {
+        // تشغيل الصيانة: المفتاح والسبب في تحديث واحد («يُحفظ مع المفتاح»)
+        let withMessage = setting == .maintenance && value == .flag(true)
+        if DebugAdminProbe.dryRun("app_settings \(key)=\(value.logText)" + (withMessage ? " + maintenance_message" : "")) {
             vm.settings.setAdminAppValue(value, for: setting)
+            if withMessage { vm.settings.maintenanceMessage = MaintenanceLogic.sanitized(maintenanceDraft) }
             return true
+        }
+        if withMessage {
+            vm.settings.setAdminAppValue(value, for: setting)
+            vm.errorMessage = nil
+            let saved = await vm.updateMaintenance(on: true, message: maintenanceDraft, updatedBy: authVM?.currentUser?.id)
+            let ok = saved && vm.settings.maintenanceMode
+            if !ok { vm.settings.setAdminAppValue(old, for: setting) } else { seedMaintenanceDraft(force: true) }
+            return ok
         }
         vm.settings.setAdminAppValue(value, for: setting)
         vm.errorMessage = nil
@@ -376,6 +443,9 @@ struct AdminAppStatusCard: View {
                                   current: s.maintenanceMode, word: AdminAppLogic.maintenanceWord(on: s.maintenanceMode),
                                   hint: AdminAppLogic.maintenanceHint(on: s.maintenanceMode),
                                   health: health, canEdit: canEdit)
+                if canEdit {
+                    AdminMaintenanceMessageField(model: model, maintenanceOn: s.maintenanceMode, health: health)
+                }
                 AdminAppActingRow(model: model, setting: .pushPaused, icon: "bell.fill",
                                   tint: DS.Color.slateFill, title: AdminAppSetting.pushPaused.rowTitle,
                                   subtitle: AdminAppLogic.pushLine(paused: paused),
@@ -424,6 +494,70 @@ struct AdminAppStatusCard: View {
                     line: L10n.t("تعذّر جلب إعدادات التحديث", "Couldn't load the update settings"),
                     health: AdminStoreHealth.failed(lastGood: nil))
         }
+    }
+}
+
+/// «سبب الصيانة (يظهر للأعضاء)» تحت صفّ «وضع الصيانة» (طلب المالك ٢٠٢٦-١١-٢٨): حقل ≤ ٢٠٠ حرف بعدّاده. والصيانة مطفأة
+/// يُحفظ مع تشغيلها (تحديث واحد بعد «شغّل الصيانة»)، ومفعّلة يظهر «حفظ» حين يتغيّر. فارغ = السطر الافتراضي في شاشة الصيانة
+private struct AdminMaintenanceMessageField: View {
+    @ObservedObject var model: AdminAppAreaModel
+    let maintenanceOn: Bool
+    let health: AdminStoreHealth
+    @FocusState private var focused: Bool
+
+    private var tint: Color { AppSection.admin.ink }
+    private var label: String { L10n.t("سبب الصيانة (يظهر للأعضاء)", "Maintenance reason (shown to members)") }
+
+    var body: some View {
+        let enabled = AdminAppLogic.controlEnabled(health: health, canEdit: true, busy: model.save.isBusy)
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            HStack(alignment: .top, spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "text.quote", tint: tint)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(label)
+                        .dsFieldFont(.label)
+                        .foregroundColor(focused ? tint : DS.Color.fieldLabel)
+                    TextField(L10n.t("مثال: نحدّث بيانات الشجرة", "e.g. We're updating the tree"),
+                              text: $model.maintenanceDraft, axis: .vertical)
+                        .lineLimit(2...4)
+                        .dsFieldFont(.fieldValue)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .focused($focused)
+                        .disabled(!enabled)
+                        .accessibilityLabel(label)
+                }
+            }
+            .dsRowBox()
+            .dsFocusFieldBox(focused: focused, tint: tint)
+            .contentShape(Rectangle())
+            .onTapGesture { if enabled { focused = true } }
+
+            HStack(spacing: DS.Spacing.sm) {
+                Text(maintenanceOn
+                     ? L10n.t("اتركه فارغاً للنص المعتاد", "Leave empty for the usual line")
+                     : L10n.t("يُحفظ مع تشغيل الصيانة", "Saved when you turn maintenance on"))
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Text(verbatim: MaintenanceLogic.counter(model.maintenanceDraft))
+                    .dsFont(.caption)
+                    .monospacedDigit()
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityLabel(L10n.t("عدد الحروف \(MaintenanceLogic.counter(model.maintenanceDraft))",
+                                               "Characters \(MaintenanceLogic.counter(model.maintenanceDraft))"))
+                if maintenanceOn && model.maintenanceDraftDirty {
+                    DSChipButton(L10n.t("حفظ", "Save"), isSelected: true, isLoading: model.save.isSaving(.maintenance)) {
+                        focused = false
+                        model.saveMaintenanceMessage()
+                    }
+                    .disabled(!enabled)
+                }
+            }
+        }
+        .padding(.leading, AdminRowDivider.iconInset)
+        .padding(.bottom, DS.Spacing.md)
     }
 }
 

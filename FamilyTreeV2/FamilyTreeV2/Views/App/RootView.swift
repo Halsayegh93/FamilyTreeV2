@@ -55,7 +55,8 @@ struct RootView: View {
                 if updateStore.isForced(minBuildSetting: appSettingsVM.settings.iosMinBuild ?? 0,
                                         isOwner: authVM.currentUser?.role == .owner) {
                     AnyView(ForceUpdateView())
-                } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
+                } else if MaintenanceLogic.showsScreen(maintenanceOn: appSettingsVM.settings.maintenanceMode,
+                                                       canModerate: authVM.canModerate) {
                     AnyView(MaintenanceModeView())
                 } else {
                     // قبول «الخصوصية والاستخدام» مرة لكل إصدار (app_config.terms_version)
@@ -92,10 +93,14 @@ struct MaintenanceModeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var refreshing = false
 
     /// بهوية الشعار (طلب المالك ٢٠٢٦-١١-٢٧ «باللون الأزرق ثيمة الشعار»): أرضية كحلية (`gradientBand`)، الشعار الكريمي،
     /// العنوان أبيض، الفاصل والسطر ذهبيان، «تحديث» ذهبي ممتلئ و«تسجيل الخروج» نصّ فاتح هادئ. الظهور مرة (`dsEntrance`).
+    /// ٢٠٢٦-١١-٢٨ (طلب المالك): شارة صيانة حمراء بين الشعار والعنوان (قفزة مرة `DSIconPop`)، وسبب المالك
+    /// (`maintenance_message`) بدل السطر الافتراضي، ورجوع تلقائي: جلب كل ٦٠ ث ما دامت الشاشة ظاهرة وعند الرجوع للتطبيق —
+    /// حين تُطفأ الصيانة يبدّل `RootView` الشاشة وحده. المنطق في `MaintenanceLogic.swift` (الوحدة MT1).
     var body: some View {
         ZStack {
             Rectangle().fill(DS.Color.gradientBand).ignoresSafeArea()
@@ -111,6 +116,18 @@ struct MaintenanceModeView: View {
                     .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
                     .dsEntrance(delay: 0, scale: DSMotion.panelScale, animation: DSMotion.panel, anchor: .center)
 
+                // شارة الصيانة: دائرة حمراء ممتلئة ورمز أبيض — قفزة مرة («تقليل الحركة» = تلاشٍ فقط)
+                ZStack {
+                    Circle().fill(DS.Color.errorFill)
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .dsGlyph(DS.Glyph.xxl, weight: .semibold)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                }
+                .frame(width: DS.Icon.floatingButton, height: DS.Icon.floatingButton)
+                .modifier(DSIconPop(delay: DSMotion.iconDelay))
+                .padding(.bottom, DS.Spacing.lg)
+                .accessibilityHidden(true)
+
                 VStack(spacing: DS.Spacing.sm) {
                     Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))
                         .dsFont(.heroTitle)
@@ -122,8 +139,8 @@ struct MaintenanceModeView: View {
                             .fill(LinearGradient(colors: [DS.Color.accentLight.opacity(0), DS.Color.accentLight.opacity(0.7)],
                                                  startPoint: .leading, endPoint: .trailing))
                             .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
-                        Image(systemName: "wrench.and.screwdriver.fill")
-                            .dsGlyph(DS.Glyph.sm)
+                        Image(systemName: "circle.fill")
+                            .dsGlyph(DS.Glyph.micro)
                             .foregroundColor(DS.Color.accentLight)
                             .accessibilityHidden(true)
                         Rectangle()
@@ -132,8 +149,7 @@ struct MaintenanceModeView: View {
                             .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
                     }
 
-                    Text(L10n.t("نقوم حالياً بتحديث التطبيق. يرجى المحاولة لاحقاً.",
-                                "We're currently updating the app. Please try again later."))
+                    Text(verbatim: MaintenanceLogic.bodyLine(appSettingsVM.settings.maintenanceMessage))
                         .dsFont(.callout)
                         .foregroundColor(DS.Color.accentLight)
                         .multilineTextAlignment(.center)
@@ -147,8 +163,7 @@ struct MaintenanceModeView: View {
                     guard !refreshing else { return }
                     refreshing = true
                     Task {
-                        await appSettingsVM.fetchSettings()
-                        await CategoryStore.shared.fetch()
+                        await refetch(always: true)
                         refreshing = false
                     }
                 }
@@ -170,6 +185,25 @@ struct MaintenanceModeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .dsLightStatusBar()
+        // الرجوع التلقائي: حلقة واحدة تُلغى حين تختفي الشاشة (لا `Timer.publish`)
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: MaintenanceLogic.refreshSeconds * 1_000_000_000)
+                guard !Task.isCancelled else { break }
+                await refetch()
+            }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await refetch() } }
+        }
+    }
+
+    /// الإعدادات (والتصنيفات بـ«تحديث» أو حين تُطفأ) — إن أُطفئت الصيانة يكمل التطبيق وحده
+    private func refetch(always: Bool = false) async {
+        await appSettingsVM.fetchSettings()
+        if always || !appSettingsVM.settings.maintenanceMode {
+            await CategoryStore.shared.fetch()
+        }
     }
 }
 
