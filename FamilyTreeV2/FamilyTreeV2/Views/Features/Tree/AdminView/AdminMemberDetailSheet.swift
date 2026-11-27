@@ -1429,6 +1429,10 @@ struct AdminMemberDetailSheet: View {
             isSaving = false
             guard !genderLockedByAccount else {
                 selectedGender = member.gender ?? "male"
+                // كان يرجع بصمت فيظنّ الإداري أن الجنس حُفظ (K1)
+                accountErrorText = L10n.t("له حساب في التطبيق — لا يُنقل بين الشجرتين، فبقي الجنس كما هو.",
+                                          "Has an app account — can't be moved between trees, so the gender is unchanged.")
+                accountError = true
                 return
             }
             // الأب يُحفظ قبل النقل لشجرة النساء — لا الاثنان في حفظة واحدة
@@ -1539,10 +1543,28 @@ struct AdminMemberDetailSheet: View {
                 if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)"); memberVM.errorMessage = nil }
             }
             // الجنس نُقل على السيرفر قبل هذا الحفظ (`moveChildGender`) — لا يُكتب العمود مرة ثانية
+            // (احتياط: التغيير يمرّ بالنقل قبل هنا.) «أنثى» لمن له أب لا تُكتب عموداً — السيرفر يرفضها
+            // (`family_tree_men_only`)؛ وأي فشل يظهر للإداري برسالة السيرفر بدل التسجيل فقط (K1)
             if genderChanged && !genderAlreadyMoved {
                 Log.info("[AdminEdit] ⚧ تعديل الجنس: \(capturedGender)")
-                await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)
-                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(err)") }
+                let route = FamilyTreeMenOnly.genderChangeRoute(to: capturedGender, current: member.gender,
+                                                                hasFather: capturedFatherId != nil)
+                var genderError: String?
+                if route == .moveBetweenTrees {
+                    genderError = FamilyTreeMenOnly.title + " — "
+                        + L10n.t("غيّر الجنس من مربّع «الجنس» لتُنقل إلى شجرة النساء.",
+                                 "Change the gender from the Gender box to move her to the women's tree.")
+                } else if route == .plainUpdate {
+                    memberVM.errorMessage = nil
+                    if !(await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)) {
+                        genderError = memberVM.errorMessage ?? FamilyTreeMenOnly.genderFailureMessage(serverMessage: nil)
+                        memberVM.errorMessage = nil
+                    }
+                }
+                if let genderError {
+                    Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(genderError)")
+                    DSStandaloneAlert.show(title: L10n.t("لم يُحفظ الجنس", "Gender not saved"), message: genderError)
+                }
             }
             if datesChanged {
                 Log.info("[AdminEdit] 📅 تعديل التواريخ: deceased=\(capturedIsDeceased), birth=\(capturedBirthDate?.description ?? "—"), death=\(capturedDeathDate?.description ?? "—")")

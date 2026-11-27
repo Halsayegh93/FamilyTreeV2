@@ -2549,9 +2549,16 @@ class MemberViewModel: ObservableObject {
         }
     }
 
-    func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    /// يرجّع نجاح الحفظ — الفشل يضع `errorMessage` (رسالة السيرفر العربية، مثل رفض «شجرة العائلة للرجال فقط»
+    /// hint `family_tree_men_only` حين يصير من له أب أنثى) ليعرضها المربّع، لا تسجيلاً فقط (K1)
+    @discardableResult
+    func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else {
+            errorMessage = L10n.t("لا يوجد اتصال بالإنترنت.", "No internet connection.")
+            return false
+        }
         self.isLoading = true
+        defer { self.isLoading = false }
         let oldGender = _memberById[memberId]?.gender
 
         var genderUpdate: [String: AnyEncodable] = [
@@ -2581,10 +2588,14 @@ class MemberViewModel: ObservableObject {
             }
 
             Log.info("تم تحديث الجنس")
+            return true
         } catch {
-            Log.error("خطأ تحديث الجنس: \(error.localizedDescription)")
+            let pg = error as? PostgrestError
+            Log.error("خطأ تحديث الجنس: \(error.localizedDescription) hint=\(pg?.hint ?? "-")")
+            errorMessage = FamilyTreeMenOnly.genderFailureMessage(
+                serverMessage: AuthViewModel.serverMessage(error, fallback: ""))
+            return false
         }
-        self.isLoading = false
     }
 
     // MARK: - Update Member Birth Date (simple string)
@@ -2903,7 +2914,9 @@ class MemberViewModel: ObservableObject {
             if let pg = error as? PostgrestError, pg.hint == "family_links_protected" {
                 errorMessage = pg.message
             } else {
-                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+                // رفض السيرفر برسالة عربية (مثل «شجرة العائلة للرجال فقط») يُعرض كما هو — K1
+                errorMessage = AuthViewModel.serverMessage(
+                    error, fallback: L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again."))
             }
             return nil
         }

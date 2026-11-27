@@ -17,6 +17,9 @@ enum KinshipCalculator {
         let pathB: [FamilyMember]      // مسار الثاني للجد المشترك (زوجة قريبك: هي ثم زوجها ثم أهله)
         /// نوع الصلة — إضافة اختيارية للواجهات؛ القيمة الافتراضية تحفظ التوافق
         var kind: Kind = .blood
+        /// شجرة العائلة: الصلة الأقرب تمرّ بأمّ (خالك، ابن خالتك، جدك أبو أمك) — الأم في شجرة النساء فلا يُرسم
+        /// الطريق في شجرة العائلة؛ تُعرض الكلمة ومعها «عن طريق الأم» (`motherNote`)
+        var viaMother: Bool = false
 
         nonisolated enum Kind { case same, spouse, blood, inLaw, unknown }
     }
@@ -127,6 +130,67 @@ enum KinshipCalculator {
             pathB: ancestorPath(for: memberB, lookup: lookup),
             kind: .unknown
         )
+    }
+
+    // MARK: - شجرة العائلة: جهة الأم من شجرة النساء (K1، ٢٠٢٦-١١-٢٧)
+    // `profiles` بلا `mother_id`؛ الأمهات في `women_members`: عقدة الرجل المنعكسة بنفس معرّفه تحمل `mother_id`،
+    // والأم بنت `parent_id` = أبوها في `profiles`. فتُدمج العُقد مع شجرة العائلة ويُحسب بالجهتين، وتُختار نتيجة
+    // جهة الأم فقط حين تكون أقرب (أقل خطوات) من نتيجة جهة الأب أو حين لا قرابة دم من جهة الأب —
+    // فنتائج جهة الأب تبقى كما هي حرفاً بحرف.
+
+    static var motherNote: String { L10n.t("عن طريق الأم", "Through the mother") }
+
+    /// شجرة العائلة + عُقد شجرة النساء: سجلّ `profiles` يبقى كما هو ويأخذ أمّه من عقدته المنعكسة،
+    /// والعُقد التي ليست في `profiles` (البنات، الزوجات، أبناء البنات) تُضاف كما هي
+    static func familyTreeLookup(family: [UUID: FamilyMember], women: [FamilyMember]) -> [UUID: FamilyMember] {
+        var merged = family
+        for node in women {
+            if var p = merged[node.id] {
+                if p.motherId == nil, let mid = node.motherId {
+                    p.motherId = mid
+                    merged[node.id] = p
+                }
+            } else {
+                merged[node.id] = node
+            }
+        }
+        return merged
+    }
+
+    /// صلة القرابة في شجرة العائلة بالجهتين.
+    /// - women: عُقد شجرة النساء (`WomenStore.cache`) — فارغة = جهة الأب وحدها كما كانت
+    /// - viewerNodeId: عقدة السائل في شجرة النساء حين لا تحمل معرّفه (حساب المرأة المربوط)
+    static func calculateInFamilyTree(from memberA: FamilyMember, to memberB: FamilyMember,
+                                      lookup: [UUID: FamilyMember], women: [FamilyMember],
+                                      viewerNodeId: UUID? = nil) -> KinshipResult {
+        let paternal = calculate(from: memberA, to: memberB, lookup: lookup)
+        guard !women.isEmpty, paternal.kind != .same, paternal.kind != .spouse else { return paternal }
+
+        let merged = familyTreeLookup(family: lookup, women: women)
+        var viewer = merged[memberA.id] ?? memberA
+        if let nodeId = viewerNodeId, nodeId != memberA.id, let node = merged[nodeId] { viewer = node }
+        guard viewer.id != memberB.id else { return paternal }
+        let target = merged[memberB.id] ?? memberB
+
+        var both = calculate(from: viewer, to: target, lookup: merged, includeMaternal: true)
+        guard both.kind == .blood else { return paternal }
+        if paternal.kind == .blood, span(paternal) <= span(both) { return paternal }
+        both.viaMother = passesThroughMother(both, lookup: merged)
+        return both
+    }
+
+    /// خطوات قرابة الدم: منك إلى الجد المشترك + منه إلى الثاني
+    private static func span(_ r: KinshipResult) -> Int { r.pathA.count + r.pathB.count - 2 }
+
+    /// في المسارين خطوة صعود من ابن إلى أمّه؟
+    private static func passesThroughMother(_ r: KinshipResult, lookup: [UUID: FamilyMember]) -> Bool {
+        for path in [r.pathA, r.pathB] where path.count > 1 {
+            for i in 0..<(path.count - 1) {
+                let child = lookup[path[i].id] ?? path[i]
+                if child.motherId == path[i + 1].id, child.fatherId != path[i + 1].id { return true }
+            }
+        }
+        return false
     }
 
     /// بناء مسار الأجداد: [العضو، أبوه، جده، جد جده...]

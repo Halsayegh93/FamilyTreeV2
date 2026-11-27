@@ -1354,26 +1354,32 @@ struct MemberDetailsView: View {
 
     private func showKinshipPath() {
         guard let currentUser = authVM.currentUser else { return }
-        let result = KinshipCalculator.calculate(from: currentUser, to: member, lookup: memberVM._memberById)
+        let lookup = memberVM._memberById
+        let member = member
+        Task { @MainActor in
+            // جهة الأم من شجرة النساء (خالك، ابن خالتك…) — K1
+            let result = await KinshipCalculator.familyTree(from: currentUser, to: member, lookup: lookup)
 
-        var pathIds = result.pathA.map(\.id) + result.pathB.map(\.id)
-        if let ancestor = result.commonAncestor {
-            pathIds.append(ancestor.id)
-        }
+            var pathIds = result.pathA.map(\.id) + result.pathB.map(\.id)
+            if let ancestor = result.commonAncestor {
+                pathIds.append(ancestor.id)
+            }
 
-        dismiss()
+            dismiss()
 
-        // الطلب المركزي: تاب الشجرة ← شجرة العائلة ← المسار — يعمل من الرئيسية والإشعارات أيضاً
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            NotificationCenter.default.post(
-                name: .requestKinshipPath,
-                object: nil,
-                userInfo: [
-                    "memberId": member.id,
-                    "relationship": result.relationship,
-                    "pathIds": pathIds
-                ]
-            )
+            // الطلب المركزي: تاب الشجرة ← شجرة العائلة ← المسار — يعمل من الرئيسية والإشعارات أيضاً
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                NotificationCenter.default.post(
+                    name: .requestKinshipPath,
+                    object: nil,
+                    userInfo: [
+                        "memberId": member.id,
+                        "relationship": result.relationship,
+                        "pathIds": pathIds,
+                        "viaMother": result.viaMother
+                    ]
+                )
+            }
         }
     }
 

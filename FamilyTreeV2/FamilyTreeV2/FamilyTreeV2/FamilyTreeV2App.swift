@@ -239,7 +239,7 @@ struct FamilyTreeV2App: App {
                     Log.info("[DeepLink] فتح عضو: \(member.firstName)")
 
                     // حساب صلة القرابة
-                    let result = KinshipCalculator.calculate(
+                    let result = await KinshipCalculator.familyTree(
                         from: currentUser,
                         to: member,
                         lookup: appState.memberVM._memberById
@@ -256,7 +256,8 @@ struct FamilyTreeV2App: App {
                         userInfo: [
                             "memberId": member.id,
                             "relationship": result.relationship,
-                            "pathIds": pathIds
+                            "pathIds": pathIds,
+                            "viaMother": result.viaMother
                         ]
                     )
                     }

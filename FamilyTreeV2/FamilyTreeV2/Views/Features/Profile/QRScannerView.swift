@@ -105,7 +105,7 @@ struct QRScannerView: View {
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
 
-                Text(result.relationship)
+                Text(KinshipCalculator.displayText(result))
                     .dsFont(.pageTitle)
                     .foregroundStyle(AppSection.profile.gradient)
                     .multilineTextAlignment(.center)
@@ -190,7 +190,7 @@ struct QRScannerView: View {
         }
 
         // حساب صلة القرابة
-        let result = KinshipCalculator.calculate(
+        let result = await KinshipCalculator.familyTree(
             from: currentUser,
             to: member,
             lookup: memberVM._memberById
@@ -216,7 +216,8 @@ struct QRScannerView: View {
                     userInfo: [
                         "memberId": member.id,
                         "relationship": result.relationship,
-                        "pathIds": allPathIds
+                        "pathIds": allPathIds,
+                        "viaMother": result.viaMother
                     ]
                 )
             }

@@ -512,3 +512,22 @@ enum WomenStore {
         try await c.from("women_members").delete().eq("id", value: removeId.uuidString).execute()
     }
 }
+
+// MARK: - صلة القرابة في شجرة العائلة بالجهتين (K1، ٢٠٢٦-١١-٢٧)
+
+extension KinshipCalculator {
+    /// صلة القرابة لشجرة العائلة: جهة الأب كما كانت، وجهة الأم من آخر جلب لشجرة النساء (يُجلب مرة إن كان فارغاً؛
+    /// فشل الجلب = جهة الأب وحدها). حساب المرأة يُحسب من عقدتها المربوطة.
+    @MainActor
+    static func familyTree(from me: FamilyMember, to member: FamilyMember,
+                           lookup: [UUID: FamilyMember]) async -> KinshipResult {
+        if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+        return calculateInFamilyTree(from: me, to: member, lookup: lookup, women: WomenStore.cache,
+                                     viewerNodeId: WomenStore.womanByLinkedUser[me.id])
+    }
+
+    /// الكلمة كما تُعرض خارج الشجرة: «ابن خالك — عن طريق الأم»
+    static func displayText(_ result: KinshipResult) -> String {
+        result.viaMother ? "\(result.relationship) — \(motherNote)" : result.relationship
+    }
+}

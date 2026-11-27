@@ -464,6 +464,8 @@ struct TreeView: View {
     @State private var activePath: Set<UUID> = []
     @State private var kinshipBanner: String? = nil
     @State private var kinshipHighlightedIds: Set<UUID> = [] // الأعضاء المهايلايتين بصلة القرابة
+    /// الصلة عن طريق الأم (K1) — البانر يقول «عن طريق الأم» ولا يُرسم طريق
+    @State private var kinshipViaMother = false
     /// متى ينتهي وضع صلة القرابة وحده (شريط الإلغاء السفلي يعدّ تنازلياً إليه)
     @State private var kinshipEndsAt: Date? = nil
     @State private var kinshipTimer: Task<Void, Never>? = nil
@@ -739,8 +741,14 @@ struct TreeView: View {
                             VStack {
                                 HStack(spacing: DS.Spacing.sm) {
                                     DSStateIcon("person.2.fill", tint: AppSection.tree.ink, size: DS.Icon.discSmall, mapsChrome: false)
-                                    Text(banner)
-                                        .dsFont(.headline)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(banner)
+                                            .dsFont(.headline)
+                                        if kinshipViaMother {
+                                            Text(KinshipCalculator.motherNote)
+                                                .dsFont(.caption)
+                                        }
+                                    }
                                     Spacer()
                                     // «×» الصغير بلا قرص (كما كان) — مساحة ضغطه ٤٤ لا تكبّر البانر
                                     DSCloseButton(context: .onColor, size: .mini) { endKinship(resetView: true) }
@@ -847,6 +855,25 @@ struct TreeView: View {
                       let memberId = info["memberId"] as? UUID,
                       let relationship = info["relationship"] as? String else { return }
 
+                // عن طريق الأم (K1): الأم في شجرة النساء فلا يُرسم الطريق هنا — الكلمة ومعها «عن طريق الأم»،
+                // والشجرة تفتح على العضو كالبحث (بلا خطوط قرابة توحي بطريق الأب)
+                if info["viaMother"] as? Bool == true {
+                    if preKinship == nil {
+                        preKinship = TreeCameraSnapshot(activePath: activePath, scale: scale, baseScale: baseScale,
+                                                        offset: offset, baseOffset: baseOffset, fittedScale: fittedScale,
+                                                        searchedMemberID: searchedMemberID, userInteracted: userInteracted)
+                    }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        kinshipHighlightedIds = []
+                        kinshipBanner = relationship
+                        kinshipViaMother = true
+                    }
+                    if let target = cachedMemberById[memberId] { selectMemberFromSearch(target) }
+                    startKinshipTimer()
+                    return
+                }
+                kinshipViaMother = false
+
                 // بناء مسار كامل من الجذر للعضو الممسوح
                 var fullPath = Set<UUID>()
 
@@ -898,14 +925,7 @@ struct TreeView: View {
                 let scrollToId = commonAncestor ?? memberId
                 moveCamera { focusMember(scrollToId, in: rebuildLayout()) }
 
-                // ينتهي الوضع وحده بعد ٢٠ ثانية (شريط الإلغاء السفلي يعدّ تنازلياً) — طلب جديد يبدأ العدّ من جديد
-                kinshipTimer?.cancel()
-                kinshipEndsAt = Date().addingTimeInterval(TreeConst.kinshipSeconds)
-                kinshipTimer = Task {
-                    try? await Task.sleep(nanoseconds: UInt64(TreeConst.kinshipSeconds * 1_000_000_000))
-                    guard !Task.isCancelled else { return }
-                    endKinship(resetView: false)
-                }
+                startKinshipTimer()
             }
             // البحث منقول إلى TreeSearchOverlay — لا يعيد رسم الشجرة عند الكتابة
         }
@@ -1195,6 +1215,17 @@ struct TreeView: View {
 
     /// إنهاء وضع صلة القرابة — الزرّ (والـ«×») يرجع الشجرة لمكانها قبل صلة القرابة بالضبط (الفروع المفتوحة
     /// والتكبير والموضع)؛ انتهاء المدة يطفئ التمييز ويترك المكان كما هو
+    /// ينتهي الوضع وحده بعد ٢٠ ثانية (شريط الإلغاء السفلي يعدّ تنازلياً) — طلب جديد يبدأ العدّ من جديد
+    private func startKinshipTimer() {
+        kinshipTimer?.cancel()
+        kinshipEndsAt = Date().addingTimeInterval(TreeConst.kinshipSeconds)
+        kinshipTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(TreeConst.kinshipSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            endKinship(resetView: false)
+        }
+    }
+
     private func endKinship(resetView: Bool) {
         kinshipTimer?.cancel()
         kinshipTimer = nil
@@ -1202,6 +1233,7 @@ struct TreeView: View {
         preKinship = nil
         withAnimation(DS.Anim.snappy) {
             kinshipBanner = nil
+            kinshipViaMother = false
             kinshipHighlightedIds = []
             kinshipEndsAt = nil
             if resetView, let snap {

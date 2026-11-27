@@ -476,8 +476,14 @@ struct EditGenderSheet: View {
                 if let fatherId = member.fatherId { await memberVM.fetchChildren(for: fatherId) }
                 dismiss()
             } else {
-                await memberVM.updateMemberGender(memberId: member.id, gender: gender)
+                // كان الفشل يُسجَّل فقط ويُغلق المربّع فيبقى الجنس كما هو بصمت — الآن يبقى مفتوحاً برسالة السيرفر (K1)
+                memberVM.errorMessage = nil
+                let saved = await memberVM.updateMemberGender(memberId: member.id, gender: gender)
                 isSaving = false
+                guard saved else {
+                    failure = memberVM.errorMessage ?? FamilyTreeMenOnly.genderFailureMessage(serverMessage: nil)
+                    return
+                }
                 dismiss()
             }
         }

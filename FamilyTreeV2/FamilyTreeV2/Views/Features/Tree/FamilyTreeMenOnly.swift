@@ -143,6 +143,34 @@ nonisolated enum FamilyTreeMenOnly {
         count > 1 ? text("أولاد — أرسل", "Boys — send") : text("هو ولد — أرسل", "It's a boy — send")
     }
 
+    // MARK: تغيير جنس سجلّ موجود (K1، ٢٠٢٦-١١-٢٧)
+    // السيرفر يرفض صار سجلّ `profiles` أنثى وله أب (`trg_zzzz_family_tree_men_only`، hint `family_tree_men_only`)،
+    // وكان `updateMemberGender` يسجّل الفشل فقط فيبقى ذكراً بصمت. «أنثى» لمن له أب = النقل بين الشجرتين
+    // (`move_child_gender`)، وأي فشل يُعرض برسالة السيرفر العربية.
+
+    enum GenderChangeRoute: Equatable {
+        /// لا تغيير
+        case unchanged
+        /// كتابة عمود الجنس فقط (ذكر، أو أنثى بلا أب)
+        case plainUpdate
+        /// أنثى ولها أب: نقل لشجرة النساء تحت أبيها (`move_child_gender`)
+        case moveBetweenTrees
+    }
+
+    static func genderChangeRoute(to gender: String, current: String?, hasFather: Bool) -> GenderChangeRoute {
+        if isFemale(gender) == isFemale(current ?? "male") { return .unchanged }
+        return isFemale(gender) && hasFather ? .moveBetweenTrees : .plainUpdate
+    }
+
+    /// hint رفض السيرفر
+    static let menOnlyHint = "family_tree_men_only"
+
+    /// ما يُعرض حين يفشل حفظ الجنس: رسالة السيرفر إن كانت عربية، وإلا رسالة عامة
+    static func genderFailureMessage(serverMessage: String?) -> String {
+        if let msg = serverMessage, msg.range(of: "\\p{Arabic}", options: .regularExpression) != nil { return msg }
+        return text("تعذّر حفظ الجنس. حاول مرة أخرى.", "Couldn't save the gender. Try again.")
+    }
+
     // MARK: النصوص
 
     static var title: String { text("شجرة العائلة للرجال فقط", "The family tree is for men only") }
