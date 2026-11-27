@@ -128,6 +128,64 @@ check(L.myRequestTitle(female: true), "طلبك عنها", "hers")
 check(L.showsPhoto(isFemale: true), false, "women: no photo")
 check(L.showsPhoto(isFemale: false), true, "men: photo")
 
+
+// MARK: ٨) إصلاحات نقد «المنتقد» بعد البناء (built-critique.md)
+
+// م١: «حذف من الشجرة» بقاعدة `showsDeleteRequest` القديمة — لا لمسجّل ولا لمن هو في الإدارة ولا لمنتظر
+check(L.canRequestRemoval(hasLogin: false, isStaff: false, isPending: false), true, "م١: plain tree member → remove allowed")
+check(L.canRequestRemoval(hasLogin: true, isStaff: false, isPending: false), false, "م١: registered member → no remove")
+check(L.canRequestRemoval(hasLogin: false, isStaff: true, isPending: false), false, "م١: staff (owner/admin/monitor/supervisor) → no remove")
+check(L.canRequestRemoval(hasLogin: false, isStaff: false, isPending: true), false, "م١: pending → no remove")
+check(L.staffRoles, ["owner", "admin", "monitor", "supervisor"], "م١: staff roles as the old rule")
+check(kinds(L.tiles(person: .other, isFemale: false, isDeceased: false, canRemove: false)),
+      [.name, .birth, .death, .photo, .addSon], "م١: other man with login → no remove tile")
+check(kinds(L.tiles(person: .myChild, isFemale: false, isDeceased: false, canRemove: false)),
+      [.childData, .death, .addSon], "م١: my son not removable → no remove tile")
+check(kinds(L.tiles(person: .other, isFemale: false, isDeceased: false, canRemove: true)),
+      [.name, .birth, .death, .photo, .addSon, .remove], "م١: removable other keeps remove")
+
+// م٢: ابنك وله حساب دخول → مربّعات الطلب لا «يُحفظ فوراً»
+check(L.person(isSelf: false, viewerId: me, fatherId: me, childHasLogin: true), .other, "م٢: my son with a login → request tiles")
+check(L.person(isSelf: false, viewerId: me, fatherId: me, childHasLogin: false), .myChild, "م٢: my son without login → «عائلتي»")
+check(L.childHasLogin(looksRegistered: true, serverAnswer: false), true, "م٢: looks registered → login")
+check(L.childHasLogin(looksRegistered: false, serverAnswer: true), true, "م٢: profile_has_login true → login")
+check(L.childHasLogin(looksRegistered: false, serverAnswer: false), false, "م٢: server says no login → «عائلتي»")
+check(L.childHasLogin(looksRegistered: false, serverAnswer: nil), true, "م٢: unknown yet → safe request path")
+let sonWithLogin = L.tiles(person: L.person(isSelf: false, viewerId: me, fatherId: me, childHasLogin: true),
+                           isFemale: false, isDeceased: false, canRemove: false)
+check(sonWithLogin.contains { $0.honesty == .savedNow }, false, "م٢: no «يُحفظ فوراً» for a son with a login")
+// ت٨: ابنك أنثى (سجلّ قديم) — لا «إضافة ابن»
+check(kinds(L.tiles(person: .myChild, isFemale: true, isDeceased: false, canRemove: true)).contains(.addSon), false,
+      "ت٨: female child → no add son")
+
+// م٣: لا «صورتي» للمرأة
+check(L.TileKind.myData.title(female: false), "اسمي وميلادي وصورتي", "م٣: man self tile mentions photo")
+check(L.TileKind.myData.title(female: true), "اسمي وميلادي", "م٣: woman self tile without photo")
+check(L.TileKind.name.title(female: true), "الاسم", "م٣: other titles unchanged")
+
+// م٤: على بطاقتك «طلبك»
+check(L.myRequestTitle(female: false, isSelf: true), "طلبك", "م٤: own card → «طلبك»")
+check(L.myRequestTitle(female: true, isSelf: true), "طلبك", "م٤: own card (woman) → «طلبك»")
+check(L.myRequestTitle(female: true, isSelf: false), "طلبك عنها", "م٤: about her unchanged")
+check(L.requestSubtitle(name: "حسن", isSelf: true), "حسن", "م٤: own card subtitle = your name, no «عن»")
+check(L.requestSubtitle(name: "حسن", isSelf: false), "عن حسن", "م٤: others keep «عن»")
+
+// ت١: «تلتقي معك» للمرأة، و«جدّ العائلة» حين الجد رأس الشجرة
+check(L.kinship(isSelf: false, viewerHasNode: true, isDeleted: false, relationship: "من أقاربك", isBlood: true,
+                distA: 8, distB: 7, ancestorName: "طاهر", female: true, ancestorIsRoot: false),
+      .button(title: "من أقاربك", line: "تلتقي معك في جدّكما طاهر"), "ت١: feminine meeting line")
+check(L.kinship(isSelf: false, viewerHasNode: true, isDeleted: false, relationship: "من أقاربك", isBlood: true,
+                distA: 8, distB: 7, ancestorName: "المحمدعلي", female: false, ancestorIsRoot: true),
+      .button(title: "من أقاربك", line: "يلتقي معك في جدّ العائلة"), "ت١: tree root → «جدّ العائلة»")
+
+// ت٢: من يرى كل الطلبات لا يرى طلبه مرتين
+check(L.othersRequests(reqs, viewer: me).count, 1, "ت٢: all-requests list drops my own")
+check(L.othersRequests(reqs, viewer: nil).count, reqs.count, "ت٢: no viewer → all")
+
+// الرقم: كما كانت البطاقة القديمة — الرقم الظاهر يظهر للمتوفى أيضاً
+check(L.showsPhoneRow(visible: "+965 9999 1234", deceased: true), true, "old rule: deceased visible phone still shown")
+check(L.showsPhoneRow(visible: nil, deceased: false), false, "hidden phone → no row")
+
 // English sanity
 L10n.isArabic = false
 check(L.BottomButton.requestEdit.title, "Request edit", "English request title")
