@@ -61,7 +61,7 @@ struct FamilyTreeV2App: App {
             }
             return
         }
-        guard AdminNotices.smsKinds.contains(kind) else { return }
+        guard AdminNotices.ownerSystemKinds.contains(kind) else { return }
         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil, userInfo: ["kind": kind])

@@ -108,9 +108,13 @@ enum AdminNotices {
     static let smsSuspicious = "sms_suspicious"
     /// أنواع KWT SMS — نقر إشعارها يفتح صفحتها في لوحة الإدارة
     static let smsKinds: Set<String> = [smsBalanceLow, smsSuspicious]
+    /// «خطأ في التطبيق» (`sentry-alert-ar`، طلب المالك ٢٠٢٦-١١-٢٧: تنبيه Sentry بالعربي) — للمالك وحده، يفتح «الأخطاء»
+    static let appError = "app_error"
+    /// أنواع النظام للمالك وحده — نقر إشعارها (push أو هنا) يفتح صفحتها؛ لغيره يبقى على «اليوم»
+    static let ownerSystemKinds: Set<String> = smsKinds.union([appError])
 
-    /// تنبيهات النظام (رصيد رسائل رمز الدخول)
-    static let systemKinds: Set<String> = [smsBalanceLow, "review_account_activity"]
+    /// تنبيهات النظام (رصيد رسائل رمز الدخول، أخطاء التطبيق)
+    static let systemKinds: Set<String> = [smsBalanceLow, appError, "review_account_activity"]
     private static let decidedPrefixes = ["تم قبول", "تم رفض"]
     /// تنبيهات أمنية تحتاج مراجعة («يحتاج إجراء» بزرّ «راجع»)
     static let securityKinds: Set<String> = [smsSuspicious]
@@ -158,6 +162,8 @@ enum AdminNoticeTarget: Equatable {
     /// «طلبات رمز الدخول» كاملة (محاولات دخول مريبة)
     case smsAttempts
     case treeProblems
+    /// «الأخطاء» (إشعار `app_error`)
+    case errors
 }
 
 /// صفّ في «إشعارات الإدارة»: إشعار (له معرّف للقراءة والحذف والتفاصيل) أو حالة مشتقة («يحتاج إجراء» الآن)
@@ -315,6 +321,8 @@ enum AdminNoticeRoutes {
         case .treeProblems:
             return AnyView(AdminAreaGate(area: .family) { AnyView(AdminMembersPage(chip: .problems)) }
                 .adminArea(.family))
+        case .errors:
+            return AnyView(AdminAreaGate(area: .app) { AnyView(AdminErrorsPage()) }.adminArea(.app).adminBackTitle(back))
         }
     }
 
@@ -325,6 +333,7 @@ enum AdminNoticeRoutes {
         case .changes:
             return ("person.text.rectangle", DS.Color.accent)
         case .system:
+            if kind == AdminNotices.appError { return ("exclamationmark.triangle.fill", DS.Color.error) }
             return ("ellipsis.message.fill", DS.Color.warning)
         case .action:
             switch kind {
@@ -683,6 +692,11 @@ struct AdminNotificationsPage: View {
             if canTopUp, n.kind == AdminNotices.smsBalanceLow {
                 item.button = L10n.t("شحن الرصيد", "Top up")
                 item.target = .sms
+            }
+            // «خطأ في التطبيق» ← «الأخطاء» (للمالك وحده — `canSms` = `canViewSystemSettings`)
+            if canSms, n.kind == AdminNotices.appError {
+                item.button = L10n.t("الأخطاء", "Errors")
+                item.target = .errors
             }
         case .team, .changes:
             break

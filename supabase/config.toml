@@ -415,6 +415,10 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 [functions.weekly-digest]
 verify_jwt = false
 
+# تنبيه الأخطاء بالعربي — Sentry يناديها بلا جلسة؛ المفتاح ?key= يُفحص داخل الدالة (SENTRY_ALERT_KEY)
+[functions.sentry-alert-ar]
+verify_jwt = false
+
 [functions.cleanup-stories]
 verify_jwt = false
 

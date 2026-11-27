@@ -11,6 +11,8 @@ enum AdminReviewDestination: Hashable {
     case sms
     /// «طلبات رمز الدخول» كاملة فوق صفحة الرسائل (إشعار «محاولات دخول مريبة»)
     case smsAttempts
+    /// «الأخطاء» (إشعار «خطأ في التطبيق» `app_error` — للمالك)
+    case errors
     /// بيت إشارة «حالة النظام» السابقة — السطر ولوحته حُذفا (spec E.2) والمسار باقٍ (`AdminStatusPill.Home.page`)
     case status(AdminStatusPill.Home)
     /// صفحة قسم (مربّعات «اليوم» وأرقامه وقائمة العنوان) — العدّاد يجعل كل انتقال قيمة جديدة فيُستبدل المسار كله، وهو مفتاح
@@ -181,6 +183,7 @@ struct AdminDashboardView: View {
             return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView(focusId: id)) }.adminArea(.inbox))
         case .sms:               return AnyView(AdminSmsView(backTitle: AdminArea.homeTitle).adminArea(.team))
         case .smsAttempts:       return AnyView(SmsAttemptsListPage().adminArea(.team))
+        case .errors:            return AnyView(AdminAreaGate(area: .app) { AnyView(AdminErrorsPage()) }.adminArea(.app))
         case .status(let home):  return home.page
         case .area(let area, let hop): return AnyView(AdminAreaView(area: area).adminAreaHop(hop))
         }
@@ -217,13 +220,15 @@ struct AdminDashboardView: View {
     /// البيضاء في `AdminInboxLanding(pushKind:)` — نوع مجهول = «الوارد» بلا فلتر). رسائل الدخول للمالك وحده
     private func routePush(_ note: Notification) {
         guard let kind = note.userInfo?["kind"] as? String else { return }
-        guard authVM.canViewSystemSettings || !AdminNotices.smsKinds.contains(kind) else { return }
+        guard authVM.canViewSystemSettings || !AdminNotices.ownerSystemKinds.contains(kind) else { return }
         let requestId = (note.userInfo?["request_id"] as? String).flatMap(UUID.init(uuidString:))
         let destinations: [AdminReviewDestination]
         if kind == AdminNotices.smsSuspicious {
             destinations = [.sms, .smsAttempts]
         } else if kind == AdminNotices.smsBalanceLow {
             destinations = [.sms]
+        } else if kind == AdminNotices.appError {
+            destinations = [.errors]
         } else if let requestId {
             destinations = [.inboxItem(requestId)]
         } else {
