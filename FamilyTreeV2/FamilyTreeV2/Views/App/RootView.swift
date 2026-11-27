@@ -91,42 +91,85 @@ struct RootView: View {
 struct MaintenanceModeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var refreshing = false
 
-    /// شاشة حالة موحّدة (`DSEmptyView` بنمط الصفحة: المجسّم + العنوان + سطر + الإجراء) بدل التصميم الخاص القديم
-    /// (طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
+    /// بهوية الشعار (طلب المالك ٢٠٢٦-١١-٢٧ «باللون الأزرق ثيمة الشعار»): أرضية كحلية (`gradientBand`)، الشعار الكريمي،
+    /// العنوان أبيض، الفاصل والسطر ذهبيان، «تحديث» ذهبي ممتلئ و«تسجيل الخروج» نصّ فاتح هادئ. الظهور مرة (`dsEntrance`).
     var body: some View {
-        VStack(spacing: DS.Spacing.lg) {
-            Spacer()
+        ZStack {
+            Rectangle().fill(DS.Color.gradientBand).ignoresSafeArea()
 
-            DSEmptyView(
-                L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"),
-                message: L10n.t("نقوم حالياً بتحديث التطبيق. يرجى المحاولة لاحقاً.",
-                                "We're currently updating the app. Please try again later."),
-                icon: "wrench.and.screwdriver.fill",
-                actionTitle: L10n.t("تحديث", "Refresh"),
-                actionIcon: "arrow.clockwise",
-                style: .page
-            ) {
-                Task {
-                    await appSettingsVM.fetchSettings()
-                    await CategoryStore.shared.fetch()
+            VStack(spacing: 0) {
+                Spacer()
+
+                Image("FamilyLogoCream")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: DS.Icon.splashLogo)
+                    .padding(DS.Icon.appLogo / 4)
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
+                    .dsEntrance(delay: 0, scale: DSMotion.panelScale, animation: DSMotion.panel, anchor: .center)
+
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))
+                        .dsFont(.heroTitle)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .multilineTextAlignment(.center)
+
+                    HStack(spacing: DS.Spacing.xsm) {
+                        Rectangle()
+                            .fill(LinearGradient(colors: [DS.Color.accentLight.opacity(0), DS.Color.accentLight.opacity(0.7)],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
+                        Image(systemName: "wrench.and.screwdriver.fill")
+                            .dsGlyph(DS.Glyph.sm)
+                            .foregroundColor(DS.Color.accentLight)
+                            .accessibilityHidden(true)
+                        Rectangle()
+                            .fill(LinearGradient(colors: [DS.Color.accentLight.opacity(0.7), DS.Color.accentLight.opacity(0)],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
+                    }
+
+                    Text(L10n.t("نقوم حالياً بتحديث التطبيق. يرجى المحاولة لاحقاً.",
+                                "We're currently updating the app. Please try again later."))
+                        .dsFont(.callout)
+                        .foregroundColor(DS.Color.accentLight)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
+                .padding(.horizontal, DS.Spacing.xl)
+                .dsEntrance(delay: DSMotion.iconDelay, scale: 1, animation: DSMotion.panel, anchor: .center)
 
-            Spacer()
-
-            DSSecondaryButton(
-                L10n.t("تسجيل الخروج", "Sign Out"),
-                icon: "rectangle.portrait.and.arrow.right"
-            ) {
-                Task {
-                    await authVM.signOut()
+                DSButton(L10n.t("تحديث", "Refresh"), icon: "arrow.clockwise", tint: DS.Color.goldFill,
+                         isLoading: refreshing, fullWidth: false) {
+                    guard !refreshing else { return }
+                    refreshing = true
+                    Task {
+                        await appSettingsVM.fetchSettings()
+                        await CategoryStore.shared.fetch()
+                        refreshing = false
+                    }
                 }
+                .padding(.top, DS.Spacing.xl)
+
+                Spacer()
+
+                Button {
+                    Task { await authVM.signOut() }
+                } label: {
+                    Label(L10n.t("تسجيل الخروج", "Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
+                        .dsFont(.button)
+                        .foregroundColor(DS.Color.textOnPrimary.opacity(0.8))
+                        .frame(minHeight: DS.Icon.tapTarget)
+                }
+                .buttonStyle(.plain)
             }
+            .padding(DS.Spacing.xxl)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(DS.Spacing.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DS.Color.background)
+        .dsLightStatusBar()
     }
 }
 
