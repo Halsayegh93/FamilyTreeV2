@@ -3,8 +3,8 @@
 //     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminMergeRules.swift tests/admin-redesign/M3/main.swift \
 //     && /private/tmp/claude-501/m3-logic
 //
-// ما يُفحص: «دمجه في الآخر» على كل صفّ إلا من له حساب أو من الإدارة أو قبل وصول الحسابات · في من يُدمج (الآخر مباشرة، أو
-// السؤال لثلاثة فأكثر) · حراس 20261127270000 (متوفى/حيّ، ميلادان بينهما أكثر من سنتين — لا زرّ) · قراءة نتيجة السيرفر
+// ما يُفحص: «دمج» واحد لكل بطاقة مجموعة (`plan`): من يبقى (صاحب الحساب مختار مسبقاً، حسابان/الإدارة/قبل وصول الحسابات
+// = لا زرّ) ومن يُحذف (سؤال ثانٍ لثلاثة فأكثر) · حراس 20261127270000 (متوفى/حيّ، ميلادان بينهما أكثر من سنتين — لا زرّ) · قراءة نتيجة السيرفر
 // (moved_husbands، صفوف not_moved) · «ينتقل: …» بالعدّ العربي والأبناء/البنات منفصلين في شجرة النساء · التعارض وما لا
 // ينتقل · رسائل الأخطاء · فشل «ليسا مكرّرين».
 import Foundation
@@ -17,24 +17,71 @@ func check<T: Equatable>(_ got: T, _ want: T, _ label: String) {
 typealias M = AdminMergeRules
 let a = UUID(), b = UUID(), c = UUID(), s = UUID()
 
-// ١) الزرّ على الصفّ
-check(M.canRemove(hasLogin: false, isStaff: false, accountsReady: true), true, "بلا حساب: يظهر «دمج»")
-check(M.canRemove(hasLogin: true, isStaff: false, accountsReady: true), false, "له حساب: لا زرّ")
-check(M.canRemove(hasLogin: false, isStaff: true, accountsReady: true), false, "من الإدارة: لا زرّ")
-check(M.canRemove(hasLogin: false, isStaff: false, accountsReady: false), false, "قبل وصول الحسابات: لا زرّ")
-
-// ٢) في من يُدمج
-check(M.targets(group: [a, b], remove: a, hasLogin: []), [b], "اثنان: الآخر")
-check(M.needsTargetChoice(M.targets(group: [a, b], remove: a, hasLogin: [])), false, "اثنان: بلا سؤال")
-check(M.targets(group: [a, b], remove: a, hasLogin: [b]), [b], "المُبقى له حساب: مسموح")
-check(M.targets(group: [a, b], remove: a, hasLogin: [a]), [], "المحذوف له حساب: لا دمج")
-check(M.targets(group: [a, b, c], remove: b, hasLogin: []), [a, c], "ثلاثة: الباقيان بترتيبهما")
-check(M.needsTargetChoice(M.targets(group: [a, b, c], remove: b, hasLogin: [])), true, "ثلاثة: يُسأل في أيّهم")
-check(M.targets(group: [a, s], remove: a, hasLogin: [], staff: [s]), [], "الآخر من الإدارة: لا دمج")
-check(M.targets(group: [a, b], remove: c, hasLogin: []), [], "ليس في المجموعة: لا دمج")
-
-// ٢ب) حراس السيرفر 20261127270000: متوفى/حيّ وميلادان متباعدان — لا زرّ حيث يرفض
+// ١) زرّ واحد لكل بطاقة مجموعة («خله دمج واحد»، المالك ٢٠٢٦-١١-٢٧) — الخطة: من يبقى، ومن يُحذف لكل مُبقى
 typealias F = M.Facts
+let alive = F(deceased: false, birthYear: nil), dead = F(deceased: true, birthYear: nil)
+let p2 = M.plan(group: [a, b], hasLogin: [], accountsReady: true)!
+check(p2.keepOptions, [a, b], "اثنان بلا حساب: أيّهما يبقى")
+check(p2.preselected, nil, "اثنان بلا حساب: بلا اختيار مسبق")
+check(p2.removeOptions(keep: a), [b], "يبقى الأول: يُحذف الثاني")
+check(p2.needsRemoveChoice(keep: a), false, "اثنان: بلا سؤال ثانٍ")
+let pl = M.plan(group: [a, b], hasLogin: [b], accountsReady: true)!
+check(pl.keepOptions, [b], "صاحب الحساب يبقى")
+check(pl.preselected, b, "صاحب الحساب مختار مسبقاً")
+check(pl.removeOptions(keep: b), [a], "الآخر يُحذف")
+check(pl.removeOptions(keep: a), [], "لا يُحذف صاحب الحساب")
+check(M.plan(group: [a, b, c], hasLogin: [a, b], accountsReady: true) == nil, true, "حسابان: لا زرّ")
+check(M.plan(group: [a, s], hasLogin: [], staff: [s], accountsReady: true) == nil, true, "الآخر من الإدارة: لا زرّ")
+check(M.plan(group: [a, b], hasLogin: [], accountsReady: false) == nil, true, "قبل وصول الحسابات: لا زرّ")
+check(M.plan(group: [a], hasLogin: [], accountsReady: true) == nil, true, "شخص واحد: لا زرّ")
+check(M.plan(group: [a, b], hasLogin: [], facts: [a: alive, b: dead], accountsReady: true) == nil, true, "متوفى وحيّ: لا زرّ على البطاقة")
+check(M.plan(group: [a, b], hasLogin: [], facts: [a: F(deceased: false, birthYear: 1960), b: F(deceased: false, birthYear: 1990)],
+             accountsReady: true) == nil, true, "ميلادان متباعدان: لا زرّ على البطاقة")
+let p3 = M.plan(group: [a, b, c], hasLogin: [], accountsReady: true)!
+check(p3.keepOptions, [a, b, c], "ثلاثة: كلهم يصلحون للبقاء")
+check(p3.removeOptions(keep: b), [a, c], "ثلاثة: يُسأل أيّهم يُحذف")
+check(p3.needsRemoveChoice(keep: b), true, "ثلاثة: سؤال ثانٍ")
+let p3d = M.plan(group: [a, b, c], hasLogin: [], facts: [a: alive, b: dead, c: alive], accountsReady: true)!
+check(p3d.keepOptions, [a, c], "ثلاثة بمتوفى: المتوفى لا يبقى ولا يُحذف")
+check(p3d.removeOptions(keep: a), [c], "ثلاثة بمتوفى: الحيّ الآخر فقط")
+let p3l = M.plan(group: [a, b, c], hasLogin: [c], accountsReady: true)!
+check(p3l.keepOptions, [a, b, c], "ثلاثة وحساب: يبقى أيٌّ منهم (صاحب الحساب لا يُحذف)")
+check(p3l.preselected, c, "ثلاثة وحساب: صاحب الحساب مختار مسبقاً")
+check(p3l.removeOptions(keep: a), [b], "ثلاثة وحساب: صاحب الحساب لا يُحذف")
+check(M.buttonTitle, "دمج", "نص الزرّ")
+
+// ١ب) «حذف» الفارغ («حط حذف بعد اذا في مكرر وبيانات ناقصة»، المالك ٢٠٢٦-١١-٢٧): لا أبناء ولا زوج ولا حساب ولا إدارة، وكل ما
+// فيه (ميلاد، وفاة، صورة، رقم، سيرة) موجود عند آخر متوافق في المجموعة — حذفه لا يُفقد شيئاً
+typealias R = M.Record
+let d0 = Date(timeIntervalSince1970: 0), d1 = Date(timeIntervalSince1970: 100)
+let full = R(birth: true, photo: true, facts: alive, addedAt: d1)
+let bare = R(facts: alive, addedAt: d1)
+check(M.isEmpty(bare, others: [full]), true, "بلا شيء وعند الآخر بيانات: فارغ")
+check(M.isEmpty(R(children: 1, facts: alive), others: [full]), false, "له أبناء: ليس فارغاً")
+check(M.isEmpty(R(spouses: 1, facts: alive), others: [full]), false, "له زوجة/زوج: ليس فارغاً")
+check(M.isEmpty(R(hasLogin: true, facts: alive), others: [full]), false, "له حساب: ليس فارغاً")
+check(M.isEmpty(R(isStaff: true, facts: alive), others: [full]), false, "من الإدارة: ليس فارغاً")
+check(M.isEmpty(R(phone: true, facts: alive), others: [full]), false, "له رقم ليس عند الآخر: دمج فقط")
+check(M.isEmpty(R(birth: true, facts: alive), others: [full]), true, "ميلاده عند الآخر أيضاً: فارغ")
+check(M.isEmpty(R(bio: true, facts: alive), others: [bare]), false, "له سيرة: دمج فقط")
+check(M.isEmpty(bare, others: [R(facts: dead)]), false, "الآخر متوفى: قد يكونان أخوين — لا حذف")
+check(M.isEmpty(bare, others: []), false, "وحده: لا حذف")
+check(M.isEmpty(R(death: true, facts: dead), others: [R(death: true, facts: dead)]), true, "متوفيان بتاريخ عند الاثنين: فارغ")
+check(M.deleteCandidates(group: [a, b], records: [a: full, b: bare]), [b], "المرشّح: الفارغ وحده")
+check(M.deleteCandidates(group: [a, b], records: [a: full, b: R(phone: true, facts: alive)]), [], "بيانات ناقصة عند الآخر: لا حذف")
+check(M.deleteCandidates(group: [a, b], records: [a: bare]), [], "سجلّ ناقص: لا حذف")
+// اثنان فارغان: الأفرغ أولاً، ثم الأقدم إضافة
+let thin = R(birth: true, facts: alive, addedAt: d0)
+check(M.deleteCandidates(group: [a, b, c], records: [a: full, b: thin, c: bare]), [c, b], "الأفرغ أولاً")
+check(M.deleteCandidates(group: [a, b, c], records: [a: full, b: R(facts: alive, addedAt: d1), c: R(facts: alive, addedAt: d0)]),
+      [c, b], "التعادل: الأقدم إضافة أولاً")
+check(M.deleteButtonTitle, "حذف", "نص زرّ الحذف")
+check(M.nothingLostNote, "لا توجد بيانات تُفقد.", "سطر لا شيء يُفقد")
+check(M.deleteForeverNote, "يُحذف نهائياً.", "سطر الحذف النهائي")
+check(M.deleteMessage(hint: "family_links_protected"), "لا يمكن الحذف؛ ما زال أحد أفراد العائلة مرتبطاً بهذا الاسم.", "حذف مرفوض للروابط")
+check(M.deleteMessage(hint: nil), "تعذّر الحذف. تحقّق من الاتصال ثم حاول مرة أخرى.", "حذف: خطأ عام")
+
+// ٢) حراس السيرفر 20261127270000: متوفى/حيّ وميلادان متباعدان — لا زرّ حيث يرفض
 check(M.compatible(F(deceased: true, birthYear: nil), F(deceased: false, birthYear: nil)), false, "متوفى وحيّ: لا دمج")
 check(M.compatible(F(deceased: true, birthYear: 1950), F(deceased: true, birthYear: 1952)), true, "فرق سنتين: مسموح")
 check(M.compatible(F(deceased: false, birthYear: 1950), F(deceased: false, birthYear: 1953)), false, "فرق ثلاث سنوات: لا دمج")
@@ -42,15 +89,9 @@ check(M.compatible(F(deceased: false, birthYear: nil), F(deceased: false, birthY
 check(M.refusalHint(F(deceased: true, birthYear: 1950), F(deceased: false, birthYear: 1990)), "deceased_mismatch", "الوفاة أولاً كالسيرفر")
 check(M.refusalHint(F(deceased: false, birthYear: 1990), F(deceased: false, birthYear: 1950)), "birth_mismatch", "الميلاد")
 check(M.refusalHint(F(deceased: false, birthYear: 1990), F(deceased: false, birthYear: 1991)), nil, "متوافقان")
-let alive = F(deceased: false, birthYear: nil), dead = F(deceased: true, birthYear: nil)
-check(M.targets(group: [a, b, c], remove: a, hasLogin: [], facts: [a: alive, b: dead, c: alive]), [c], "ثلاثة: المتوفى ليس هدفاً للحيّ")
-check(M.targets(group: [a, b], remove: a, hasLogin: [], facts: [a: alive, b: dead]), [], "اثنان متوفى وحيّ: لا زرّ")
-check(M.targets(group: [a, b], remove: a, hasLogin: [], facts: [a: F(deceased: false, birthYear: 1960), b: F(deceased: false, birthYear: 1990)]),
-      [], "اثنان بميلادين متباعدين: لا زرّ")
 check(M.year(fromBirthDate: "1975-04-02"), 1975, "سنة الميلاد من النص")
 check(M.year(fromBirthDate: nil), nil, "بلا ميلاد")
 check(M.year(fromBirthDate: "abcd"), nil, "نص غير صالح")
-check(M.removeButtonTitle, "دمجه في الآخر", "نص الزرّ")
 check(M.dismissFailedMessage, "تعذّر حفظ «ليسا مكرّرين». تحقّق من الاتصال ثم حاول مرة أخرى.", "فشل «ليسا مكرّرين»")
 
 // ٣) نتيجة السيرفر

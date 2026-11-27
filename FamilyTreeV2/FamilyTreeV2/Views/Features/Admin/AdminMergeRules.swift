@@ -1,35 +1,120 @@
 import Foundation
 
-// MARK: - «دمج» في «المكرر والأخطاء» — المنطق الخالص (موافقة المالك ٢٠٢٦-١١-٢٧، «حط زر دمج لكل اسم واحد»)
+// MARK: - «دمج» في «المكرر والأخطاء» — المنطق الخالص (موافقة المالك ٢٠٢٦-١١-٢٧؛ «خله دمج واحد» نفس اليوم)
 //
-// زرّ «دمجه في الآخر» على كل شخص في مجموعة مكرّرة = هذا الاسم هو الذي يُحذف ويُدمج في الآخر (إن كانوا ثلاثة فأكثر يُسأل:
-// في أيّهم؟). من له حساب دخول لا يُحذف — لا زرّ على صفّه، ولا زرّ حيث يرفض السيرفر (متوفى وحيّ، أو ميلادان بينهما أكثر من
-// سنتين — `compatible`). السيرفر يحرس الشيء نفسه (`merge_duplicate_members`، 20261127240000 + 20261127270000) ويحسب ما
-// ينتقل بمعاينة (`p_dry_run`) قبل التأكيد.
+// زرّ «دمج» واحد على بطاقة المجموعة المكرّرة يفتح المربّع: «أيّهما يبقى؟» (مربّعات بالاسم وسطر الفرق) ← لثلاثة فأكثر
+// «أيّهم يُحذف؟» ← التأكيد. `plan` يقرّر: من له حساب دخول لا يُحذف (يُختار مسبقاً للبقاء؛ حسابان = لا زرّ)، ومن الإدارة لا
+// يُدمج أصلاً (السيرفر يرفضه في الطرفين)، ولا زرّ حيث يرفض السيرفر كل زوج (متوفى وحيّ، أو ميلادان بينهما أكثر من سنتين —
+// `compatible`). السيرفر يحرس الشيء نفسه (`merge_duplicate_members`، 20261127240000 + 20261127270000) ويحسب ما ينتقل
+// بمعاينة (`p_dry_run`) قبل التأكيد.
 // فحصه بلا محاكي: tests/admin-redesign/M3.
 
 nonisolated enum AdminMergeRules {
 
-    // MARK: من يُدمج في من
+    // MARK: من يبقى ومن يُحذف
 
-    /// هل يظهر «دمج» على هذا الصفّ؟ (المالك والمدير، ومن بلا حساب دخول، وقائمة الحسابات وصلت)
-    static func canRemove(hasLogin: Bool, isStaff: Bool, accountsReady: Bool) -> Bool {
-        accountsReady && !hasLogin && !isStaff
+    /// نصّ الزرّ على بطاقة المجموعة
+    static let buttonTitle = "دمج"
+
+    /// خطة المجموعة: من يصلح للبقاء، ومن يُحذف مع كلٍّ منهم
+    struct Plan: Equatable {
+        /// بترتيب المجموعة
+        let keepOptions: [UUID]
+        /// المُبقى → من يمكن حذفه فيه (بترتيب المجموعة)
+        let pairs: [UUID: [UUID]]
+        /// صاحب الحساب (أو الخيار الوحيد) مختار مسبقاً في «أيّهما يبقى؟»
+        let preselected: UUID?
+
+        func removeOptions(keep: UUID) -> [UUID] { pairs[keep] ?? [] }
+        func needsRemoveChoice(keep: UUID) -> Bool { removeOptions(keep: keep).count > 1 }
     }
 
-    /// نصّ الزرّ على الصفّ — «دمجه» = هذا الاسم يُحذف، لا «يبقى هذا»
-    static let removeButtonTitle = "دمجه في الآخر"
+    /// nil = لا زرّ على البطاقة (أقل من اثنين، حسابان فأكثر، قبل وصول الحسابات، أو لا زوج يقبله السيرفر).
+    /// `facts` الغائب لشخص = لا يُعرف فيُسمح (السيرفر يحكم).
+    static func plan(group: [UUID], hasLogin: Set<UUID>, staff: Set<UUID> = [], facts: [UUID: Facts] = [:],
+                     accountsReady: Bool) -> Plan? {
+        guard accountsReady, group.count > 1, group.filter(hasLogin.contains).count < 2 else { return nil }
+        let people = group.filter { !staff.contains($0) }
+        var pairs: [UUID: [UUID]] = [:]
+        for keep in people {
+            let removable = people.filter { r in
+                guard r != keep, !hasLogin.contains(r) else { return false }
+                guard let fk = facts[keep], let fr = facts[r] else { return true }
+                return compatible(fk, fr)
+            }
+            if !removable.isEmpty { pairs[keep] = removable }
+        }
+        let keeps = people.filter { pairs[$0] != nil }
+        guard !keeps.isEmpty else { return nil }
+        let login = keeps.first(where: hasLogin.contains)
+        return Plan(keepOptions: keeps, pairs: pairs, preselected: login ?? (keeps.count == 1 ? keeps.first : nil))
+    }
 
-    /// من يمكن الدمج فيه: الباقون في المجموعة بترتيبها (المُبقى قد يكون له حساب) — بلا أحد من الإدارة، وبلا من يرفضه
-    /// السيرفر مع المحذوف (`compatible`؛ `facts` الغائب = لا يُعرف فيُسمح).
-    /// فارغ = لا دمج (المحذوف له حساب أو لا أحد غيره يصلح)
-    static func targets(group: [UUID], remove: UUID, hasLogin: Set<UUID>, staff: Set<UUID> = [],
-                        facts: [UUID: Facts] = [:]) -> [UUID] {
-        guard group.contains(remove), !hasLogin.contains(remove), !staff.contains(remove) else { return [] }
-        return group.filter { id in
-            guard id != remove, !staff.contains(id) else { return false }
-            guard let r = facts[remove], let k = facts[id] else { return true }
-            return compatible(r, k)
+    // MARK: «حذف» الاسم الفارغ («حط حذف بعد اذا في مكرر وبيانات ناقصة و نفس المكان بالشجرة»، المالك ٢٠٢٦-١١-٢٧)
+    //
+    // بجانب «دمج» على البطاقة (المجموعة = نفس الأب = نفس المكان في الشجرة) حين يكون فيها اسم «فارغ»: لا أبناء ولا بنات، لا
+    // زوجة ولا زوج، لا حساب دخول، ليس من الإدارة، وكل ما فيه (الميلاد، الوفاة، الصورة، الرقم، السيرة) موجود عند آخر في
+    // المجموعة يوافقه (`compatible` — متوفى وحيّ قد يكونان أخوين فلا حذف). حذفه لا يُفقد شيئاً؛ وإلا «دمج» وحده (يحفظ البيانات).
+
+    /// ما يُعرف عن الشخص لقرار الحذف
+    struct Record: Equatable {
+        var children = 0
+        var spouses = 0
+        var hasLogin = false
+        var isStaff = false
+        var birth = false
+        var death = false
+        var photo = false
+        var phone = false
+        var bio = false
+        var facts = Facts(deceased: false, birthYear: nil)
+        var addedAt: Date? = nil
+
+        fileprivate var data: [Bool] { [birth, death, photo, phone, bio] }
+        fileprivate var dataCount: Int { data.filter { $0 }.count }
+        /// كل ما عندي عند `other` أيضاً
+        fileprivate func covered(by other: Record) -> Bool {
+            zip(data, other.data).allSatisfy { mine, theirs in !mine || theirs }
+        }
+    }
+
+    /// حذفه لا يُفقد شيئاً: فارغ من الروابط والحساب والإدارة، وآخر متوافق عنده كل ما عنده
+    static func isEmpty(_ r: Record, others: [Record]) -> Bool {
+        guard r.children == 0, r.spouses == 0, !r.hasLogin, !r.isStaff else { return false }
+        return others.contains { o in !o.isStaff && compatible(r.facts, o.facts) && r.covered(by: o) }
+    }
+
+    /// المرشّحون للحذف بترتيب الاختيار: الأفرغ أولاً، ثم الأقدم إضافة، ثم ترتيب المجموعة. الأول مختار مسبقاً.
+    /// من لا سجلّ له في `records` لا يُرشَّح ولا يُحسب «آخر».
+    static func deleteCandidates(group: [UUID], records: [UUID: Record]) -> [UUID] {
+        let found = group.filter { empty(id: $0, group: group, records: records) }
+        return found.enumerated().sorted { x, y in
+            let rx = records[x.element]!, ry = records[y.element]!
+            if rx.dataCount != ry.dataCount { return rx.dataCount < ry.dataCount }
+            switch (rx.addedAt, ry.addedAt) {
+            case let (dx?, dy?) where dx != dy: return dx < dy
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return x.offset < y.offset
+            }
+        }.map(\.element)
+    }
+
+    private static func empty(id: UUID, group: [UUID], records: [UUID: Record]) -> Bool {
+        guard let r = records[id] else { return false }
+        return isEmpty(r, others: group.filter { $0 != id }.compactMap { records[$0] })
+    }
+
+    static let deleteButtonTitle = "حذف"
+    static let nothingLostNote = "لا توجد بيانات تُفقد."
+    static let deleteForeverNote = "يُحذف نهائياً."
+
+    /// رسالة رسمية لفشل الحذف
+    static func deleteMessage(hint: String?) -> String {
+        switch hint {
+        case "family_links_protected": return "لا يمكن الحذف؛ ما زال أحد أفراد العائلة مرتبطاً بهذا الاسم."
+        case "not_allowed", "42501": return "الحذف متاح للمالك والمدير فقط."
+        default: return "تعذّر الحذف. تحقّق من الاتصال ثم حاول مرة أخرى."
         }
     }
 
@@ -55,9 +140,6 @@ nonisolated enum AdminMergeRules {
         guard let raw, raw.count >= 4, let y = Int(raw.prefix(4)), y > 1000 else { return nil }
         return y
     }
-
-    /// ثلاثة فأكثر: يُسأل «يُدمج في أيّهم؟»، واثنان: الآخر مباشرة
-    static func needsTargetChoice(_ targets: [UUID]) -> Bool { targets.count > 1 }
 
     // MARK: المعاينة («ينتقل: …»)
 

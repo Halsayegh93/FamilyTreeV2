@@ -9,9 +9,11 @@ import SwiftUI
 //     والمدير (من يرى النساء في «العائلة»). المجموعة صفّ: الاسم · «أبناء فلان»/«بنات فلان» (شجرة النساء) · كل شخص باسمه الكامل (سطران) وسطر فرق (عدد الأبناء ·
 //     الزوج للمرأة · «أُضيف في …») ثم (سنة الميلاد · «له حساب» ·
 //     «متوفى») يفتح ورقة العضو (`AdminMemberSheet`) أو مربّع المرأة (`WomanDetailSheet`). «ليسا مكرّرين» على السيرفر للمالك والمدير
-//     (`AdminDuplicateDismissStore` + `duplicate_dismissals`، محلي للمراقب؛ فشل الحفظ = تنبيه رسمي). «دمجه في الآخر» بجانب
-//     سطر الاسم (المالك والمدير، لا على من له حساب، ولا حيث يرفض السيرفر: متوفى وحيّ أو ميلادان متباعدان) — هذا الاسم يُحذف
-//     ويُدمج في الآخر (`AdminMergeBox` + `merge_duplicate_members`، ٢٠٢٦-١١-٢٧).
+//     (`AdminDuplicateDismissStore` + `duplicate_dismissals`، محلي للمراقب؛ فشل الحفظ = تنبيه رسمي). «دمج» واحد أسفل
+//     البطاقة بجانبه («خله دمج واحد»، المالك ٢٠٢٦-١١-٢٧؛ المالك والمدير) يفتح «أيّهما يبقى؟» — لا زرّ لحسابين، ولا حيث يرفض
+//     السيرفر: متوفى وحيّ أو ميلادان متباعدان (`AdminMergeRules.plan`؛ `AdminMergeBox` + `merge_duplicate_members`).
+//     و«حذف» بجانبه حين يكون فيها اسم لا يُفقد بحذفه شيء (بلا أبناء ولا زوج ولا حساب، وبياناته عند الآخر —
+//     `AdminMergeRules.deleteCandidates`؛ `AdminDeleteDuplicateBox` بطريق الحذف الموجود، المالك ٢٠٢٦-١١-٢٧).
 //  ٢) «مشكلات الشجرة» — الأنواع الخمسة بأعدادها، كلٌّ يفتح قائمتها الموجودة بأزرار إصلاحها
 //     (`AdminReviewListPage(.problems, start: .problem(…))`).
 //  ٣) «أرقام بدون أسماء» (المالك والمدير) — دخلوا برمز الدخول ولم يكملوا التسجيل: الرقم كاملاً · «سُجّل في …» · «الإشعارات
@@ -270,6 +272,8 @@ struct AdminIssuesPage: View {
     @State private var womenChildren: [UUID: Int] = [:]
     /// «دمج» — الاسم الذي يُحذف ومن يمكن الدمج فيه (`AdminMergeBox`)
     @State private var merge: AdminMergeContext?
+    /// «حذف» الاسم الفارغ — المرشّحون (`AdminDeleteDuplicateBox`)
+    @State private var deleteBox: AdminDeleteDuplicateContext?
 
     init() {}
 
@@ -293,6 +297,9 @@ struct AdminIssuesPage: View {
             .dsCenterBox(item: $merge) { context in
                 AdminMergeBox(context: context, onMerged: { await reload(force: true) }, onClose: { merge = nil })
             }
+            .dsCenterBox(item: $deleteBox) { context in
+                AdminDeleteDuplicateBox(context: context, perform: { await deleteDuplicate($0) }, onClose: { deleteBox = nil })
+            }
             .refreshable { await reload(force: true) }
             .task { await reload(force: false) }
             .onChange(of: memberVM.membersVersion) { _ in rebuild() }
@@ -313,6 +320,8 @@ struct AdminIssuesPage: View {
     private var canEdit: Bool { authVM.canEditMembers && authVM.adminCanEdit(.family) }
     /// «دمج» للمالك والمدير (السيرفر يرفض غيرهما)
     private var canMerge: Bool { authVM.isAdmin && authVM.adminCanEdit(.family) }
+    /// «حذف» الاسم الفارغ — صلاحية حذف الأعضاء، وشجرة النساء محمّلة (لعدّ البنات والزوجات)
+    private var canDeleteEmpty: Bool { authVM.canDeleteMembers && authVM.adminCanEdit(.family) && !women.isEmpty }
 
     private var header: AdminPageHeader {
         AdminPageHeader(title: AdminIssuesRow.title,
@@ -439,12 +448,33 @@ struct AdminIssuesPage: View {
             AdminRowDivider(inset: 0)
             HStack {
                 Spacer(minLength: 0)
-                AdminPillButton(title: L10n.t("ليسا مكرّرين", "Not duplicates"), icon: "checkmark", style: .soft,
-                                height: DS.Hub.pillHeightCard) {
-                    withAnimation(reduceMotion ? nil : DS.Anim.snappy) { dismissed.dismiss(group.signature) }
+                AdminPillRow {
+                    AdminPillButton(title: L10n.t("ليسا مكرّرين", "Not duplicates"), icon: "checkmark", style: .soft,
+                                    height: DS.Hub.pillHeightCard) {
+                        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { dismissed.dismiss(group.signature) }
+                    }
+                    .accessibilityHint(seesAll ? L10n.t("يخفي هذه المجموعة عند المالك والمدير", "Hides this group for the owner and admins")
+                                                : L10n.t("يخفي هذه المجموعة عندك أنت فقط", "Hides this group on your device only"))
+                    // «دمج» واحد للبطاقة (لا على كل صفّ) — المربّع يسأل «أيّهما يبقى؟»
+                    if canMerge, let plan = mergePlan(group, inWomen: inWomen) {
+                        AdminPillButton(title: L10n.t(AdminMergeRules.buttonTitle, "Merge"), icon: "arrow.triangle.merge",
+                                        style: .navy, height: DS.Hub.pillHeightCard) {
+                            startMerge(group, plan: plan, inWomen: inWomen)
+                        }
+                        .accessibilityLabel(Text(verbatim: L10n.t("دمج «\(group.name)»", "Merge “\(group.name)”")))
+                        .accessibilityHint(L10n.t("يسأل أيّهما يبقى، ثم يحذف المكرر وينقل ما يخصّه", "Asks which one stays, then removes the duplicate and moves what it has"))
+                    }
+                    // «حذف» بجانبه حين يكون في المجموعة اسم لا يُفقد بحذفه شيء
+                    if canDeleteEmpty, case let ids = deleteCandidates(group, inWomen: inWomen), !ids.isEmpty {
+                        AdminPillButton(title: L10n.t(AdminMergeRules.deleteButtonTitle, "Delete"), icon: "trash",
+                                        style: .reject, height: DS.Hub.pillHeightCard) {
+                            deleteBox = AdminDeleteDuplicateContext(
+                                candidates: ids.map { mergePerson($0, in: group, inWomen: inWomen) }, signature: group.signature)
+                        }
+                        .accessibilityLabel(Text(verbatim: L10n.t("حذف المكرر الفارغ من «\(group.name)»", "Delete the empty duplicate of “\(group.name)”")))
+                        .accessibilityHint(L10n.t("لا توجد بيانات تُفقد", "No data is lost"))
+                    }
                 }
-                .accessibilityHint(seesAll ? L10n.t("يخفي هذه المجموعة عند المالك والمدير", "Hides this group for the owner and admins")
-                                            : L10n.t("يخفي هذه المجموعة عندك أنت فقط", "Hides this group on your device only"))
             }
             .padding(.top, DS.Spacing.sm)
         }
@@ -456,27 +486,11 @@ struct AdminIssuesPage: View {
         let person = inWomen ? women.first { $0.id == id } : memberVM.member(byId: id)
         let tags = person.map { chips($0, inWomen: inWomen) } ?? []
         let facts = person.map { differences($0, inWomen: inWomen) } ?? []
-        let showsMerge = canMerge && mergeable(id, inWomen: inWomen) && !mergeTargets(id, in: group, inWomen: inWomen).isEmpty
-        // «دمجه في الآخر» في آخر سطر الاسم (لا تحت الصفّ) — يُقرأ «هذا يُدمج ويُحذف» لا «أبقِ هذا»
-        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            AnyView(personButton(id, number: number, in: group, inWomen: inWomen, person: person, tags: tags, facts: facts,
-                                 chevron: !showsMerge))
-            if showsMerge {
-                AdminPillButton(title: L10n.t(AdminMergeRules.removeButtonTitle, "Merge into the other"),
-                                icon: "arrow.triangle.merge", style: .soft, height: DS.Hub.pillHeightCard) {
-                    startMerge(id, in: group, inWomen: inWomen)
-                }
-                .fixedSize()
-                .padding(.top, DS.Spacing.smd)
-                .accessibilityLabel(Text(verbatim: L10n.t("دمج \(person?.fullName ?? group.name) في الآخر",
-                                                          "Merge \(person?.fullName ?? group.name) into the other")))
-                .accessibilityHint(L10n.t("يحذف هذا الاسم وينقل ما يخصّه إلى الاسم الآخر", "Removes this name and moves what it has to the other one"))
-            }
-        }
+        return AnyView(personButton(id, number: number, in: group, inWomen: inWomen, person: person, tags: tags, facts: facts))
     }
 
     private func personButton(_ id: UUID, number: Int, in group: AdminDuplicateNames.Group, inWomen: Bool,
-                              person: FamilyMember?, tags: [AdminMemberTag], facts: [String], chevron: Bool = true) -> some View {
+                              person: FamilyMember?, tags: [AdminMemberTag], facts: [String]) -> some View {
         Button {
             open(id, in: group, inWomen: inWomen)
         } label: {
@@ -508,7 +522,7 @@ struct AdminIssuesPage: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if chevron { DSChevron() }
+                DSChevron()
             }
             .padding(.vertical, DS.Spacing.smd)
             .frame(minHeight: DS.Hub.rowMinHeightTwoLines)
@@ -533,13 +547,8 @@ struct AdminIssuesPage: View {
         return [.owner, .admin, .monitor, .supervisor].contains(role)
     }
 
-    /// يظهر «دمج» على الصفّ: بلا حساب، ليس من الإدارة، وقائمة الحسابات وصلت (شجرة الرجال)
-    private func mergeable(_ id: UUID, inWomen: Bool) -> Bool {
-        AdminMergeRules.canRemove(hasLogin: hasLogin(id, inWomen: inWomen), isStaff: isStaff(id, inWomen: inWomen),
-                                  accountsReady: inWomen || accounts.loaded)
-    }
-
-    private func mergeTargets(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) -> [UUID] {
+    /// خطة «دمج» للبطاقة — nil = لا زرّ (حسابان، الإدارة، قبل وصول الحسابات، أو يرفض السيرفر كل زوج)
+    private func mergePlan(_ group: AdminDuplicateNames.Group, inWomen: Bool) -> AdminMergeRules.Plan? {
         let login = Set(group.ids.filter { hasLogin($0, inWomen: inWomen) })
         let staff = Set(group.ids.filter { isStaff($0, inWomen: inWomen) })
         var facts: [UUID: AdminMergeRules.Facts] = [:]
@@ -548,7 +557,59 @@ struct AdminIssuesPage: View {
             facts[gid] = AdminMergeRules.Facts(deceased: m.isDeceased == true,
                                                birthYear: AdminMergeRules.year(fromBirthDate: m.birthDate))
         }
-        return AdminMergeRules.targets(group: group.ids, remove: id, hasLogin: login, staff: staff, facts: facts)
+        return AdminMergeRules.plan(group: group.ids, hasLogin: login, staff: staff, facts: facts,
+                                    accountsReady: inWomen || accounts.loaded)
+    }
+
+    /// المرشّحون لـ«حذف»: بلا أبناء ولا بنات ولا زوج/زوجة ولا حساب ولا إدارة، وبياناتهم كلها عند آخر متوافق
+    private func deleteCandidates(_ group: AdminDuplicateNames.Group, inWomen: Bool) -> [UUID] {
+        var records: [UUID: AdminMergeRules.Record] = [:]
+        for id in group.ids {
+            guard let m = inWomen ? women.first(where: { $0.id == id }) : memberVM.member(byId: id) else { continue }
+            let children: Int
+            let spouses: Int
+            if inWomen {
+                children = womenChildren[id] ?? 0
+                spouses = (m.husbandId == nil ? 0 : 1) + women.filter { $0.husbandId == id }.count
+            } else {
+                children = (menChildren[id] ?? 0) + women.filter { $0.fatherId == id }.count
+                spouses = women.filter { $0.husbandId == id }.count + memberVM.allMembers.filter { $0.husbandId == id }.count
+            }
+            func has(_ v: String?) -> Bool { !(v ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+            records[id] = AdminMergeRules.Record(
+                children: children, spouses: spouses,
+                hasLogin: hasLogin(id, inWomen: inWomen), isStaff: isStaff(id, inWomen: inWomen),
+                birth: has(m.birthDate), death: has(m.deathDate),
+                photo: has(m.avatarUrl) || has(m.photoURL), phone: has(m.phoneNumber), bio: !(m.bio ?? []).isEmpty,
+                facts: AdminMergeRules.Facts(deceased: m.isDeceased == true,
+                                             birthYear: AdminMergeRules.year(fromBirthDate: m.birthDate)),
+                addedAt: m.createdAt.flatMap(DateParsing.iso))
+        }
+        // شجرة الرجال: قائمة الحسابات لازم تصل قبل الحكم بـ«بلا حساب»
+        guard inWomen || accounts.loaded else { return [] }
+        return AdminMergeRules.deleteCandidates(group: group.ids, records: records)
+    }
+
+    /// الحذف بطريق الإدارة الموجود — nil = نجح، وإلا رسالة رسمية
+    private func deleteDuplicate(_ id: UUID) async -> String? {
+        if women.contains(where: { $0.id == id }) && memberVM.member(byId: id) == nil {
+            do {
+                try await WomenStore.delete(id: id)
+            } catch {
+                Log.error("[Duplicates] women delete failed: \(ErrorHelper.description(error))")
+                return AdminMergeRules.deleteMessage(hint: (error as? PostgrestError)?.hint)
+            }
+            await loadWomen(force: true)
+            return nil
+        }
+        guard await memberVM.deleteMember(memberId: id) else {
+            // `deleteMember` يضع رسالة السيرفر عند حماية الروابط، وإلا رسالته العامة
+            let generic = L10n.t("تعذّر حذف العضو. حاول مرة أخرى.", "Couldn't delete the member. Try again.")
+            let linked = memberVM.errorMessage.map { !$0.isEmpty && $0 != generic } ?? false
+            return AdminMergeRules.deleteMessage(hint: linked ? "family_links_protected" : nil)
+        }
+        await reload(force: true)
+        return nil
     }
 
     private func mergePerson(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) -> AdminMergePerson {
@@ -559,11 +620,9 @@ struct AdminIssuesPage: View {
         return AdminMergePerson(id: id, name: name, facts: lines.joined(separator: " · "))
     }
 
-    private func startMerge(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) {
-        let targets = mergeTargets(id, in: group, inWomen: inWomen)
-        guard !targets.isEmpty else { return }
-        merge = AdminMergeContext(remove: mergePerson(id, in: group, inWomen: inWomen),
-                                  targets: targets.map { mergePerson($0, in: group, inWomen: inWomen) })
+    private func startMerge(_ group: AdminDuplicateNames.Group, plan: AdminMergeRules.Plan, inWomen: Bool) {
+        merge = AdminMergeContext(people: group.ids.map { mergePerson($0, in: group, inWomen: inWomen) },
+                                  plan: plan, signature: group.signature)
     }
 
     /// سنة الميلاد · «له حساب» · «متوفى» — ما يفرّق بين الاثنين
