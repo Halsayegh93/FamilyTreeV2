@@ -198,7 +198,7 @@ enum SignupOriginRules {
         // مربّع البيانات
         static let familyFullName = "الاسم الرباعي"
         static let outsideFullName = "الاسم الثلاثي"
-        static let familyNameHint = "العائلة «المحمدعلي»، وتربط الإدارة الحساب بالوالد بعد التحقق من اسمه في الشجرة."
+        static let familyNameHint = "بدون اسم العائلة، وتُضاف «المحمدعلي» تلقائياً."
         static let outsideNameHint = "الاسم الأول واسم الوالد والجد، بدون اسم العائلة."
         static let familyName = "العائلة"
         static let familyPlaceholder = "مثال: الموسى"

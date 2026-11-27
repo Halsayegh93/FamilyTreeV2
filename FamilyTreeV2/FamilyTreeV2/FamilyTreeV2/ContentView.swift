@@ -16,6 +16,11 @@ struct ContentView: View {
             JoinCardPreviewScreen(mode: mode)
                 .environment(\.layoutDirection, .rightToLeft)
                 .environment(\.locale, Locale(identifier: "ar"))
+        } else if let mode = SignupPreview.mode {
+            // شاشات التسجيل الجديد للتصوير: `-uiPreviewSignup choose|complete`
+            SignupPreviewScreen(mode: mode)
+                .environment(\.layoutDirection, .rightToLeft)
+                .environment(\.locale, Locale(identifier: "ar"))
         } else if let mode = AdminTrailPreview.mode {
             AdminTrailPreviewScreen(mode: mode)
                 .environment(\.layoutDirection, .rightToLeft)

@@ -163,7 +163,7 @@ struct RegistrationView: View {
             }
 
             // العائلة «المحمدعلي» ضمناً، والربط بالوالد تتحقق منه الإدارة
-            Text(L10n.t(SignupOriginRules.Ar.familyNameHint, "Family: Al-Mohammad Ali. The admins link you to your father after checking his name in the tree."))
+            Text(L10n.t(SignupOriginRules.Ar.familyNameHint, "Without the family name; Al-Mohammad Ali is added automatically."))
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
