@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 /// الرفع/الحذف للمدراء فقط (owner + admin).
 struct FamilyArchiveView: View {
     @EnvironmentObject private var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`) — يُعاد الرسم حين تتغيّر الفئة أو الجدول
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var notificationVM: NotificationViewModel
     @StateObject private var archiveVM = FamilyArchiveViewModel()
@@ -138,8 +140,8 @@ struct FamilyArchiveView: View {
                 }
             }
 
-            // زر رفع — متاح للجميع، يختفي فقط في وضع التحديد
-            if !selectionMode {
+            // زر رفع — متاح للجميع، يختفي في وضع التحديد (و«إضافة للمكتبة» مطفأة لفئته — `MemberAccess`)
+            if !selectionMode && authVM.memberSees(.libraryAdd) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {

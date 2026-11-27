@@ -95,7 +95,10 @@ struct WomenTreeView: View {
                     }
                     WomenClassicTreeView(
                         members: allMembers,
-                        onSelect: { selectedWoman = $0 },
+                        // «صلاحيات الأعضاء حسب الفئة»: «تفاصيل المرأة» مطفأة لفئته — الضغط لا يفتح شيئاً (عقدتها هي تفتح)
+                        onSelect: { w in
+                            if w.id == authVM.currentUser?.id || authVM.memberSees(.womenTreeDetails) { selectedWoman = w }
+                        },
                         treeTab: treeTab,
                         meWomanId: resolveMyWomanId(),
                         // حساب امرأة: تفتح الشجرة على عقدتها
@@ -2437,7 +2440,8 @@ struct WomanDetailSheet: View {
         HStack(spacing: DSBox.buttonSpacing) {
             // الإدارة «الإدارة»، والعضو على عقدته «عائلتي»، وغيره «طلب إضافة» — كلها تفتح مربّع الإجراءات
             // (كان الزرّ للإدارة وحدها، فالعضو لا يجد طريقاً للإضافة من شجرة النساء)
-            if mode != .viewOnly {
+            // «طلب تعديل» مطفأ لفئته (`MemberAccess`) — «عائلتي» والإدارة كما هما
+            if mode != .viewOnly && (mode != .request || MemberAccessStore.shared.sees(.womenTreeEditRequest)) {
                 // الزرّ الواحد بلون دوره (`DSMemberKit`): «الإدارة» ذهبي، و«عائلتي»/«طلب إضافة» أخضر العائلة —
                 // نفس مقاس «إغلاق» وخطّه، ورمزه يقفز مرة عند الظهور؛ دوّارته أثناء العمل
                 DSLiveButton(actionsBoxTitle,

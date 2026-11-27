@@ -53,6 +53,17 @@ enum DaughterSons {
         case memberDetails = "member_details"
 
         static let defaults: [LockedSection] = [.diwaniyas, .projects, .library, .womenTree, .memberDetails]
+
+        /// خانتها في «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`)
+        var screen: MemberScreen {
+            switch self {
+            case .diwaniyas: return .diwaniyas
+            case .projects: return .projects
+            case .library: return .library
+            case .womenTree: return .womenTree
+            case .memberDetails: return .memberDetails
+            }
+        }
     }
 
     /// القائمة من السيرفر (مصفوفة نصوص)، وإلا الافتراضي — مصفوفة فارغة = لا قفل
@@ -367,6 +378,12 @@ final class LineageGateStore: ObservableObject {
     @Published var pageRequested = false
     /// «طلب استكمال البيانات» على طلب النسب المعلّق (R2) — يفتح البوابة بحقل «اسم الوالدة» مميّزاً
     @Published var ask: CompletionAsk.Open?
+    private var accessSub: AnyCancellable?
+
+    init() {
+        // «صلاحيات الأعضاء حسب الفئة»: من يراقب هذا المخزن يُعاد رسمه حين تتغيّر الفئة أو الجدول
+        accessSub = MemberAccessStore.shared.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+    }
 
     func refresh() async {
         status = await DaughterSons.fetchStatus()
@@ -397,9 +414,10 @@ final class LineageGateStore: ObservableObject {
     /// «صلاحيات محدودة» دائمة (أجاب «لا» على «هل الأم من العائلة؟») — بلا «استكمال التسجيل»، ولا يُعرض له شيء عنها
     var isLimited: Bool { isRestricted && status?.limited == true }
 
-    /// القسم مخفي تماماً (لا يظهر مدخله) — «صلاحيات محدودة» فقط (المالك: «تكون الأشياء مخفية» بلا رسالة)
+    /// القسم مخفي تماماً (لا يظهر مدخله) — «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`؛ «صلاحيات محدودة» منها،
+    /// وقائمتها القديمة احتياط داخله). المالك: «تكون الأشياء مخفية» بلا رسالة
     func hides(_ section: DaughterSons.LockedSection) -> Bool {
-        isLimited && DaughterSons.limitedLockedSections.contains(section)
+        !MemberAccessStore.shared.sees(section.screen)
     }
 
     /// «لا» على «هل الأم من العائلة؟» ← الحالة محلياً حتى يصل التحديث
@@ -413,9 +431,13 @@ final class LineageGateStore: ObservableObject {
 
     /// القسم مقفول على هذا الحساب (القائمة من السيرفر)
     func isLocked(_ section: DaughterSons.LockedSection) -> Bool {
-        guard isRestricted else { return false }
-        return (isLimited ? DaughterSons.limitedLockedSections : DaughterSons.lockedSections).contains(section)
+        if hides(section) { return true }
+        guard isRestricted, !isLimited else { return false }
+        return DaughterSons.lockedSections.contains(section)
     }
+
+    /// القفل يُخفى بلا رسالة (الفئة أطفأته) — لا «استكمال التسجيل»
+    var locksSilently: Bool { isLimited || !isRestricted }
 
     /// يفتح صفحة «أكمل حسابك» (أو حالة «قيد المراجعة»)
     func openPage() {
@@ -515,7 +537,7 @@ struct LineageLockedView: View {
     var body: some View {
         let pending = store.isPending
         // «صلاحيات محدودة»: لا رسالة ولا زرّ — المدخل نفسه مخفي (`hides`)، وهذا احتياط لمسار وصل إليه
-        if store.isLimited { return AnyView(Color.clear) }
+        if store.locksSilently { return AnyView(Color.clear) }
         return AnyView(DSEmptyView(
             pending ? DaughterSons.text("locked_pending_title", SignupOriginRules.Ar.pendingTitle, "Your account is under review")
                     : DaughterSons.text("locked_title", SignupOriginRules.Ar.lockedTitle, "Complete your registration to see this section"),

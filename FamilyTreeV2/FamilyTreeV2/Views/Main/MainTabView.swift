@@ -9,6 +9,9 @@ struct MainTabView: View {
     private var diwaniyasTabShown: Bool {
         (appSettingsVM.settings.diwaniyasEnabled ?? true) && !lineageGate.hides(.diwaniyas)
     }
+    /// «صلاحيات الأعضاء حسب الفئة»: تبويب الشجرة يغيب إن أُطفئت «شجرة العائلة» لفئته
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
+    private var treeTabShown: Bool { authVM.memberSees(.tree) }
     @ObservedObject private var langManager = LanguageManager.shared
     /// آخر تبويب يُحفظ مع حالة النافذة: إن سكّر النظام التطبيق بالخلفية (امتلاء الذاكرة) يرجع لنفس التبويب
     /// بدل الرئيسية (طلب المالك ٢٠٢٦-١٠-٣١). الإغلاق اليدوي بالسحب يمسحها فيبدأ من الرئيسية كالعادة.
@@ -83,11 +86,13 @@ struct MainTabView: View {
                     Label(tabTitle("الرئيسية", "Home"), systemImage: AppSection.home.symbol)
                 }
 
-                Tab(value: 1) {
-                    AnyView(TreeTabContainer(selectedTab: crossfadingTab))
-                        .dsSection(.tree)
-                } label: {
-                    Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
+                if treeTabShown {
+                    Tab(value: 1) {
+                        AnyView(TreeTabContainer(selectedTab: crossfadingTab))
+                            .dsSection(.tree)
+                    } label: {
+                        Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
+                    }
                 }
 
                 if diwaniyasTabShown {
@@ -126,13 +131,15 @@ struct MainTabView: View {
                 .tag(0)
 
             // مغلّف يسمح بالتبديل بين الواجهة الكلاسيكية والتجربة الجديدة
-            AnyView(TreeTabContainer(selectedTab: crossfadingTab))
-                .dsSection(.tree)
-                .tabItem {
-                    Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
-                    Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
-                }
-                .tag(1)
+            if treeTabShown {
+                AnyView(TreeTabContainer(selectedTab: crossfadingTab))
+                    .dsSection(.tree)
+                    .tabItem {
+                        Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
+                        Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
+                    }
+                    .tag(1)
+            }
 
             if diwaniyasTabShown {
                 AnyView(DiwaniyasView(selectedTab: crossfadingTab))
@@ -163,6 +170,30 @@ struct MainTabView: View {
             }
         }
         }
+    }
+
+    /// تبويب محفوظ أو مفتوح لم يعد متاحاً (الإدارة بلا صلاحية، الديوانيات أو الشجرة مطفأة) → الرئيسية
+    private func leaveHiddenTab() {
+        if (selectedTab == 4 && !authVM.canModerate)
+            || (selectedTab == 2 && !diwaniyasTabShown)
+            || (selectedTab == 1 && !treeTabShown)
+            || !(0...4).contains(selectedTab) {
+            selectedTab = 0
+        }
+    }
+
+    /// احتياط قبل ترحيل `my_member_category`: نفس القاعدة من حقائق التطبيق
+    private func applyLocalMemberCategory() {
+        guard let me = authVM.currentUser else { return }
+        let status = lineageGate.status
+        MemberAccessStore.shared.applyLocal(MemberAccess.Facts(
+            isStaff: authVM.canModerate,
+            isActive: me.role == .member && (me.status ?? .active) == .active,
+            isLimited: status?.limited == true,
+            hasLineageRow: status?.flagged == true,
+            isDaughterChildNode: false,
+            isOutsideNode: false,
+            isFemale: me.isFemale))
     }
 
     var body: some View {
@@ -225,11 +256,7 @@ struct MainTabView: View {
         // وتُترك بلا إرسال عند الخروج منها
         .onAppear {
             // تبويب محفوظ لم يعد متاحاً (الإدارة بلا صلاحية، الديوانيات مطفأة) → الرئيسية
-            if (selectedTab == 4 && !authVM.canModerate)
-                || (selectedTab == 2 && !diwaniyasTabShown)
-                || !(0...4).contains(selectedTab) {
-                selectedTab = 0
-            }
+            leaveHiddenTab()
             AppSection.current = selectedSection
             AppUsageTracker.shared.start(tab: selectedTab)
         }
@@ -237,6 +264,15 @@ struct MainTabView: View {
             AppSection.current = selectedSection
             AppUsageTracker.shared.setTab(tab)
         }
+        // الفئة من السيرفر (`my_member_category`) — وقبل الترحيل من حقائق التطبيق؛ تبويب غاب ← الرئيسية
+        .task(id: authVM.currentUser?.id) {
+            applyLocalMemberCategory()
+            await MemberAccessStore.shared.refresh(userId: authVM.currentUser?.id)
+        }
+        .onReceive(lineageGate.$status) { _ in applyLocalMemberCategory() }
+        .onChange(of: memberAccess.category) { _ in leaveHiddenTab() }
+        .onChange(of: treeTabShown) { _ in leaveHiddenTab() }
+        .onChange(of: diwaniyasTabShown) { _ in leaveHiddenTab() }
         .onDisappear {
             if authVM.status != .fullyAuthenticated {
                 AppSection.current = nil

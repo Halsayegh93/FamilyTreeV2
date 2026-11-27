@@ -410,6 +410,8 @@ struct TreePinchZoomModifier: ViewModifier {
 // MARK: - 1. واجهة الشجرة الرئيسية — Liquid Glass
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة»: البحث و«موقعك» وصلة القرابة (تتغيّر نادراً)
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
@@ -786,7 +788,7 @@ struct TreeView: View {
                             "Your join request is with the admins to link your account to your place in the tree. After that, «Me» takes you straight to your name."))
             }
             // تفاصيل العضو: مربّع بالمنتصف قابل للتوسّع بدل الشيت (طلب المالك)
-            .fullScreenCover(item: $selectedMember) { member in
+            .fullScreenCover(item: $selectedMember.memberDetailsGate(selfId: authVM.currentUser?.id)) { member in
                 MemberDetailsView(member: member, centered: true)
                     .background(ClearPresentationBackground())
             }
@@ -853,7 +855,9 @@ struct TreeView: View {
                 selectMemberFromSearch(target)
             }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
-                guard let info = note.userInfo,
+                // «صلاحيات الأعضاء حسب الفئة»: صلة القرابة في الشجرة مطفأة لفئته
+                guard authVM.memberSees(.treeKinship),
+                      let info = note.userInfo,
                       let memberId = info["memberId"] as? UUID,
                       let relationship = info["relationship"] as? String else { return }
 
@@ -1031,12 +1035,12 @@ struct TreeView: View {
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
         VStack(spacing: DS.Spacing.xs) {
-            searchToolButton(.mini)
+            if authVM.memberSees(.treeSearch) { searchToolButton(.mini) }
             homeToolButton(.mini)
             if let treeTab {
                 FamilyTreeSideTabs(selection: treeTab)
             }
-            if authVM.currentUser != nil {
+            if authVM.currentUser != nil && authVM.memberSees(.treeMyLocation) {
                 DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .mini, tint: AppSection.tree.ink) {
                     if let currentUserID = authVM.currentUser?.id,
@@ -1062,7 +1066,7 @@ struct TreeView: View {
     private var classicToolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             // الترتيب: بحث → البداية → تبويب [عائلة/نساء] → موقعي
-            searchToolButton(.toolbar)
+            if authVM.memberSees(.treeSearch) { searchToolButton(.toolbar) }
             homeToolButton(.toolbar)
 
             Spacer(minLength: 0)
@@ -1075,7 +1079,7 @@ struct TreeView: View {
             Spacer(minLength: 0)
 
             // زر موقعي — آخر شي
-            if authVM.currentUser != nil {
+            if authVM.currentUser != nil && authVM.memberSees(.treeMyLocation) {
                 DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .toolbar, tint: AppSection.tree.ink) {
                     if let currentUserID = authVM.currentUser?.id,

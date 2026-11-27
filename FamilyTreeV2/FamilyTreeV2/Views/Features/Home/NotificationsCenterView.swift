@@ -1284,7 +1284,7 @@ struct NotificationsCenterView: View {
             detailMemberCardBody(member: member)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .fullScreenCover(item: $selectedMember) { m in
+        .fullScreenCover(item: $selectedMember.memberDetailsGate(selfId: authVM.currentUser?.id)) { m in
             MemberDetailsView(member: m, centered: true)
                 .background(ClearPresentationBackground())
         }

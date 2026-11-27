@@ -126,7 +126,7 @@ struct MemberDetailsView: View {
     }
 
     /// الحساب المقيّد («أكمل حسابك»، طلب المالك ٢٠٢٦-١١-٠٧): تفاصيل غيره مقفولة — القائمة من السيرفر
-    @ObservedObject private var lineage = LineageGateStore.shared
+    @ObservedObject private var lineage = LineageGateStore.shared   // ينقل تغيّر «صلاحيات الأعضاء حسب الفئة» أيضاً
     private var lineageLocked: Bool { !isViewingSelf && lineage.isLocked(.memberDetails) }
 
     var body: some View {
@@ -536,7 +536,7 @@ struct MemberDetailsView: View {
 
     @ViewBuilder
     private var quickActionsRow: some View {
-        let showKinship = !isViewingSelf && !member.isDeleted
+        let showKinship = !isViewingSelf && !member.isDeleted && authVM.memberSees(.memberDetailsKinship)
         HStack(spacing: DS.Spacing.sm) {
             if showKinship {
                 // شريحة العُدّة (٣٤، ومساحة ضغط ٤٤ داخلها) — نفسها في تفاصيل النساء
@@ -601,7 +601,8 @@ struct MemberDetailsView: View {
     private var familyStrip: some View {
         let father = cachedFather
         let children = cachedChildren
-        if father != nil || !children.isEmpty {
+        // «العائلة» مطفأة لفئته (بطاقته هو دائماً)
+        if (father != nil || !children.isEmpty) && (isViewingSelf || authVM.memberSees(.memberDetailsFamily)) {
             // «AB»: لوح كريمي بمربّع أخضر العائلة — مطويّاً صور الأقارب بأدوارهم و«عرض ‹»
             MemberCardFamilyBox(
                 summary: familySummary(hasFather: father != nil, children: children.count),
@@ -754,7 +755,9 @@ struct MemberDetailsView: View {
         // الرقم (البند ٨): رقم المرأة لا يراه العضو أبداً — لا صفّ ولا «مخفي»؛ الإدارة الأربعة وهي نفسها يرونه
         // وتحته «مخفي عن الأعضاء». الرجل المخفي كما كان («مخفي» للعضو). السيرفر يعيد nil للمخفيّ أصلاً.
         let phone = m.dsVisiblePhone(viewerId: authVM.currentUser?.id, viewerCanModerate: canMod)
-        switch MemberCardLogic.phoneRow(hasPhone: phone != nil, isFemale: m.isFemale,
+        // «صلاحيات الأعضاء حسب الفئة»: «الهاتف والاتصال» مطفأ لفئته — لا صفّ (والسيرفر لا يرسل الرقم)
+        let contactShown = isSelf || canMod || authVM.memberSees(.memberDetailsContact)
+        if contactShown { switch MemberCardLogic.phoneRow(hasPhone: phone != nil, isFemale: m.isFemale,
                                         isPhoneHidden: m.isPhoneHidden == true, isDeceased: isDeceased,
                                         viewerIsSelf: isSelf, viewerIsStaff: canMod) {
         case .shown(let hiddenCaption):
@@ -777,7 +780,7 @@ struct MemberDetailsView: View {
             ))
         case .none:
             break
-        }
+        } }
 
         if isDeceased,
            let death = m.deathDate, !death.isEmpty {
@@ -893,8 +896,10 @@ struct MemberDetailsView: View {
     @ViewBuilder
     private var pendingRequestsCard: some View {
         let mine = myRequestsAboutMember
+        // «طلبك عنه» مطفأ لفئته: لا قائمة لطلباته (قائمة الإدارة كما هي)
         let mode = MemberCardLogic.requestsSection(canModerateTree: authVM.canModerateTree,
-                                                   allCount: cachedPendingRequests.count, mineCount: mine.count)
+                                                   allCount: cachedPendingRequests.count,
+                                                   mineCount: authVM.memberSees(.memberDetailsMyRequests) ? mine.count : 0)
         MemberCardRequestsSection(
             requests: mode == .all ? cachedPendingRequests : mine,
             mode: mode,
@@ -929,12 +934,14 @@ struct MemberDetailsView: View {
                     // «تعديل مباشر» / «طلب إضافة» صارا زرّ الدور تحت الاسم (`roleActionButton`)؛ و«طلب تعديل»
                     // هنا لعرض الشيت وحده (المربّع بالمنتصف يضعه في شريطه السفلي) — لا يضيع من أي عرض
                     if !isViewingSelf {
-                        circleActionButton(
-                            icon: "pencil.and.list.clipboard",
-                            label: L10n.t("طلب تعديل", "Request Edit"),
-                            tint: chromeInk,
-                            filled: true
-                        ) { showEditActions = true }
+                        if authVM.memberSees(.memberDetailsEditRequest) {
+                            circleActionButton(
+                                icon: "pencil.and.list.clipboard",
+                                label: L10n.t("طلب تعديل", "Request Edit"),
+                                tint: chromeInk,
+                                filled: true
+                            ) { showEditActions = true }
+                        }
 
                         // إبلاغ عن العضو — متاح لغير صاحب الملف (سياسة Apple)
                         circleActionButton(
@@ -1153,7 +1160,7 @@ struct MemberDetailsView: View {
                 showAdminControl = true
             }
         }
-        if !isViewingSelf {
+        if !isViewingSelf && authVM.memberSees(.memberDetailsEditRequest) {
             return PanelAction(title: L10n.t("طلب تعديل", "Request Edit"), icon: "pencil.and.list.clipboard") {
                 showEditActions = true
             }
@@ -1163,7 +1170,9 @@ struct MemberDetailsView: View {
 
     /// «طلب تعديل» لغير صاحب الملف — في الشريط السفلي بجانب «إغلاق» كما كان (طلب المالك ٢٠٢٦-١٠-٢٤)،
     /// للأعضاء والإدارة
-    private var showsRequestEdit: Bool { !isViewingSelf && !member.isDeleted }
+    private var showsRequestEdit: Bool {
+        !isViewingSelf && !member.isDeleted && authVM.memberSees(.memberDetailsEditRequest)
+    }
 
     /// زرّ الدور تحت الاسم (`DSMemberKit`): «تعديل مباشر» ذهبي للمالك والمدير والمراقب (`canEditMembers`)
     /// والقلم يكتب. «طلب إضافة» في شجرة النساء وحدها (طلب المالك ٢٠٢٦-١٠-٢٥) — هنا «إضافة ابن» داخل «طلب تعديل»
@@ -1174,7 +1183,7 @@ struct MemberDetailsView: View {
                          hint: L10n.t("يفتح إدارة السجل", "Opens the member record"), tile: true) {
                 showAdminControl = true
             }
-        } else if isViewingSelf && !member.isDeleted {
+        } else if isViewingSelf && !member.isDeleted && authVM.memberSees(.profileMyFamily) {
             DSLiveButton(L10n.t("إضافة ابن", "Add Child"), icon: "plus",
                          tint: DSMemberKit.directTint, motion: .write,
                          hint: L10n.t("إضافة ابن إلى الشجرة", "Adds your child to the tree"), tile: true) {

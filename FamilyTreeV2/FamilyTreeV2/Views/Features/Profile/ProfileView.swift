@@ -4,6 +4,8 @@ import Supabase
 
 struct ProfileView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`) — يُعاد الرسم حين تتغيّر الفئة أو الجدول
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
@@ -137,7 +139,7 @@ struct ProfileView: View {
                                         .frame(maxWidth: .infinity)
 
                                         VStack(spacing: DS.Spacing.md) {
-                                            if reviewCard.card != nil {
+                                            if reviewCard.card != nil || !authVM.memberSees(.profileMyFamily) {
                                                 EmptyView()
                                             } else if isWomanAccount {
                                                 womenPositionSection
@@ -175,8 +177,8 @@ struct ProfileView: View {
                                         // «طلباتي» انتقلت إلى الإشعارات ← «الطلبات المرسلة» (طلب المالك ٢٠٢٦-١١-١٧)
 
                                         // حساب امرأة: «موقعي في شجرة النساء» بدل «عائلتي» (روابطه من شجرة الرجال)
-                                        if reviewCard.card != nil {
-                                            // حساب المراجعة غير مرتبط بالشجرة — بلا «عائلتي»
+                                        if reviewCard.card != nil || !authVM.memberSees(.profileMyFamily) {
+                                            // حساب المراجعة غير مرتبط بالشجرة — بلا «عائلتي» (ومطفأة لفئته — `MemberAccess`)
                                         } else if isWomanAccount {
                                             womenPositionSection
                                                 .dsCardCascade(4, appeared: appeared)
@@ -337,7 +339,7 @@ struct ProfileView: View {
                 EditChildSheet(member: child)
             }
             // حساب امرأة: الأب/الزوج/الابن من شجرة الرجال — نفس تفاصيل العضو
-            .fullScreenCover(item: $relativeDetails) { m in
+            .fullScreenCover(item: $relativeDetails.memberDetailsGate(selfId: authVM.currentUser?.id)) { m in
                 MemberDetailsView(member: m, centered: true)
                     .background(ClearPresentationBackground())
             }
@@ -474,7 +476,7 @@ struct ProfileView: View {
             
             // User Info
             VStack(spacing: DS.Spacing.sm) {
-                Button { showEditProfile = true } label: {
+                Button { if authVM.memberSees(.profileEditInfo) { showEditProfile = true } } label: {
                     // سطر واحد إن وسع، وإلا سطران متوازنان (`DSBalanced`) — القلم ملتصق بآخر الاسم
                     let name = user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.displayFullName
                     ViewThatFits(in: .horizontal) {
@@ -542,16 +544,18 @@ struct ProfileView: View {
         return DSFormCard(L10n.t("البيانات الشخصية", "My info"), icon: "person.text.rectangle.fill",
                           color: DS.Color.primary) {
             // كما كانت (dd34de39) — الاسم وحده تغيّر إلى «رمز العضو»؛ بأحجام إمكانية الوصول بالرمز وحده
-            HStack(spacing: DS.Spacing.sm) {
+            if authVM.memberSees(.profileQR) { HStack(spacing: DS.Spacing.sm) {
                 headerChip(L10n.t("مسح رمز", "Scan"), icon: "camera.viewfinder", tint: DS.Color.accent,
                            voiceOver: L10n.t("مسح رمز العضو", "Scan member code")) { showQRScanner = true }
                 headerChip(L10n.t("رمز العضو", "Member code"), icon: "qrcode", tint: DS.Color.secondary,
                            voiceOver: L10n.t("عرض رمز العضو", "Show member code")) { showQRCode = true }
-            }
+            } }
         } content: {
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                 ForEach(infoItems, id: \.title) { item in
-                    if let field = item.editField {
+                    // «تعديل بياناتي» / «تغيير الرقم» مطفأة لفئته: الخانة للقراءة فقط
+                    if let field = item.editField,
+                       authVM.memberSees(field == .phone ? .profileChangePhone : .profileEditInfo) {
                         // الخانة القابلة للتعديل تفتح مربّع التعديل على حقلها (وخصوصيته تحته)
                         Button { openEdit(field) } label: {
                             infoGridCell(icon: item.icon, color: item.color, title: item.title,

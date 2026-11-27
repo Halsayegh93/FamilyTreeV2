@@ -55,7 +55,7 @@ struct NotificationDetailBox: View {
                 guard let rid = requestId else { return }
                 request = await adminRequestVM.fetchRequest(id: rid)
             }
-            .fullScreenCover(item: $openMember) { m in
+            .fullScreenCover(item: $openMember.memberDetailsGate(selfId: authVM.currentUser?.id)) { m in
                 MemberDetailsView(member: m, centered: true)
                     .background(ClearPresentationBackground())
             }

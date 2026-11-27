@@ -2,6 +2,8 @@ import SwiftUI
 
 struct FamilyProjectsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`) — يُعاد الرسم حين تتغيّر الفئة أو الجدول
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -71,8 +73,8 @@ struct FamilyProjectsView: View {
                 contentArea
             }
 
-            // FAB رفع — للجميع، يختفي في وضع التحديد
-            if !selectionMode {
+            // FAB رفع — للجميع، يختفي في وضع التحديد (و«إضافة مشروع» مطفأة لفئته — `MemberAccess`)
+            if !selectionMode && authVM.memberSees(.projectsAdd) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {

@@ -401,6 +401,14 @@ struct AdminTeamAreaView: View {
                     AdminTeamMembersCard(canEdit: authVM.canManageRoles && authVM.adminCanEdit(.team))
                 })
             }
+            // «صلاحيات الأعضاء حسب الفئة» (المالك وحده — `MemberAccessAdminPage.swift`)
+            if authVM.isOwner {
+                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+                    AdminSectionLabel(title: L10n.t("صلاحيات الأعضاء حسب الفئة", "Member access by category"),
+                                      trailing: L10n.t("ما يظهر لكل فئة", "What each category sees"))
+                    MemberAccessCategoriesCard()
+                })
+            }
             if authVM.adminSees(.teamUsage) {
                 AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
                     AdminSectionLabel(title: L10n.t("الاستخدام", "Usage"),

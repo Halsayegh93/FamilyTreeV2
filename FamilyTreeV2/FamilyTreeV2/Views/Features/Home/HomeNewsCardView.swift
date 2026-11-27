@@ -43,6 +43,10 @@ struct HomeNewsCardView: View {
     var onBlockTap: () -> Void = {}
     /// فتح صورة الخبر بملء الشاشة — رقم الصورة
     var onMediaTap: (Int) -> Void = { _ in }
+    /// «صلاحيات الأعضاء حسب الفئة»: الإعجاب والتعليق والاستطلاع لفئة المشاهد (`MemberAccess` — المخفي غائب)
+    var showsLike: Bool = true
+    var showsComment: Bool = true
+    var showsPoll: Bool = true
     /// دخول الصفحة (نفس `dsCardCascade`): الختم يُطبع على البطاقة بعد وصولها، وما يُبنى بالتمرير يظهر مباشرة
     var appeared: Bool = true
     var cascadeIndex: Int = 0
@@ -120,10 +124,10 @@ struct HomeNewsCardView: View {
             }
 
             if !media.isEmpty {
-                NewsCardMedia(urls: media, isLiked: isLiked, onLike: onLikeTap, onOpen: onMediaTap)
+                NewsCardMedia(urls: media, isLiked: isLiked, onLike: showsLike ? onLikeTap : {}, onOpen: onMediaTap)
             }
 
-            if !pollOptions.isEmpty {
+            if showsPoll && !pollOptions.isEmpty {
                 NewsCardPoll(question: pollQuestion, options: pollOptions, votes: pollVotes,
                              selected: selectedPollOption, tint: typeColor, onVote: onVoteTap)
             }
@@ -131,6 +135,7 @@ struct HomeNewsCardView: View {
             NewsCardFooter(
                 likeCount: likeCount, isLiked: isLiked, commentCount: commentCount,
                 onLike: onLikeTap, onComment: onCommentTap,
+                showsLike: showsLike, showsComment: showsComment,
                 byline: NewsBylineView(
                     names: bylineNames,
                     avatarUrl: authorMember?.avatarUrl,
@@ -490,12 +495,14 @@ struct NewsCardFooter: View {
     let commentCount: Int
     let onLike: () -> Void
     let onComment: () -> Void
+    var showsLike: Bool = true
+    var showsComment: Bool = true
     let byline: NewsBylineView
 
     var body: some View {
         HStack(spacing: DS.Spacing.xxs) {
-            NewsLikeButton(count: likeCount, isLiked: isLiked, action: onLike)
-            NewsCommentButton(count: commentCount, action: onComment)
+            if showsLike { NewsLikeButton(count: likeCount, isLiked: isLiked, action: onLike) }
+            if showsComment { NewsCommentButton(count: commentCount, action: onComment) }
             Spacer(minLength: DS.Spacing.sm)
             byline
         }

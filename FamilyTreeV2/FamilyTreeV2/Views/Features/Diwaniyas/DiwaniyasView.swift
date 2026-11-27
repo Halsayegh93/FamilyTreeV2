@@ -71,7 +71,7 @@ struct DiwaniyasView: View {
                 }
 
                 // زر الإضافة السفلي (FAB) — مثل بقية الصفحات (لا يظهر والقسم مقفول)
-                if !lineage.isLocked(.diwaniyas) {
+                if !lineage.isLocked(.diwaniyas) && authVM.memberSees(.diwaniyasAdd) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {
