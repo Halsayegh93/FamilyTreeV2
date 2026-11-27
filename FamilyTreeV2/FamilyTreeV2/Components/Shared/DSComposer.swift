@@ -70,6 +70,8 @@ enum DSMotion {
     /// التنقّل بين الشاشات (التبويبات، «العائلة/النساء»، أقسام الإدارة): الشاشة القديمة تذوب في الجديدة
     /// (`DSScreenCrossfade`) — الرأس الكحلي ثابت بلا ومضة
     static let screenFade: TimeInterval = 0.3
+    /// ضغطة شريط التبويبات نفسها (مئات المرات باليوم): نفس الذوبان أقصر — ٠٫٢ ث لا يُبطئ التنقّل
+    static let tabFade: TimeInterval = 0.2
 
     // ٢) الرأس
     static let iconDelay = 0.06
@@ -133,6 +135,27 @@ enum DSMotion {
     static let pillIn = Animation.easeOut(duration: DSMotionRules.Timing.pillIn)
     /// بانر صلة القرابة (من طريق الأب أو «عن طريق الأم») ينزل من أعلى — يُغلق بـ`DS.Anim.snappy` الأسرع
     static let banner = Animation.easeInOut(duration: 0.3)
+
+    // ٦) الشجرتان (طلب المالك ٢٠٢٦-١١-٢٧ «والشجرة بعد») — حركة لحظة الضغط فقط، لا شيء مستمر ولا عمل لكل عقدة بكل إطار
+    /// الكاميرا («البداية»، «موقعك»، نتيجة البحث، فتح/طيّ فرع): نابض واحد هادئ بلا ارتداد — «تقليل الحركة»: مباشرة
+    static let camera = Animation.spring(response: 0.5, dampingFraction: 0.86)
+    /// أبناء الفرع المفتوح للتو: يكبرون من موضعهم تباعاً (أول ٨ فقط بفاصل، والباقي مع الثامن)
+    static let treeNodeIn = Animation.spring(response: 0.42, dampingFraction: 0.74)
+    static let treeNodeStep = 0.05
+    static let treeNodeCap = 8
+    /// ضغطة عقدة شجرة النساء (لا زرّ فيها — قفزة لحظية على العقدة المضغوطة وحدها)
+    static let nodePressScale: CGFloat = 0.95
+    static let nodePressHold: TimeInterval = 0.12
+    /// الطيّ: الأبناء يذوبون أسرع من دخولهم
+    static let treeNodeOut = Animation.easeIn(duration: DSMotionRules.exitDuration(enter: 0.2))
+    /// خطوط الفرع المفتوح: تمتدّ (العائلة) أو تذوب (النساء) بسرعة قبل وصول الأبناء
+    static let treeLineDraw = Animation.easeOut(duration: 0.45).delay(0.08)
+    static let treeLineFade = Animation.easeOut(duration: 0.22).delay(0.06)
+
+    /// تأخير ابن رقم [index] في الفرع المفتوح — بعد `base` (انتظار الخط)، وبسقف `treeNodeCap`
+    static func treeNodeDelay(_ index: Int, base: Double) -> Double {
+        base + Double(min(max(index, 0), treeNodeCap)) * treeNodeStep
+    }
 
     /// تأخير عنصر في التسلسل
     static func staggerDelay(_ index: Int, base: Double) -> Double {
@@ -1833,7 +1856,7 @@ private struct DSCenterBoxItemModifier<Item: Identifiable, Box: View>: ViewModif
 /// لا تعترض اللمس، وتبقى مع «تقليل الحركة» (التلاشي هو البديل الذي توصي به أبل للحركة)
 @MainActor
 enum DSScreenCrossfade {
-    static func run(_ change: () -> Void) {
+    static func run(duration: TimeInterval = DSMotion.screenFade, _ change: () -> Void) {
         guard let window = appWindow, let snapshot = window.snapshotView(afterScreenUpdates: false) else {
             change()
             return
@@ -1842,7 +1865,7 @@ enum DSScreenCrossfade {
         snapshot.isUserInteractionEnabled = false
         window.addSubview(snapshot)
         change()
-        UIView.animate(withDuration: DSMotion.screenFade, delay: 0,
+        UIView.animate(withDuration: duration, delay: 0,
                        options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState]) {
             snapshot.alpha = 0
         } completion: { _ in

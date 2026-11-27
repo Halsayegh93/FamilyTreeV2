@@ -1038,7 +1038,11 @@ struct ArchiveUploadSheet: View {
         .onChange(of: photoItem) { newItem in handlePhotoPick(newItem) }
         .onAppear {
             guard !reduceMotion else { return }   // أيقونات ثابتة مع «تقليل الحركة»
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { floatIcons = true }
+            // طفوة واحدة عند الظهور ثم تستقرّ — لا `repeatForever` (قاعدة المشروع: الحركة المستمرة على الساعة المشتركة فقط)
+            withAnimation(.easeInOut(duration: 0.8)) { floatIcons = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                withAnimation(.easeInOut(duration: 0.8)) { floatIcons = false }
+            }
         }
     }
 
@@ -1219,8 +1223,12 @@ struct ArchiveUploadSheet: View {
                 fileName: pickedFileName,
                 mimeType: pickedMimeType
             )
-            if item != nil {
+            if let item {
                 dismiss()
+                // لحظة نجاح بعد الإغلاق (كانت تُغلق بلا كلمة) — «أُرسل للمراجعة» إن بقي العنصر معلّقاً
+                let published = item.approvalStatus == .approved
+                DSMomentToast.show(published ? L10n.t("تمت الإضافة", "Added") : L10n.t("أُرسل للمراجعة", "Sent for review"),
+                                   moment: published ? .success : .sentForApproval, section: .library)
             } else if let err = archiveVM.errorMessage {
                 errorBanner = err
             }

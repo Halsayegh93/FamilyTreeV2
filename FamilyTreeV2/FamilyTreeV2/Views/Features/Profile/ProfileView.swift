@@ -467,6 +467,8 @@ struct ProfileView: View {
                         )
                 }
             }
+            // الصورة تقفز للظهور مرة (من ٠٫٥٥ بنابض لطيف، بلا دوران) بعد وصول بطاقة الملف — «تقليل الحركة»: تلاشٍ فقط
+            .modifier(DSIconPop(delay: DSMotion.titleDelay, fromAngle: 0))
             .contentShape(Circle())
             .onTapGesture { if !user.isFemale { showAvatarPreview = true } }
             .accessibilityAddTraits(user.isFemale ? [] : .isButton)
@@ -506,6 +508,8 @@ struct ProfileView: View {
                             .animation(reduceMotion ? nil : DS.Anim.smooth, value: totalChildren)
                     }
                 }
+                // الرتبة وعدد العائلة يصعدان بعد الصورة والاسم — «تقليل الحركة»: تلاشٍ فقط
+                .dsEntrance(delay: DSMotion.sectionsAfterHeader, y: DSMotion.footerRise, animation: DSMotion.footer)
             }
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.sm)
@@ -1239,17 +1243,22 @@ struct ProfileView: View {
 
             // ═══ الأبناء ═══
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
-                ForEach(memberVM.currentMemberChildren, id: \.id) { son in
+                // الأبناء ثم البنات يصعدون تباعاً بعد وصول «الأسرة» (مرة مع ظهور الصفحة؛ الخانة المبنية لاحقاً
+                // تظهر مباشرة) — «تقليل الحركة»: تلاشٍ فقط
+                let sons = memberVM.currentMemberChildren
+                ForEach(Array(sons.enumerated()), id: \.element.id) { index, son in
                     Button { editingChild = son } label: { childGridCell(son: son) }
                         .buttonStyle(DSPressStyle())
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel((son.firstName.isEmpty ? L10n.t("ابن بدون اسم", "Unnamed child") : son.firstName)
                                             + ((son.isDeceased ?? false) ? L10n.t("، متوفى", ", deceased") : ""))
                         .accessibilityHint(L10n.t("تعديل", "Edit"))
+                        .dsStaggerWhen(Self.childStaggerFirst + index, active: appeared)
                 }
                 // البنات — قابلة للنقر للتعديل لأي عضو؛ الترتيب انتقل للوضع الموحّد.
-                ForEach(womenKids) { entry in
+                ForEach(Array(womenKids.enumerated()), id: \.element.id) { index, entry in
                     familyMemberButton(entry)
+                        .dsStaggerWhen(Self.childStaggerFirst + sons.count + index, active: appeared)
                 }
                 // إضافة ابن — نفس خانة الإضافة (لمن له أسرة)
                 if hasOwnFamily {
@@ -1259,6 +1268,9 @@ struct ProfileView: View {
             }
         }
     }
+
+    /// أول خانة أبناء تدخل بعد بطاقة «الأسرة» نفسها (`dsCardCascade(4)` ≈ ٠٫٢٤ ث)
+    private static let childStaggerFirst = 4
 
     private func childGridCell(son: FamilyMember) -> some View {
         let info = childIconInfo(for: son)

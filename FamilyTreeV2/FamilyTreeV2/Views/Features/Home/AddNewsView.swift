@@ -367,6 +367,12 @@ struct AddNewsView: View {
             pollOptions: isPoll ? normalizedPollOptions : [],
             asAdminIdentity: postAsAdmin
         )
-        if isPosted { dismiss() } else { showPostErrorAlert = true }
+        if isPosted {
+            dismiss()
+            // لحظة نجاح بعد الإغلاق (كان يُغلق بلا كلمة): «تم النشر» لمن ينشر مباشرة، و«أُرسل للمراجعة» لغيره
+            let published = newsVM.canAutoPublishNews
+            DSMomentToast.show(published ? L10n.t("تم النشر", "Posted") : L10n.t("أُرسل للمراجعة", "Sent for review"),
+                               moment: published ? .success : .sentForApproval, section: .news)
+        } else { showPostErrorAlert = true }
     }
 }

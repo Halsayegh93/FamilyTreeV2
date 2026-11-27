@@ -47,6 +47,9 @@ struct HomeNewsPreviewCard: View {
             }
             .buttonStyle(DSPressStyle())
             content
+                // بعد السحب للتحديث: الصفوف الجديدة تذوب في مكانها بدل القفز (تلاشٍ ٠٫٢ ث — مسموح مع «تقليل الحركة»)
+                .animation(DSMotion.fade, value: previewPosts.map(\.id))
+                .animation(DSMotion.fade, value: latestOccasion?.id)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // البطاقة الواحدة (`.dsCard`) — بحشوة أضيق من قبل (كانت ١٦)

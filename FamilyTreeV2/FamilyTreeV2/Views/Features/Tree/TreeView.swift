@@ -585,6 +585,8 @@ struct TreeView: View {
                                                     .stroke(l.color, style: l.style)
                                             }
                                         }
+                                            // يذوب مع أول الامتداد (طبقة الفرع المفتوح وحده — لا كل الخطوط)
+                                            .opacity(Double(min(1, drawProgress * 4)))
                                             .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                                             .allowsHitTesting(false)
                                             .accessibilityHidden(true)
@@ -647,7 +649,7 @@ struct TreeView: View {
                             if orientationFlipped {
                                 // تدوير: أعد بناء التخطيط (عدد الأعمدة يتغيّر) ثم مركّز
                                 // العقدة المفتوحة الحالية بمنتصف الشاشة تلقائياً (طلب المالك)
-                                withAnimation(DS.Anim.smooth) {
+                                withAnimation(reduceMotion ? nil : DSMotion.camera) {
                                     let L = rebuildLayout()
                                     fitCanvas(in: newSize, layout: L)
                                     if let focus = breadcrumbChain.last ?? primaryRootMember {
@@ -667,9 +669,11 @@ struct TreeView: View {
                                 TreeSearchOverlay(
                                     onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
-                                    onClose: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { showSearch = false } },
+                                    onClose: { withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
                                 )
+                                // لوحة البحث تنزل قليلاً مع تلاشٍ وتختفي أسرع — «تقليل الحركة»: تلاشٍ فقط
+                                .transition(.dsReveal(reduceMotion: reduceMotion))
                             } else if breadcrumbChain.count > 1 {
                                 breadcrumbStrip
                                     .padding(.horizontal, DS.Spacing.sm)
@@ -709,9 +713,11 @@ struct TreeView: View {
                                 TreeSearchOverlay(
                                     onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
-                                    onClose: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { showSearch = false } },
+                                    onClose: { withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
                                 )
+                                // لوحة البحث تنزل قليلاً مع تلاشٍ وتختفي أسرع — «تقليل الحركة»: تلاشٍ فقط
+                                .transition(.dsReveal(reduceMotion: reduceMotion))
                             } else {
                                 VStack(spacing: DS.Spacing.xxs) {
                                     classicToolbarRow
@@ -965,7 +971,7 @@ struct TreeView: View {
     /// اختيار نتيجة من البحث: يُغلق البحث (فيرجع مسار الأسماء و«البداية»/«موقعك») ثم ينتقل للعضو — الكاميرا تُعاد
     /// وحدها حين تصغر بطاقة الأدوات (`refitAfterChromeChange`) فلا يقع الشخص أسفل الشاشة (مراجعة ٢٠٢٦-١١-٢٧ #1)
     private func chooseSearchResult(_ member: FamilyMember) {
-        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { showSearch = false }
+        withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false }
         selectMemberFromSearch(member)
     }
 
@@ -1063,8 +1069,8 @@ struct TreeView: View {
         activePath = [root.id]
         searchedMemberID = nil
         let L = rebuildLayout()
-        if animated {
-            withAnimation(.easeInOut(duration: 0.4)) { fitCanvas(in: viewport, layout: L) }
+        if animated && !reduceMotion {
+            withAnimation(DSMotion.camera) { fitCanvas(in: viewport, layout: L) }
         } else {
             fitCanvas(in: viewport, layout: L)
         }
@@ -1129,7 +1135,7 @@ struct TreeView: View {
     private func searchToolButton(_ size: DSNavButtonSize) -> some View {
         DSHeaderButton(symbol: "magnifyingglass", label: L10n.t("بحث", "Search"), context: .surface,
                        size: size, tint: AppSection.tree.ink) {
-            withAnimation(reduceMotion ? nil : DS.Anim.smooth) { showSearch = true }
+            withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.smooth) { showSearch = true }
         }
     }
 
@@ -1193,8 +1199,13 @@ struct TreeView: View {
                             }
                         }
                         .id(m.id)
+                        // اسم جديد في المسار يكبر قليلاً مع تلاشٍ، والمحذوف يذوب أسرع — «تقليل الحركة»: تلاشٍ فقط
+                        .transition(reduceMotion ? .opacity : .asymmetric(
+                            insertion: AnyTransition.scale(scale: 0.85).combined(with: .opacity),
+                            removal: AnyTransition.opacity.animation(DSMotion.revealOut)))
                     }
                 }
+                .animation(reduceMotion ? DSMotion.fade : DS.Anim.snappy, value: breadcrumbChain.map(\.id))
                 .padding(.horizontal, DS.Spacing.xxs)
                 .padding(.vertical, DS.Border.width)
             }
@@ -1322,7 +1333,7 @@ struct TreeView: View {
         // سقف التكبير على الشاشة كما كان (الزوم بوحدات العقدة ÷ معامل «حجم النص»)
         let ns: CGFloat = zoomedIn ? fittedScale : min(TreeConst.maxScale / layout.m.k, max(fittedScale * 2, 0.95))
         let r = scale > 0 ? ns / scale : 1
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(reduceMotion ? nil : DSMotion.camera) {
             if zoomedIn {
                 scale = ns; baseScale = ns
                 offset = centeredOffset(scale: ns, in: viewport, layout: layout)
@@ -1354,16 +1365,21 @@ struct TreeView: View {
 
     /// دخول أبناء الأب المفتوح للتو: يكبرون من موضعهم تباعاً بعد امتداد الخط إليهم.
     private func nodeEntrance(for m: FamilyMember) -> AnyTransition {
-        guard !reduceMotion, let fid = m.fatherId, fid == drawOnId,
+        // «تقليل الحركة»: الفتح والطيّ بلا حركة أصلاً (toggleNode بلا withAnimation)
+        guard !reduceMotion else { return .opacity }
+        // الطيّ: يذوب أسرع من الدخول (`treeNodeOut`)
+        let removal = AnyTransition.opacity.animation(DSMotion.treeNodeOut)
+        guard let fid = m.fatherId, fid == drawOnId,
               let idx = layout.childRows[fid]?.flatMap({ $0 }).firstIndex(of: m.id),
               let p = layout.positions[m.id], layout.size.width > 0, layout.size.height > 0
-        else { return .opacity }
+        else { return .asymmetric(insertion: .opacity, removal: removal) }
         let anchor = UnitPoint(x: (p.x + layout.m.nodeW / 2) / layout.size.width, y: p.y / layout.size.height)
+        // أول ٨ أبناء بفاصل قصير بعد امتداد الخط، والباقي معاً مع الثامن (`treeNodeCap`)
         return .asymmetric(
             insertion: AnyTransition.scale(scale: 0.5, anchor: anchor)
                 .combined(with: .opacity)
-                .animation(.spring(response: 0.45, dampingFraction: 0.72).delay(0.3 + Double(idx) * 0.07)),
-            removal: .opacity)
+                .animation(DSMotion.treeNodeIn.delay(DSMotion.treeNodeDelay(idx, base: 0.24))),
+            removal: removal)
     }
 
     /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.
@@ -1417,13 +1433,13 @@ struct TreeView: View {
         let drawOn = !wasExpanded && !reduceMotion
         if drawOn { drawOnId = member.id; drawProgress = 0 }
         defer {
-            if drawOn { withAnimation(.easeInOut(duration: 0.7).delay(0.15)) { drawProgress = 1 } }
+            if drawOn { withAnimation(DSMotion.treeLineDraw) { drawProgress = 1 } }
         }
         // بعد كل فتح/طيّ: ملاءمة المجموعة كاملة في الشاشة (طلب المالك ٢٠٢٦-١١-١٠) —
         // الفتح = العقدة وكل أبنائها، والطيّ = أبوها وإخوتها. لا تعمل إلا بعد ضغطة الفتح/الطيّ نفسها.
         let groupId = opening ? member.id : (member.fatherId ?? member.id)
         let apply = { fitGroup(groupId, in: rebuildLayout()) }
-        if reduceMotion { apply() } else { withAnimation(DS.Anim.smooth) { apply() } }
+        if reduceMotion { apply() } else { withAnimation(DSMotion.camera) { apply() } }
     }
 
     private func collectDescendants(of parentId: UUID, into set: inout Set<UUID>) {
@@ -1496,7 +1512,7 @@ struct TreeView: View {
 
     /// حركة الكاميرا بسلاسة — ومباشرة مع «تقليل الحركة»
     private func moveCamera(_ body: @escaping () -> Void) {
-        if reduceMotion { body() } else { withAnimation(DS.Anim.smooth) { body() } }
+        if reduceMotion { body() } else { withAnimation(DSMotion.camera) { body() } }
     }
 
     /// تغيّر ارتفاع بطاقة الأدوات بعد آخر حركة تلقائية والمستخدم لم يحرّك شيئاً: أعد الحركة نفسها —
@@ -2077,6 +2093,9 @@ struct TreeMemberNode: View, Equatable {
                             .frame(width: interactiveNodeSize + 6 * k, height: interactiveNodeSize + 6 * k)
                     }
                 }
+                // ضغطة العقدة: تصغير خفيف لحظة الإصبع على هذه العقدة وحدها (`isPressed` محلي — لا حالة مشتركة)؛
+                // «تقليل الحركة»: خفوت فقط
+                .buttonStyle(DSPressStyle())
                 .overlay {
                     // «أنت هنا» — حلقة واحدة ثابتة دائمة حول عقدتك (كانت ثلاث: ثابتة + نابضة + حلقة البحث).
                     // بعد «موقعك» تنبض قليلاً على الساعة المشتركة (لا `repeatForever`)، وساكنة مع «تقليل الحركة»

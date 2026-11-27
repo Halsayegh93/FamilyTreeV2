@@ -336,7 +336,10 @@ struct NewsCardMedia: View {
     }
 
     private func likeBurst() {
-        if !isLiked { onLike() }
+        if !isLiked {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onLike()
+        }
         withAnimation(reduceMotion ? .easeOut(duration: 0.15) : DS.Anim.bouncy) {
             showHeart = true
         }
@@ -516,7 +519,11 @@ struct NewsLikeButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            // نقرة اهتزاز خفيفة مع الإعجاب فقط (الإلغاء بلا اهتزاز) — في نفس إطار قفزة القلب
+            if !isLiked { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+            action()
+        } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Group {
                     if reduceMotion {
@@ -527,7 +534,7 @@ struct NewsLikeButton: View {
                     } else {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
                             .scaleEffect(isLiked ? 1.15 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
+                            .animation(DSMotion.selectPop, value: isLiked)
                     }
                 }
                 .dsGlyph(DS.Glyph.lg, weight: .medium)

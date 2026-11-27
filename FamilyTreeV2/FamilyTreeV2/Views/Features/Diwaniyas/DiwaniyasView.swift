@@ -218,6 +218,7 @@ struct DiwaniyasView: View {
                     message: L10n.t("اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
                                     "Tap + to add your diwaniya.\nIt appears after admin approval."),
                     section: .diwaniyas)
+            .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر مثل المكتبة والمشاريع (تلاشٍ فقط مع «تقليل الحركة»)
     }
 
     // MARK: - Diwaniya Card
@@ -807,7 +808,12 @@ private struct AddDiwaniyaRequestView: View {
             kind: kind,
             autoApprove: canAutoApprove
         )
-        if success { dismiss() } else { showError = true }
+        if success {
+            dismiss()
+            // لحظة نجاح بعد الإغلاق (كانت تُغلق بلا كلمة): «تمت الإضافة» للإدارة، و«أُرسلت للمراجعة» لغيرهم
+            DSMomentToast.show(canAutoApprove ? L10n.t("تمت الإضافة", "Added") : L10n.t("أُرسلت للمراجعة", "Sent for review"),
+                               moment: canAutoApprove ? .success : .sentForApproval, section: .diwaniyas)
+        } else { showError = true }
     }
 }
 

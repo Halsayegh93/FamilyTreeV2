@@ -287,8 +287,9 @@ struct MemberCardFamilyBox<Content: View, Face: View>: View {
             MemberCardSectionHeader(title: L10n.t("العائلة", "Family"), icon: "person.3.fill",
                                     fill: DS.Color.palmFill)
             if isOpen {
+                // الأب والأبناء ينزلون قليلاً مع تلاشٍ، ويختفون أسرع (`dsReveal`) — «تقليل الحركة»: تلاشٍ فقط
                 content()
-                    .transition(.opacity)
+                    .transition(.dsReveal(reduceMotion: reduceMotion))
                 toggle
             } else {
                 HStack(alignment: .center, spacing: DS.Spacing.md) {
@@ -328,7 +329,7 @@ struct MemberCardFamilyBox<Content: View, Face: View>: View {
 
     private var toggle: some View {
         Button {
-            withAnimation(reduceMotion ? nil : DSMotion.expand) { isOpen.toggle() }
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.expand) { isOpen.toggle() }
         } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Text(isOpen ? L10n.t("إخفاء", "Hide") : L10n.t("عرض", "Show"))

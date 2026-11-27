@@ -962,6 +962,9 @@ struct HomeNewsView: View {
         // هامش الصفحة الموحّد (كان ١٢ — بقية الصفحات ١٦)
         .dsPageMargin()
         .padding(.top, DS.Spacing.sm)
+        // بعد السحب للتحديث أو «تحميل أخبار أقدم»: البطاقات الجديدة تذوب في مكانها وما تحتها ينزاح بهدوء
+        // (تلاشٍ ٠٫٢ ث — مسموح مع «تقليل الحركة»؛ دخول الصفحة نفسه يبقى `dsCardCascade`)
+        .animation(DSMotion.fade, value: filteredNews.map(\.id))
     }
 
 

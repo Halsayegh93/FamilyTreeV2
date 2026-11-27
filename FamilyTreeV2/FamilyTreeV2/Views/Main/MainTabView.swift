@@ -38,7 +38,8 @@ struct MainTabView: View {
                 if newValue == selectedTab {
                     selectedTab = newValue
                 } else {
-                    DSScreenCrossfade.run { selectedTab = newValue }
+                    // ضغطة الشريط: ذوبان أقصر (`DSMotion.tabFade`) — تنقّل متكرّر يبقى سريعاً
+                    DSScreenCrossfade.run(duration: DSMotion.tabFade) { selectedTab = newValue }
                 }
                 // جلسات الاستخدام: التبويب الجديد قبل ظهور صفحاته (`AppUsageTracker`)
                 AppUsageTracker.shared.setTab(newValue)

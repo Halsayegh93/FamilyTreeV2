@@ -2,6 +2,8 @@ import SwiftUI
 
 /// خطوط أب واحد مع أبنائه (كل المجموعات والصفوف) — تُبنى مرة مع التخطيط لا كل إطار.
 private struct WomenConnector {
+    /// الأب — لتذويب خطوط الفرع المفتوح للتو في طبقتها
+    var pid: UUID? = nil
     var path = Path()
     var dots: [CGPoint] = []   // نقاط تفرّع الأبناء عن الخط الأفقي
 }
@@ -146,6 +148,11 @@ struct WomenClassicTreeView: View {
     @State private var cOutsideHusband: [UUID: FamilyMember] = [:]
     /// آخر عقدة توسّعت — أبناؤها يدخلون بتدرّج
     @State private var lastExpandedId: UUID? = nil
+    /// خطوط الفرع المفتوح للتو تذوب في طبقة صغيرة وحدها (0 → 1) — بقية الخطوط كما هي
+    @State private var lineFadeId: UUID? = nil
+    @State private var lineFade: Double = 1
+    /// العقدة المضغوطة للتو — تصغر لحظة ثم ترجع (العقد الأخرى لا تتغيّر)
+    @State private var tapPopId: UUID? = nil
     /// المعاينة: المسار والأب وإخوة الشخص (غير باهتين)
     @State private var previewLit: Set<UUID> = []
 
@@ -501,6 +508,7 @@ struct WomenClassicTreeView: View {
             }.filter { !$0.isEmpty }
             guard !groups.isEmpty else { continue }
             var c = WomenConnector()
+            c.pid = pid
             func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: x, y: y) }
             func drop(_ k: Kid, _ y: CGFloat) {
                 c.path.move(to: p(k.x, y)); c.path.addLine(to: p(k.x, k.top)); c.dots.append(p(k.x, y))
@@ -599,8 +607,9 @@ struct WomenClassicTreeView: View {
                             let k = layout.m.k
                             let lineLayers = TreeArtLines.layers(width: 1.5, dark: artScheme == .dark, scale: k)
                             let lineDark = artScheme == .dark
+                            let fadeId = lineFadeId
                             Canvas { ctx, _ in
-                                for c in layout.connectors {
+                                for c in layout.connectors where fadeId == nil || c.pid != fadeId {
                                     TreeArtLines.stroke(&ctx, c.path, lineLayers)
                                     for d in c.dots {
                                         TreeArtLines.dot(&ctx, at: d, r: 2 * k, dark: lineDark)
@@ -610,6 +619,17 @@ struct WomenClassicTreeView: View {
                             .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
+                            // خطوط الفرع المفتوح للتو: تذوب بسرعة قبل وصول الأبناء (طبقة أب واحد فقط)
+                            if let fadeId, let g = layout.connectors.first(where: { $0.pid == fadeId }) {
+                                Canvas { ctx, _ in
+                                    TreeArtLines.stroke(&ctx, g.path, lineLayers)
+                                    for d in g.dots { TreeArtLines.dot(&ctx, at: d, r: 2 * k, dark: lineDark) }
+                                }
+                                .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
+                                .opacity(lineFade)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                            }
                             if let preview { previewMark(preview, .back) }
                             // العُقد
                             ForEach(members.filter { layout.positions[$0.id] != nil }, id: \.id) { m in
@@ -684,7 +704,7 @@ struct WomenClassicTreeView: View {
                     viewport = newSize
                     if orientationFlipped {
                         // تدوير: أعد البناء ثم مركّز العقدة الحالية بالمنتصف تلقائياً (المعاينة: مجموعتها بالمنتصف)
-                        withAnimation(reduceMotion ? nil : DS.Anim.smooth) {
+                        withAnimation(reduceMotion ? nil : DSMotion.camera) {
                             let L = rebuild()
                             if let preview { previewCamera(preview, in: L) } else { fit(in: newSize, layout: L) }
                         }
@@ -976,7 +996,7 @@ struct WomenClassicTreeView: View {
 
     /// حركة الكاميرا بسلاسة — ومباشرة مع «تقليل الحركة»
     private func moveCamera(_ body: @escaping () -> Void) {
-        if reduceMotion { body() } else { withAnimation(DS.Anim.smooth) { body() } }
+        if reduceMotion { body() } else { withAnimation(DSMotion.camera) { body() } }
     }
 
     /// المساحة الظاهرة: تحت بطاقة الأدوات العائمة (≈٧٩ قبل أن تُقاس)، فوق الشريط السفلي، والجانب = عمود الأزرار
@@ -1038,7 +1058,7 @@ struct WomenClassicTreeView: View {
         // أفقي: بلا بار علوي — هامش أصغر يعطي مساحة أكبر للأبناء
         let topMargin: CGFloat = viewport.width > viewport.height ? 16 : 70
         let cx = (p.x + L.m.nodeW / 2) * s
-        withAnimation(reduceMotion ? nil : DS.Anim.smooth) {
+        withAnimation(reduceMotion ? nil : DSMotion.camera) {
             offset = clampOffset(CGSize(width: viewport.width / 2 - cx,
                                         height: topMargin - p.y * s))
             baseOffset = offset
@@ -1251,6 +1271,8 @@ struct WomenClassicTreeView: View {
                     }
             }
             .frame(width: CIRCLE, height: CIRCLE)
+            // ضغطة العقدة: تصغر لحظة ثم ترجع (العقدة المضغوطة وحدها)
+            .scaleEffect(tapPopId == m.id ? DSMotion.nodePressScale : 1)
             // القارئ الصوتي: جملة واحدة للعقدة — الاسم، الصلة، «متوفاة»، وما يحدث بالضغط (مراجعة ٢٠٢٦-١١-٢٧ #12).
             // قبل مربّعات الزوجات والزوج فتبقى عناصر مستقلة؛ وكبسولة الاسم تحتها مخفية عنه (إجراء «التفاصيل» هنا)
             .accessibilityElement(children: .ignore)
@@ -1348,8 +1370,8 @@ struct WomenClassicTreeView: View {
             insertion: AnyTransition.scale(scale: 0.55, anchor: .top)
                 .combined(with: .offset(y: -10))
                 .combined(with: .opacity)
-                .animation(DS.Anim.snappy.delay(staggerDelay(m))),
-            removal: AnyTransition.opacity.animation(.easeOut(duration: 0.12))
+                .animation(DSMotion.treeNodeIn.delay(staggerDelay(m))),
+            removal: AnyTransition.opacity.animation(DSMotion.treeNodeOut)
         ))
     }
 
@@ -1552,7 +1574,8 @@ struct WomenClassicTreeView: View {
         guard let pid = lastExpandedId, m.fatherId == pid,
               let sibs = cChildrenOf[pid],
               let idx = sibs.firstIndex(where: { $0.id == m.id }) else { return 0 }
-        return min(0.35, Double(idx) * 0.05)
+        // أول ٨ بفاصل قصير، والباقي معاً مع الثامن (`DSMotion.treeNodeCap`)
+        return DSMotion.treeNodeDelay(idx, base: 0)
     }
 
     /// سنوات المتوفّى «ميلاد - وفاة» مع لاحقة «م»، والمجهولة «٠٠٠٠م» — يطابق شجرة العائلة.
@@ -1572,15 +1595,30 @@ struct WomenClassicTreeView: View {
     /// ضغط الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك). نفسه للقارئ الصوتي
     private func tapNode(_ m: FamilyMember, hasKids: Bool) {
         if !hasKids { onSelect?(m); return }
+        popNode(m.id)
         if collapsed.contains(m.id) {
             pendingExpandScroll = m.id    // توسّع → انزل للأبناء
             lastExpandedId = m.id         // أبناؤه يدخلون بتدرّج
+            if !reduceMotion {
+                // خطوطه تذوب في طبقتها ثم يبقى مرسوماً كغيره
+                lineFadeId = m.id; lineFade = 0
+                DispatchQueue.main.async { withAnimation(DSMotion.treeLineFade) { lineFade = 1 } }
+            }
         } else {
             lastExpandedId = nil
             pendingCollapseScroll = treeParentId(m.id) ?? m.id   // طي → اطلع لأب العقدة
         }
         // «تقليل الحركة»: الفتح والطيّ مباشرة (مراجعة ٢٠٢٦-١١-٢٧ #8)
         if reduceMotion { toggle(m.id) } else { withAnimation(DS.Anim.snappy) { toggle(m.id) } }
+    }
+
+    /// قفزة الضغط على العقدة نفسها: تصغر بتباطؤ سريع ثم ترجع بنابض — «تقليل الحركة»: لا شيء
+    private func popNode(_ id: UUID) {
+        guard !reduceMotion else { return }
+        withAnimation(DSMotion.tap) { tapPopId = id }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.nodePressHold) {
+            withAnimation(DSMotion.press) { if tapPopId == id { tapPopId = nil } }
+        }
     }
 
     private func toggle(_ id: UUID) {
@@ -1633,7 +1671,7 @@ struct WomenClassicTreeView: View {
         initedRoot = nil
         initIfNeeded()
         let L = rebuild()
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) {
+        withAnimation(reduceMotion ? nil : DSMotion.camera) {
             fit(in: viewport, layout: L)
         }
     }

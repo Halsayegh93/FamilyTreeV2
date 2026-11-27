@@ -181,8 +181,13 @@ struct NotificationMetaLine: View {
                     .fixedSize()
             }
             Spacer(minLength: DS.Spacing.xs)
-            if unread { DSGoldDot(size: DSNoticeMetrics.unreadDot) }
+            if unread {
+                DSGoldDot(size: DSNoticeMetrics.unreadDot)
+                    // «تمت القراءة»: النقطة تذوب بدل الاختفاء المفاجئ
+                    .transition(.opacity)
+            }
         }
+        .animation(DSMotion.fade, value: unread)
     }
 }
 
