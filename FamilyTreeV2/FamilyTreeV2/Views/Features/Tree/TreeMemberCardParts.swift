@@ -165,8 +165,6 @@ struct TreeCardKinshipButton: View {
 struct TreeCardMyRequests: View {
     let requests: [AdminRequest]
     let female: Bool
-    /// على بطاقتك «طلبك» (م٤)
-    var isSelf = false
     let open: (AdminRequest) -> Void
 
     var body: some View {
@@ -183,7 +181,7 @@ struct TreeCardMyRequests: View {
         HStack(spacing: DS.Spacing.md) {
             AdminIconSquare(symbol: "tray", tint: DS.Color.accent, filled: true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(TreeMemberCardLogic.myRequestTitle(female: female, isSelf: isSelf))
+                Text(TreeMemberCardLogic.myRequestTitle(female: female))
                     .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
                 Text(verbatim: TreeCardRequestText.kind(request) + " · " + L10n.t("بانتظار الإدارة", "Waiting for the admins"))
@@ -420,8 +418,6 @@ struct TreeCardTilesPage: View {
     let back: String
     let title: String
     let subtitle: String
-    /// المرأة: «اسمي وميلادي» بلا «صورتي» (م٣)
-    var female = false
     let note: String?
     let tiles: [TreeCardTile]
     let pending: Set<TreeMemberCardLogic.TileKind>
@@ -440,7 +436,7 @@ struct TreeCardTilesPage: View {
                         ForEach(Array(tiles.enumerated()), id: \.element.kind) { i, tile in
                             let waiting = pending.contains(tile.kind)
                             Button { pick(tile) } label: {
-                                AdminHubTile(icon: tile.kind.icon, fill: Self.fill(tile.kind), title: tile.kind.title(female: female),
+                                AdminHubTile(icon: tile.kind.icon, fill: Self.fill(tile.kind), title: tile.kind.title,
                                              caption: waiting ? TreeMemberCardLogic.pendingTileText : tile.honesty.text,
                                              captionTint: Self.captionTint(tile.honesty, waiting: waiting),
                                              reservesCaption: true, index: i,
@@ -483,7 +479,6 @@ struct TreeCardTilesPage: View {
 struct TreeCardRequestPage: View {
     let back: String
     let female: Bool
-    var isSelf = false
     let memberName: String
     let request: AdminRequest?
     let isWithdrawing: Bool
@@ -492,8 +487,8 @@ struct TreeCardRequestPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TreeCardPageHeader(back: back, title: TreeMemberCardLogic.myRequestTitle(female: female, isSelf: isSelf),
-                               subtitle: TreeMemberCardLogic.requestSubtitle(name: memberName, isSelf: isSelf), onBack: onBack)
+            TreeCardPageHeader(back: back, title: TreeMemberCardLogic.myRequestTitle(female: female),
+                               subtitle: L10n.t("عن ", "About ") + memberName, onBack: onBack)
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Hub.cardGap) {
                     if let request {

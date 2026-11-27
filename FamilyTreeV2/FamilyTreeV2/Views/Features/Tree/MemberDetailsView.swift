@@ -70,8 +70,6 @@ struct MemberDetailsView: View {
     @State private var kinship: TreeMemberCardLogic.Kinship = .none
     @State private var kinshipPathIds: [UUID] = []
     @State private var kinshipText = ""
-    /// جواب `profile_has_login` لابنك (nil = لم يصل) — ابنك المسجّل لا يُعدَّل من «عائلتي» (نقد البناء م٢)
-    @State private var childLoginAnswer: Bool? = nil
 
     @ObservedObject private var lineage = LineageGateStore.shared
 
@@ -82,26 +80,8 @@ struct MemberDetailsView: View {
     private var lineageLocked: Bool { !isViewingSelf && lineage.isLocked(.memberDetails) }
     private var isDeceased: Bool { member.isDeceased == true }
 
-    /// ابنك أنت (أبوه = المشاهد)، قبل النظر إلى حسابه
-    private var isOwnChild: Bool {
-        guard let me = viewer?.id else { return false }
-        return !isViewingSelf && member.fatherId == me
-    }
-
-    private var childHasLogin: Bool {
-        isOwnChild && TreeMemberCardLogic.childHasLogin(looksRegistered: member.looksRegistered, serverAnswer: childLoginAnswer)
-    }
-
     private var person: TreeMemberCardLogic.Person {
-        TreeMemberCardLogic.person(isSelf: isViewingSelf, viewerId: viewer?.id, fatherId: member.fatherId,
-                                   childHasLogin: childHasLogin)
-    }
-
-    /// «حذف من الشجرة» بقاعدة `showsDeleteRequest` القديمة (م١): لا لمسجّل ولا للإدارة ولا لمنتظر
-    private var canRequestRemoval: Bool {
-        TreeMemberCardLogic.canRequestRemoval(hasLogin: member.looksRegistered || childHasLogin,
-                                              isStaff: TreeMemberCardLogic.staffRoles.contains(member.role.rawValue),
-                                              isPending: member.role == .pending)
+        TreeMemberCardLogic.person(isSelf: isViewingSelf, viewerId: viewer?.id, fatherId: member.fatherId)
     }
 
     private var bottomButton: TreeMemberCardLogic.BottomButton {
@@ -109,9 +89,10 @@ struct MemberDetailsView: View {
                                          isDeleted: member.isDeleted)
     }
 
-    /// الرقم الظاهر لك وحدك (قواعد الرقم المخفي) — للمتوفى أيضاً كما كانت البطاقة القديمة (صفّ الرقم والعلم)
+    /// الرقم الظاهر لك وحدك (قواعد الرقم المخفي) — والمتوفى بلا اتصال
     private var visiblePhone: String? {
-        member.dsVisiblePhone(viewerId: viewer?.id, viewerCanModerate: authVM.canModerate)
+        guard !isDeceased else { return nil }
+        return member.dsVisiblePhone(viewerId: viewer?.id, viewerCanModerate: authVM.canModerate)
     }
 
     private var myRequests: [AdminRequest] {
@@ -126,8 +107,7 @@ struct MemberDetailsView: View {
     private var myActions: [String] { myRequests.compactMap { $0.treeEditPayload?.resolvedAction?.rawValue } }
 
     private var tiles: [TreeCardTile] {
-        TreeMemberCardLogic.tiles(person: person, isFemale: member.isFemale, isDeceased: isDeceased,
-                                  canRemove: canRequestRemoval)
+        TreeMemberCardLogic.tiles(person: person, isFemale: member.isFemale, isDeceased: isDeceased)
     }
 
     private var pendingKinds: Set<TreeMemberCardLogic.TileKind> {
@@ -185,12 +165,6 @@ struct MemberDetailsView: View {
         .onChange(of: adminRequestVM.treeEditRequests.count) { _ in recomputeCache() }
         .task(id: member.isDeceased) { await refreshDeathAnnounced() }
         .task { await adminRequestVM.fetchMyPendingRequests() }
-        .task(id: member.id) {
-            // ابنك: هل له حساب دخول؟ (`profile_has_login` — نداء موجود، قراءة فقط)
-            childLoginAnswer = nil
-            guard isOwnChild, !member.looksRegistered else { return }
-            childLoginAnswer = await memberVM.profileHasLogin(member.id)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .deathAnnouncementPublished)) { note in
             if (note.object as? UUID) == member.id { deathAnnounced = true }
         }
@@ -198,7 +172,6 @@ struct MemberDetailsView: View {
             if let id = note.object as? UUID, id == member.id { dismiss() }
         }
         .modifier(TreeCardPresentations(view: self))
-        .debugStackProbe("TreeMemberCard")
     }
 
     // MARK: البطاقة
@@ -241,9 +214,8 @@ struct MemberDetailsView: View {
         case .mine, .locked: actions.append(.tree)
         default: break
         }
-        // أزرار الاتصال السريعة للحيّ؛ رقم المتوفى في مجموعة «التواصل» كما كان
-        if !isDeceased, KuwaitPhone.telURL(visiblePhone) != nil { actions.append(.call) }
-        if !isDeceased, KuwaitPhone.whatsappURL(visiblePhone) != nil { actions.append(.whatsapp) }
+        if KuwaitPhone.telURL(visiblePhone) != nil { actions.append(.call) }
+        if KuwaitPhone.whatsappURL(visiblePhone) != nil { actions.append(.whatsapp) }
         return TreeCardHeader(
             member: member,
             facts: TreeMemberCardLogic.factsLine(age: age, deceased: isDeceased, female: member.isFemale,
@@ -255,7 +227,7 @@ struct MemberDetailsView: View {
     private var cardBody: some View {
         VStack(spacing: DS.Hub.cardGap) {
             if !myRequests.isEmpty {
-                TreeCardMyRequests(requests: myRequests, female: member.isFemale, isSelf: isViewingSelf) { path.append(.request($0.id)) }
+                TreeCardMyRequests(requests: myRequests, female: member.isFemale) { path.append(.request($0.id)) }
             }
             if TreeMemberCardLogic.showsAllRequests(canModerateTree: authVM.canModerateTree), !cachedAllRequests.isEmpty {
                 MemberPendingRequestsCard(requests: cachedAllRequests,
@@ -319,22 +291,16 @@ struct MemberDetailsView: View {
                 back: isViewingSelf ? L10n.t("بطاقتك", "Your card") : firstName,
                 title: bottomButton == .editMine ? TreeMemberCardLogic.BottomButton.editMine.title
                                                  : TreeMemberCardLogic.BottomButton.requestEdit.title,
-                subtitle: TreeMemberCardLogic.requestSubtitle(name: member.displayFullName, isSelf: isViewingSelf),
-                female: member.isFemale,
+                subtitle: isViewingSelf ? member.displayFullName : L10n.t("عن ", "About ") + member.displayFullName,
                 note: person == .myChild ? L10n.t("\(firstName) ابنك — بياناته تُحفظ فوراً من «عائلتي».",
                                                   "\(firstName) is your son — his details save right away from «My family».")
-                                         : (isOwnChild && childHasLogin
-                                            ? L10n.t("\(firstName) ابنك وله حساب — يعدّل بياناته بنفسه، أو اطلب من الإدارة.",
-                                                     "\(firstName) is your son with an account — he edits his own details, or ask the admins.")
-                                            : nil),
+                                         : nil,
                 tiles: tiles, pending: pendingKinds,
                 onBack: { if !path.isEmpty { path.removeLast() } },
-                pick: pick)
-                .debugStackProbe("TreeCardTilesPage"))
+                pick: pick))
         case .request(let id):
             AnyView(TreeCardRequestPage(
-                back: isViewingSelf ? L10n.t("بطاقتك", "Your card") : firstName, female: member.isFemale,
-                isSelf: isViewingSelf, memberName: member.displayFullName,
+                back: firstName, female: member.isFemale, memberName: member.displayFullName,
                 request: adminRequestVM.myPendingRequests.first { $0.id == id },
                 isWithdrawing: withdrawing,
                 onBack: { if !path.isEmpty { path.removeLast() } },
@@ -381,10 +347,8 @@ struct MemberDetailsView: View {
             .filter { $0.fatherId == m.id && $0.isCountable }
             .sorted { $0.sortOrder < $1.sortOrder }
         // طلبات شجرة النساء عن عقدة أخرى (بنته مثلاً) تظهر في بطاقتها هي
-        // بلا طلباتك — تظهر فوقها في «طلبك عنه» (ت٢)
-        let me = viewer?.id
         cachedAllRequests = adminRequestVM.treeEditRequests.filter { r in
-            guard r.memberId == m.id, me == nil || r.requesterId != me else { return false }
+            guard r.memberId == m.id else { return false }
             let node = r.treeEditPayload?.womenNodeId
             return node == nil || node == m.id
         }
@@ -407,8 +371,7 @@ struct MemberDetailsView: View {
         kinship = TreeMemberCardLogic.kinship(isSelf: false, viewerHasNode: true, isDeleted: false,
                                               relationship: result.relationship, isBlood: result.kind == .blood,
                                               distA: max(0, result.pathA.count - 1), distB: max(0, result.pathB.count - 1),
-                                              ancestorName: result.commonAncestor?.firstName, female: m.isFemale,
-                                              ancestorIsRoot: result.commonAncestor.map { $0.fatherId == nil } ?? false)
+                                              ancestorName: result.commonAncestor?.firstName)
     }
 
     /// طريق القرابة في الشجرة (T5): تاب الشجرة ← شجرة العائلة ← المسار — يعمل من الرئيسية والإشعارات أيضاً

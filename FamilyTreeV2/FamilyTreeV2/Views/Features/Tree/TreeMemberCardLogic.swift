@@ -41,27 +41,10 @@ enum TreeMemberCardLogic {
 
     enum Person: Equatable { case me, myChild, other }
 
-    /// `childHasLogin`: ابنك وله حساب دخول — حارس الأبناء (`trg_profiles_descendant_guard`) يمنع تعديل سجلّه من «عائلتي»،
-    /// فيُعامَل كغيرك: مربّعات طلب بعد موافقة الإدارة (نقد البناء م٢)
-    static func person(isSelf: Bool, viewerId: UUID?, fatherId: UUID?, childHasLogin: Bool = false) -> Person {
+    static func person(isSelf: Bool, viewerId: UUID?, fatherId: UUID?) -> Person {
         if isSelf { return .me }
-        if let viewerId, fatherId == viewerId { return childHasLogin ? .other : .myChild }
+        if let viewerId, fatherId == viewerId { return .myChild }
         return .other
-    }
-
-    /// له حساب دخول؟ إشارة البطاقة (`looksRegistered`) أو جواب `profile_has_login`. ما دام الجواب لم يصل (nil) نعدّه مسجّلاً:
-    /// طريق الطلب آمن دائماً، و«يُحفظ فوراً» قد يكذب
-    static func childHasLogin(looksRegistered: Bool, serverAnswer: Bool?) -> Bool {
-        looksRegistered || serverAnswer != false
-    }
-
-    /// الأدوار التي لا يُطلب إخفاؤها من الشجرة (قاعدة `showsDeleteRequest` القديمة)
-    static let staffRoles = ["owner", "admin", "monitor", "supervisor"]
-
-    /// «حذف من الشجرة» (نقد البناء م١): `decide` يُخفي بلا فحص، فلا يُعرض عن مسجّل ولا عن الإدارة ولا عن منتظر —
-    /// قاعدة `showsDeleteRequest` القديمة نفسها (من جهة الشخص)
-    static func canRequestRemoval(hasLogin: Bool, isStaff: Bool, isPending: Bool) -> Bool {
-        !hasLogin && !isStaff && !isPending
     }
 
     // MARK: مربّعات «طلب تعديل»
@@ -89,14 +72,9 @@ enum TreeMemberCardLogic {
         // غيرك (وابنك)
         case name, birth, death, deathDate, photo, addSon, remove
 
-        var title: String { title(female: false) }
-
-        /// المرأة بلا صورة (قاعدة المالك) — فلا «صورتي» في مربّعها (نقد البناء م٣)
-        func title(female: Bool) -> String {
+        var title: String {
             switch self {
-            case .myData:
-                return female ? L10n.t("اسمي وميلادي", "My name & birth")
-                              : L10n.t("اسمي وميلادي وصورتي", "My name, birth & photo")
+            case .myData: return L10n.t("اسمي وميلادي وصورتي", "My name, birth & photo")
             case .myPhone: return L10n.t("رقمي", "My number")
             case .addMyChild: return L10n.t("إضافة ابن", "Add a son")
             case .childData: return L10n.t("بياناته في «عائلتي»", "His details in «My family»")
@@ -145,8 +123,7 @@ enum TreeMemberCardLogic {
         let honesty: Honesty
     }
 
-    /// `canRemove`: `canRequestRemoval` — بلا «حذف من الشجرة» لمسجّل أو من الإدارة (م١)
-    static func tiles(person: Person, isFemale: Bool, isDeceased: Bool, canRemove: Bool = true) -> [Tile] {
+    static func tiles(person: Person, isFemale: Bool, isDeceased: Bool) -> [Tile] {
         let deathKind: TileKind = isDeceased ? .deathDate : .death
         switch person {
         case .me:
@@ -155,15 +132,12 @@ enum TreeMemberCardLogic {
             if !isFemale { out.append(Tile(kind: .addMyChild, honesty: .afterApproval)) }
             return out
         case .myChild:
-            var out = [Tile(kind: .childData, honesty: .savedNow), Tile(kind: deathKind, honesty: .afterApproval)]
-            // ابنك أنثى (سجلّ قديم): أبناؤها في شجرة النساء (ت٨)
-            if !isFemale { out.append(Tile(kind: .addSon, honesty: .afterApproval)) }
-            if canRemove { out.append(Tile(kind: .remove, honesty: .afterApproval)) }
-            return out
+            return [Tile(kind: .childData, honesty: .savedNow), Tile(kind: deathKind, honesty: .afterApproval),
+                    Tile(kind: .addSon, honesty: .afterApproval), Tile(kind: .remove, honesty: .afterApproval)]
         case .other:
             var kinds: [TileKind] = [.name, .birth, deathKind]
             // المرأة: لا صورة (قاعدة المالك)، وأبناؤها وإخفاؤها في شجرة النساء بقواعدها
-            if !isFemale { kinds += [.photo, .addSon] + (canRemove ? [.remove] : []) }
+            if !isFemale { kinds += [.photo, .addSon, .remove] }
             return kinds.map { Tile(kind: $0, honesty: .afterApproval) }
         }
     }
@@ -187,19 +161,14 @@ enum TreeMemberCardLogic {
     static var mineText: String { L10n.t("هذه بطاقتك كما يراها أقاربك", "This is your card as your relatives see it") }
 
     /// `distA`/`distB` خطوات كلٍّ منكما إلى الجد المشترك (حدّ «البعيدة» نفسه في `KinshipCalculator`)
-    /// `female`: «تلتقي معك» للمرأة؛ `ancestorIsRoot`: الجد رأس الشجرة → «في جدّ العائلة» (نقد البناء ت١)
     static func kinship(isSelf: Bool, viewerHasNode: Bool, isDeleted: Bool, relationship: String, isBlood: Bool,
-                        distA: Int, distB: Int, ancestorName: String?, female: Bool = false,
-                        ancestorIsRoot: Bool = false) -> Kinship {
+                        distA: Int, distB: Int, ancestorName: String?) -> Kinship {
         if isDeleted { return .none }
         if isSelf { return .mine }
         guard viewerHasNode else { return .locked }
         let distant = isBlood && (distA > 4 || distB > 3)
         let name = ancestorName?.trimmingCharacters(in: .whitespaces) ?? ""
-        let meets = female ? L10n.t("تلتقي معك في ", "She meets you at ") : L10n.t("يلتقي معك في ", "He meets you at ")
-        let place = ancestorIsRoot ? L10n.t("جدّ العائلة", "the family's grandfather")
-                                   : L10n.t("جدّكما \(name)", "your grandfather \(name)")
-        let line = distant && (ancestorIsRoot || !name.isEmpty) ? meets + place : nil
+        let line = distant && !name.isEmpty ? L10n.t("يلتقي معك في جدّكما \(name)", "You meet at your grandfather \(name)") : nil
         return .button(title: relationship, line: line)
     }
 
@@ -301,25 +270,9 @@ enum TreeMemberCardLogic {
     /// كل الطلبات عنه لمن يقرّر طلبات الشجرة فقط — لا المشرف ولا العضو
     static func showsAllRequests(canModerateTree: Bool) -> Bool { canModerateTree }
 
-    /// على بطاقتك أنت «طلبك» (نقد البناء م٤)
-    static func myRequestTitle(female: Bool, isSelf: Bool = false) -> String {
-        if isSelf { return L10n.t("طلبك", "Your request") }
-        return female ? L10n.t("طلبك عنها", "Your request about her") : L10n.t("طلبك عنه", "Your request about him")
+    static func myRequestTitle(female: Bool) -> String {
+        female ? L10n.t("طلبك عنها", "Your request about her") : L10n.t("طلبك عنه", "Your request about him")
     }
-
-    /// السطر تحت عنوان صفحة الطلب: اسمك بلا «عن» على بطاقتك
-    static func requestSubtitle(name: String, isSelf: Bool) -> String {
-        isSelf ? name : L10n.t("عن ", "About ") + name
-    }
-
-    /// قائمة كل الطلبات عنه (لمن يقرّر) بلا طلباتك — تظهر فوقها في «طلبك عنه» (ت٢)
-    static func othersRequests(_ requests: [RequestRef], viewer: UUID?) -> [RequestRef] {
-        guard let viewer else { return requests }
-        return requests.filter { $0.requesterId != viewer }
-    }
-
-    /// صفّ الرقم: الرقم الظاهر لك (قواعد الإخفاء) يظهر — للمتوفى أيضاً كما كانت البطاقة القديمة
-    static func showsPhoneRow(visible: String?, deceased: Bool) -> Bool { visible != nil }
 
     /// لا صور للإناث في التطبيق (قاعدة المالك ٢٠٢٦-١١-٢٤)
     static func showsPhoto(isFemale: Bool) -> Bool { !isFemale }
