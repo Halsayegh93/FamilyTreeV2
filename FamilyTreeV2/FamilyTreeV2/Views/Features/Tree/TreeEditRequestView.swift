@@ -15,6 +15,9 @@ struct TreeEditRequestView: View {
 
     let member: FamilyMember
     let action: TreeEditAction
+    /// المستهدف عقدة في شجرة النساء بلا ملف (صورة زوج البنت من خارج العائلة بلا حساب، 20261127260000):
+    /// الطلب باسم مقدّمه (`member_id`) والمستهدف في `targetMemberId`
+    var targetIsWomenNode: Bool = false
 
     /// مع `.add`: ابن أو أكثر، لكل ابن «متوفّى» — طلب لكل ابن (طلب المالك ٢٠٢٦-١٠-٢٥)
     @State private var sons: [DSAddEntry] = [DSAddEntry()]
@@ -419,7 +422,8 @@ struct TreeEditRequestView: View {
                     newPhotoUrl: url,
                     notes: cleanNotes.isEmpty ? nil : cleanNotes
                 )
-                let sent = await adminRequestVM.submitTreeEditRequest(payload: photoPayload)
+                let sent = await adminRequestVM.submitTreeEditRequest(payload: photoPayload,
+                                                                      aboutRequester: targetIsWomenNode)
                 if sent {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     showSuccessAlert = true

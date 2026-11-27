@@ -451,7 +451,9 @@ class AdminRequestViewModel: ObservableObject {
         await submitTreeEditRequest(payload: payload, source: source)
     }
 
-    func submitTreeEditRequest(payload: TreeEditPayload, source: RequestSource? = nil) async -> Bool {
+    /// - aboutRequester: `member_id` = مقدّم الطلب والمستهدف في `targetMemberId` وحده — لعقدة في شجرة النساء بلا ملف
+    ///   (صورة زوج البنت من خارج العائلة بلا حساب؛ الحارس يقبلها لزوجته أو ابنه فقط، 20261127260000)
+    func submitTreeEditRequest(payload: TreeEditPayload, source: RequestSource? = nil, aboutRequester: Bool = false) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else { return false }
         self.isLoading = true
@@ -464,7 +466,7 @@ class AdminRequestViewModel: ObservableObject {
 
             // member_id: دايماً يكون العضو المعني — للإضافة = الطالب نفسه (لأن الابن مو موجود بعد)
             let targetId: String
-            if let tid = payload.targetMemberId, !tid.isEmpty {
+            if !aboutRequester, let tid = payload.targetMemberId, !tid.isEmpty {
                 targetId = tid
             } else {
                 targetId = user.id.uuidString

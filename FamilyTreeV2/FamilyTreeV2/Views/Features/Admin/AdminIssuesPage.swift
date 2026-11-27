@@ -1,4 +1,5 @@
 import Combine
+import Supabase
 import SwiftUI
 
 // MARK: - «المكرر والأخطاء» (طلب المالك ٢٠٢٦-١١-٢٧ «ابيك في قسم العائلة توريني قسم المكرر او الاخطاء»)
@@ -7,45 +8,106 @@ import SwiftUI
 //  ١) «أسماء مكررة» — نفس الأب ونفس الاسم الأول بعد التطبيع (`AdminDuplicateNames`)، شجرة الرجال للجميع وشجرة النساء للمالك
 //     والمدير (من يرى النساء في «العائلة»). المجموعة صفّ: الاسم · «أبناء فلان»/«بنات فلان» (شجرة النساء) · كل شخص باسمه الكامل (سطران) وسطر فرق (عدد الأبناء ·
 //     الزوج للمرأة · «أُضيف في …») ثم (سنة الميلاد · «له حساب» ·
-//     «متوفى») يفتح ورقة العضو (`AdminMemberSheet`) أو مربّع المرأة (`WomanDetailSheet`). «ليسا مكرّرين» محلي لكل مستخدم
-//     (`AdminDuplicateDismissStore`). لا دمج ولا حذف هنا.
+//     «متوفى») يفتح ورقة العضو (`AdminMemberSheet`) أو مربّع المرأة (`WomanDetailSheet`). «ليسا مكرّرين» على السيرفر للمالك والمدير
+//     (`AdminDuplicateDismissStore` + `duplicate_dismissals`، محلي للمراقب). «دمج» على كل صفّ (المالك والمدير، لا على من له حساب) — هذا الاسم يُحذف
+//     ويُدمج في الآخر (`AdminMergeBox` + `merge_duplicate_members`، ٢٠٢٦-١١-٢٧).
 //  ٢) «مشكلات الشجرة» — الأنواع الخمسة بأعدادها، كلٌّ يفتح قائمتها الموجودة بأزرار إصلاحها
 //     (`AdminReviewListPage(.problems, start: .problem(…))`).
 //  ٣) «أرقام بدون أسماء» (المالك والمدير) — دخلوا برمز الدخول ولم يكملوا التسجيل: الرقم كاملاً · «سُجّل في …» · «الإشعارات
 //     مفعّلة» (جهاز مسجّل في `device_tokens`) · اتصال وواتساب. لا حذف (تُحذف تلقائياً بعد ٣٠ يوماً).
 
-/// «ليسا مكرّرين» — مراجعة محلية لكل مستخدم على جهازه (UserDefaults، مثل `AdminLivingVerifiedStore`)، بلا عمود سيرفر
+/// «ليسا مكرّرين» — للمالك والمدير على السيرفر (`duplicate_dismissals`، 20261127250000): مشترك بينهما ويبقى بعد تغيير
+/// الجهاز. المراقب (يرى شجرة الرجال) يبقى محلياً على جهازه (UserDefaults)، وكذلك الجميع ما دام الجدول لم يُرفع بعد.
+/// المفتاح توقيع المجموعة (`AdminDuplicateNames.Group.signature`) — مكرّر جديد يغيّره فتعود المجموعة.
 @MainActor
 final class AdminDuplicateDismissStore: ObservableObject {
     static let shared = AdminDuplicateDismissStore()
 
     @Published private(set) var signatures: Set<String> = []
     private var user: String?
+    /// المالك والمدير والجدول موجود على السيرفر
+    private var onServer = false
+    private var serverMissing = false
 
     private static func key(_ user: String) -> String { "admin.duplicateDismissed.\(user)" }
+    private static let table = "duplicate_dismissals"
 
-    func activate(user id: UUID?) {
+    private struct Row: Codable { let group_key: String }
+
+    /// عند فتح الصفحة: المالك والمدير يجلبون من السيرفر في كل مرة (تغييرات الآخر)، وغيرهم من الجهاز
+    func activate(user id: UUID?, shared: Bool) {
         let u = id?.uuidString.lowercased() ?? ""
-        guard u != user else { return }
+        let switched = u != user
         user = u
-        let raw = UserDefaults.standard.string(forKey: Self.key(u)) ?? ""
-        let loaded = Set(raw.split(separator: "\n").map(String.init))
-        if loaded != signatures { signatures = loaded }
+        onServer = shared && !serverMissing
+        if onServer {
+            if switched { signatures = [] }
+            Task { await refresh() }
+        } else if switched {
+            loadLocal()
+        }
+    }
+
+    func refresh() async {
+        guard onServer else { return }
+        do {
+            let rows: [Row] = try await SupabaseConfig.client.from(Self.table).select("group_key").execute().value
+            let loaded = Set(rows.map(\.group_key))
+            if loaded != signatures { signatures = loaded }
+        } catch {
+            fallBackIfMissing(error)
+            if !Log.isCancellation(error) { Log.fetchError("[Duplicates] dismissals load failed", error) }
+        }
     }
 
     func dismiss(_ signature: String) {
         guard !signatures.contains(signature) else { return }
         signatures.insert(signature)
-        save()
+        guard onServer else { saveLocal(); return }
+        Task {
+            do {
+                try await SupabaseConfig.client.from(Self.table)
+                    .upsert(Row(group_key: signature), onConflict: "group_key", ignoreDuplicates: true)
+                    .execute()
+            } catch {
+                Log.error("[Duplicates] dismiss failed: \(ErrorHelper.description(error))")
+                fallBackIfMissing(error)
+                if onServer { signatures.remove(signature) } else { saveLocal() }
+            }
+        }
     }
 
+    /// «إعادة إظهار ما أخفيته» — المجموعات المخفية كلها (للمالك والمدير: عند الاثنين)
     func reset() {
         guard !signatures.isEmpty else { return }
+        let keys = Array(signatures)
         signatures = []
-        save()
+        guard onServer else { saveLocal(); return }
+        Task {
+            do {
+                try await SupabaseConfig.client.from(Self.table).delete().in("group_key", values: keys).execute()
+            } catch {
+                Log.error("[Duplicates] reset failed: \(ErrorHelper.description(error))")
+                await refresh()
+            }
+        }
     }
 
-    private func save() {
+    /// الجدول لم يُرفع بعد → التخزين المحلي كما كان
+    private func fallBackIfMissing(_ error: Error) {
+        guard ErrorHelper.isMissingTable(error, table: Self.table) else { return }
+        serverMissing = true
+        onServer = false
+        loadLocal()
+    }
+
+    private func loadLocal() {
+        let raw = UserDefaults.standard.string(forKey: Self.key(user ?? "")) ?? ""
+        let loaded = Set(raw.split(separator: "\n").map(String.init))
+        if loaded != signatures { signatures = loaded }
+    }
+
+    private func saveLocal() {
         guard let user else { return }
         UserDefaults.standard.set(signatures.sorted().joined(separator: "\n"), forKey: Self.key(user))
     }
@@ -197,6 +259,8 @@ struct AdminIssuesPage: View {
     /// عدد الأبناء لكل معرّف (شجرة الرجال بالأب، شجرة النساء بالأصل أو الأم) — يفرّق بين المكرّرين
     @State private var menChildren: [UUID: Int] = [:]
     @State private var womenChildren: [UUID: Int] = [:]
+    /// «دمج» — الاسم الذي يُحذف ومن يمكن الدمج فيه (`AdminMergeBox`)
+    @State private var merge: AdminMergeContext?
 
     init() {}
 
@@ -217,6 +281,9 @@ struct AdminIssuesPage: View {
                                             canDelete: authVM.canDeleteMembers && authVM.adminCanEdit(.family),
                                             canAnnounceDeath: authVM.isAdmin, canModerate: authVM.canModerate,
                                             onChanged: { await loadWomen(force: true) }))
+            .dsCenterBox(item: $merge) { context in
+                AdminMergeBox(context: context, onMerged: { await reload(force: true) }, onClose: { merge = nil })
+            }
             .refreshable { await reload(force: true) }
             .task { await reload(force: false) }
             .onChange(of: memberVM.membersVersion) { _ in rebuild() }
@@ -228,6 +295,8 @@ struct AdminIssuesPage: View {
 
     private var seesAll: Bool { authVM.isAdmin }
     private var canEdit: Bool { authVM.canEditMembers && authVM.adminCanEdit(.family) }
+    /// «دمج» للمالك والمدير (السيرفر يرفض غيرهما)
+    private var canMerge: Bool { authVM.isAdmin && authVM.adminCanEdit(.family) }
 
     private var header: AdminPageHeader {
         AdminPageHeader(title: AdminIssuesRow.title,
@@ -237,7 +306,7 @@ struct AdminIssuesPage: View {
     }
 
     private func reload(force: Bool) async {
-        dismissed.activate(user: authVM.currentUser?.id)
+        dismissed.activate(user: authVM.currentUser?.id, shared: authVM.isAdmin)
         if memberVM.allMembers.isEmpty || force { await memberVM.fetchAllMembers(force: force) }
         rebuild()
         await sons.refresh()
@@ -310,8 +379,11 @@ struct AdminIssuesPage: View {
                     AnyView(groupCard(group, inWomen: inWomen))
                 }
             }
-            footnote(L10n.t("«ليسا مكرّرين» يخفي المجموعة عندك أنت فقط، وتعود إن أُضيف شخص ثالث بالاسم نفسه.",
-                            "«Not duplicates» hides the group on your device only; it returns if a third person with the name is added."))
+            footnote(seesAll
+                     ? L10n.t("«ليسا مكرّرين» يخفي المجموعة عند المالك والمدير، وتعود إن أُضيف شخص آخر بالاسم نفسه.",
+                              "«Not duplicates» hides the group for the owner and admins; it returns if another person with the name is added.")
+                     : L10n.t("«ليسا مكرّرين» يخفي المجموعة عندك أنت فقط، وتعود إن أُضيف شخص آخر بالاسم نفسه.",
+                              "«Not duplicates» hides the group on your device only; it returns if another person with the name is added."))
             if !dismissed.signatures.isEmpty {
                 Button {
                     dismissed.reset()
@@ -355,7 +427,8 @@ struct AdminIssuesPage: View {
                                 height: DS.Hub.pillHeightCard) {
                     withAnimation(reduceMotion ? nil : DS.Anim.snappy) { dismissed.dismiss(group.signature) }
                 }
-                .accessibilityHint(L10n.t("يخفي هذه المجموعة عندك أنت فقط", "Hides this group on your device only"))
+                .accessibilityHint(seesAll ? L10n.t("يخفي هذه المجموعة عند المالك والمدير", "Hides this group for the owner and admins")
+                                            : L10n.t("يخفي هذه المجموعة عندك أنت فقط", "Hides this group on your device only"))
             }
             .padding(.top, DS.Spacing.sm)
         }
@@ -367,7 +440,26 @@ struct AdminIssuesPage: View {
         let person = inWomen ? women.first { $0.id == id } : memberVM.member(byId: id)
         let tags = person.map { chips($0, inWomen: inWomen) } ?? []
         let facts = person.map { differences($0, inWomen: inWomen) } ?? []
-        return Button {
+        return VStack(alignment: .leading, spacing: 0) {
+            AnyView(personButton(id, number: number, in: group, inWomen: inWomen, person: person, tags: tags, facts: facts))
+            if canMerge, mergeable(id, inWomen: inWomen), !mergeTargets(id, in: group, inWomen: inWomen).isEmpty {
+                HStack {
+                    Spacer(minLength: 0)
+                    AdminPillButton(title: L10n.t("دمج", "Merge"), icon: "arrow.triangle.merge", style: .soft,
+                                    height: DS.Hub.pillHeightCard) {
+                        startMerge(id, in: group, inWomen: inWomen)
+                    }
+                    .accessibilityLabel(Text(verbatim: L10n.t("دمج \(person?.fullName ?? group.name)", "Merge \(person?.fullName ?? group.name)")))
+                    .accessibilityHint(L10n.t("يحذف هذا الاسم وينقل ما يخصّه إلى الاسم الآخر", "Removes this name and moves what it has to the other one"))
+                }
+                .padding(.bottom, DS.Spacing.smd)
+            }
+        }
+    }
+
+    private func personButton(_ id: UUID, number: Int, in group: AdminDuplicateNames.Group, inWomen: Bool,
+                              person: FamilyMember?, tags: [AdminMemberTag], facts: [String]) -> some View {
+        Button {
             open(id, in: group, inWomen: inWomen)
         } label: {
             HStack(spacing: DS.Spacing.md) {
@@ -407,6 +499,47 @@ struct AdminIssuesPage: View {
         .buttonStyle(AdminRowPressStyle())
         .accessibilityElement(children: .combine)
         .accessibilityHint(L10n.t("يفتح بيانات العضو", "Opens the member details"))
+    }
+
+    // MARK: دمج
+
+    /// له حساب دخول؟ (شجرة النساء: مربوطة بحساب أو ملف في `profiles`)
+    private func hasLogin(_ id: UUID, inWomen: Bool) -> Bool {
+        if inWomen { return WomenStore.linkedUserByWoman[id] != nil || memberVM.member(byId: id) != nil }
+        guard let m = memberVM.member(byId: id) else { return true }
+        return accounts.info(id) != nil || m.status == .frozen
+    }
+
+    private func isStaff(_ id: UUID, inWomen: Bool) -> Bool {
+        guard !inWomen, let role = memberVM.member(byId: id)?.role else { return false }
+        return [.owner, .admin, .monitor, .supervisor].contains(role)
+    }
+
+    /// يظهر «دمج» على الصفّ: بلا حساب، ليس من الإدارة، وقائمة الحسابات وصلت (شجرة الرجال)
+    private func mergeable(_ id: UUID, inWomen: Bool) -> Bool {
+        AdminMergeRules.canRemove(hasLogin: hasLogin(id, inWomen: inWomen), isStaff: isStaff(id, inWomen: inWomen),
+                                  accountsReady: inWomen || accounts.loaded)
+    }
+
+    private func mergeTargets(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) -> [UUID] {
+        let login = Set(group.ids.filter { hasLogin($0, inWomen: inWomen) })
+        let staff = Set(group.ids.filter { isStaff($0, inWomen: inWomen) })
+        return AdminMergeRules.targets(group: group.ids, remove: id, hasLogin: login, staff: staff)
+    }
+
+    private func mergePerson(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) -> AdminMergePerson {
+        let person = inWomen ? women.first { $0.id == id } : memberVM.member(byId: id)
+        let name = person.map { $0.fullName.isEmpty ? group.name : $0.fullName } ?? group.name
+        let lines = (person.map { differences($0, inWomen: inWomen) } ?? [])
+            + (person.map { chips($0, inWomen: inWomen).map(\.text) } ?? [])
+        return AdminMergePerson(id: id, name: name, facts: lines.joined(separator: " · "))
+    }
+
+    private func startMerge(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) {
+        let targets = mergeTargets(id, in: group, inWomen: inWomen)
+        guard !targets.isEmpty else { return }
+        merge = AdminMergeContext(remove: mergePerson(id, in: group, inWomen: inWomen),
+                                  targets: targets.map { mergePerson($0, in: group, inWomen: inWomen) })
     }
 
     /// سنة الميلاد · «له حساب» · «متوفى» — ما يفرّق بين الاثنين

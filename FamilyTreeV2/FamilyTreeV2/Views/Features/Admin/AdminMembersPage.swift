@@ -240,7 +240,7 @@ struct AdminMembersPage: View {
             }
         }
         verified.activate(user: authVM.currentUser?.id)
-        dupDismissed.activate(user: authVM.currentUser?.id)
+        dupDismissed.activate(user: authVM.currentUser?.id, shared: authVM.isAdmin)
         if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
         rebuild()
         await sons.refresh()

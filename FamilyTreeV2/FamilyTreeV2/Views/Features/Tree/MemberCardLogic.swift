@@ -123,14 +123,23 @@ nonisolated enum MemberCardLogic {
         return ids
     }
 
+    /// أين تُطبَّق صورة زوج البنت من خارج العائلة: ملف حسابه، أو عقدته في شجرة النساء حين لا حساب له
+    struct PhotoTarget: Equatable {
+        let id: UUID
+        /// true = عقدة في `women_members` بلا ملف (`tree_edit add_photo` بـ member_id = مقدّم الطلب، 20261127260000)
+        let womenNode: Bool
+    }
+
     /// «إضافة صورة» لزوج البنت من خارج العائلة (بند ١٥، المالك ٢٠٢٦-١١-٢٧ «خله عن طريق زوجته أو ابنه المضاف مع طلب أو
-    /// هو بنفسه» — بلا زرّ للإدارة): الحساب الذي تُطبَّق عليه الصورة (`tree_edit add_photo` على `profiles.avatar_url`)، أو nil.
-    /// للذكر من خارج العائلة الذي له حساب، ولزوجته أو ابنه وحدهما — هو نفسه يضيفها من «حسابي»، والنساء بلا صور
-    static func outsideHusbandPhotoTarget(nodeIsMale: Bool, nodeIsOutside: Bool, linkedProfile: UUID?, viewer: UUID?,
-                                          viewerIsWife: Bool, viewerIsSon: Bool) -> UUID? {
-        guard nodeIsMale, nodeIsOutside, let linkedProfile, let viewer, viewer != linkedProfile,
+    /// هو بنفسه» — بلا زرّ للإدارة): للذكر من خارج العائلة، لزوجته أو ابنه وحدهما. له حساب → الصورة على ملفه
+    /// (`profiles.avatar_url`، وهو نفسه يضيفها من «حسابي»)؛ بلا حساب → على عقدته في شجرة النساء (موافقة المالك
+    /// ٢٠٢٦-١١-٢٧، `women_members.avatar_url`). النساء بلا صور.
+    static func outsideHusbandPhotoTarget(nodeId: UUID, nodeIsMale: Bool, nodeIsOutside: Bool, linkedProfile: UUID?,
+                                          viewer: UUID?, viewerIsWife: Bool, viewerIsSon: Bool) -> PhotoTarget? {
+        guard nodeIsMale, nodeIsOutside, let viewer, viewer != linkedProfile, viewer != nodeId,
               viewerIsWife || viewerIsSon else { return nil }
-        return linkedProfile
+        if let linkedProfile { return PhotoTarget(id: linkedProfile, womenNode: false) }
+        return PhotoTarget(id: nodeId, womenNode: true)
     }
 
     /// ما يُنفَّذ وحده عند القبول (`private.apply_women_request`) وما تنفّذه الإدارة بيدها:

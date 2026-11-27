@@ -332,7 +332,7 @@ struct WomanDetailSheet: View {
     /// طلبات تعديل البيانات في «الطلبات» (الشكل «أ»، قرار المالك ٢٠٢٦-١١-١٧) — مربّع الطلب المفتوح
     @State private var editRequest: WomanEditRequest? = nil
     /// «إضافة صورة» لزوج البنت من خارج العائلة (بند ١٥): حسابه — يفتح مربّع اقتراح الصورة نفسه (`TreeEditRequestView`)
-    @State private var photoRequestFor: FamilyMember? = nil
+    @State private var photoRequestFor: OutsideHusbandPhoto? = nil
     /// «الطلبات المرسلة» من «تابِعه» أو خانة «طلبك قيد المراجعة» (بطاقة «AB»، البندان ٥ و٧)
     @State private var showSentRequests = false
     /// «اتصال / واتساب» من صفّ «الهاتف» (الإدارة وهي نفسها) — نفس بطاقة الرجل
@@ -447,17 +447,19 @@ struct WomanDetailSheet: View {
 
     /// حساب زوج البنت من خارج العائلة الذي تقترح له زوجته أو ابنه صورة (بند ١٥، المالك «خله عن طريق زوجته أو ابنه
     /// المضاف مع طلب أو هو بنفسه») — nil لغيرهما، وللنساء، ولمن لا حساب له (الصورة تُطبَّق على `profiles` عند القبول)
-    private var outsideHusbandPhotoAccount: FamilyMember? {
+    private var outsideHusbandPhotoAccount: OutsideHusbandPhoto? {
         guard let me else { return nil }
         let myNode = WomenStore.womanByLinkedUser[me.id] ?? me.id
         let mine = allWomen.first { $0.id == myNode }
         let linked = WomenStore.linkedUserByWoman[woman.id] ?? (profileIds.contains(woman.id) ? woman.id : nil)
-        let target = MemberCardLogic.outsideHusbandPhotoTarget(
-            nodeIsMale: !woman.isFemale, nodeIsOutside: WomenStore.outsideFamilyIds.contains(woman.id),
+        guard let target = MemberCardLogic.outsideHusbandPhotoTarget(
+            nodeId: woman.id, nodeIsMale: !woman.isFemale, nodeIsOutside: WomenStore.outsideFamilyIds.contains(woman.id),
             linkedProfile: linked, viewer: me.id,
             viewerIsWife: mine?.husbandId == woman.id,
-            viewerIsSon: mine?.fatherId == woman.id)
-        return target.flatMap { t in memberVM.allMembers.first { $0.id == t } }
+            viewerIsSon: mine?.fatherId == woman.id) else { return nil }
+        // بلا حساب: الطلب على عقدته في شجرة النساء نفسها
+        if target.womenNode { return OutsideHusbandPhoto(member: woman, womenNode: true) }
+        return memberVM.allMembers.first { $0.id == target.id }.map { OutsideHusbandPhoto(member: $0, womenNode: false) }
     }
 
     /// عقدة أبي المستخدم — منها «إضافة أخت» (لا من الملف الشخصي — طلب المالك ٢٠٢٦-١٠-٢٤)
@@ -1900,8 +1902,8 @@ struct WomanDetailSheet: View {
                                 onCancel: { editRequest = nil })
         }
         // اقتراح صورة زوج البنت من خارج العائلة — مسار «إضافة صورة» نفسه وموافقة الإدارة
-        .dsCenterBox(item: $photoRequestFor) { account in
-            TreeEditRequestView(member: account, action: .addPhoto)
+        .dsCenterBox(item: $photoRequestFor) { target in
+            TreeEditRequestView(member: target.member, action: .addPhoto, targetIsWomenNode: target.womenNode)
         })
     }
 
@@ -3567,6 +3569,13 @@ private final class WomanAddTally {
     var manual = false
     /// قريبة («عائلتي») أُرسلت للإدارة من السيرفر نفسه — تظهر بعد الموافقة
     var awaitingApproval = 0
+}
+
+/// «إضافة صورة» لزوج البنت من خارج العائلة: ملف حسابه، أو عقدته في شجرة النساء بلا حساب (20261127260000)
+struct OutsideHusbandPhoto: Identifiable {
+    let member: FamilyMember
+    let womenNode: Bool
+    var id: UUID { member.id }
 }
 
 private struct WomanWriteError {
