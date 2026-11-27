@@ -2005,6 +2005,9 @@ struct TreeMemberNode: View, Equatable {
             && a.k == b.k
     }
     @State private var shouldLoadImage = false
+    /// قفزة الضغطة المكتملة — حالة العقدة نفسها (لا تُعيد بناء غيرها)
+    @State private var popped = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isCurrentLocationMember: Bool {
         member.id == currentLocationMemberID
@@ -2052,6 +2055,7 @@ struct TreeMemberNode: View, Equatable {
                 // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك)
                 Button {
                     guard TreeTapGuard.allowsTap else { return }
+                    DSTreeNodePop.fire($popped, reduceMotion: reduceMotion)
                     if hasChildren {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         onToggle()
@@ -2093,9 +2097,10 @@ struct TreeMemberNode: View, Equatable {
                             .frame(width: interactiveNodeSize + 6 * k, height: interactiveNodeSize + 6 * k)
                     }
                 }
-                // ضغطة العقدة: تصغير خفيف لحظة الإصبع على هذه العقدة وحدها (`isPressed` محلي — لا حالة مشتركة)؛
-                // «تقليل الحركة»: خفوت فقط
-                .buttonStyle(DSPressStyle())
+                // ضغطة العقدة: قفزة صغيرة بعد الضغطة المكتملة فقط (لا عند بدء سحب فوق العقدة)، وحالتها في العقدة
+                // نفسها — «تقليل الحركة»: لا شيء
+                .scaleEffect(popped ? DSMotion.nodePressScale : 1)
+                .buttonStyle(DSTreeNodeButtonStyle())
                 .overlay {
                     // «أنت هنا» — حلقة واحدة ثابتة دائمة حول عقدتك (كانت ثلاث: ثابتة + نابضة + حلقة البحث).
                     // بعد «موقعك» تنبض قليلاً على الساعة المشتركة (لا `repeatForever`)، وساكنة مع «تقليل الحركة»

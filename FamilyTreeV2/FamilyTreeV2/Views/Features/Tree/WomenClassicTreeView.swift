@@ -151,8 +151,6 @@ struct WomenClassicTreeView: View {
     /// خطوط الفرع المفتوح للتو تذوب في طبقة صغيرة وحدها (0 → 1) — بقية الخطوط كما هي
     @State private var lineFadeId: UUID? = nil
     @State private var lineFade: Double = 1
-    /// العقدة المضغوطة للتو — تصغر لحظة ثم ترجع (العقد الأخرى لا تتغيّر)
-    @State private var tapPopId: UUID? = nil
     /// المعاينة: المسار والأب وإخوة الشخص (غير باهتين)
     @State private var previewLit: Set<UUID> = []
 
@@ -1271,8 +1269,9 @@ struct WomenClassicTreeView: View {
                     }
             }
             .frame(width: CIRCLE, height: CIRCLE)
-            // ضغطة العقدة: تصغر لحظة ثم ترجع (العقدة المضغوطة وحدها)
-            .scaleEffect(tapPopId == m.id ? DSMotion.nodePressScale : 1)
+            // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك). الضغطة المكتملة تقفز العقدة نفسها
+            // (حالتها داخل العقدة — `DSTreeNodeTap`)، لكل العقد بأبناء وبلا أبناء
+            .modifier(DSTreeNodeTap { tapNode(m, hasKids: !kids.isEmpty) })
             // القارئ الصوتي: جملة واحدة للعقدة — الاسم، الصلة، «متوفاة»، وما يحدث بالضغط (مراجعة ٢٠٢٦-١١-٢٧ #12).
             // قبل مربّعات الزوجات والزوج فتبقى عناصر مستقلة؛ وكبسولة الاسم تحتها مخفية عنه (إجراء «التفاصيل» هنا)
             .accessibilityElement(children: .ignore)
@@ -1322,11 +1321,6 @@ struct WomenClassicTreeView: View {
                             .offset(x: M.husbandCellX, y: CIRCLE / 2 - M.husbandSquare / 2)
                     }
                 }
-            }
-            // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك)
-            .onTapGesture {
-                guard TreeTapGuard.allowsTap else { return }
-                tapNode(m, hasKids: !kids.isEmpty)
             }
 
             // الاسم كبسولة واحدة للحي والمتوفّى، وللمتوفّى مربّع ثانٍ منفصل تحته للسنوات بخط أكبر — نفس شجرة العائلة
@@ -1595,14 +1589,18 @@ struct WomenClassicTreeView: View {
     /// ضغط الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك). نفسه للقارئ الصوتي
     private func tapNode(_ m: FamilyMember, hasKids: Bool) {
         if !hasKids { onSelect?(m); return }
-        popNode(m.id)
         if collapsed.contains(m.id) {
             pendingExpandScroll = m.id    // توسّع → انزل للأبناء
             lastExpandedId = m.id         // أبناؤه يدخلون بتدرّج
             if !reduceMotion {
                 // خطوطه تذوب في طبقتها ثم يبقى مرسوماً كغيره
-                lineFadeId = m.id; lineFade = 0
+                let id = m.id
+                lineFadeId = id; lineFade = 0
                 DispatchQueue.main.async { withAnimation(DSMotion.treeLineFade) { lineFade = 1 } }
+                // بعد الذوبان بقليل تعود خطوطه للطبقة الواحدة
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.treeLineFadeClear) {
+                    if lineFadeId == id { lineFadeId = nil }
+                }
             }
         } else {
             lastExpandedId = nil
@@ -1610,15 +1608,6 @@ struct WomenClassicTreeView: View {
         }
         // «تقليل الحركة»: الفتح والطيّ مباشرة (مراجعة ٢٠٢٦-١١-٢٧ #8)
         if reduceMotion { toggle(m.id) } else { withAnimation(DS.Anim.snappy) { toggle(m.id) } }
-    }
-
-    /// قفزة الضغط على العقدة نفسها: تصغر بتباطؤ سريع ثم ترجع بنابض — «تقليل الحركة»: لا شيء
-    private func popNode(_ id: UUID) {
-        guard !reduceMotion else { return }
-        withAnimation(DSMotion.tap) { tapPopId = id }
-        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.nodePressHold) {
-            withAnimation(DSMotion.press) { if tapPopId == id { tapPopId = nil } }
-        }
     }
 
     private func toggle(_ id: UUID) {

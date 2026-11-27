@@ -151,6 +151,8 @@ enum DSMotion {
     /// خطوط الفرع المفتوح: تمتدّ (العائلة) أو تذوب (النساء) بسرعة قبل وصول الأبناء
     static let treeLineDraw = Animation.easeOut(duration: 0.45).delay(0.08)
     static let treeLineFade = Animation.easeOut(duration: 0.22).delay(0.06)
+    /// متى تعود خطوط الفرع المذاب للطبقة الواحدة (~٠٫٣ ث بعد نهاية الذوبان)
+    static let treeLineFadeClear: TimeInterval = 0.06 + 0.22 + 0.3
 
     /// تأخير ابن رقم [index] في الفرع المفتوح — بعد `base` (انتظار الخط)، وبسقف `treeNodeCap`
     static func treeNodeDelay(_ index: Int, base: Double) -> Double {
@@ -324,6 +326,44 @@ private struct DSCardPressLabel: View {
             .scaleEffect(configuration.isPressed && !reduceMotion ? DSMotion.cardPressScale : 1)
             .opacity(configuration.isPressed && reduceMotion ? 0.85 : 1)
             .animation(DSMotion.tap, value: configuration.isPressed)
+    }
+}
+
+/// قفزة ضغطة عقدة الشجرة — حالتها داخل العقدة نفسها (لا حالة على مستوى الشجرة فلا يُعاد بناء بقية العقد).
+/// تُطلق من الضغطة المكتملة فقط (لا عند بدء سحب يبدأ فوق عقدة): تصغر بتباطؤ سريع ثم ترجع بنابض.
+/// «تقليل الحركة»: لا شيء.
+@MainActor
+enum DSTreeNodePop {
+    /// `popped` = `@State` العقدة نفسها
+    static func fire(_ popped: Binding<Bool>, reduceMotion: Bool) {
+        guard !reduceMotion else { return }
+        withAnimation(DSMotion.tap) { popped.wrappedValue = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.nodePressHold) {
+            withAnimation(DSMotion.press) { popped.wrappedValue = false }
+        }
+    }
+}
+
+/// زرّ عقدة الشجرة بلا أثر عند لمس الإصبع (الأثر = `DSTreeNodePop` بعد ضغطة مكتملة) — كان التصغير/الخفوت
+/// يظهر أيضاً حين يبدأ سحب الشجرة فوق عقدة
+struct DSTreeNodeButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { configuration.label }
+}
+
+/// عقدة شجرة النساء (بلا زرّ): الضغطة المكتملة تقفز العقدة نفسها ثم تنفّذ — لكل العقد، بأبناء وبلا أبناء
+struct DSTreeNodeTap: ViewModifier {
+    let action: () -> Void
+    @State private var popped = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(popped ? DSMotion.nodePressScale : 1)
+            .onTapGesture {
+                guard TreeTapGuard.allowsTap else { return }
+                DSTreeNodePop.fire($popped, reduceMotion: reduceMotion)
+                action()
+            }
     }
 }
 

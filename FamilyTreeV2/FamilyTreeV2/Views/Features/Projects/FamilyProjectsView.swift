@@ -10,7 +10,6 @@ struct FamilyProjectsView: View {
 
     @State private var showingAddProject = false
     @State private var selectedProject: Project?
-    @State private var showAddedAlert = false
 
     // Filter
     @State private var filter: ProjectsFilter = .approved
@@ -114,23 +113,11 @@ struct FamilyProjectsView: View {
         }
         // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
         .dsCenterBox(isPresented: $showingAddProject) {
-            AddProjectView(showAddedAlert: $showAddedAlert)
+            AddProjectView()
                 .environmentObject(projectsVM)
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
                 .dsSectionPage(.projects)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
-        }
-        .dsAlert(
-            L10n.t("تم إرسال المشروع", "Project Submitted"),
-            isPresented: $showAddedAlert,
-            moment: .sentForApproval
-        ) {
-            Button(L10n.t("حسناً", "OK")) {}
-        } message: {
-            Text(L10n.t(
-                "تم إرسال مشروعك للمراجعة. سيظهر بعد موافقة الإدارة.",
-                "Your project has been submitted for review. It will appear after admin approval."
-            ))
         }
         // تفاصيل المشروع — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
         // يتمرّر داخله، يُغلق بـ× أو بالضغط خارجه
@@ -624,7 +611,6 @@ struct AddProjectView: View {
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
-    @Binding var showAddedAlert: Bool
 
     @State private var title = ""
     @State private var description = ""
@@ -772,8 +758,11 @@ struct AddProjectView: View {
                 await projectsVM.fetchMyPendingProjects(ownerId: userId)
             }
             isSaving = false
-            showAddedAlert = true
             dismiss()
+            // لحظة النجاح نفسها كالديوانيات والأخبار والمكتبة (بدل تنبيه «تم إرسال المشروع» بزرّ «حسناً»).
+            // قاعدة النشر نفسها: `addProject` يحفظ المشروع «معلّقاً» دائماً (للإدارة أيضاً) ← «أُرسل للمراجعة»؛
+            // إن صار يُنشر مباشرة لأحد فهنا «تمت الإضافة» بـ`.success`
+            DSMomentToast.show(L10n.t("أُرسل للمراجعة", "Sent for review"), moment: .sentForApproval, section: .projects)
         } else {
             isSaving = false
         }

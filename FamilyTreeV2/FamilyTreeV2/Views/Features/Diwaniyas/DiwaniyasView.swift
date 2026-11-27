@@ -15,6 +15,8 @@ struct DiwaniyasView: View {
     @State private var reportSent = false
     @State private var reportFailed = false
     @State private var appeared = false
+    /// دخول الحالة الفارغة لُعب مرة — لا يُعاد مع كل ظهور
+    @State private var emptyEntrancePlayed = false
     /// الظاهرة للمستخدم (المعتمدة + طلباته/المعلّقة للإدارة) — كلها في قائمة واحدة: شريط «الديوانيات/الحسينيات»
     /// شيل (طلب المالك ٢٠٢٦-١٠-٢٤)، والنوع علامة على البطاقة
     @State private var cachedVisibleDiwaniyas: [Diwaniya] = []
@@ -218,7 +220,11 @@ struct DiwaniyasView: View {
                     message: L10n.t("اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
                                     "Tap + to add your diwaniya.\nIt appears after admin approval."),
                     section: .diwaniyas)
-            .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر مثل المكتبة والمشاريع (تلاشٍ فقط مع «تقليل الحركة»)
+            // تصعد وتظهر مثل المكتبة والمشاريع — مرة واحدة طوال عمر الصفحة (عودتها بعدها مباشرة بلا حركة)؛
+            // «تقليل الحركة»: تلاشٍ فقط
+            .dsEntrance(delay: DSMotion.staggerDelay(0, base: DSMotion.sectionsOnPage),
+                        y: DSMotion.rise, scale: DSMotion.riseScale, active: !emptyEntrancePlayed)
+            .onDisappear { emptyEntrancePlayed = true }
     }
 
     // MARK: - Diwaniya Card

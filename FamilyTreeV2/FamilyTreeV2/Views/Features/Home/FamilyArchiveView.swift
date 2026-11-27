@@ -1039,10 +1039,7 @@ struct ArchiveUploadSheet: View {
         .onAppear {
             guard !reduceMotion else { return }   // أيقونات ثابتة مع «تقليل الحركة»
             // طفوة واحدة عند الظهور ثم تستقرّ — لا `repeatForever` (قاعدة المشروع: الحركة المستمرة على الساعة المشتركة فقط)
-            withAnimation(.easeInOut(duration: 0.8)) { floatIcons = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                withAnimation(.easeInOut(duration: 0.8)) { floatIcons = false }
-            }
+            withAnimation(.easeOut(duration: 0.8)) { floatIcons = true }   // صعود واحد ثم تبقى
         }
     }
 
