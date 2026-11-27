@@ -426,6 +426,9 @@ struct TreeView: View {
 
     @State private var searchedMemberID: UUID? = nil
     @State private var highlightTask: Task<Void, Never>?
+    /// «موقعك» ضُغط للتو: حلقة «أنت هنا» تنبض على الساعة المشتركة لمدة `TreeConst.highlightDuration` ثم تسكن
+    @State private var locatePulseId: UUID?
+    @State private var locatePulseTask: Task<Void, Never>?
 
     // ── محرّك الكانفس (إحداثيات مطلقة، يطابق تبويب النساء — زوم حقيقي + سحب بزخم) ──
     @State private var scale: CGFloat = TreeConst.defaultScale
@@ -662,7 +665,7 @@ struct TreeView: View {
                         VStack(spacing: DS.Spacing.sm) {
                             if showSearch {
                                 TreeSearchOverlay(
-                                    onSelect: { member in selectMemberFromSearch(member) },
+                                    onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
                                     onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
@@ -692,7 +695,8 @@ struct TreeView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("شجرة العائلة", "Family Tree"),
-                            subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
+                            subtitle: L10n.t(TreeHeaderCount.arabic(cachedVisibleMembers.count),
+                                            TreeHeaderCount.english(cachedVisibleMembers.count)),
                             icon: AppSection.tree.symbol,   // الشجرة (رمز التطبيق) لا ورقة
                             section: .tree,
                             subtitleChip: true
@@ -703,7 +707,7 @@ struct TreeView: View {
                         Group {
                             if showSearch {
                                 TreeSearchOverlay(
-                                    onSelect: { member in selectMemberFromSearch(member) },
+                                    onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
                                     onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
@@ -816,6 +820,8 @@ struct TreeView: View {
                 // إلغاء أي highlight tasks عالقة لتفادي memory leaks عند التنقل السريع
                 highlightTask?.cancel()
                 highlightTask = nil
+                locatePulseTask?.cancel()
+                locatePulseId = nil
             }
             // «أنت هنا» دائم — يتبع حساب المستخدم الحالي
             .onChange(of: authVM.currentUser?.id) { newId in
@@ -919,7 +925,8 @@ struct TreeView: View {
                                                     searchedMemberID: searchedMemberID, userInteracted: userInteracted)
                 }
 
-                // فتح كل الفروع بالمسار + هايلايت
+                // فتح كل الفروع بالمسار + هايلايت (علامة البحث هنا تبقى ما بقي وضع صلة القرابة)
+                highlightTask?.cancel()
                 withAnimation(DSMotion.banner) {
                     activePath = fullPath
                     kinshipHighlightedIds = fullPath
@@ -955,9 +962,16 @@ struct TreeView: View {
         return name
     }
 
+    /// اختيار نتيجة من البحث: يُغلق البحث (فيرجع مسار الأسماء و«البداية»/«موقعك») ثم ينتقل للعضو — الكاميرا تُعاد
+    /// وحدها حين تصغر بطاقة الأدوات (`refitAfterChromeChange`) فلا يقع الشخص أسفل الشاشة (مراجعة ٢٠٢٦-١١-٢٧ #1)
+    private func chooseSearchResult(_ member: FamilyMember) {
+        withAnimation(DS.Anim.snappy) { showSearch = false }
+        selectMemberFromSearch(member)
+    }
+
     private func selectMemberFromSearch(_ member: FamilyMember) {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        searchedMemberID = member.id
+        markSearched(member.id)
         var ancestors = Set<UUID>()
         var currentParentId = member.fatherId
         var visited = Set<UUID>()
@@ -984,17 +998,51 @@ struct TreeView: View {
         }
         if includeFocusedMemberInPath { ancestors.insert(member.id) }
         activePath = ancestors
-        searchedMemberID = highlight ? member.id : nil
+        if highlight { markSearched(member.id) } else { highlightTask?.cancel(); searchedMemberID = nil }
         moveCamera { focusMember(member.id, in: rebuildLayout()) }
+    }
 
-        // إزالة التظليل بعد ٥ ثوانٍ
-        if highlight {
-            highlightTask?.cancel()
-            highlightTask = Task {
+    /// علامة الشخص المبحوث عنه (حلقة ذهبية) — تتلاشى بعد `TreeConst.highlightDuration` (كانت تبقى بلا نهاية بعد البحث)
+    private func markSearched(_ id: UUID) {
+        highlightTask?.cancel()
+        searchedMemberID = id
+        highlightTask = Task {
+            try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { searchedMemberID = nil }
+        }
+    }
+
+    /// «موقعك» — الدالة الواحدة للزرّين (العمودي والأفقي؛ مراجعة ٢٠٢٦-١١-٢٧ #2): المربوط ينتقل لعقدته وتنبض حلقة
+    /// «أنت هنا» قليلاً، وابن البنت/حساب المرأة ينتقل لشجرة النساء (بلاغ المالك ٢٠٢٦-١١-٢٧)، وغير المربوط يرى
+    /// «حسابك غير مربوط بالشجرة بعد». القرار في `TreeMyPlace.resolve` (مفحوص: tests/admin-redesign/T1)
+    private func goToMyPlace() {
+        let byId = cachedMemberById
+        let place = TreeMyPlace.resolve(userId: authVM.currentUser?.id, rootId: primaryRootMember?.id,
+                                        isInTree: { byId[$0] != nil },
+                                        fatherOf: { id in byId[id]?.fatherId.flatMap { byId[$0] != nil ? $0 : nil } },
+                                        inWomenTree: Self.placeIsInWomenTree(authVM.currentUser),
+                                        hasWomenTab: treeTab != nil)
+        switch place {
+        case .family(let id)?:
+            guard let me = byId[id] else { return }
+            currentLocationMemberID = id
+            // حلقة «أنت هنا» الدائمة تكفي — بلا حلقة البحث فوقها (كانت ثلاث حلقات على عقدتك)
+            centerOnMember(me, highlight: false, includeFocusedMemberInPath: false)
+            locatePulseTask?.cancel()
+            locatePulseId = id
+            locatePulseTask = Task {
                 try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.3)) { searchedMemberID = nil }
+                locatePulseId = nil
             }
+        case .women?:
+            // مكانه في شجرة النساء تحت أمّه — تبويب النساء يتمركز على عقدته (`autoLocate` + `.openWomenTree`)
+            NotificationCenter.default.post(name: .openWomenTree, object: nil)
+        case .notLinked?:
+            showNotInTree = true
+        case nil:
+            break
         }
     }
 
@@ -1043,19 +1091,7 @@ struct TreeView: View {
             if authVM.currentUser != nil && authVM.memberSees(.treeMyLocation) {
                 DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .mini, tint: AppSection.tree.ink) {
-                    if let currentUserID = authVM.currentUser?.id,
-                       let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID),
-                       cachedMemberById[currentUserID] != nil {
-                        currentLocationMemberID = userMember.id
-                        centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                    } else if treeTab != nil, Self.placeIsInWomenTree(authVM.currentUser) {
-                        // ابن البنت (وحساب المرأة) مكانه في شجرة النساء تحت أمّه، لا في شجرة العائلة — كان يقول له
-                        // «حسابك غير مربوط… طلب الانضمام لدى الإدارة» وهو مربوط (بلاغ المالك ٢٠٢٦-١١-٢٧، «حسين علي محمد
-                        // الصاغة»). ينقله لتبويب النساء، وهي تتمركز على عقدته (`autoLocate` + `.openWomenTree`)
-                        NotificationCenter.default.post(name: .openWomenTree, object: nil)
-                    } else {
-                        showNotInTree = true
-                    }
+                    goToMyPlace()
                 }
             }
         }
@@ -1082,12 +1118,7 @@ struct TreeView: View {
             if authVM.currentUser != nil && authVM.memberSees(.treeMyLocation) {
                 DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .toolbar, tint: AppSection.tree.ink) {
-                    if let currentUserID = authVM.currentUser?.id,
-                       let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
-                        // التمييز «أنت هنا» دائم — الزر يفتح المسار ويتمركز فقط
-                        currentLocationMemberID = userMember.id
-                        centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                    }
+                    goToMyPlace()
                 }
             }
         }
@@ -1348,6 +1379,9 @@ struct TreeView: View {
             showName: true,
             level: layout.depth[m.id] ?? 0,
             currentLocationMemberID: currentLocationMemberID,
+            isLocating: locatePulseId == m.id,
+            // المالك يظهر للأعضاء بلون المدير (CLAUDE.md «Publicly the owner shows the admin colour»)
+            ownerShowsAsAdmin: !authVM.isOwner,
             isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
             searchedSnapshot: searchedMemberID,
             // العقدة كلها × معامل «حجم النص» (نفس معامل التخطيط) — نصوصها بحجم ثابت فلا تكبر مرتين
@@ -1437,11 +1471,21 @@ struct TreeView: View {
     private func focusMember(_ id: UUID, in L: FamilyLayout) {
         guard let p = L.positions[id], viewport.width > 0, viewport.height > 0 else { return }
         let s = TreeGroupFit.defaultScale / L.m.k
+        func frame(_ id: UUID) -> CGRect? {
+            L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeHDefault) }
+        }
         let node = CGRect(x: p.x, y: p.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeHDefault)
+        // الأب وأول صف من الأبناء الظاهرين: يتوسّطون المساحة مع العضو ما اتّسعوا (مراجعة ٢٠٢٦-١١-٢٧ #4 — كان الأب
+        // تحت بطاقة الأدوات والنصف السفلي فارغاً)
+        let father = cachedMemberById[id]?.fatherId.flatMap(frame)
+        let kids = (L.childRows[id]?.first ?? []).compactMap(frame).reduce(CGRect.null) { $0.union($1) }
+        let area = cameraArea(viewport)
         scale = s; baseScale = s
         userInteracted = true
         looseClamp = true
-        offset = TreeGroupFit.looseClamp(TreeGroupFit.memberOffset(node: node, area: cameraArea(viewport), scale: s),
+        offset = TreeGroupFit.looseClamp(TreeFocusCamera.offset(member: node, father: father, kids: kids.isNull ? nil : kids,
+                                                                avail: area.avail, bandMidX: area.band.midX, scale: s,
+                                                                fallbackAnchorY: TreeGroupFit.memberAnchorY),
                                          content: CGSize(width: L.size.width * s, height: L.size.height * s),
                                          viewport: viewport)
         baseOffset = offset
@@ -1454,10 +1498,11 @@ struct TreeView: View {
     }
 
     /// تغيّر ارتفاع بطاقة الأدوات بعد آخر حركة تلقائية والمستخدم لم يحرّك شيئاً: أعد الحركة نفسها —
-    /// كبرت (ظهر مسار الأسماء) فلا يختفي شيء تحتها، أو صغرت في «البداية» (اختفى المسار) فتبقى مطابقة لأول فتح.
-    /// تصغيرها في غير «البداية» (فتح البحث) لا يحرّك الشجرة
+    /// كبرت (ظهر مسار الأسماء) فلا يختفي شيء تحتها، أو صغرت في «البداية» (اختفى المسار) فتبقى مطابقة لأول فتح،
+    /// أو صغرت بعد الانتقال لعضو (أُغلق البحث بقائمة نتائجه الطويلة) فيرجع العضو لموضعه الطبيعي لا أسفل الشاشة
+    /// (مراجعة ٢٠٢٦-١١-٢٧ #1). تصغيرها بعد ملاءمة مجموعة لا يحرّك الشجرة
     private func refitAfterChromeChange(grew: Bool) {
-        guard let f = autoFit, grew || f.mode == .home,
+        guard let f = autoFit, grew || f.mode != .group,
               f.scale == scale, f.offset == offset, layout.positions[f.id] != nil else { return }
         moveCamera {
             if f.mode == .member { focusMember(f.id, in: layout) } else { fitGroup(f.id, in: layout, home: f.mode == .home) }
@@ -1558,9 +1603,9 @@ struct TreeView: View {
         } else if memberVM.membersVersion > 0 && !memberVM.isLoading {
             // التحميل تم فعلاً لكن لا يوجد أعضاء — رسالة مختلفة عن "جاري المزامنة"
             DSEmptyView(L10n.t("لا يوجد أفراد في الشجرة بعد", "No family members yet"),
-                        message: L10n.t("اسحب للتحديث أو تواصل مع الإدارة", "Pull to refresh or contact the admin"),
+                        message: L10n.t("أعد المحاولة أو تواصل مع الإدارة", "Try again or contact the admin"),
                         section: .tree,
-                        actionTitle: L10n.t("تحديث", "Refresh"), actionIcon: "arrow.clockwise") {
+                        actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise") {
                 Task {
                     await memberVM.fetchAllMembers(force: true)
                     guard !Task.isCancelled else { return }
@@ -1920,6 +1965,10 @@ struct TreeMemberNode: View, Equatable {
     let showName: Bool
     var level: Int = 0
     let currentLocationMemberID: UUID?
+    /// «موقعك» ضُغط للتو على هذه العقدة — نبضة قصيرة لحلقة «أنت هنا»
+    var isLocating: Bool = false
+    /// المشاهد ليس مالكاً: المالك يظهر بلون المدير
+    var ownerShowsAsAdmin: Bool = true
     var isKinshipHighlighted: Bool = false
     /// قيمة البحث وقت بناء العقدة — للمقارنة (الربط يقرأ القيمة الحالية دائماً فلا يصلح لها)
     var searchedSnapshot: UUID? = nil
@@ -1933,12 +1982,11 @@ struct TreeMemberNode: View, Equatable {
         a.member == b.member && a.isExpanded == b.isExpanded && a.hasChildren == b.hasChildren
             && a.childrenCount == b.childrenCount && a.showName == b.showName && a.level == b.level
             && a.currentLocationMemberID == b.currentLocationMemberID
+            && a.isLocating == b.isLocating && a.ownerShowsAsAdmin == b.ownerShowsAsAdmin
             && a.isKinshipHighlighted == b.isKinshipHighlighted && a.searchedSnapshot == b.searchedSnapshot
             && a.k == b.k
     }
     @State private var shouldLoadImage = false
-    @State private var isPulsing = false
-    @State private var arrowGlow = false
 
     private var isCurrentLocationMember: Bool {
         member.id == currentLocationMemberID
@@ -1953,7 +2001,7 @@ struct TreeMemberNode: View, Equatable {
             return DS.Color.deceased
         }
         switch member.role {
-        case .owner: return DS.Color.ownerRole
+        case .owner: return ownerShowsAsAdmin ? DS.Color.adminRole : DS.Color.ownerRole
         case .admin: return DS.Color.adminRole
         case .monitor: return DS.Color.monitorRole
         case .supervisor: return DS.Color.supervisorRole
@@ -2028,39 +2076,22 @@ struct TreeMemberNode: View, Equatable {
                     }
                 }
                 .overlay {
-                    // «أنت هنا» — حلقة زرقاء ثابتة دائمة حول عقدتك
+                    // «أنت هنا» — حلقة واحدة ثابتة دائمة حول عقدتك (كانت ثلاث: ثابتة + نابضة + حلقة البحث).
+                    // بعد «موقعك» تنبض قليلاً على الساعة المشتركة (لا `repeatForever`)، وساكنة مع «تقليل الحركة»
                     if isCurrentLocationMember {
                         Circle()
                             .stroke(DS.Color.currentLocation.opacity(0.9), lineWidth: 3 * k)
                             .frame(width: interactiveNodeSize + 16 * k, height: interactiveNodeSize + 16 * k)
-                    }
-                }
-                .overlay {
-                    // حلقة البحث المتوهجة
-                    if searchedMemberID == member.id {
+                            .modifier(TreeLocatePulse(color: DS.Color.currentLocation, active: isLocating,
+                                                      diameter: interactiveNodeSize + 16 * k, lineWidth: 3 * k))
+                    } else if searchedMemberID == member.id {
+                        // علامة الشخص المبحوث عنه — ذهبي الإطارات (`accentLight`) يُرى على العقدة الكحلية،
+                        // ويتلاشى بعد ٥ ثوانٍ (`TreeView.markSearched`)
                         Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [AppSection.tree.ink, AppSection.tree.ink],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 5 * k
-                            )
+                            .stroke(DS.Color.accentLight, lineWidth: 5 * k)
                             .frame(width: interactiveNodeSize + 14 * k, height: interactiveNodeSize + 14 * k)
-                            .dsGlowShadow()
-                    }
-                }
-                .overlay {
-                    // وميض الموقع (الدائرة الزرقاء — يجب أن يكون تحت شريط المتوفى)
-                    if isCurrentLocationMember {
-                        Circle()
-                            .stroke(DS.Color.currentLocation, lineWidth: 4.2 * k)
-                            .frame(width: interactiveNodeSize + 10 * k, height: interactiveNodeSize + 10 * k)
-                            .scaleEffect(isPulsing ? 1.35 : 1.0)
-                            .opacity(isPulsing ? 0.0 : 0.9)
-                            .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12 * k)
-                            .animation(Animation.easeOut(duration: 1.25).repeatCount(4, autoreverses: false), value: isPulsing)
-                            .onAppear { isPulsing = true }
+                            .shadow(color: DS.Color.accentLight.opacity(0.55), radius: 8 * k)
+                            .transition(.opacity)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
@@ -2145,7 +2176,9 @@ struct TreeMemberNode: View, Equatable {
                                     .dsTreeFont(.title3Tree, k)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.55)
+                                    // الطويل يصغر حتى ٧٥٪ ثم يُقصّ بنقاط — كان ٥٥٪ فينزل لنحو ٧ نقاط بالتكبير الافتراضي
+                                    // (مراجعة ٢٠٢٦-١١-٢٧ #3). سطر واحد: الكبسولة بارتفاع ثابت لا يتّسع لسطرين
+                                    .minimumScaleFactor(TreeNodeText.minScale)
                                     // هامش ثابت على الجانبين في كل الصفوف — الطويل يصغر داخل الكبسولة
                                     .padding(.horizontal, 10 * k)
                                     .padding(.vertical, DS.Spacing.xs * k)
@@ -2157,7 +2190,7 @@ struct TreeMemberNode: View, Equatable {
                                     .dsTreeFont(.treeYears, k)
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.6)
+                                    .minimumScaleFactor(TreeNodeText.minScale)
                                     .padding(.horizontal, 12 * k)
                                     .frame(width: interactiveLabelWidth, height: 26 * k)
                                     .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
@@ -2302,3 +2335,61 @@ struct TreeAvatarArt: View, Equatable {
 }
 
 // لمسة الطين على عناصر الشجرة صارت الواحدة `DSClaySkin` (ArtTrial.swift) — كانت `TreeArtSkin` هنا (أسلوب واحد ٢٠٢٦-١٠-٠٧)
+
+
+/// أصغر نسبة تصغير لنصوص العقدة (الاسم والسنوات) — مكان واحد (مراجعة ٢٠٢٦-١١-٢٧ #3)
+enum TreeNodeText {
+    static let minScale: CGFloat = 0.75
+}
+
+/// نبضة «أنت هنا» بعد «موقعك»: حلقة بلون الموقع تتّسع من حلقة العقدة وتتلاشى، على الساعة الهادئة المشتركة
+/// (`FTAmbientClock`، مثل `DSUrgentPulse`) — لا `repeatForever` ولا مؤقّت. تسكن وتختفي حين لا تكون نشطة، خارج الشاشة،
+/// خلف مربّع (`ftAnimationsPaused`) ومع «تقليل الحركة» (الحلقة الثابتة تبقى)
+struct TreeLocatePulse: ViewModifier {
+    let color: Color
+    let active: Bool
+    let diameter: CGFloat
+    let lineWidth: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ftAnimationsPaused) private var paused
+    @State private var onScreen = false
+    @State private var start: TimeInterval?
+    @State private var now: TimeInterval = 0
+    @State private var token = FTAmbientClock.Token()
+    private var clock: FTAmbientClock { FTAmbientClock.shared }
+    private static let grow: CGFloat = 0.35
+
+    func body(content: Content) -> some View {
+        let q = phase
+        content
+            .overlay {
+                Circle()
+                    .stroke(color, lineWidth: lineWidth * 1.4)
+                    .frame(width: diameter, height: diameter)
+                    .scaleEffect(1 + Self.grow * CGFloat(1 - (1 - q) * (1 - q)))
+                    .opacity(start == nil ? 0 : 0.9 * (1 - q))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .onAppear { onScreen = true; sync() }
+            .onDisappear { onScreen = false; sync() }
+            // القيمة الجديدة تُمرَّر صراحةً: داخل `onChange` قد تُقرأ الخصائص من نسخة العرض السابقة
+            // (كانت النبضة لا تقف بعد انتهاء «موقعك» — فحص المحاكي ٢٠٢٦-١١-٢٧)
+            .onChange(of: active) { v in sync(active: v) }
+            .onChange(of: paused) { v in sync(paused: v) }
+            .onChange(of: reduceMotion) { v in sync(reduceMotion: v) }
+            .onReceive(clock.$time) { t in if start != nil { now = t } }
+    }
+
+    private var phase: Double {
+        guard let start else { return 0 }
+        return max(0, now - start).truncatingRemainder(dividingBy: DS.Pulse.period) / DS.Pulse.period
+    }
+
+    private func sync(active: Bool? = nil, paused: Bool? = nil, reduceMotion: Bool? = nil) {
+        let run = (active ?? self.active) && onScreen && !(reduceMotion ?? self.reduceMotion) && !(paused ?? self.paused)
+        clock.hold(ObjectIdentifier(token), run)
+        start = run ? clock.time : nil
+        now = clock.time
+    }
+}
