@@ -236,7 +236,7 @@ enum DS {
         /// تعبئة المتوفّى تحت نص/أيقونة بيضاء — slateFill الثابت (الأبيض فوقه ٧:١)
         static let deceasedFill     = slateFill
         /// شريط «متوفّى» على عقدة الشجرة — عنّابي بدرجة خفيفة (كان مكتوباً في TreeView وWomenClassicTreeView)
-        static let deceasedStrip    = SwiftUI.Color(hex: "#A62B32")
+        static let deceasedStrip    = SwiftUI.Color(hex: "#AD4A52")   // عنّابي خفيف قريب من الأحمر (اختيار المالك ٢٠٢٦-١١-٢٧؛ كان #A62B32) — الأبيض عليه 5.4:1
 
         /// ألوان شعارات التواصل (معنى: هوية المنصّة — لا تتبع القسم). كانت مكرّرة في FamilyProjectsView وProjectDetailView
         enum Social {
