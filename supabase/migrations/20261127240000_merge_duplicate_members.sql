@@ -7,7 +7,8 @@
 --   • عقدته في شجرة النساء وكل من يشير لها (البنات parent_id، الزوجات husband_id، الأبناء mother_id، وكل مفتاح
 --     أجنبي على women_members) عبر repoint_women_node — كما يفعل «ربط بالشجرة».
 --   • كل مفتاح أجنبي على profiles(id) (الأبناء father_id، mother_id، husband_id، الصور، الطلبات، subject_member_id…)
---     — حلقة على pg_constraint مثل merge_member_into_tree، لكن بلا تخطٍّ صامت: أي خطأ غير «مكرّر فريد» يُلغي الكل.
+--     — حلقة على pg_constraint مثل merge_member_into_tree: أي خطأ غير «مكرّر فريد» يُلغي الكل، لكن «مكرّر فريد» واحد كان
+--     يتخطّى نقل الجدول كله بصمت — صُحّح صفّاً صفّاً في 20261127270000_merge_duplicate_guards.
 --   • أعمدة بلا مفتاح أجنبي: death_announcements/death_marks.member_id، guardian_consents.tree_member_id/minor_id،
 --     join_requests.suggested_father_id، admin_request_events/steps.subject_id، daughter_son_lineage.women_node_id،
 --     والمصفوفتان profiles.sons_ids و women_members.hidden_children.

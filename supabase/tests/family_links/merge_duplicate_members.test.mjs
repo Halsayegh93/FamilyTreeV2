@@ -1,7 +1,9 @@
 // تجربة 20261127240000_merge_duplicate_members («دمج» في «المكرر والأخطاء»، موافقة المالك ٢٠٢٦-١١-٢٧) على قاعدة محلية
 // معزولة (لا تلمس السيرفر): فوق حماية روابط العائلة (20261001150000 + 20261001190000) + profile_has_login الحي،
 // ومشغّل إشعار «عدّلت الإدارة بياناتك» بنسخة مصغّرة تحترم family.merging كما في الحي (notify_member_change).
-// قبل الترحيل (الدالة غير موجودة) ← بعده (الحراس، المعاينة، النقل، الملء والتعارض، شجرة النساء) ← بعد التراجع.
+// قبل الترحيل (الدالة غير موجودة) ← بعده + 20261127270000_merge_duplicate_guards (الحراس ومنها المتوفى/الحيّ والميلاد
+// المتباعد، المعاينة، النقل صفّاً صفّاً، الملء والتعارض، شجرة النساء بالأبناء والبنات منفصلين) ← تراجع 270000 (يرجع 240000)
+// ← تراجع 240000.
 // التشغيل: cd supabase/tests/family_links && node merge_duplicate_members.test.mjs
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
@@ -19,6 +21,9 @@ const chain = ['20261001150000_protect_family_links', '20261001190000_carry_own_
 const MIG = '20261127240000_merge_duplicate_members';
 const mig = readFileSync(`${REPO}/migrations/${MIG}.sql`, 'utf8');
 const rb = readFileSync(`${REPO}/rollback/${MIG}_rollback.sql`, 'utf8');
+const MIG2 = '20261127270000_merge_duplicate_guards';
+const mig2 = readFileSync(`${REPO}/migrations/${MIG2}.sql`, 'utf8');
+const rb2 = readFileSync(`${REPO}/rollback/${MIG2}_rollback.sql`, 'utf8');
 
 // نسخ الحي لما تلمسه الدالة (أعمدة وجداول ودوال مساعدة)
 const live = `
@@ -26,6 +31,11 @@ alter table public.notifications add column subject_member_id uuid references pu
 alter table public.women_members add column hidden_children uuid[];
 create table public.death_marks (member_id uuid primary key, marked_at timestamptz default now());
 create table public.join_requests (id uuid primary key default gen_random_uuid(), suggested_father_id uuid);
+-- فريد على العضو: تصويت واحد لكل استطلاع (مفتاح أجنبي cascade كما في الحي) · موافقة وليّ بلا مفتاح أجنبي
+create table public.news_poll_votes (id uuid primary key default gen_random_uuid(), poll_id int,
+  member_id uuid references public.profiles(id) on delete cascade, unique (poll_id, member_id));
+create table public.guardian_consents (id uuid primary key default gen_random_uuid(), tree_member_id uuid, minor_id uuid,
+  unique (tree_member_id, minor_id));
 create or replace function public.profile_has_login(p_id uuid) returns boolean language sql stable security definer
   set search_path to '' as $$
   select exists (select 1 from auth.users u where u.id = p_id or u.raw_app_meta_data ->> 'profile_id' = p_id::text); $$;
@@ -55,7 +65,9 @@ const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 // شجرة النساء: F أب · WA/WB «سارة» مكرّرتان (WB أم C1، ميلاد) · WL لها حساب · WC بنت أخرى
 const P = { O: id(1), ADM: id(2), MON: id(3), MEM: id(4), G: id(5), G2: id(6), K: id(10), R: id(11), K2: id(12), R2: id(13),
   KL: id(14), R3: id(15), RL: id(16), RS: id(17), S1: id(20), S2: id(21), D1: id(22), W1: id(23), MOM: id(24), OX: id(25),
-  F: id(30), WA: id(31), WB: id(32), WL: id(33), C1: id(34), WC: id(35), GAL: id(40), REQ: id(41), N1: id(42), N2: id(43) };
+  F: id(30), WA: id(31), WB: id(32), WL: id(33), C1: id(34), WC: id(35), GAL: id(40), REQ: id(41), N1: id(42), N2: id(43),
+  // حراس 270000: DA متوفى / DB حيّ («سعد») · BA ١٩٥٠ / BB ١٩٥٥ («فهد») · WD «سارة» متوفاة · CS ابن WB (عقدة ذكر)
+  DA: id(50), DB: id(51), BA: id(52), BB: id(53), WD: id(54), CS: id(55), X1: id(60), X2: id(61) };
 let pass = 0, fail = 0;
 const check = (l, ok, x = '') => { ok ? pass++ : fail++; console.log(`${ok ? '✅' : '❌'} ${l}${x ? ' — ' + x : ''}`); };
 
@@ -85,8 +97,13 @@ await db.exec(`
     ('${P.RL}', 'بدر', 'بدر صالح ٢', 'male', 'member', 'active', '${P.G}', null),
     ('${P.RS}', 'بدر', 'بدر صالح ٣', 'male', 'monitor', 'active', '${P.G}', null),
     ('${P.OX}', 'حسن', 'حسن ناصر', 'male', 'member', 'active', '${P.G2}', null),
+    ('${P.DB}', 'سعد', 'سعد صالح', 'male', 'member', 'active', '${P.G}', null),
+    ('${P.BA}', 'فهد', 'فهد صالح', 'male', 'member', 'active', '${P.G}', '1950-03-03'),
+    ('${P.BB}', 'فهد', 'فهد صالح', 'male', 'member', 'active', '${P.G}', '1955-03-03'),
     ('${P.S1}', 'يوسف', 'يوسف حسن', 'male', 'member', 'active', '${P.R}', null),
     ('${P.S2}', 'عمر', 'عمر حسن', 'male', 'member', 'active', '${P.R}', null);
+  insert into profiles(id, first_name, full_name, gender, role, status, father_id, is_deceased) values
+    ('${P.DA}', 'سعد', 'سعد صالح', 'male', 'member', 'active', '${P.G}', true);
   update profiles set sons_ids = array['${P.K}', '${P.R}']::uuid[] where id = '${P.G}';
   insert into women_members(id, first_name, full_name, parent_id, gender) values
     ('${P.MOM}', 'فاطمة', 'فاطمة ناصر', '${P.G2}', 'female'),
@@ -98,6 +115,11 @@ await db.exec(`
     ('${P.WL}', 'سارة', 'سارة خالد ٢', '${P.F}', 'female', '${P.MEM}');
   insert into women_members(id, first_name, full_name, husband_id, gender) values ('${P.W1}', 'نورة', 'نورة', '${P.R}', 'female');
   insert into women_members(id, first_name, full_name, mother_id, parent_id, gender) values ('${P.C1}', 'جود', 'جود', '${P.WB}', '${P.G2}', 'female');
+  insert into women_members(id, first_name, full_name, mother_id, parent_id, gender) values ('${P.CS}', 'سالم', 'سالم', '${P.WB}', '${P.G2}', 'male');
+  insert into women_members(id, first_name, full_name, parent_id, gender, is_deceased) values ('${P.WD}', 'سارة', 'سارة خالد', '${P.F}', 'female', true);
+  -- تصويتات: للمكرر ٣، وللمُبقى تصويت في الاستطلاع ٢ نفسه (يتعارض وحده) · موافقتا وليّ للمكرر، إحداهما يملكها المُبقى
+  insert into news_poll_votes(poll_id, member_id) values (1, '${P.R}'), (2, '${P.R}'), (3, '${P.R}'), (2, '${P.K}');
+  insert into guardian_consents(tree_member_id, minor_id) values ('${P.R}', '${P.X1}'), ('${P.R}', '${P.X2}'), ('${P.K}', '${P.X2}');
   update women_members set mother_id = '${P.MOM}' where id = '${P.R}';
   update women_members set birth_date = '1980-02-02' where id = '${P.WB}';
   update women_members set hidden_children = array['${P.D1}', '${P.R}']::uuid[] where id = '${P.G}';
@@ -126,7 +148,8 @@ const before = await merge(P.ADM, P.K, P.R);
 check('قبل الترحيل: الدالة غير موجودة', !before.ok && /does not exist/.test(before.err), before.err);
 
 await db.exec(mig);
-console.log('\n══════ بعد الترحيل ══════');
+await db.exec(mig2);
+console.log('\n══════ بعد الترحيل (240000 + 270000) ══════');
 
 // ─── الصلاحيات ───
 const asMem = await merge(P.MEM, P.K, P.R);
@@ -155,12 +178,21 @@ await expectHint('رجل وامرأة: not_same_tree', P.K, P.WB, 'not_same_tree
 await expectHint('شجرة النساء — لها حساب: remove_has_login', P.WA, P.WL, 'remove_has_login');
 await expectHint('شجرة النساء — عقدة رجل منسوخة: not_same_tree', P.WA, P.F, 'not_same_tree');
 await expectHint('شجرة النساء — أصل مختلف: different_father', P.WA, P.MOM, 'different_father');
+// ─── حراس 270000 ───
+const dm = await merge(P.ADM, P.DB, P.DA, true);
+check('متوفى في حيّ: deceased_mismatch برسالة رسمية', !dm.ok && dm.hint === 'deceased_mismatch' && dm.code === 'P0001'
+  && dm.err === 'لا يمكن دمج متوفى في حيّ — قد يكونان أخوين بنفس الاسم.', `${dm.hint} · ${dm.err}`);
+await expectHint('حيّ في متوفى (العكس): deceased_mismatch', P.DA, P.DB, 'deceased_mismatch');
+await expectHint('ميلادان بينهما ٥ سنوات: birth_mismatch', P.BA, P.BB, 'birth_mismatch');
+await expectHint('شجرة النساء — متوفاة في حيّة: deceased_mismatch', P.WA, P.WD, 'deceased_mismatch');
+check('الرفض لا يغيّر شيئاً', await exists('profiles', P.DA) && await exists('profiles', P.BB) && await exists('women_members', P.WD));
 
 // ─── المعاينة (dry run) لا تغيّر شيئاً ───
 const histBase = (await one(`select coalesce(max(id), 0)::int n from family_link_history`)).n;
 const dry = await merge(P.O, P.K, P.R, true);
 const d = dry.rows?.[0]?.r ?? {};
-check('المعاينة: نجاح بالأعداد', dry.ok && d.dry_run === true && d.moved_children === 2 && d.moved_daughters === 1 && d.moved_wives === 1,
+check('المعاينة: نجاح بالأعداد', dry.ok && d.dry_run === true && d.moved_children === 2 && d.moved_daughters === 1 && d.moved_wives === 1
+  && d.moved_husbands === 0 && (d.not_moved ?? []).some(x => x.table === 'news_poll_votes' && x.count === 1),
   JSON.stringify(d));
 check('المعاينة: ما سيُملأ (الميلاد، الأم)', (d.filled ?? []).includes('birth_date') && (d.filled ?? []).includes('mother_id'), JSON.stringify(d.filled));
 check('المعاينة: لا شيء تغيّر', await exists('profiles', P.R) && (await one(`select father_id from profiles where id = $1`, [P.S1])).father_id === P.R
@@ -194,6 +226,15 @@ check('إشعارات المكرر نفسه حُذفت (لا تصل للمُبق
 check('الإشعار عنه انتقل (subject_member_id)', (await one(`select subject_member_id from notifications where id = $1`, [P.N2])).subject_member_id === P.K);
 check('death_marks انتقل', (await one(`select count(*)::int n from death_marks where member_id = $1`, [P.K])).n === 1);
 check('join_requests.suggested_father_id انتقل', (await one(`select count(*)::int n from join_requests where suggested_father_id = $1`, [P.K])).n === 1);
+const votes = (await db.query(`select poll_id from news_poll_votes where member_id = $1 order by poll_id`, [P.K])).rows.map(x => x.poll_id);
+check('صفّاً صفّاً: التصويتان غير المتعارضين انتقلا، وتصويت المُبقى نفسه باقٍ', JSON.stringify(votes) === '[1,2,3]', JSON.stringify(votes));
+check('المتعارض وحده ذهب مع المكرر', (await one(`select count(*)::int n from news_poll_votes where member_id = $1`, [P.R])).n === 0);
+const gc = (await db.query(`select minor_id from guardian_consents where tree_member_id = $1 order by minor_id`, [P.K])).rows.map(x => x.minor_id);
+check('بلا مفتاح أجنبي صفّاً صفّاً: غير المتعارض انتقل والمتعارض حُذف', JSON.stringify(gc) === JSON.stringify([P.X1, P.X2])
+  && (await one(`select count(*)::int n from guardian_consents where tree_member_id = $1`, [P.R])).n === 0, JSON.stringify(gc));
+const nm = r.not_moved ?? [];
+check('not_moved يذكر الجدول والعدد', nm.some(x => x.table === 'news_poll_votes' && x.count === 1)
+  && nm.some(x => x.table === 'guardian_consents' && x.count === 1), JSON.stringify(nm));
 const notified = await one(`select count(*)::int n from notifications where kind = 'my_profile_change'`);
 check('لا إشعار لأي عضو', notified.n === 0, String(notified.n));
 const hist = await one(`select count(*)::int n, count(*) filter (where actor = '${P.ADM}')::int a, count(*) filter (where blocked)::int b from family_link_history where id > ${histBase}`);
@@ -213,15 +254,24 @@ check('المُبقى له حساب: يُسمح', kl.ok && !(await exists('profi
 
 // ─── شجرة النساء ───
 const wdry = await merge(P.ADM, P.WA, P.WB, true);
-check('شجرة النساء — المعاينة', wdry.ok && wdry.rows[0].r.tree === 'women' && wdry.rows[0].r.moved_children === 1, JSON.stringify(wdry.rows?.[0]?.r ?? wdry.err));
+const wd = wdry.rows?.[0]?.r ?? {};
+check('شجرة النساء — المعاينة: ابن وبنت منفصلان', wdry.ok && wd.tree === 'women' && wd.moved_children === 1 && wd.moved_daughters === 1
+  && wd.moved_husbands === 0 && wd.moved_women === 1, JSON.stringify(wdry.rows?.[0]?.r ?? wdry.err));
 const w = await merge(P.ADM, P.WA, P.WB);
 const wr = w.rows?.[0]?.r ?? {};
 check('شجرة النساء — نجاح وحذف المكررة', w.ok && !(await exists('women_members', P.WB)), w.err ?? JSON.stringify(wr));
 check('شجرة النساء — ابنتها انتقلت (mother_id)', (await one(`select mother_id from women_members where id = $1`, [P.C1])).mother_id === P.WA);
+check('شجرة النساء — ابنها انتقل (mother_id)', (await one(`select mother_id from women_members where id = $1`, [P.CS])).mother_id === P.WA);
 const wa = await one(`select birth_date::text b from women_members where id = $1`, [P.WA]);
 check('شجرة النساء — الميلاد مُلئ', (wr.filled ?? []).includes('birth_date') && wa.b === '1980-02-02', wa.b);
 
 // ─── التراجع ───
+await db.exec(rb2);
+const old = await merge(P.ADM, P.DB, P.DA, true);
+check('تراجع 270000: دالة 240000 (المتوفى في حيّ يمرّ بالمعاينة، بلا moved_husbands)', old.ok && old.rows[0].r.moved_husbands === undefined,
+  old.err ?? JSON.stringify(old.rows[0].r));
+const fnSrc = await one(`select prosrc from pg_proc where proname = 'merge_duplicate_members'`);
+check('تراجع 270000: النصّ = 240000 حرفياً', fnSrc.prosrc.trim() === mig.slice(mig.indexOf('as $function$') + 13, mig.indexOf('$function$;')).trim());
 await db.exec(rb);
 const gone = await merge(P.ADM, P.WA, P.WC);
 check('بعد التراجع: الدالة غير موجودة', !gone.ok && /does not exist/.test(gone.err), gone.err);

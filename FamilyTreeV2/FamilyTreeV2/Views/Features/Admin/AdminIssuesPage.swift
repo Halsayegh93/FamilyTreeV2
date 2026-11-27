@@ -9,7 +9,8 @@ import SwiftUI
 //     والمدير (من يرى النساء في «العائلة»). المجموعة صفّ: الاسم · «أبناء فلان»/«بنات فلان» (شجرة النساء) · كل شخص باسمه الكامل (سطران) وسطر فرق (عدد الأبناء ·
 //     الزوج للمرأة · «أُضيف في …») ثم (سنة الميلاد · «له حساب» ·
 //     «متوفى») يفتح ورقة العضو (`AdminMemberSheet`) أو مربّع المرأة (`WomanDetailSheet`). «ليسا مكرّرين» على السيرفر للمالك والمدير
-//     (`AdminDuplicateDismissStore` + `duplicate_dismissals`، محلي للمراقب). «دمج» على كل صفّ (المالك والمدير، لا على من له حساب) — هذا الاسم يُحذف
+//     (`AdminDuplicateDismissStore` + `duplicate_dismissals`، محلي للمراقب؛ فشل الحفظ = تنبيه رسمي). «دمجه في الآخر» بجانب
+//     سطر الاسم (المالك والمدير، لا على من له حساب، ولا حيث يرفض السيرفر: متوفى وحيّ أو ميلادان متباعدان) — هذا الاسم يُحذف
 //     ويُدمج في الآخر (`AdminMergeBox` + `merge_duplicate_members`، ٢٠٢٦-١١-٢٧).
 //  ٢) «مشكلات الشجرة» — الأنواع الخمسة بأعدادها، كلٌّ يفتح قائمتها الموجودة بأزرار إصلاحها
 //     (`AdminReviewListPage(.problems, start: .problem(…))`).
@@ -24,6 +25,8 @@ final class AdminDuplicateDismissStore: ObservableObject {
     static let shared = AdminDuplicateDismissStore()
 
     @Published private(set) var signatures: Set<String> = []
+    /// فشل حفظ «ليسا مكرّرين» على السيرفر — الصفحة تعرض التنبيه (`AdminMergeRules.dismissFailedMessage`) ثم تمسحه
+    @Published var failure: String?
     private var user: String?
     /// المالك والمدير والجدول موجود على السيرفر
     private var onServer = false
@@ -72,7 +75,13 @@ final class AdminDuplicateDismissStore: ObservableObject {
             } catch {
                 Log.error("[Duplicates] dismiss failed: \(ErrorHelper.description(error))")
                 fallBackIfMissing(error)
-                if onServer { signatures.remove(signature) } else { saveLocal() }
+                if onServer {
+                    // لا عودة صامتة: المجموعة ترجع ومعها تنبيه رسمي
+                    signatures.remove(signature)
+                    failure = AdminMergeRules.dismissFailedMessage
+                } else {
+                    saveLocal()
+                }
             }
         }
     }
@@ -291,6 +300,13 @@ struct AdminIssuesPage: View {
             .onChange(of: accounts.loaded) { _ in rebuild() }
             .onChange(of: sons.ids) { _ in rebuild() }
             .onChange(of: dismissed.signatures) { _ in rebuild() }
+            .dsAlert(L10n.t("تعذّر الحفظ", "Couldn't save"),
+                     isPresented: Binding(get: { dismissed.failure != nil }, set: { if !$0 { dismissed.failure = nil } })) {
+                Button(L10n.t("حسناً", "OK"), role: .cancel) { dismissed.failure = nil }
+            } message: {
+                Text(verbatim: L10n.t(dismissed.failure ?? AdminMergeRules.dismissFailedMessage,
+                                      "Couldn't save “Not duplicates”. Check your connection and try again."))
+            }
     }
 
     private var seesAll: Bool { authVM.isAdmin }
@@ -440,25 +456,27 @@ struct AdminIssuesPage: View {
         let person = inWomen ? women.first { $0.id == id } : memberVM.member(byId: id)
         let tags = person.map { chips($0, inWomen: inWomen) } ?? []
         let facts = person.map { differences($0, inWomen: inWomen) } ?? []
-        return VStack(alignment: .leading, spacing: 0) {
-            AnyView(personButton(id, number: number, in: group, inWomen: inWomen, person: person, tags: tags, facts: facts))
-            if canMerge, mergeable(id, inWomen: inWomen), !mergeTargets(id, in: group, inWomen: inWomen).isEmpty {
-                HStack {
-                    Spacer(minLength: 0)
-                    AdminPillButton(title: L10n.t("دمج", "Merge"), icon: "arrow.triangle.merge", style: .soft,
-                                    height: DS.Hub.pillHeightCard) {
-                        startMerge(id, in: group, inWomen: inWomen)
-                    }
-                    .accessibilityLabel(Text(verbatim: L10n.t("دمج \(person?.fullName ?? group.name)", "Merge \(person?.fullName ?? group.name)")))
-                    .accessibilityHint(L10n.t("يحذف هذا الاسم وينقل ما يخصّه إلى الاسم الآخر", "Removes this name and moves what it has to the other one"))
+        let showsMerge = canMerge && mergeable(id, inWomen: inWomen) && !mergeTargets(id, in: group, inWomen: inWomen).isEmpty
+        // «دمجه في الآخر» في آخر سطر الاسم (لا تحت الصفّ) — يُقرأ «هذا يُدمج ويُحذف» لا «أبقِ هذا»
+        return HStack(alignment: .top, spacing: DS.Spacing.sm) {
+            AnyView(personButton(id, number: number, in: group, inWomen: inWomen, person: person, tags: tags, facts: facts,
+                                 chevron: !showsMerge))
+            if showsMerge {
+                AdminPillButton(title: L10n.t(AdminMergeRules.removeButtonTitle, "Merge into the other"),
+                                icon: "arrow.triangle.merge", style: .soft, height: DS.Hub.pillHeightCard) {
+                    startMerge(id, in: group, inWomen: inWomen)
                 }
-                .padding(.bottom, DS.Spacing.smd)
+                .fixedSize()
+                .padding(.top, DS.Spacing.smd)
+                .accessibilityLabel(Text(verbatim: L10n.t("دمج \(person?.fullName ?? group.name) في الآخر",
+                                                          "Merge \(person?.fullName ?? group.name) into the other")))
+                .accessibilityHint(L10n.t("يحذف هذا الاسم وينقل ما يخصّه إلى الاسم الآخر", "Removes this name and moves what it has to the other one"))
             }
         }
     }
 
     private func personButton(_ id: UUID, number: Int, in group: AdminDuplicateNames.Group, inWomen: Bool,
-                              person: FamilyMember?, tags: [AdminMemberTag], facts: [String]) -> some View {
+                              person: FamilyMember?, tags: [AdminMemberTag], facts: [String], chevron: Bool = true) -> some View {
         Button {
             open(id, in: group, inWomen: inWomen)
         } label: {
@@ -490,7 +508,7 @@ struct AdminIssuesPage: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                DSChevron()
+                if chevron { DSChevron() }
             }
             .padding(.vertical, DS.Spacing.smd)
             .frame(minHeight: DS.Hub.rowMinHeightTwoLines)
@@ -524,7 +542,13 @@ struct AdminIssuesPage: View {
     private func mergeTargets(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) -> [UUID] {
         let login = Set(group.ids.filter { hasLogin($0, inWomen: inWomen) })
         let staff = Set(group.ids.filter { isStaff($0, inWomen: inWomen) })
-        return AdminMergeRules.targets(group: group.ids, remove: id, hasLogin: login, staff: staff)
+        var facts: [UUID: AdminMergeRules.Facts] = [:]
+        for gid in group.ids {
+            guard let m = inWomen ? women.first(where: { $0.id == gid }) : memberVM.member(byId: gid) else { continue }
+            facts[gid] = AdminMergeRules.Facts(deceased: m.isDeceased == true,
+                                               birthYear: AdminMergeRules.year(fromBirthDate: m.birthDate))
+        }
+        return AdminMergeRules.targets(group: group.ids, remove: id, hasLogin: login, staff: staff, facts: facts)
     }
 
     private func mergePerson(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) -> AdminMergePerson {

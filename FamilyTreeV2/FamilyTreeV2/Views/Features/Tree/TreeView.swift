@@ -667,7 +667,7 @@ struct TreeView: View {
                                 TreeSearchOverlay(
                                     onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
-                                    onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
+                                    onClose: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
                                 )
                             } else if breadcrumbChain.count > 1 {
@@ -709,7 +709,7 @@ struct TreeView: View {
                                 TreeSearchOverlay(
                                     onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
-                                    onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
+                                    onClose: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
                                 )
                             } else {
@@ -965,7 +965,7 @@ struct TreeView: View {
     /// اختيار نتيجة من البحث: يُغلق البحث (فيرجع مسار الأسماء و«البداية»/«موقعك») ثم ينتقل للعضو — الكاميرا تُعاد
     /// وحدها حين تصغر بطاقة الأدوات (`refitAfterChromeChange`) فلا يقع الشخص أسفل الشاشة (مراجعة ٢٠٢٦-١١-٢٧ #1)
     private func chooseSearchResult(_ member: FamilyMember) {
-        withAnimation(DS.Anim.snappy) { showSearch = false }
+        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { showSearch = false }
         selectMemberFromSearch(member)
     }
 
@@ -1127,7 +1127,7 @@ struct TreeView: View {
     private func searchToolButton(_ size: DSNavButtonSize) -> some View {
         DSHeaderButton(symbol: "magnifyingglass", label: L10n.t("بحث", "Search"), context: .surface,
                        size: size, tint: AppSection.tree.ink) {
-            withAnimation(DS.Anim.smooth) { showSearch = true }
+            withAnimation(reduceMotion ? nil : DS.Anim.smooth) { showSearch = true }
         }
     }
 
