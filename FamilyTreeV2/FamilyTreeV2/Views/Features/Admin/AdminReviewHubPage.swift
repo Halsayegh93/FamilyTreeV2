@@ -68,6 +68,8 @@ nonisolated enum AdminReviewHubLogic {
         let accounts: [UUID: A]
         let daughterSons: Set<UUID>
         let verified: Set<UUID>
+        /// بلاغ ٢٠٢٦-١١-٢٧: من له حساب خارج القوائم الثلاث (أبناء البنات — `AdminAccountsStore.outsideSeen`) يدخل «مسجّلون بلا صورة»
+        var outside: Set<UUID> = []
     }
 
     /// بطاقتا الصفحة
@@ -155,8 +157,10 @@ extension AdminReviewHubLogic.List {
 enum AdminReviewHubCounts {
     /// عدد كل قائمة — المفتاح الغائب = لم يصل بعد («—»). نفس ما تعدّه صفحة كل قائمة (T2)
     /// - photos: من ينظر (قاعدة «مسجّلون بلا صورة» تستثنيه والمالك لغير المالك) — nil = لا يُحسب (القائمة غائبة فلا «سليمة»)
+    /// - outside: من له حساب خارج قوائم الاستخدام (`AdminAccountsStore.outsideSeen` — أبناء البنات) لقائمة الصور وحدها
     static func make(index: AdminMembersIndex, verified: Set<UUID>,
-                     members: [FamilyMember], photos: PhotoNudgeLogic.Viewer? = nil) -> [AdminReviewHubLogic.List: Int] {
+                     members: [FamilyMember], photos: PhotoNudgeLogic.Viewer? = nil,
+                     outside: Set<UUID> = []) -> [AdminReviewHubLogic.List: Int] {
         guard index.built else { return [:] }
         var out: [AdminReviewHubLogic.List: Int] = [:]
         for list in AdminReviewHubLogic.List.allCases {
@@ -166,7 +170,9 @@ enum AdminReviewHubCounts {
                 out[list] = DeathDatesCampaign.stats(members).incomplete
             case .photos:
                 // نفس قاعدة القائمة وعددها (`AdminPhotoNudgeList.rows`) — nil قبل وصول الحسابات
-                if let photos, let rows = AdminPhotoNudgeList.rows(in: index, viewer: photos) { out[list] = rows.count }
+                if let photos, let rows = AdminPhotoNudgeList.rows(in: index, viewer: photos, outside: outside) {
+                    out[list] = rows.count
+                }
             case .notOpened, .inactive:
                 if index.accountsReady, let review = list.review { out[list] = review.rows(in: index, verified: verified).count }
             default:
@@ -203,6 +209,7 @@ struct AdminReviewHubPage: View {
             .onChange(of: memberVM.membersVersion) { _ in rebuild() }
             .onChange(of: accounts.accounts) { _ in rebuild() }
             .onChange(of: accounts.loaded) { _ in rebuild() }
+            .onChange(of: accounts.outsideSeen) { _ in rebuild() }
             .onChange(of: sons.ids) { _ in rebuild() }
             .onChange(of: verified.ids) { _ in rebuild() }
             .debugStackProbe("AdminReviewHubPage")
@@ -232,7 +239,7 @@ struct AdminReviewHubPage: View {
                                             branchName: { names.branchName(for: $0) })
         index = built
         counts = AdminReviewHubCounts.make(index: built, verified: verified.ids, members: memberVM.allMembers,
-                                           photos: .init(authVM: authVM))
+                                           photos: .init(authVM: authVM), outside: Set(accounts.outsideSeen.keys))
     }
 
     // MARK: المحتوى

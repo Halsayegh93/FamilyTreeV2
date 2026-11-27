@@ -258,14 +258,22 @@ private struct PhotoNudgeRowFace<Actions: View>: View {
 
 @MainActor
 enum AdminPhotoNudgeList {
-    /// أعضاء القائمة من فهرس «العائلة» (نفس قاعدة السيرفر) — nil قبل وصول الحسابات (لا صفر مضلِّل)
-    static func rows(in index: AdminMembersIndex, viewer: PhotoNudgeLogic.Viewer) -> [Int]? {
+    /// أعضاء القائمة من فهرس «العائلة» (نفس قاعدة السيرفر) — nil قبل وصول الحسابات (لا صفر مضلِّل).
+    /// `outside` (بلاغ المالك ٢٠٢٦-١١-٢٧): من له حساب خارج قوائم الاستخدام — أبناء البنات (`AdminAccountsStore.outsideSeen`)؛
+    /// يدخلون القائمة وعددها ولا يمسّون أي رقم في العائلة
+    static func rows(in index: AdminMembersIndex, viewer: PhotoNudgeLogic.Viewer, outside: Set<UUID> = []) -> [Int]? {
         guard index.built, index.accountsReady else { return nil }
         return index.entries.indices.filter { i in
             let e = index.entries[i]
-            return PhotoNudgeLogic.isListed(.init(e.member, hasLogin: e.hasLogin),
+            return PhotoNudgeLogic.isListed(.init(e.member, hasLogin: hasLogin(e, outside: outside)),
                                             viewerId: viewer.id, viewerIsOwner: viewer.isOwner)
         }
+    }
+
+    /// له حساب لهذه القائمة (`PhotoNudgeLogic.listLogin`): قوائم الاستخدام، أو حساب خارجها وله رقم (قاعدة السيرفر)
+    static func hasLogin(_ e: AdminMembersIndex.Entry, outside: Set<UUID>) -> Bool {
+        PhotoNudgeLogic.listLogin(inUsage: e.hasLogin, outsideLogin: outside.contains(e.id),
+                                  hasPhone: !AdminMemberFacts.isBlank(e.member.phoneNumber))
     }
 
     static var title: String { L10n.t("مسجّلون بلا صورة", "Registered, no photo") }
@@ -357,7 +365,7 @@ struct AdminPhotoNudgePage: View {
 
     /// القائمة بترتيبها: من لم يُنبَّه أولاً (بترتيب الفهرس)، ثم الأقدم إشعاراً
     private var rows: [Int]? {
-        guard let list = AdminPhotoNudgeList.rows(in: index, viewer: viewer) else { return nil }
+        guard let list = AdminPhotoNudgeList.rows(in: index, viewer: viewer, outside: outside) else { return nil }
         let last = { (i: Int) in store.open(for: index.entries[i].id)?.nudgeOpen.lastNotice }
         return list.enumerated().sorted { a, b in
             switch (last(a.element), last(b.element)) {
@@ -368,6 +376,9 @@ struct AdminPhotoNudgePage: View {
             }
         }.map(\.element)
     }
+
+    /// من له حساب خارج قوائم الاستخدام (أبناء البنات) — يُقرأ من المخزن عند كل رسم، فوصوله يُعيد القائمة بلا بناء
+    private var outside: Set<UUID> { Set(accounts.outsideSeen.keys) }
 
     private var openMap: [UUID: PhotoNudgeLogic.Open] {
         store.openByMember.mapValues(\.nudgeOpen)
@@ -499,7 +510,8 @@ struct AdminPhotoNudgePage: View {
         let known = store.allOpenHealth.hasData && viewer.canReadStatus
         let line = PhotoNudgeLogic.listLine(open, known: store.allOpenHealth.hasData, viewer: viewer,
                                             maxReminders: PhotoNudgeConfig.maxReminders, now: now)
-        let state = PhotoNudgeLogic.row(viewer: viewer, member: .init(entry.member, hasLogin: entry.hasLogin),
+        let state = PhotoNudgeLogic.row(viewer: viewer,
+                                        member: .init(entry.member, hasLogin: AdminPhotoNudgeList.hasLogin(entry, outside: outside)),
                                         open: open, maxReminders: PhotoNudgeConfig.maxReminders, now: now)
         return HStack(spacing: DS.Spacing.sm) {
             Button { sheet = AdminMemberSheetContext(ids: ids, start: position) } label: {

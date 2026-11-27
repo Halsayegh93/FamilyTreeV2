@@ -69,6 +69,10 @@ let key3 = H.CacheKey(membersVersion: 3, members: 10, accountsLoaded: true, acco
                       daughterSons: [], verified: [])
 check(key1 == key2, false, "V30: two members swapping categories (same count) changes the key")
 check(key1 == key3, true, "V30: same members, same categories → same key (no rebuild)")
+// بلاغ ٢٠٢٦-١١-٢٧: ابن البنت يدخل «مسجّلون بلا صورة» من قراءة الدخول الإضافية — وصولها يعيد العدّ في «اليوم»
+var key4 = key3
+key4.outside = [a]
+check(key4 == key3, false, "outside logins arriving (daughter's son) change the key → «مسجّلون بلا صورة» recounted")
 
 // MARK: - V16: «الراحلون 502» يهبط حيث يُرى 502 أولاً
 

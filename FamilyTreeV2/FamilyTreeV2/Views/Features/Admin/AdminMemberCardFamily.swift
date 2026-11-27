@@ -22,6 +22,8 @@ final class AdminMemberCardFamilyStore: ObservableObject {
     @Published private(set) var loaded = false
     /// صفّ ابن البنت لكل عضو جُلب (nil = ليس ابن بنت)
     @Published private(set) var lineageRows: [UUID: LineageRow] = [:]
+    /// تدقيق ٢٠٢٦-١١-٢٧: من سُئل عن صفّه (وُجد أو لا) — قبله «العائلة» لابن البنت «—» (`AdminMemberCardLogic.familyKnown`)
+    @Published private(set) var lineageChecked: Set<UUID> = []
     private var lastFetch: Date?
 
     nonisolated struct LineageRow: Decodable, Equatable, Sendable {
@@ -65,6 +67,8 @@ final class AdminMemberCardFamilyStore: ObservableObject {
         } catch {
             Log.warning("[MemberCard] daughter_son_lineage: \(error.localizedDescription)")
         }
+        // الفشل أيضاً ينهي الانتظار — يبقى ما نعرفه (لا «—» دائماً)
+        lineageChecked.insert(memberId)
     }
 
     func node(_ id: UUID?) -> FamilyMember? {
@@ -103,10 +107,14 @@ struct AdminMemberCardFamily {
     let hiddenByFamily: Bool
     /// رأس الشجرة (بلا أب وله أبناء) — لا صفّ «الأب»
     let isProfileRoot: Bool
+    /// تدقيق ٢٠٢٦-١١-٢٧: شجرة النساء (وصفّ ابن البنت) وصلت — قبلها الصفوف «—» لا «غير مسجّل» (`familyKnown`)
+    let known: Bool
 
     init(member m: FamilyMember, isProfile: Bool, all: [FamilyMember], byId: (UUID) -> FamilyMember?,
-         women: [FamilyMember], daughterSon: Bool, lineageRow: AdminMemberCardFamilyStore.LineageRow?) {
+         women: [FamilyMember], daughterSon: Bool, lineageRow: AdminMemberCardFamilyStore.LineageRow?,
+         known: Bool = true) {
         self.isProfile = isProfile
+        self.known = known
         let womenById = Dictionary(women.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         // عقدته: ابن البنت بعقدته المسجّلة، المرأة المسجّلة بعقدتها المربوطة، وإلا معرّفه نفسه إن كان في شجرة النساء
         let node: UUID? = {
@@ -293,7 +301,13 @@ struct AdminMemberFamilyGroup: View {
         requestRows.contains(row) ? { handlers.jumpToRequest(row) } : nil
     }
 
+    /// «—» قبل المعرفة (`family.known`)، وإلا القيمة
+    private func shown(_ value: String?) -> String? {
+        AdminMemberCardLogic.knownValue(value, known: family.known, placeholder: AdminStoreHealthText.placeholder)
+    }
+
     var summary: String {
+        guard family.known else { return AdminStoreHealthText.placeholder }
         let ar = L10n.isArabic
         var parts: [String] = []
         if !family.isProfileRoot {
@@ -348,7 +362,7 @@ struct AdminMemberFamilyGroup: View {
             if !family.isProfileRoot {
                 // الأب: شجرة الرجال تُربط/تُغيَّر بمربّع الأب (`LinkFatherSheet`)؛ أبو ابن البنت في شجرة النساء — للاطلاع
                 AdminMemberFactRow(icon: "arrow.triangle.branch", tint: DS.Color.palm, title: L10n.t("الأب", "Father"),
-                                   tag: fatherTag, value: AdminMemberCardFamily.firstName(family.father),
+                                   tag: fatherTag, value: shown(AdminMemberCardFamily.firstName(family.father)),
                                    hasRequest: requestRows.contains(.father),
                                    action: canEdit && family.isProfile && family.lineage != .daughterSon
                                        ? { handlers.openTall(.father(m)) } : nil,
@@ -357,7 +371,7 @@ struct AdminMemberFamilyGroup: View {
             }
             // م٤: منتقي الأم (بنات العائلة — `DSWifeFlowBox(relation: .mother)` ← `WomenStore.setMotherId`)، لا شجرة النساء
             AdminMemberFactRow(icon: "heart", tint: DS.Color.palm, title: L10n.t("الأم", "Mother"),
-                               tag: motherTag, value: AdminMemberCardFamily.firstName(family.mother), feminine: true,
+                               tag: motherTag, value: shown(AdminMemberCardFamily.firstName(family.mother)), feminine: true,
                                hasRequest: requestRows.contains(.mother),
                                action: canEdit && family.nodeId != nil ? { handlers.openFamily(.mother(m)) } : nil,
                                actionHint: family.mother == nil ? L10n.t("إضافة", "Add") : L10n.t("تغيير", "Change"),
@@ -365,12 +379,12 @@ struct AdminMemberFamilyGroup: View {
             AdminMemberFactRow(icon: "heart", tint: DS.Color.palm, title: spouseTitle, subtitle: spouseNames,
                                tag: family.anySpouseOutside ? AdminMemberTag(text: L10n.t("من خارج العائلة", "From outside the family"),
                                                                             tone: .outside) : nil,
-                               value: spouseValue, feminine: !female, hasRequest: requestRows.contains(.spouses),
+                               value: shown(spouseValue), feminine: !female, hasRequest: requestRows.contains(.spouses),
                                action: canEdit && family.nodeId != nil ? { handlers.openFamily(.spouses(m)) } : nil,
                                actionHint: L10n.t("إدارة", "Manage"), jump: jump(.spouses))
             if !female {
                 AdminMemberFactRow(icon: "person.2", tint: DS.Color.palm, title: L10n.t("الأبناء والبنات", "Sons and daughters"),
-                                   subtitle: family.childrenNames, value: family.childrenValue,
+                                   subtitle: family.known ? family.childrenNames : nil, value: shown(family.childrenValue),
                                    hasRequest: requestRows.contains(.children),
                                    action: canManageChildren && family.isProfile ? { handlers.openFamily(.children(m)) } : nil,
                                    actionHint: L10n.t("إدارة", "Manage"), jump: jump(.children))
@@ -401,8 +415,9 @@ struct AdminMemberFamilyGroup: View {
                                              : L10n.t("مخفي عن الأعضاء", "Hidden from members") }
             return nil
         }()
-        // ابن البنت بلا عقدة محمّلة: لا مفتاح على ملفه في شجرة الرجال (السيرفر يرفض إظهاره هناك)
-        let canToggle = canEdit && !family.hiddenByFamily
+        // ابن البنت بلا عقدة محمّلة: لا مفتاح على ملفه في شجرة الرجال (السيرفر يرفض إظهاره هناك). قبل وصول شجرة النساء
+        // لا مفتاح ولا «مخفي» — «—» (كان ابن البنت «مخفي» بإخفاء ملفه حتى تصل عقدته)
+        let canToggle = family.known && canEdit && !family.hiddenByFamily
             && (family.visibilityNode != nil || (family.isProfile && family.lineage != .daughterSon && !female))
         if canToggle {
             AdminMemberFactRow(icon: "tree", tint: DS.Color.palm, title: title, subtitle: note, hidesValue: true,
@@ -416,9 +431,9 @@ struct AdminMemberFamilyGroup: View {
                                                                                    : L10n.t("يُظهره", "Shows them"))
                                                                          : L10n.t("يسأل قبل الإخفاء", "Asks before hiding")))))
         } else {
-            AdminMemberFactRow(icon: "tree", tint: DS.Color.palm, title: title, subtitle: note,
-                               value: family.hidden ? (female ? L10n.t("مخفية", "Hidden") : L10n.t("مخفي", "Hidden"))
-                                                    : (female ? L10n.t("ظاهرة", "Shown") : L10n.t("ظاهر", "Shown")))
+            AdminMemberFactRow(icon: "tree", tint: DS.Color.palm, title: title, subtitle: family.known ? note : nil,
+                               value: shown(family.hidden ? (female ? L10n.t("مخفية", "Hidden") : L10n.t("مخفي", "Hidden"))
+                                                          : (female ? L10n.t("ظاهرة", "Shown") : L10n.t("ظاهر", "Shown"))))
         }
     }
 }

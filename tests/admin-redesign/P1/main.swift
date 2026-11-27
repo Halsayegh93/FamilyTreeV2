@@ -145,6 +145,26 @@ check(L.isListed(member(id: me), viewerId: me, viewerIsOwner: false), false, "li
 check(L.isListed(member(isOwner: true), viewerId: me, viewerIsOwner: false), false, "list: owner hidden from admin/monitor")
 check(L.isListed(member(isOwner: true), viewerId: me, viewerIsOwner: true), true, "list: owner listed for the other owner")
 
+// بلاغ المالك ٢٠٢٦-١١-٢٧: أبناء البنات (تستبعدهم قوائم الاستخدام عمداً) لهم حساب — يدخلون القائمة بقراءة الدخول الإضافية
+// وبرقمهم (نفس `private.photo_nudge_listed` بعد 20261127100000)
+check(L.listLogin(inUsage: true, outsideLogin: false, hasPhone: true), true, "list login: in the usage lists → account")
+check(L.listLogin(inUsage: false, outsideLogin: true, hasPhone: true), true,
+      "list login: daughter's son with a login and a phone → account (was left out)")
+check(L.listLogin(inUsage: false, outsideLogin: true, hasPhone: false), false,
+      "list login: outside login without a phone → out (server needs a phone)")
+check(L.listLogin(inUsage: false, outsideLogin: false, hasPhone: true), false, "list login: no login anywhere → out")
+check(L.isListed(member(login: L.listLogin(inUsage: false, outsideLogin: true, hasPhone: true)), viewerId: me,
+                 viewerIsOwner: false), true, "list: daughter's son, login, no photo → listed")
+check(L.isListed(member(login: L.listLogin(inUsage: false, outsideLogin: true, hasPhone: true), photo: true), viewerId: me,
+                 viewerIsOwner: false), false, "list: daughter's son with a photo → out")
+
+// تدقيق الكرت ٢٠٢٦-١١-٢٧: «أضف» يرفضه السيرفر للموقوف/المعلّق (V12 `account_frozen`، مطبَّق) — لا زرّ «نبّهه» له
+check(L.canNudge(admin, member(active: false)), false, "who: frozen / pending → no «نبّهه» (server: account_frozen)")
+check(L.row(viewer: admin, member: member(active: false), open: nil, maxReminders: 3, now: now, calendar: kuwait), .hidden,
+      "row: frozen, no photo, no request → no row")
+check(L.canAskChange(admin, member(photo: true, active: false)), true,
+      "who: frozen with a photo → «طلب تغيير» stays (the change path doesn't check status)")
+
 let a = UUID(), b = UUID(), c = UUID(), d = UUID()
 let opens: [UUID: L.Open] = [b: open(ago(days: 2)), c: open(ago(days: 8)), d: open(ago(days: 6, seconds: 86_399))]
 check(L.bulkCount(listed: [a, b, c, d], open: opens, now: now), 2, "bulk: skips members notified in the last 7 days (b, d)")

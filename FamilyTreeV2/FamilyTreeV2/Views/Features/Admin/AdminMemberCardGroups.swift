@@ -437,8 +437,8 @@ struct AdminMemberAccountGroup: View {
     /// م١٠: كلمة الرأس نفسها («بدون حساب») ثم «لم يسجّل الدخول بعد» — لا «غير مسجّل · آخر دخول غير مسجّل»
     var summary: String {
         AdminMemberCardLogic.accountSummary(statusWord: AdminMemberAccountSection.registerWord(facts.status),
-                                            lastSeen: facts.account?.lastSeen.map(AdminMemberSheetFacts.dateText),
-                                            hasAccount: facts.account != nil, female: member.isFemale,
+                                            lastSeen: facts.lastSeen.map(AdminMemberSheetFacts.dateText),
+                                            login: facts.login, female: member.isFemale,
                                             arabic: L10n.isArabic)
     }
 
@@ -459,7 +459,7 @@ struct AdminMemberAccountGroup: View {
             AdminMemberFactRow(icon: "clock", tint: DS.Color.sea, title: L10n.t("آخر دخول", "Last sign-in"),
                                subtitle: facts.usageLine,
                                value: facts.lastSeenText(female: member.isFemale),
-                               valueIsNumber: facts.account?.lastSeen != nil)
+                               valueIsNumber: facts.lastSeen != nil)
             if let devices { devices }
         }
     }

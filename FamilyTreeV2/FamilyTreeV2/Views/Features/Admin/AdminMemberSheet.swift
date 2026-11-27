@@ -81,6 +81,10 @@ struct AdminMemberSheet: View {
     @State private var movedIds: [UUID: UUID] = [:]
     /// ت-ج٧: آخر جلب لمخازن «الوارد» من هذا الكرت — «التالي» لا يعيده قبل `requestsRefreshInterval`
     @State private var requestsFetchedAt: Date?
+    /// بلاغ ٢٠٢٦-١١-٢٧: جواب `profile_has_login` لمن ليس في قوائم الاستخدام (ابن البنت…) — مرة لكل عضو يُعرض، و`loginDone`
+    /// انتهى السؤال (أو لا حاجة له). nil قبله = «جارٍ التحقق…» لا «بدون حساب»
+    @State private var serverLogin: Bool?
+    @State private var loginDone = false
 
     init(ids: [UUID], start: Int, inBox: Bool = false) {
         self.ids = ids
@@ -187,9 +191,23 @@ struct AdminMemberSheet: View {
     }
 
     private func facts(_ m: FamilyMember) -> AdminMemberSheetFacts {
-        AdminMemberSheetFacts(member: m, all: memberVM.allMembers, byId: memberVM.member(byId:), tree: tree,
-                              account: isProfile ? accounts.info(m.id) : nil, accountsReady: accounts.loaded,
-                              liveStatus: liveStatus, daughterSon: daughterSons.contains(m.id))
+        let account = isProfile ? accounts.info(m.id) : nil
+        return AdminMemberSheetFacts(member: m, all: memberVM.allMembers, byId: memberVM.member(byId:), tree: tree,
+                                     account: account, login: login(m, account: account),
+                                     lastSeen: isProfile ? accounts.outsideSeen[m.id] : nil,
+                                     liveStatus: liveStatus, daughterSon: daughterSons.contains(m.id),
+                                     womenKnown: family.loaded)
+    }
+
+    /// له حساب دخول؟ قوائم الاستخدام أولاً، ومن ليس فيها جواب السيرفر (`AdminMemberCardLogic.cardLogin`). عقدة شجرة النساء
+    /// بلا ملف: رابطها بحساب (`nodeLogin`)
+    private func login(_ m: FamilyMember, account: AdminAccountInfo?) -> Bool? {
+        guard isProfile else {
+            return AdminMemberCardLogic.nodeLogin(linked: WomenStore.linkedUserByWoman[m.id] != nil, storeLoaded: accounts.loaded)
+        }
+        return AdminMemberCardLogic.cardLogin(inStore: account != nil, storeLoaded: accounts.loaded, server: serverLogin,
+                                              serverDone: loginDone,
+                                              storeExcludes: daughterSons.contains(m.id) || m.role == .pending)
     }
 
     private func familyFacts(_ m: FamilyMember) -> AdminMemberCardFamily {
@@ -251,7 +269,7 @@ struct AdminMemberSheet: View {
         let lock = AdminMemberSheetLogic.lockNote(isSelf: isSelf(m), memberIsOwner: m.role == .owner, isDeceased: !living,
                                                   viewerCanAct: canEdit || canFreeze || canBan || canDelete)
         let showsDevices = authVM.canViewSystemSettings && facts.status != .treeOnly && isProfile
-        let hasLogin = facts.account != nil
+        let hasLogin = facts.login == true
         let card = AdminMemberSheetLogic.adminCard(
             isSelf: isSelf(m), living: living,
             photo: isProfile && AdminMemberPhotoActions.state(member: m, hasLogin: hasLogin, viewer: .init(authVM: authVM)) != .hidden,
@@ -533,7 +551,11 @@ struct AdminMemberSheet: View {
         ban = nil
         devices = nil
         devicesFailed = false
+        serverLogin = nil
+        loginDone = false
         if !accounts.loaded { await accounts.refresh() }
+        // أول شيء بعد قوائم الاستخدام: الرأس و«الحساب» وصفّ الصورة ينتظرون هذا الجواب وحده
+        if let m = member { await checkLogin(m) }
         // «العائلة»: شجرة النساء وصفّ ابن البنت · «طلبات عنه»: مخازن «الوارد» نفسها (لمن يقرّر طلبات الشجرة)
         await family.refresh()
         if let id = currentId { await family.refreshLineage(id) }
@@ -557,6 +579,19 @@ struct AdminMemberSheet: View {
     }
 
     private func isCurrent(_ m: FamilyMember) -> Bool { !Task.isCancelled && currentId == m.id }
+
+    /// بلاغ ٢٠٢٦-١١-٢٧: من ليس في قوائم الاستخدام (`app_usage_members` تستبعد أبناء البنات عمداً — أرقام العائلة كما هي)
+    /// يُسأل عنه `profile_has_login` مرة لكل عضو يُعرض — نفس نداء مربّع الجنس. الفشل يترك الحكم للقوائم (`cardLogin`)
+    private func checkLogin(_ m: FamilyMember) async {
+        let asks = AdminMemberCardLogic.asksServerLogin(isProfile: isProfile, deceased: m.isDeceased == true,
+                                                        inStore: accounts.info(m.id) != nil)
+        if asks {
+            let answer = await memberVM.profileHasLogin(m.id)
+            guard isCurrent(m) else { return }
+            serverLogin = answer
+        }
+        loginDone = true
+    }
 
     /// مخازن «الوارد» (بمهلها — لا جلب مكرّر)
     private func refreshRequests() async {
@@ -692,6 +727,10 @@ struct AdminMemberSheet: View {
 struct AdminMemberSheetFacts {
     let status: AdminMemberStatus?
     let account: AdminAccountInfo?
+    /// له حساب دخول: قوائم الاستخدام، وإلا جواب `profile_has_login` (`AdminMemberCardLogic.cardLogin`) — nil لا يُعرف بعد
+    let login: Bool?
+    /// آخر ظهور: من قوائم الاستخدام، أو قراءة الدخول الإضافية لمن تستبعده (`AdminAccountsStore.outsideSeen`)
+    let lastSeen: Date?
     let gaps: [AdminMemberGap]
     let problems: [AdminMemberProblem]
     let isFamilyRoot: Bool
@@ -701,14 +740,20 @@ struct AdminMemberSheetFacts {
     let branchHead: FamilyMember?
 
     init(member m: FamilyMember, all: [FamilyMember], byId: (UUID) -> FamilyMember?, tree: AdminMemberFacts.TreeContext?,
-         account: AdminAccountInfo?, accountsReady: Bool, liveStatus: FamilyMember.MemberStatus?, daughterSon: Bool = false) {
+         account: AdminAccountInfo?, login: Bool?, lastSeen: Date? = nil, liveStatus: FamilyMember.MemberStatus?,
+         daughterSon: Bool = false, womenKnown: Bool = true) {
         var shown = m
         if let liveStatus { shown.status = liveStatus }
-        status = AdminMemberFacts.status(shown, hasLogin: accountsReady ? account != nil : nil)
+        // بلاغ ٢٠٢٦-١١-٢٧: كان «له حساب» = في قوائم الاستخدام وحدها، فكل ابن بنت «بدون حساب» وبلا صفّ الصورة ولا رقاقتها
+        status = AdminMemberFacts.status(shown, hasLogin: login)
         self.account = account
-        gaps = AdminMemberFacts.gaps(m, registered: account != nil)
-        // ابن البنت بلا أب ومخفي من شجرة الرجال عمداً — ليست مشكلة (بيته شجرة النساء)
-        problems = daughterSon ? [] : (tree.map { AdminMemberFacts.problems(m, in: $0) } ?? [])
+        self.login = login
+        self.lastSeen = account?.lastSeen ?? lastSeen
+        gaps = AdminMemberFacts.gaps(m, registered: login == true)
+        // ابن البنت بلا أب ومخفي من شجرة الرجال عمداً — ليست مشكلة (بيته شجرة النساء). وحساب المرأة: مربوط بعقدته في شجرة
+        // النساء أم لا — لا يُعرف قبل وصولها (تدقيق ٢٠٢٦-١١-٢٧: كانت «الأب غير مسجّل · مخفي من الشجرة» حتى تصل)
+        let unknownWoman = m.isFemale && !womenKnown
+        problems = daughterSon || unknownWoman ? [] : (tree.map { AdminMemberFacts.problems(m, in: $0) } ?? [])
         children = all.filter { $0.fatherId == m.id }.sorted { $0.sortOrder < $1.sortOrder }
         isFamilyRoot = m.fatherId == nil && !children.isEmpty
         father = m.fatherId.flatMap(byId)
@@ -754,8 +799,8 @@ struct AdminMemberSheetFacts {
 
     /// «آخر دخول»: التاريخ، أو «لم يسجّل/تسجّل الدخول بعد» لمن لا حساب له (م١٠ — كان «غير مسجّل»)
     func lastSeenText(female: Bool) -> String {
-        AdminMemberCardLogic.lastSeen(account?.lastSeen.map(Self.dateText), hasAccount: account != nil, female: female,
-                                      arabic: L10n.isArabic)
+        AdminMemberCardLogic.lastSeen(lastSeen.map(Self.dateText), login: login, female: female,
+                                      placeholder: AdminStoreHealthText.placeholder, arabic: L10n.isArabic)
     }
 
     static func dateText(_ date: Date) -> String { DateHelper.displayDate(date) }

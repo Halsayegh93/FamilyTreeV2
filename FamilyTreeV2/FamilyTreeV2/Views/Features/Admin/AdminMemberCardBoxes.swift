@@ -49,9 +49,12 @@ extension AdminMemberCardFamily {
     @MainActor
     static func make(_ m: FamilyMember, isProfile: Bool, memberVM: MemberViewModel,
                      store: AdminMemberCardFamilyStore) -> AdminMemberCardFamily {
-        AdminMemberCardFamily(member: m, isProfile: isProfile, all: memberVM.allMembers, byId: memberVM.member(byId:),
-                              women: store.people, daughterSon: DaughterSonsIndex.shared.contains(m.id),
-                              lineageRow: store.lineageRows[m.id])
+        let daughterSon = DaughterSonsIndex.shared.contains(m.id)
+        return AdminMemberCardFamily(member: m, isProfile: isProfile, all: memberVM.allMembers, byId: memberVM.member(byId:),
+                                     women: store.people, daughterSon: daughterSon,
+                                     lineageRow: store.lineageRows[m.id],
+                                     known: AdminMemberCardLogic.familyKnown(storeLoaded: store.loaded, daughterSon: daughterSon,
+                                                                             lineageChecked: store.lineageChecked.contains(m.id)))
     }
 }
 

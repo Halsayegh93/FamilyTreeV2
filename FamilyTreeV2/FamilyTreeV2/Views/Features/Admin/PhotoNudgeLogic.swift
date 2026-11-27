@@ -81,9 +81,10 @@ nonisolated enum PhotoNudgeLogic {
         viewer.canEdit && !m.isDeceased && m.hasLogin && m.id != viewer.id && (!m.isOwner || viewer.isOwner)
     }
 
-    /// «نبّهه يضيف صورة»: بلا صورة، وليس أنثى (لا صور للإناث — السيرفر يفرّغها ويرفض `female_no_photo`)
+    /// «نبّهه يضيف صورة»: بلا صورة، وليس أنثى (لا صور للإناث — السيرفر يفرّغها ويرفض `female_no_photo`)، ومفعّل: مسار «أضف»
+    /// يرفض الموقوف والمعلّق (`account_frozen`، 20261126200000 V12 — تدقيق الكرت ٢٠٢٦-١١-٢٧: كان الزرّ يظهر ويُرفض)
     static func canNudge(_ viewer: Viewer, _ m: Member) -> Bool {
-        canAct(viewer, m) && !m.hasPhoto && !m.isFemale
+        canAct(viewer, m) && !m.hasPhoto && !m.isFemale && m.isActive
     }
 
     /// «طلب تغيير الصورة» (المربّع بالسبب): له صورة
@@ -325,6 +326,13 @@ nonisolated enum PhotoNudgeLogic {
     static func isListed(_ m: Member, viewerId: UUID?, viewerIsOwner: Bool) -> Bool {
         m.hasLogin && !m.isDeceased && m.isActive && !m.isFemale && !m.hasPhoto && m.id != viewerId
             && (!m.isOwner || viewerIsOwner)
+    }
+
+    /// له حساب لقاعدة القائمة: في قوائم الاستخدام (`AdminAccountsStore`)، أو — لمن تستبعده عمداً: أبناء البنات (لا يُعدّون في
+    /// أرقام العائلة) — في قراءة الدخول الإضافية (`AdminAccountsStore.outsideSeen`: حساب دخول أو جهاز) وله رقم، كما يشترط
+    /// السيرفر (`private.photo_nudge_listed` بعد 20261127100000 — بلاغ المالك ٢٠٢٦-١١-٢٧)
+    static func listLogin(inUsage: Bool, outsideLogin: Bool, hasPhone: Bool) -> Bool {
+        inUsage || (outsideLogin && hasPhone)
     }
 
     /// نُبّه خلال ٧ أيام — «نبّههم كلهم» يتخطّاه

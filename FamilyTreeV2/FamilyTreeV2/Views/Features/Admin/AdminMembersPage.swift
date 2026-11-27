@@ -203,6 +203,7 @@ struct AdminMembersPage: View {
         .onChange(of: memberVM.membersVersion) { _ in rebuild() }
         .onChange(of: accounts.accounts) { _ in rebuild() }
         .onChange(of: accounts.loaded) { _ in rebuild() }
+        .onChange(of: accounts.outsideSeen) { _ in refreshReviews() }
         .onChange(of: sons.ids) { _ in rebuild() }
         .onChange(of: verified.ids) { _ in refreshReviews() }
         .onChange(of: query) { _ in limits = [:] }
@@ -318,7 +319,7 @@ struct AdminMembersPage: View {
     /// أعداد قوائم «يحتاج مراجعتك» — المصدر الواحد مع صفحتها (`AdminReviewHubCounts`)
     private func refreshReviews() {
         reviewCounts = AdminReviewHubCounts.make(index: index, verified: verified.ids, members: memberVM.allMembers,
-                                                 photos: .init(authVM: authVM))
+                                                 photos: .init(authVM: authVM), outside: Set(accounts.outsideSeen.keys))
     }
 
     private func open(_ p: AdminMembersPush) {

@@ -225,7 +225,8 @@ struct AdminMemberAdminSection: View {
                                    showsChevron: true,
                                    busy: busy == AdminMemberConfirm.unlinkPhone.id || busy == AdminMemberConfirm.clearPhone.id)
                 }
-                if !phone.isEmpty && facts.account == nil {
+                // «امسح» لمن لا حساب دخول له يقيناً — لا لابن البنت المسجّل (خارج قوائم الاستخدام) ولا قبل الجواب
+                if !phone.isEmpty && facts.login == false {
                     AdminPillButton(title: L10n.t("امسح", "Clear"), style: .reject) { ask(.unlinkPhone) }
                         .fixedSize()
                         .accessibilityLabel(L10n.t("مسح رقم الهاتف", "Clear the phone number"))
@@ -233,7 +234,7 @@ struct AdminMemberAdminSection: View {
                 }
             }
         case .photo:
-            AdminMemberPhotoActions(member: member, hasLogin: facts.account != nil, noDevices: noDevices,
+            AdminMemberPhotoActions(member: member, hasLogin: facts.login == true, noDevices: noDevices,
                                     askChange: { openBox(.photoRequest(member)) }, working: $photoWorking)
         case .register:
             AdminMemberRow(icon: "iphone", tint: DS.Color.sea, title: L10n.t("تسجيل في التطبيق", "Register in the app"),

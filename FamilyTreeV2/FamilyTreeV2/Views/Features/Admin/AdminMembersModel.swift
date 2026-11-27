@@ -604,6 +604,11 @@ final class AdminAccountsStore: ObservableObject {
     /// سجلّات بلا اسم (رقم دخول بلا اسم) في كل فئة — تُطرح من أرقام `app_usage_stats` (`AppUsageStats.excludingNameless`)
     /// لأنها ليست أفراداً في العائلة. بعد أن يستبعدها السيرفر نفسه تصير أصفاراً فلا يتغيّر شيء
     private(set) var namelessByCategory: [AppUsageCategory: Int] = [:]
+    /// بلاغ المالك ٢٠٢٦-١١-٢٧: من له حساب دخول (أو جهاز) وتستبعده القوائم الثلاث عمداً — أبناء البنات، لا يُعدّون في أرقام
+    /// العائلة — بآخر ظهوره، من `get_members_last_signin` (المالك والمدير والمراقب؛ غيرهم لا شيء). لا يدخل `accounts` ولا
+    /// أي عدد: يقرؤه كرت العضو («آخر دخول») وقائمة «مسجّلون بلا صورة» (`PhotoNudgeLogic.listLogin`) وحدهما. فشله لا يُفشل
+    /// المخزن — يبقى آخر ما وصل
+    @Published private(set) var outsideSeen: [UUID: Date] = [:]
     private var lastFetch: Date?
 
     static let categories: [AppUsageCategory] = [.active, .idle, .loginNoDevice]
@@ -619,8 +624,10 @@ final class AdminAccountsStore: ObservableObject {
             async let active = Self.fetch(.active)
             async let idle = Self.fetch(.idle)
             async let noDevice = Self.fetch(.loginNoDevice)
+            async let seen = Self.fetchSeen()
             let lists = try await (active, idle, noDevice)
             apply([.active: lists.0, .idle: lists.1, .loginNoDevice: lists.2])
+            if let seen = await seen { applyOutside(seen) }
             lastFetch = Date()
         } catch {
             // إلغاء (الصفحة أُغلقت، جلب أحدث) ليس فشلاً — يرجع الحال كما كان
@@ -653,6 +660,44 @@ final class AdminAccountsStore: ObservableObject {
         if map != accounts { accounts = map }
         loaded = true
         health = .loaded(at: Date())
+    }
+
+    /// `outsideSeen` = من في قراءة الدخول وليس في القوائم الثلاث (اليوم: أبناء البنات الثلاثة)
+    func applyOutside(_ rows: [LastSignIn]) {
+        var map: [UUID: Date] = [:]
+        for row in rows where accounts[row.memberId] == nil {
+            if let seen = row.seen { map[row.memberId] = seen }
+        }
+        if map != outsideSeen { outsideSeen = map }
+    }
+
+    /// صفّ `get_members_last_signin` (`private.member_activity`: حساب دخول أو جهاز، بآخر ظهور)
+    struct LastSignIn: Decodable {
+        let memberId: UUID
+        let seen: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case memberId = "member_id"
+            case seen = "last_sign_in_at"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            memberId = try c.decode(UUID.self, forKey: .memberId)
+            seen = AppUsageMember.parse(try c.decodeIfPresent(String.self, forKey: .seen))
+        }
+    }
+
+    /// nil = تعذّر (يبقى آخر ما وصل)
+    private static func fetchSeen() async -> [LastSignIn]? {
+        do {
+            return try await SupabaseConfig.client.rpc("get_members_last_signin").execute().value
+        } catch {
+            if !Log.isCancellation(error) {
+                Log.warning("[AdminAccountsStore] get_members_last_signin: \(error.localizedDescription)")
+            }
+            return nil
+        }
     }
 
     private static func fetch(_ category: AppUsageCategory) async throws -> [AppUsageMember] {

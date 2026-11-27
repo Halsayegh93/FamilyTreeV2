@@ -515,13 +515,14 @@ struct AdminDashboardView: View {
         let key = AdminReviewHubLogic.CacheKey(membersVersion: memberVM.membersVersion, members: memberVM.allMembers.count,
                                                accountsLoaded: accounts.loaded,
                                                accounts: accounts.accounts.mapValues(\.usage),
-                                               daughterSons: sons, verified: verified)
+                                               daughterSons: sons, verified: verified,
+                                               outside: Set(accounts.outsideSeen.keys))
         guard key != reviewKey else { return }
         reviewKey = key
         let index = AdminMembersIndex.build(members: memberVM.allMembers, accounts: accounts.accounts,
                                             accountsReady: accounts.loaded, daughterSons: sons, branchName: { _ in nil })
         let counts = AdminReviewHubCounts.make(index: index, verified: verified, members: memberVM.allMembers,
-                                               photos: .init(authVM: authVM))
+                                               photos: .init(authVM: authVM), outside: key.outside)
         if counts != reviewCounts { reviewCounts = counts }
     }
 

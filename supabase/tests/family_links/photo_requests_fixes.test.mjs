@@ -30,6 +30,9 @@ const applied = read('migrations/20261111160000_photo_change_request.sql');
 const p1 = read('migrations/20261126180000_photo_add_request.sql');
 const fix = read('migrations/20261126200000_photo_requests_fixes.sql');
 const undo = read('rollback/20261126200000_photo_requests_fixes_rollback.sql');
+// بلاغ المالك ٢٠٢٦-١١-٢٧: أبناء البنات المسجّلون بلا صورة يُذكَّرون مثل غيرهم (private.photo_nudge_listed بلا استثنائهم)
+const dsons = read('migrations/20261127100000_photo_nudge_daughter_sons.sql');
+const dsonsUndo = read('rollback/20261127100000_photo_nudge_daughter_sons_rollback.sql');
 
 
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -69,7 +72,7 @@ async function seed(db) {
     insert into daughter_son_lineage(profile_id) values ('${P.DS}');`);
 }
 
-/** stage: before = الحي اليوم (180000) · after = + الترحيل */
+/** stage: before = قبل 200000 (180000) · after = + 200000 (الحي اليوم ٢٠٢٦-١١-٢٧) · dsons = + 20261127100000 */
 async function setup(stage) {
   const db = new PGlite();
   await db.exec(baseBody); await db.exec(preFns); await db.exec(baseTriggers);
@@ -127,7 +130,8 @@ async function setup(stage) {
   await db.exec(applied);
   await db.exec(p1);
   await seed(db);
-  if (stage === 'after') await db.exec(fix);
+  if (stage === 'after' || stage === 'dsons') await db.exec(fix);
+  if (stage === 'dsons') await db.exec(dsons);
   return db;
 }
 
@@ -331,6 +335,79 @@ const sortIds = a => JSON.stringify([...a].sort());
   await db.exec(fix);
   r = await ask(db, P.A, P.PN, '');
   check('الترحيل يُعاد بعد التراجع ويعمل', !r.ok && r.hint === 'account_frozen', r.err);
+}
+
+// ══════ 20261127100000: أبناء البنات في «نبّههم كلهم» ══════
+{
+  console.log('\n══════ أبناء البنات (20261127100000) ══════');
+  const listed = async (db, member, me = P.O, role = 'owner') =>
+    (await q(db, `select private.photo_nudge_listed($1, $2, $3) as ok`, [member, me, role]))[0].ok;
+  const shown = [P.X, P.Y, P.Z, P.F, P.FR, P.PN, P.DS, P.NP, P.DV, P.D, P.T, P.M, P.A, P.O];
+  // قبله (الحي اليوم): ابن البنت المسجّل بلا صورة خارج القاعدة — لا يصله «نبّههم كلهم» ولو عرضه التطبيق
+  let db = await setup('after');
+  check('قبله: ابن البنت المسجّل بلا صورة خارج القاعدة', await listed(db, P.DS) === false);
+  let b = (await allNotes(db)).length;
+  let r = await askAll(db, P.A, shown);
+  let sent = (await allNotes(db)).slice(b).map(n => n.t);
+  check('قبله: «نبّههم كلهم» لا يصله', r.ok && !sent.includes(P.DS), r.err ?? JSON.stringify(sent));
+
+  db = await setup('dsons');
+  check('بعده: ابن البنت المسجّل بلا صورة في القاعدة', await listed(db, P.DS) === true);
+  b = (await allNotes(db)).length;
+  r = await askAll(db, P.A, shown);
+  sent = (await allNotes(db)).slice(b).map(n => n.t);
+  // (لا صورة معلّقة لـ Z هنا — فهو مؤهَّل مثل X وY)
+  check('بعده: «نبّههم كلهم» = X · Y · Z · DV · DS (ابن البنت معهم)', r.ok && Number(r.rows[0].n) === 5
+    && sortIds(sent) === sortIds([P.X, P.Y, P.Z, P.DV, P.DS]), r.err ?? `${r.rows?.[0]?.n} ${JSON.stringify(sent)}`);
+  check('… بنص «أضف» وbulk', (await notesFor(db, P.DS))[0]?.title === 'أضف صورتك الشخصية'
+    && (await notesFor(db, P.DS))[0]?.details?.bulk === true);
+  // كل شرط آخر باقٍ — على ابن بنت أيضاً
+  const DS2 = id(30);
+  await db.exec(`insert into profiles(id, first_name, full_name, gender, role, status, phone_number) values
+      ('${DS2}', 'سعد', 'سعد ناصر العتيبي', 'male', 'member', 'active', null);
+    insert into auth.users(id, raw_app_meta_data) values ('${DS2}', '{}');
+    insert into daughter_son_lineage(profile_id) values ('${DS2}');`);
+  check('ابن بنت بلا رقم: خارج القاعدة (الرقم شرط)', await listed(db, DS2) === false);
+  await db.exec(`update profiles set phone_number = '55500030' where id = '${DS2}'`);
+  check('… برقمه: في القاعدة', await listed(db, DS2) === true);
+  await db.exec(`update profiles set status = 'frozen' where id = '${DS2}'`);
+  check('ابن بنت موقوف: خارج القاعدة', await listed(db, DS2) === false);
+  await db.exec(`update profiles set status = 'active', avatar_url = 'https://x/avatars/ds2.jpg' where id = '${DS2}'`);
+  check('ابن بنت له صورة: خارج القاعدة', await listed(db, DS2) === false);
+  await db.exec(`update profiles set avatar_url = null where id = '${DS2}'; delete from auth.users where id = '${DS2}'`);
+  check('ابن بنت بلا حساب ولا جهاز: خارج القاعدة', await listed(db, DS2) === false);
+  await db.exec(`insert into auth.users(id, raw_app_meta_data) values ('${DS2}', '{}')`);
+  check('ابن بنت هو المتصل: خارج القاعدة', await listed(db, DS2, DS2, 'member') === false);
+  await db.exec(`update profiles set is_deceased = true where id = '${DS2}'`);
+  check('ابن بنت متوفى: خارج القاعدة', await listed(db, DS2) === false);
+  for (const [who, name] of [[P.F, 'الأنثى'], [P.FR, 'الموقوف'], [P.PN, 'المعلّق'], [P.NP, 'بلا رقم'], [P.D, 'المتوفى'],
+                             [P.T, 'بلا حساب ولا جهاز'], [P.M, 'من له صورة']]) {
+    check(`بعده: ${name} ما زال خارج القاعدة`, await listed(db, who) === false);
+  }
+  await db.exec(`update profiles set avatar_url = null where id = '${P.O}'`);
+  check('بعده: المالك بلا صورة خارج القاعدة للمدير وداخلها للمالك الآخر',
+    await listed(db, P.O, P.A, 'admin') === false && await listed(db, P.O, id(99), 'owner') === true);
+  await db.exec(`update profiles set avatar_url = 'https://x/avatars/o.jpg' where id = '${P.O}'`);
+  r = await as(db, P.A, `select private.photo_nudge_listed($1, $2, 'owner')`, [P.DS, P.A]);
+  check('بعده: الدالة الداخلية لا تُنفَّذ من التطبيق', !r.ok, r.err ?? '');
+  // الطلب الفردي والتذكير التلقائي لم يستثنيا ابن البنت أصلاً — لا تغيير
+  const db2 = await setup('dsons');
+  r = await ask(db2, P.A, P.DS, '');
+  check('«نبّهه» الفردي لابن البنت يعمل (كما كان)', r.ok, r.err ?? '');
+  await ago(db2, P.DS, '4 days');
+  check('… والتذكير التلقائي يذكّره', await tick(db2) === 1);
+
+  // التراجع: يرجع الحي حرفياً (ابن البنت خارج القاعدة)
+  const before = (await q(await setup('after'), `select pg_get_functiondef('private.photo_nudge_listed(uuid,uuid,text)'::regprocedure) as d`))[0].d;
+  const db3 = await setup('dsons');
+  await db3.exec(dsonsUndo);
+  const after = (await q(db3, `select pg_get_functiondef('private.photo_nudge_listed(uuid,uuid,text)'::regprocedure) as d`))[0].d;
+  check('التراجع: الدالة كما في 200000 حرفياً', before === after);
+  check('التراجع: ابن البنت خارج القاعدة من جديد', await listed(db3, P.DS) === false);
+  r = await as(db3, P.A, `select private.photo_nudge_listed($1, $2, 'owner')`, [P.DS, P.A]);
+  check('التراجع: الدالة الداخلية ما زالت لا تُنفَّذ من التطبيق', !r.ok, r.err ?? '');
+  await db3.exec(dsons);
+  check('الترحيل يُعاد بعد التراجع ويعمل', await listed(db3, P.DS) === true);
 }
 
 console.log(`\n${pass} نجح · ${fail} فشل`);

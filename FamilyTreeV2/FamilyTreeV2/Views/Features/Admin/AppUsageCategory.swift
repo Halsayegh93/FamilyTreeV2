@@ -76,7 +76,7 @@ struct AppUsageMember: Decodable, Identifiable {
         accountCreated = Self.parse(try c.decodeIfPresent(String.self, forKey: .accountCreated))
     }
 
-    private static func parse(_ raw: String?) -> Date? {
+    static func parse(_ raw: String?) -> Date? {
         guard let raw else { return nil }
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

@@ -227,6 +227,20 @@ nonisolated enum AdminMemberCardLogic {
         return arabic ? "غير معروف" : "Unknown"
     }
 
+    /// «آخر دخول» حين قد لا يُعرف الحساب بعد (`login` nil = جواب السيرفر لم يصل): «—» — لا «لم يسجّل الدخول بعد» قبل الجواب
+    static func lastSeen(_ date: String?, login: Bool?, female: Bool, placeholder: String, arabic: Bool = true) -> String {
+        if let date = date?.trimmingCharacters(in: .whitespaces), !date.isEmpty { return date }
+        guard let login else { return placeholder }
+        return lastSeen(nil, hasAccount: login, female: female, arabic: arabic)
+    }
+
+    /// ملخّص «الحساب» حين قد لا يُعرف الحساب بعد: كلمة الحال وحدها («—») حتى يصل الجواب
+    static func accountSummary(statusWord: String, lastSeen date: String?, login: Bool?, female: Bool,
+                               arabic: Bool = true) -> String {
+        guard let login else { return statusWord }
+        return accountSummary(statusWord: statusWord, lastSeen: date, hasAccount: login, female: female, arabic: arabic)
+    }
+
     /// ملخّص «الحساب»: كلمة الحال (كالرأس) ثم آخر دخول — «بدون حساب · لم يسجّل الدخول بعد» · «مسجّل · آخر دخول 2/11/2026»
     static func accountSummary(statusWord: String, lastSeen date: String?, hasAccount: Bool, female: Bool,
                                arabic: Bool = true) -> String {
@@ -398,6 +412,41 @@ nonisolated enum AdminMemberCardLogic {
         let staff: Set<String> = ["owner", "admin", "monitor", "supervisor", "pending"]
         if staff.contains(role) || isViewer || frozen || linkedLogin || inAccountsStore { return true }
         return serverLogin
+    }
+
+    // MARK: ٨) «له حساب» في الكرت (بلاغ المالك ٢٠٢٦-١١-٢٧: «حسين علي محمد الصاغة» ابن بنت له حساب، والكرت «بدون حساب»)
+
+    /// يُسأل السيرفر (`profile_has_login`) مرة لكل فتح؟ ملف في شجرة الرجال، حيّ، وليس في قوائم الاستخدام
+    /// (`AdminAccountsStore` ← `app_usage_members`، تستبعد أبناء البنات عمداً — لا يُعدّون في أرقام العائلة). المتوفى حالته
+    /// «متوفى» بلا سؤال، وعقدة شجرة النساء بلا ملف لا يُسأل عنها
+    static func asksServerLogin(isProfile: Bool, deceased: Bool, inStore: Bool) -> Bool {
+        isProfile && !deceased && !inStore
+    }
+
+    /// له حساب في الكرت: true · false · nil لا يُعرف بعد (لا «بدون حساب» قبل الجواب). من في قوائم الاستخدام له حساب يقيناً
+    /// (كل فئاتها الثلاث لها حساب)، ومن ليس فيها فجواب السيرفر. فشل السؤال (`serverDone` بلا جواب): القوائم تكفي لمن تشمله
+    /// وغاب عنها، ومن تستبعده عمداً (`storeExcludes` — ابن البنت، طلب الانضمام) يبقى nil
+    static func cardLogin(inStore: Bool, storeLoaded: Bool, server: Bool?, serverDone: Bool, storeExcludes: Bool) -> Bool? {
+        if inStore { return true }
+        if let server { return server }
+        guard serverDone, storeLoaded, !storeExcludes else { return nil }
+        return false
+    }
+
+    /// عقدة شجرة النساء بلا ملف (تدقيق ٢٠٢٦-١١-٢٧): حسابها رابطها (`linked_user_id`) — كانت «بدون حساب» ولو رُبطت بحساب
+    static func nodeLogin(linked: Bool, storeLoaded: Bool) -> Bool? {
+        if linked { return true }
+        return storeLoaded ? false : nil
+    }
+
+    /// «العائلة» معروفة؟ شجرة النساء وصلت، ولابن البنت صفّه أيضاً (عقدته منه) — قبلها «—» لا «الأب غير مسجّل»
+    static func familyKnown(storeLoaded: Bool, daughterSon: Bool, lineageChecked: Bool) -> Bool {
+        storeLoaded && (!daughterSon || lineageChecked)
+    }
+
+    /// قيمة صفّ في «العائلة»: «—» قبل المعرفة، وإلا القيمة (nil = الصفّ يقول «غير مسجّل» بنفسه)
+    static func knownValue(_ value: String?, known: Bool, placeholder: String) -> String? {
+        known ? value : placeholder
     }
 
     /// ما يمنع «انقله» (السيرفر لا يمنع حذف من له حساب — `move_child_gender` إلى أنثى يحذف ملفه)

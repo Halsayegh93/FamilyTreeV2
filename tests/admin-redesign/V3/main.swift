@@ -437,5 +437,61 @@ check(C.requestsRefreshDue(last: t0, now: t0.addingTimeInterval(C.requestsRefres
 // MARK: ت-ج٨ بلا لغة تقنية
 check(C.daughterUnlinkNote(), "فك ربط البنت غير متاح بعد.", "plain words, no «السيرفر»")
 
+// MARK: بلاغ المالك ٢٠٢٦-١١-٢٧ «حسين علي محمد الصاغة»: ابن البنت «بدون حساب» وله حساب
+// مخزن الحسابات (`app_usage_members`) يستبعد أبناء البنات عمداً — من ليس فيه يُسأل عنه السيرفر مرة (`profile_has_login`)
+check(C.asksServerLogin(isProfile: true, deceased: false, inStore: false), true,
+      "not in the usage lists (daughter's son…) → ask the server once")
+check(C.asksServerLogin(isProfile: true, deceased: false, inStore: true), false, "in the usage lists → no call")
+check(C.asksServerLogin(isProfile: true, deceased: true, inStore: false), false, "deceased → no call (status says it)")
+check(C.asksServerLogin(isProfile: false, deceased: false, inStore: false), false, "women-tree node → no profile to ask about")
+check(C.cardLogin(inStore: true, storeLoaded: true, server: nil, serverDone: false, storeExcludes: false), true,
+      "in the usage lists → account, without waiting")
+check(C.cardLogin(inStore: false, storeLoaded: true, server: true, serverDone: true, storeExcludes: true), true,
+      "daughter's son with a login (the bug) → account, not «بدون حساب»")
+check(C.cardLogin(inStore: false, storeLoaded: true, server: false, serverDone: true, storeExcludes: true), false,
+      "daughter's son, server says no login → no account")
+check(C.cardLogin(inStore: false, storeLoaded: true, server: nil, serverDone: false, storeExcludes: true), nil,
+      "answer on its way → unknown, never «بدون حساب» first")
+check(C.cardLogin(inStore: false, storeLoaded: true, server: nil, serverDone: false, storeExcludes: false), nil,
+      "answer on its way (member the lists cover) → unknown too")
+check(C.cardLogin(inStore: false, storeLoaded: true, server: nil, serverDone: true, storeExcludes: false), false,
+      "call failed, the lists cover them and lack them → no account")
+check(C.cardLogin(inStore: false, storeLoaded: true, server: nil, serverDone: true, storeExcludes: true), nil,
+      "call failed for a daughter's son (lists leave him out) → unknown")
+check(C.cardLogin(inStore: false, storeLoaded: false, server: nil, serverDone: true, storeExcludes: false), nil,
+      "call failed and the lists never loaded → unknown")
+check(C.cardLogin(inStore: false, storeLoaded: false, server: true, serverDone: true, storeExcludes: false), true,
+      "lists not loaded yet but the server answered → its answer")
+// «آخر دخول» وملخّص «الحساب» قبل الجواب: «—» وحده — لا «لم يسجّل الدخول بعد»
+check(C.lastSeen(nil, login: nil, female: false, placeholder: "—"), "—", "unknown account → «—»")
+check(C.lastSeen(nil, login: true, female: false, placeholder: "—"), "غير معروف", "account, no date → «غير معروف»")
+check(C.lastSeen(nil, login: false, female: false, placeholder: "—"), "لم يسجّل الدخول بعد", "no account → never signed in")
+check(C.lastSeen("2/11/2026", login: true, female: false, placeholder: "—"), "2/11/2026", "date wins")
+check(C.accountSummary(statusWord: "—", lastSeen: nil, login: nil, female: false), "—",
+      "unknown → «—» alone, no «لم يسجّل الدخول بعد»")
+check(C.accountSummary(statusWord: "مسجّل", lastSeen: nil, login: true, female: false), "مسجّل · غير معروف",
+      "daughter's son with a login but no date → «مسجّل · غير معروف»")
+check(C.accountSummary(statusWord: "مسجّل", lastSeen: "2/11/2026", login: true, female: false), "مسجّل · آخر دخول 2/11/2026",
+      "with a date → «آخر دخول …»")
+check(C.accountSummary(statusWord: "بدون حساب", lastSeen: nil, login: false, female: true), "بدون حساب · لم تسجّل الدخول بعد",
+      "no account (woman) → as before")
+
+// تدقيق الكرت ٢٠٢٦-١١-٢٧: عقدة شجرة النساء المربوطة بحساب لها حساب (كانت «بدون حساب» في الرأس)
+check(C.nodeLogin(linked: true, storeLoaded: true), true, "women-tree node linked to an account → account")
+check(C.nodeLogin(linked: false, storeLoaded: true), false, "women-tree node, no link → no account")
+check(C.nodeLogin(linked: false, storeLoaded: false), nil, "women-tree node, lists not loaded → unknown")
+// «العائلة» قبل وصول شجرة النساء وصفّ ابن البنت: «—» لا «الأب غير مسجّل · الأم غير مسجّلة · مخفي»
+check(C.familyKnown(storeLoaded: false, daughterSon: false, lineageChecked: false), false,
+      "women's tree not loaded → family facts unknown")
+check(C.familyKnown(storeLoaded: true, daughterSon: false, lineageChecked: false), true,
+      "loaded, not a daughter's son → known (no lineage row needed)")
+check(C.familyKnown(storeLoaded: true, daughterSon: true, lineageChecked: false), false,
+      "daughter's son before his lineage row (his women-tree node) → unknown")
+check(C.familyKnown(storeLoaded: true, daughterSon: true, lineageChecked: true), true,
+      "daughter's son with the row checked → known")
+check(C.knownValue("علي", known: false, placeholder: "—"), "—", "unknown → «—», never «غير مسجّل»")
+check(C.knownValue(nil, known: true, placeholder: "—"), nil, "known and empty → the row says «غير مسجّل» itself")
+check(C.knownValue("علي", known: true, placeholder: "—"), "علي", "known → the value")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
