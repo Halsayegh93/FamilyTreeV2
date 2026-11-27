@@ -19,9 +19,11 @@ struct AdminReviewListPage: View {
     /// «الفرع: …» المختار في «العائلة» — nil = كل العائلة
     let branchSet: Set<UUID>?
 
-    init(review: AdminMemberReview, branchSet: Set<UUID>?) {
+    /// - start: الشريحة المختارة عند الفتح («المكرر والأخطاء» يفتح «مشكلات في الشجرة» على نوع المشكلة)
+    init(review: AdminMemberReview, branchSet: Set<UUID>?, start: AdminReviewFilter = .all) {
         self.review = review
         self.branchSet = branchSet
+        _filter = State(initialValue: start)
     }
 
     @EnvironmentObject var authVM: AuthViewModel
@@ -34,7 +36,7 @@ struct AdminReviewListPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var index = AdminMembersIndex.empty
-    @State private var filter = AdminReviewFilter.all
+    @State private var filter: AdminReviewFilter
     @State private var query = ""
     @State private var limit = AdminMembersPage.pageSize
     @State private var sheet: AdminMemberSheetContext?

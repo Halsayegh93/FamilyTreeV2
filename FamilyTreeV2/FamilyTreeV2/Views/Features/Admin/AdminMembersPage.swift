@@ -84,6 +84,8 @@ struct AdminMembersPage: View {
     @ObservedObject private var sons = DaughterSonsIndex.shared
     /// «حي ✓» المحلية لهذا المستخدم (عدد «هل ما زالوا أحياء؟»)
     @ObservedObject private var verified = AdminLivingVerifiedStore.shared
+    /// «ليسا مكرّرين» المحلية لهذا المستخدم (عدد «المكرر والأخطاء»)
+    @ObservedObject private var dupDismissed = AdminDuplicateDismissStore.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dismiss) private var dismiss
     @Environment(\.adminBackTitle) private var outerBack
@@ -116,6 +118,8 @@ struct AdminMembersPage: View {
     @State private var memo = AdminMembersScopeMemo()
     /// أعداد قوائم «يحتاج مراجعتك» (المفتاح الغائب = لم يصل) — نفس صفحتها (U12)
     @State private var reviewCounts: [AdminReviewHubLogic.List: Int] = [:]
+    /// «المكرر والأخطاء»: الأسماء المكررة والأرقام بدون أسماء (`AdminIssuesData` — نفس صفحتها)
+    @State private var issues = AdminIssuesData()
     @State private var showFilters = false
 
     // ما يُفتح
@@ -206,6 +210,7 @@ struct AdminMembersPage: View {
         .onChange(of: accounts.outsideSeen) { _ in refreshReviews() }
         .onChange(of: sons.ids) { _ in rebuild() }
         .onChange(of: verified.ids) { _ in refreshReviews() }
+        .onChange(of: dupDismissed.signatures) { _ in refreshIssues() }
         .onChange(of: query) { _ in limits = [:] }
         .onChange(of: filters) { _ in limits = [:] }
         .debugStackProbe("AdminMembersPage", limitKB: DebugStackLimit.page)
@@ -235,6 +240,7 @@ struct AdminMembersPage: View {
             }
         }
         verified.activate(user: authVM.currentUser?.id)
+        dupDismissed.activate(user: authVM.currentUser?.id)
         if memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
         rebuild()
         await sons.refresh()
@@ -290,6 +296,7 @@ struct AdminMembersPage: View {
         buildPeople()
         buildPersons()
         version += 1
+        refreshIssues()
     }
 
     /// صفوف «نساء» و«خارج العائلة» — بناء صفحة «نساء العائلة» نفسه (أعدادها = أرقامها، T2)
@@ -320,6 +327,13 @@ struct AdminMembersPage: View {
     private func refreshReviews() {
         reviewCounts = AdminReviewHubCounts.make(index: index, verified: verified.ids, members: memberVM.allMembers,
                                                  photos: .init(authVM: authVM), outside: Set(accounts.outsideSeen.keys))
+        refreshIssues()
+    }
+
+    /// أعداد «المكرر والأخطاء» — شجرة النساء حين وصلت (لمن يراها)
+    private func refreshIssues() {
+        issues = AdminIssuesData.make(members: memberVM.allMembers, women: seesOthers ? womenRows : [],
+                                      accounts: accounts, dismissed: dupDismissed.signatures, seesAll: seesOthers)
     }
 
     private func open(_ p: AdminMembersPush) {
@@ -541,6 +555,9 @@ struct AdminMembersPage: View {
                 if let row = reviewRow {
                     row.padding(.bottom, DS.Spacing.lg)
                 }
+                if let row = issuesRow {
+                    row.padding(.bottom, DS.Spacing.lg)
+                }
                 AnyView(listSection(model))
                 AnyView(footer)
             }
@@ -562,6 +579,18 @@ struct AdminMembersPage: View {
         case .loading:         return AnyView(AdminMembersReviewRow(card: nil))
         case .card(let card):  return AnyView(AdminMembersReviewRow(card: card))
         }
+    }
+
+    // MARK: «المكرر والأخطاء»
+
+    /// الصفّ بعدده حين يكون فيه أحد — nil = لا أسماء مكررة ولا مشكلات ولا أرقام بدون أسماء (طلب المالك ٢٠٢٦-١١-٢٧)
+    private var issuesRow: AnyView? {
+        let problems = reviewCounts[.problems] ?? 0
+        let total = AdminDuplicateNames.entryCount(duplicates: issues.duplicates, problems: problems,
+                                                   nameless: issues.nameless.count)
+        guard total > 0 else { return nil }
+        let line = AdminIssuesRow.line(duplicates: issues.duplicates, problems: problems, nameless: issues.nameless.count)
+        return AnyView(AdminIssuesRow(count: total, line: line))
     }
 
     // MARK: التصفية المفعّلة
