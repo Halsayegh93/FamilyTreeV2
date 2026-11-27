@@ -53,7 +53,11 @@ check(Logic.smartLine(input)?.text, "طلب واحد بانتظار قرارك",
 input.waiting = 0
 let joined = Logic.smartLine(input)
 check(joined?.text, "انضمّ 3 أعضاء هذا الأسبوع", "joined this week is fifth")
-check(joined?.link, AdminTodayLink(home: .family, landing: nil), "joined opens the family root")
+check(joined?.link, AdminTodayLink(home: .family, landing: .members(.joinedThisWeek)),
+      "joined opens «العائلة» on exactly who joined this week (owner 2026-11-27)")
+check(AdminMembersLanding.joinedThisWeek,
+      AdminMembersLanding(account: .all, life: .all, population: [.men], sub: "newThisWeek"),
+      "joined landing = {رجال} + the «newThisWeek» list, no other filter")
 input.joinedThisWeek = 1
 check(Logic.smartLine(input)?.text, "انضمّ عضو جديد هذا الأسبوع", "one joined")
 

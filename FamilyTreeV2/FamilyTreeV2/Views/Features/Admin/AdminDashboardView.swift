@@ -464,13 +464,17 @@ struct AdminDashboardView: View {
         let weekAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
         // «مشكلات الشجرة» بتعريف قائمتها في «العائلة» نفسه (يتيم، بلا اسم، أب مفقود، مخفي، رقم مكرر)
         let tree = AdminMemberFacts.TreeContext(all)
+        let sons = DaughterSonsIndex.shared.ids
         for m in all {
             if m.role == .pending { continue }
-            // نفس «قُيّدوا هذا الأسبوع» في «العائلة»
-            if m.isDeceased != true && m.isCountable,
-               let created = ApprovalWorkflow.date(m.createdAt), created >= weekAgo { joined += 1 }
+            // نفس قائمة «انضافوا هذا الأسبوع» في «العائلة» حرفياً (القاعدة الواحدة — الحبّة تفتحها بعددها)
+            if AdminMembersLogic.joinedThisWeek(deceased: m.isDeceased == true, countable: m.isCountable,
+                                                daughterSon: sons.contains(m.id),
+                                                created: ApprovalWorkflow.date(m.createdAt), weekAgo: weekAgo) {
+                joined += 1
+            }
             // ابن البنت وحساب المرأة بيتهما شجرة النساء — ليسا «مشكلة» في شجرة الرجال
-            if DaughterSonsIndex.shared.contains(m.id) || m.isWomanAccount { continue }
+            if sons.contains(m.id) || m.isWomanAccount { continue }
             if !AdminMemberFacts.problems(m, in: tree).isEmpty { treeIssues += 1 }
         }
         let total = AdminAllRequestsView.reviewRequestsTotal(

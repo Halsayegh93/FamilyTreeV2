@@ -109,5 +109,26 @@ check(M.Order.make(filtered: true, searching: false), .alphabetical, "filters �
 check(M.Order.make(filtered: true, searching: true), .relevance, "search → best match")
 check(M.Order.alphabetical.title, "أبجدياً", "order word")
 
+// MARK: - «انضمّ N هذا الأسبوع» (المالك ٢٠٢٦-١١-٢٧): الحبّة والقائمة بقاعدة واحدة
+
+check(M.opening(landing: AdminMembersLanding.joinedThisWeek).sub, "newThisWeek", "the joined landing carries its list")
+check(M.opening(landing: AdminMembersLanding.joinedThisWeek).people, [.men], "the joined landing is the men list")
+check(AdminMembersLanding(sub: "newThisWeek").overridden(by: AdminMembersLanding(account: .with)).sub, "newThisWeek",
+      "explicit fields keep the stored list")
+let weekAgo = Date(timeIntervalSince1970: 1_000_000)
+let fresh = weekAgo.addingTimeInterval(3_600), old = weekAgo.addingTimeInterval(-3_600)
+check(M.joinedThisWeek(deceased: false, countable: true, daughterSon: false, created: fresh, weekAgo: weekAgo), true,
+      "a living tree man added this week counts")
+check(M.joinedThisWeek(deceased: false, countable: true, daughterSon: true, created: fresh, weekAgo: weekAgo), false,
+      "a daughter's son is not in the men list → not in the pill either (pill = list)")
+check(M.joinedThisWeek(deceased: true, countable: true, daughterSon: false, created: fresh, weekAgo: weekAgo), false,
+      "deceased → no")
+check(M.joinedThisWeek(deceased: false, countable: false, daughterSon: false, created: fresh, weekAgo: weekAgo), false,
+      "not countable (woman account, frozen, hidden, no name) → no")
+check(M.joinedThisWeek(deceased: false, countable: true, daughterSon: false, created: old, weekAgo: weekAgo), false,
+      "older than a week → no")
+check(M.joinedThisWeek(deceased: false, countable: true, daughterSon: false, created: nil, weekAgo: weekAgo), false,
+      "no date → no")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -2877,6 +2877,12 @@ extension DS.Hub {
     static let bandPillFill = SwiftUI.Color.white.opacity(0.08)
     static let bandPillStroke = DS.Color.accentLight.opacity(0.55)
     static let bandPillDot: CGFloat = 8
+    /// الحبّة مرسومةً أصغر (المالك ٢٠٢٦-١١-٢٧ «تصغره شوي»): ٣٢ ونقطتها ٦ — ولمسها يبقى ٤٤ (`DS.Icon.tapTarget`)
+    static let bandPillHeight: CGFloat = 32
+    static let bandPillDotSmall: CGFloat = 6
+    /// «في التطبيق 170» أخضر فوق الكحلي (المالك ٢٠٢٦-١١-٢٧ «ابى في التطبيق يكون اخضر»): أخضر `currentLocation` الفاتح —
+    /// ٨٫٦:١ على #172536 و٨٫٤:١ على #1B2638
+    static let bandInApp = SwiftUI.Color(hex: "#9ACDA1")
     /// شارة عدد الجرس الذهبية (ما يحتاج إجراء الآن) — ونصّها وحلقتها كحليان
     static let bellBadgeGold: CGFloat = 18
 

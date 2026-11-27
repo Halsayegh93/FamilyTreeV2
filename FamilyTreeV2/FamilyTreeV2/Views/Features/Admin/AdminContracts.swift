@@ -87,13 +87,19 @@ nonisolated struct AdminMembersLanding: Hashable {
     /// «مَن» (F5): nil = افتراض الصفحة {رجال}، والفارغة = الثلاث («الكل»). حلقة «النساء» ← {نساء}، «خارج العائلة» ←
     /// {خارج العائلة}، حلقة «الرجال» ← {رجال}
     var population: Set<Population>? = nil
+    /// قائمة من قوائم الرجال (القيمة الخام لـ`AdminMemberSub`، مثل «newThisWeek») — شريحة «القائمة» تُلغى. nil = بلا
+    var sub: String? = nil
 
     /// الحقول الصريحة (من `init` الصفحة) تغلب الهبوط
     func overridden(by explicit: AdminMembersLanding) -> AdminMembersLanding {
         AdminMembersLanding(account: explicit.account ?? account, life: explicit.life ?? life,
                             branch: explicit.branch ?? branch, review: explicit.review ?? review,
-                            population: explicit.population ?? population)
+                            population: explicit.population ?? population, sub: explicit.sub ?? sub)
     }
+
+    /// حبّة «انضمّ 19 عضواً هذا الأسبوع» (المالك ٢٠٢٦-١١-٢٧): «العائلة» على {رجال} وقائمة «انضافوا هذا الأسبوع» وحدها —
+    /// عددها = رقم الحبّة (`AdminMembersLogic.joinedThisWeek` القاعدة الواحدة)
+    static let joinedThisWeek = AdminMembersLanding(account: .all, life: .all, population: [.men], sub: "newThisWeek")
 }
 
 /// «نساء العائلة» تُفتح بفلاتر (spec C.9: الحالة · الفرع). nil = افتراض الصفحة («الحيّات»)

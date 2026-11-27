@@ -181,10 +181,18 @@ nonisolated enum AdminMembersLogic {
         }
     }
 
+    /// «انضافوا هذا الأسبوع» — القاعدة الواحدة لحبّة «اليوم» («انضمّ 19 عضواً هذا الأسبوع») وقائمتها في «العائلة»
+    /// (`AdminMembersIndex.build`، الفرعية `newThisWeek`): رجل حيّ في الشجرة (`isCountable`) ليس ابن بنت (بيته «خارج
+    /// العائلة»)، أُضيف خلال الأيام السبعة
+    static func joinedThisWeek(deceased: Bool, countable: Bool, daughterSon: Bool, created: Date?, weekAgo: Date) -> Bool {
+        guard !deceased, countable, !daughterSon, let created else { return false }
+        return created >= weekAgo
+    }
+
     /// الهبوط (`AdminMembersLanding`): الحقل الغائب = افتراض الصفحة (بلا فلتر)؛ «تواريخ الوفاة» صفحتها الواحدة
     static func opening(landing: AdminMembersLanding) -> Opening {
         var o = Opening(account: landing.account ?? .all, life: landing.life ?? .all, branch: landing.branch,
-                        people: landing.population)
+                        sub: landing.sub, people: landing.population)
         switch landing.review {
         case .death?:  o.push = .deathDates
         case let r?:   o.push = .review(r)

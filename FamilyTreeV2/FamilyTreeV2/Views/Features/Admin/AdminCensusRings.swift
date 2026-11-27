@@ -198,7 +198,11 @@ nonisolated enum AdminCensusRoutes {
             return seesWomenPage ? .members(AdminMembersLanding(account: .all, life: .all, population: [.women]))
                                  : .womenTree
         case .inApp:
-            return .stats(.inApp)
+            // المالك ٢٠٢٦-١١-٢٧ «ابيك تنقلني الى اسمائهم»: الأحياء الذين لهم حساب رجالاً ونساءً = 170 بأسمائهم. من لا يرى
+            // النساء (المراقب) قائمته رجال وحدهم فلا تساوي 170 — يبقى قسم «الإحصاءات» الذي يقسمه
+            return seesWomenPage
+                ? .members(AdminMembersLanding(account: .with, life: .alive, population: [.men, .women]))
+                : .stats(.inApp)
         case .outside:
             return seesWomenPage ? .members(AdminMembersLanding(account: .all, life: .all, population: [.outside]))
                                  : .stats(.outside)
@@ -291,6 +295,13 @@ nonisolated enum AdminCensusText {
     /// تحت «في التطبيق»: «من 2,489 حياً»
     static func inAppSub(living: Int?) -> String? {
         living.map { L10n.t("من \(Self.living($0))", "of \(Self.living($0))") }
+    }
+
+    /// رابط الرأس الكحلي: «في التطبيق 170 من 2,991» — من الإجمالي (حلقة «الإجمالي» = رجال + نساء؛ المالك ٢٠٢٦-١١-٢٧
+    /// «بالعدد الاجمالي»)
+    static func inAppOfTotal(_ total: Int) -> String {
+        let n = AdminNumberText.grouped(total)
+        return L10n.t("من \(n)", "of \(n)")
     }
 
     /// تحت «خارج العائلة»: «أحياء» — أرقام خارج العائلة للأحياء وحدهم (طلب المالك، F1: بلا «و87 متوفى»)
@@ -933,10 +944,12 @@ private struct AdminCensusBandBody: View {
 
     // MARK: الرابطان
 
-    /// «في التطبيق 170 من 2,489 حياً ‹» · «خارج العائلة 46 حياً ‹» — صفّ واحد، أو تحت بعض حين يضيق
+    /// «في التطبيق 170 من 2,991 ‹» (أخضر، من الإجمالي — المالك ٢٠٢٦-١١-٢٧) · «خارج العائلة 46 حياً ‹» — صفّ واحد، أو تحت
+    /// بعض حين يضيق
     private var links: some View {
         let inApp = link(title: AdminCensusText.inAppTitle, value: figures.inApp,
-                         tail: AdminCensusText.inAppSub(living: figures.totalAlive), action: actions.inApp)
+                         tail: figures.total.map(AdminCensusText.inAppOfTotal), action: actions.inApp,
+                         ink: DS.Hub.bandInApp)
         let outside = link(title: AdminCensusText.outsideTitle, value: figures.outsideLiving,
                            tail: figures.outsideLiving.map(AdminCensusText.livingNoun), action: actions.outside)
         return ViewThatFits(in: .horizontal) {
@@ -954,14 +967,15 @@ private struct AdminCensusBandBody: View {
 
     /// رابط: الاسم ذهبي ١٣، العدد أبيض ١٥ شبه عريض، ما بعده ذهبي، والسهم إن فتح — نصّ واحد يلتفّ كفقرة. الصفر باهت بلا
     /// سهم، و«—» قبل الوصول بلا ضغطة (T2)
-    private func link(title: String, value: Int?, tail: String?, action: (() -> Void)?) -> some View {
+    /// - ink: لون الاسم والعدد (nil = الاسم ذهبي والعدد أبيض؛ «في التطبيق» أخضر `DS.Hub.bandInApp`)
+    private func link(title: String, value: Int?, tail: String?, action: (() -> Void)?, ink: Color? = nil) -> some View {
         let opens = AdminCensusMath.opens(value: value, hasAction: action != nil)
         let dim = (value ?? 0) == 0
         let gold = dim ? DS.Hub.lineZero : DS.Color.headerSubtitle
-        var text = Text(title).font(DS.Font.role(.subtitle)).foregroundColor(gold)
+        var text = Text(title).font(DS.Font.role(.subtitle)).foregroundColor(dim ? gold : (ink ?? gold))
             + Text(verbatim: " ")
             + Text(verbatim: AdminCensusText.number(value)).font(DS.Font.role(.hubLineNumber))
-                .foregroundColor(dim ? DS.Hub.lineZero : DS.Color.headerTitle)
+                .foregroundColor(dim ? DS.Hub.lineZero : (ink ?? DS.Color.headerTitle))
         if let tail, value != nil {
             text = text + Text(verbatim: " ") + Text(verbatim: tail).font(DS.Font.role(.subtitle)).foregroundColor(gold)
         }

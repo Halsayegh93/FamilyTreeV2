@@ -96,6 +96,22 @@ check(AdminTileGridMath.itemWidth(rowWidth: 361, items: 2, spacing: 10), 175.5, 
 check(AdminTileGridMath.itemWidth(rowWidth: 361, items: 1, spacing: 10), 361, "a lone last tile spans the row")
 check(AdminTileGridMath.itemWidth(rowWidth: 5, items: 2, spacing: 10), 0, "never negative")
 
+// MARK: «الأقسام» ٣ مربّعات في الصفّ (المالك ٢٠٢٦-١١-٢٧ «خل المربعات بشكل مربع ٣ جنب بعض»)
+check(AdminTileGridMath.areaColumns(accessibilitySize: false, landscape: false), 3, "areas: 3 per row in portrait")
+check(AdminTileGridMath.rows(count: 6, columns: AdminTileGridMath.areaColumns(accessibilitySize: false, landscape: false)),
+      [0..<3, 3..<6], "6 areas → 2 rows of 3")
+check(AdminTileGridMath.areaColumns(accessibilitySize: true, landscape: false), 2, "accessibility sizes fall back to 2")
+check(AdminTileGridMath.areaColumns(accessibilitySize: false, landscape: true), 3, "landscape keeps 3")
+check(AdminTileGridMath.rowHeight(itemWidth: 113, contents: [80, 96], square: true), 113, "square: the row is as tall as wide")
+check(AdminTileGridMath.rowHeight(itemWidth: 113, contents: [80, 130], square: true), 130,
+      "square never clips: big text grows the row")
+check(AdminTileGridMath.rowHeight(itemWidth: 113, contents: [60, 70], square: false), 70, "not square: tallest content")
+check(AdminTileGridMath.rowInset(rowWidth: 361, items: 3, columns: 3, spacing: 10), 0, "a full row starts at the edge")
+check(AdminTileGridMath.rowInset(rowWidth: 361, items: 1, columns: 3, spacing: 10).rounded(), 124,
+      "a lone square stays a third wide, centred (no stretched last tile)")
+check(AdminTileGridMath.rowInset(rowWidth: 361, items: 2, columns: 3, spacing: 10).rounded(), 62,
+      "two squares centred under three")
+
 // MARK: الإنجليزية
 L10n.isArabic = false
 check(AdminTileLine.make(state: nil, health: .failed(lastGood: nil), readOnly: false).text, "Couldn't load",

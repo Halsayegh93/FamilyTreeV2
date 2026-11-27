@@ -237,6 +237,27 @@ check(set.snapshot(linked).items.map(\.title), ["رجال", "نساء", "لهم 
 linked = F(AdminMembersLogic.opening(chip: "all", sub: "all", womenOutside: false))
 check(linked, F(), "plain open = page default")
 
+// MARK: - «في التطبيق 170» ← أسماؤهم (المالك ٢٠٢٦-١١-٢٧ «ابيك تنقلني الى اسمائهم تلقائي»)
+
+// العيّنة: رجال أحياء لهم حساب = 0 و3؛ نساء حيّات لهن حساب = 4 → 3 (= menAccounts 2 + womenAccounts 1)
+let appFigures = AdminCensusFigures(men: 4, menAlive: 3, women: 3, womenAlive: 2, menAccounts: 2, womenAccounts: 1,
+                                    outsideLiving: 2)
+if let l = landing(R.destination(.inApp, on: .today, seesWomenPage: true)) {
+    let opened = F(AdminMembersLogic.opening(landing: l))
+    check(opened, F(people: [.men, .women], accounts: [.with], lives: [.alive]),
+          "in-app landing → {رجال، نساء} · لهم حساب · الأحياء")
+    check(count(opened), appFigures.value(of: .inApp), "T2: «في التطبيق» = the names list count")
+    check(listed(opened), appFigures.value(of: .inApp) ?? -1, "T2: «في التطبيق» = the rows listed")
+    check(rows(opened).map(\.population), [.men, .women], "in-app list: men section then women section")
+} else {
+    check(false, true, "in-app lands on «العائلة»")
+}
+// «خارج العائلة 47 حياً» ← {خارج العائلة}: القائمة أحياء فقط، العدد = الرقم والصفوف
+if let l = landing(R.destination(.outside, on: .today, seesWomenPage: true)) {
+    let opened = F(AdminMembersLogic.opening(landing: l))
+    check(listed(opened), appFigures.value(of: .outside) ?? -1, "T2: «خارج العائلة» = the rows listed (living only)")
+}
+
 // MARK: - التحميل: «—» لا صفر
 
 check(count(F(people: [.women]), ready: [.men]), nil, "women not loaded yet → «—»")

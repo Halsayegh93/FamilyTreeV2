@@ -116,17 +116,18 @@ private struct AdminTodayBandBody: View {
 
     // MARK: سطر التحية حبّةً
 
-    /// حبّة ٤٤ بإطار ذهبي: نقطة ذهبية · الجملة بيضاء ١٥ (سطر واحد يُقصّ، وأكثر من أحجام إمكانية الوصول) · سهم ذهبي إن فتح
+    /// حبّة مرسومة ٣٢ بإطار ذهبي ولمسها ٤٤ (المالك ٢٠٢٦-١١-٢٧ «تصغره شوي»): نقطة ذهبية · الجملة بيضاء ١٣ (سطر واحد
+    /// يُقصّ، وأكثر من أحجام إمكانية الوصول) · سهم ذهبي إن فتح
     private func smartPill(_ line: AdminSmartLine) -> some View {
         let opens = openSmartLine != nil
-        let shape = RoundedRectangle(cornerRadius: DS.Icon.tapTarget / 2, style: .continuous)
-        let face = HStack(spacing: DS.Spacing.sm) {
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.bandPillHeight / 2, style: .continuous)
+        let face = HStack(spacing: DS.Spacing.xsm) {
             Circle()
                 .fill(DS.Color.accentLight)
-                .frame(width: DS.Hub.bandPillDot, height: DS.Hub.bandPillDot)
+                .frame(width: DS.Hub.bandPillDotSmall, height: DS.Hub.bandPillDotSmall)
                 .accessibilityHidden(true)
             Text(verbatim: line.text)
-                .dsFont(.rowTitle)
+                .dsFont(.chip)
                 .foregroundColor(DS.Color.headerTitle)
                 .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
                 .truncationMode(.tail)
@@ -138,12 +139,14 @@ private struct AdminTodayBandBody: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(minHeight: DS.Icon.tapTarget)
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .frame(minHeight: DS.Hub.bandPillHeight)
         .background(shape.fill(DS.Hub.bandPillFill))
         .overlay(shape.strokeBorder(DS.Hub.bandPillStroke, lineWidth: DS.Border.width))
-        .contentShape(shape)
+        // اللمس ٤٤ حول الحبّة المرسومة الأصغر
+        .frame(minHeight: DS.Icon.tapTarget)
+        .contentShape(Rectangle())
         return Group {
             if let openSmartLine {
                 Button(action: openSmartLine) { face }

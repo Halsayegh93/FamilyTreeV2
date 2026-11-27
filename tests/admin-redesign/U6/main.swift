@@ -61,6 +61,7 @@ check(noElders.unverified(verified: []), 0, "no candidates yet → no note")
 
 // MARK: النصوص (spec C.1 / C.12)
 check(AdminCensusText.inAppSub(living: 2_489), "من 2,489 حياً", "in-app sub")
+check(AdminCensusText.inAppOfTotal(2_991), "من 2,991", "band: «في التطبيق 170 من 2,991» (owner 2026-11-27: against the total)")
 check(AdminCensusText.outsideLivingSub, "أحياء", "outside sub = living only (F1)")
 check(AdminCensusText.split(men: 2_362, women: 127), "2,362 رجل و127 امرأة", "living split")
 check(AdminCensusText.split(men: 367, women: 135), "367 رجل و135 امرأة", "deceased split")
@@ -91,7 +92,11 @@ check(AdminCensusRoutes.destination(.men, on: .today, seesWomenPage: true),
 check(AdminCensusRoutes.destination(.women, on: .today, seesWomenPage: true),
       .members(AdminMembersLanding(account: .all, life: .all, population: [.women])), "women → family {نساء}, status all")
 check(AdminCensusRoutes.destination(.women, on: .today, seesWomenPage: false), .womenTree, "monitor → women tree")
-check(AdminCensusRoutes.destination(.inApp, on: .today, seesWomenPage: true), .stats(.inApp), "170 → stats in-app")
+check(AdminCensusRoutes.destination(.inApp, on: .today, seesWomenPage: true),
+      .members(AdminMembersLanding(account: .with, life: .alive, population: [.men, .women])),
+      "170 → «العائلة» names: living, with an account, men + women (owner 2026-11-27)")
+check(AdminCensusRoutes.destination(.inApp, on: .today, seesWomenPage: false), .stats(.inApp),
+      "170 (monitor, no women list) → stats in-app (a men-only list would not hold 170)")
 check(AdminCensusRoutes.destination(.outside, on: .today, seesWomenPage: true),
       .members(AdminMembersLanding(account: .all, life: .all, population: [.outside])), "50 → family {خارج العائلة} (F5)")
 check(AdminCensusRoutes.destination(.outside, on: .today, seesWomenPage: false), .stats(.outside), "50 (monitor) → stats outside")

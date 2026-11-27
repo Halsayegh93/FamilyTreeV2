@@ -198,6 +198,26 @@ nonisolated enum AdminTileGridMath {
         accessibilitySize ? 1 : max(1, landscape ? wide : portrait)
     }
 
+    /// أعمدة «الأقسام» في «اليوم» (المالك ٢٠٢٦-١١-٢٧ «خل المربعات بشكل مربع ٣ جنب بعض»): ٣ مربّعات في الصفّ عمودياً
+    /// وأفقياً، وعمودان من أحجام إمكانية الوصول (الاسم الكبير لا يتّسع في ثلث العرض)
+    static func areaColumns(accessibilitySize: Bool, landscape: Bool) -> Int {
+        accessibilitySize ? 2 : 3
+    }
+
+    /// ارتفاع الصفّ: أطول مربّعاته، والمربّع المربّع لا يقلّ عن عرضه (ولا يُقصّ إن كبر الخط)
+    static func rowHeight(itemWidth: CGFloat, contents: [CGFloat], square: Bool) -> CGFloat {
+        let tallest = contents.max() ?? 0
+        return square ? max(itemWidth, tallest) : tallest
+    }
+
+    /// إزاحة صفّ المربّعات المربّعة الناقص: يبقى كل مربّع بعرض عمود ويتوسّط الصفّ (لا مربّع ممدود بعرض الشاشة)
+    static func rowInset(rowWidth: CGFloat, items: Int, columns: Int, spacing: CGFloat) -> CGFloat {
+        let c = max(1, columns), n = min(max(1, items), c)
+        let w = itemWidth(rowWidth: rowWidth, items: c, spacing: spacing)
+        let used = w * CGFloat(n) + spacing * CGFloat(n - 1)
+        return max(0, (rowWidth - used) / 2)
+    }
+
     /// مجالات الصفوف: ٥ في عمودين = [0..<2, 2..<4, 4..<5]
     static func rows(count: Int, columns: Int) -> [Range<Int>] {
         guard count > 0 else { return [] }
@@ -246,6 +266,9 @@ enum AdminTileMetrics {
     static let landscapeMaxColumns = 6
     /// مربّع القسم: بين مربّع الأيقونة والنص (spec A.8 / العيّنة ١٠)، وأعمدة الشبكة أفقياً
     static let areaIconGap: CGFloat = DS.Spacing.smd
+    /// مربّع القسم المربّع: بين الرمز والاسم، وحشوة الجانبين (أضيق — ثلث العرض)
+    static let squareGap: CGFloat = DS.Spacing.xsm
+    static let squarePadding: CGFloat = DS.Spacing.xsm
     static let areaColumnsLandscape = 3
     /// لمس «تعذّر التحميل» ↻ يتّسع فوق السطر وتحته (حتى حافة المربّع) فيقارب ٤٤ دون أن يغطي الاسم
     static let retryHitBleed: CGFloat = DS.Spacing.md
@@ -430,19 +453,18 @@ private struct AdminTileLineView: View {
 
 // MARK: - مربّع القسم
 
-/// شبكة مربّعات الأقسام (spec A.8): عمودان بفراغ ١٠، والعدد الفردي يمدّ آخر مربّع بعرض الصفّ؛ ثلاثة أفقياً؛ عمود واحد من
-/// أحجام إمكانية الوصول. مربّعات الصفّ الواحد بطول واحد (أطولها)
+/// شبكة مربّعات الأقسام: ٣ مربّعات مربّعة في الصفّ بفراغ ١٠ (المالك ٢٠٢٦-١١-٢٧ «خل المربعات بشكل مربع ٣ جنب بعض»)،
+/// وعمودان من أحجام إمكانية الوصول (`AdminTileGridMath.areaColumns`). الصفّ الناقص يتوسّط بمربّعات بعرض عمود، والمربّع
+/// لا يقلّ عن عرضه ويطول إن كبر الخط (لا قصّ)
 struct AdminRowTileGrid<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dsLandscape) private var landscape
 
     var body: some View {
-        AdminTileRowsLayout(columns: AdminTileGridMath.columns(accessibilitySize: typeSize.isAccessibilitySize,
-                                                               landscape: landscape,
-                                                               portrait: DS.Hub.areaTileColumns,
-                                                               wide: AdminTileMetrics.areaColumnsLandscape),
-                            spacing: DS.Hub.areaTileGap) {
+        AdminTileRowsLayout(columns: AdminTileGridMath.areaColumns(accessibilitySize: typeSize.isAccessibilitySize,
+                                                                   landscape: landscape),
+                            spacing: DS.Hub.areaTileGap, square: true) {
             content()
         }
     }
@@ -453,11 +475,14 @@ struct AdminRowTileGrid<Content: View>: View {
 struct AdminTileRowsLayout: Layout {
     var columns: Int
     var spacing: CGFloat
+    /// مربّعات مربّعة: كل مربّع بعرض عمود (الصفّ الناقص يتوسّط)، والصفّ لا يقلّ عن عرض مربّعه
+    var square = false
 
     private struct Row {
         let range: Range<Int>
         let itemWidth: CGFloat
         let height: CGFloat
+        let inset: CGFloat
     }
 
     /// العرض المقترح محدوداً: الحاويات قد تسأل بلا عرض أو بعرض لا نهائي — نجيب بعرض ثابت (كـ`DSTileGridLayout`)
@@ -468,9 +493,12 @@ struct AdminTileRowsLayout: Layout {
 
     private func rows(width: CGFloat, subviews: Subviews) -> [Row] {
         AdminTileGridMath.rows(count: subviews.count, columns: columns).map { range in
-            let w = AdminTileGridMath.itemWidth(rowWidth: width, items: range.count, spacing: spacing)
-            let h = range.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w, height: nil)).height }.max() ?? 0
-            return Row(range: range, itemWidth: w, height: h)
+            let w = AdminTileGridMath.itemWidth(rowWidth: width, items: square ? columns : range.count, spacing: spacing)
+            let contents = range.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w, height: nil)).height }
+            let h = AdminTileGridMath.rowHeight(itemWidth: w, contents: contents, square: square)
+            let inset = square ? AdminTileGridMath.rowInset(rowWidth: width, items: range.count, columns: columns,
+                                                            spacing: spacing) : 0
+            return Row(range: range, itemWidth: w, height: h, inset: inset)
         }
     }
 
@@ -484,7 +512,7 @@ struct AdminTileRowsLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in rows(width: bounds.width, subviews: subviews) {
-            var x = bounds.minX
+            var x = bounds.minX + row.inset
             for index in row.range {
                 subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading,
                                       proposal: ProposedViewSize(width: row.itemWidth, height: row.height))
@@ -546,27 +574,27 @@ struct AdminRowTile: View {
     var body: some View {
         let line = AdminTileLine.make(state: state, health: health, readOnly: readOnly)
         let shape = RoundedRectangle(cornerRadius: AdminTileMetrics.radius, style: .continuous)
-        HStack(alignment: .center, spacing: AdminTileMetrics.areaIconGap) {
-            VStack(alignment: .leading, spacing: AdminTileMetrics.captionGap) {
+        // مربّع (المالك ٢٠٢٦-١١-٢٧ «بشكل مربع ٣ جنب بعض»): الرمز في الوسط فوق، الاسم تحته في الوسط، وسطر الحال تحت الاسم
+        VStack(alignment: .center, spacing: AdminTileMetrics.squareGap) {
+            Image(dsSymbol: icon)
+                .dsGlyph(DS.Glyph.xxl, weight: .regular)
+                .foregroundColor(DS.Hub.tileIconInk)
+                .accessibilityHidden(true)
+            VStack(alignment: .center, spacing: AdminTileMetrics.captionGap) {
                 Text(title)
                     .dsFont(.rowTitle)
                     .foregroundColor(DS.Hub.tileTitleInk)
-                    .multilineTextAlignment(.leading)
-                    // سطر واحد (طلب المالك «نصغر المربعات»)؛ من أحجام إمكانية الوصول عمود واحد عريض ويلتفّ إن لزم
+                    .multilineTextAlignment(.center)
+                    // سطر واحد (طلب المالك «نصغر المربعات»)؛ من أحجام إمكانية الوصول يلتفّ إن لزم
                     .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                     .minimumScaleFactor(AdminTileMetrics.titleMinScale)
                     .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                 AdminFlatTileState(line: line, retry: retry, ink: stateInk)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Image(dsSymbol: icon)
-                .dsGlyph(DS.Glyph.xl, weight: .regular)
-                .foregroundColor(DS.Hub.tileIconInk)
-                .accessibilityHidden(true)
         }
-        .padding(.horizontal, DS.Hub.areaTilePadding)
+        .padding(.horizontal, AdminTileMetrics.squarePadding)
         .padding(.vertical, DS.Hub.areaTilePaddingV)
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.areaTileMinHeight, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: DS.Hub.areaTileMinHeight, maxHeight: .infinity, alignment: .center)
         .background(shape.fill(fill))
         // مضغوطاً: طبقة داكنة خفيفة فوق لونه (والتصغير من `AdminTilePressStyle`)
         .overlay(shape.fill(DS.Hub.tilePressVeil).opacity(pressed ? 1 : 0).allowsHitTesting(false))
@@ -603,7 +631,7 @@ private struct AdminFlatTileState: View {
                 .redacted(reason: .placeholder)
                 .accessibilityHidden(true)
         case .word:
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            VStack(alignment: .center, spacing: DS.Spacing.xxs) {
                 HStack(alignment: .center, spacing: DS.Spacing.xs) {
                     if let pill = line.pill {
                         AdminTilePillLabel(text: line.text, pill: pill)
@@ -622,6 +650,7 @@ private struct AdminFlatTileState: View {
                     Text(AdminStoreHealthText.updated(since))
                         .dsFont(.subtitle)
                         .foregroundColor(ink)
+                        .multilineTextAlignment(.center)
                 }
             }
         case .unknown:
@@ -629,12 +658,12 @@ private struct AdminFlatTileState: View {
                 // لمسه يتّسع بعرض المربّع وفوق السطر وتحته — باقي المربّع يفتح القسم كالعادة
                 Button(action: retry) {
                     unknownFace
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, AdminTileMetrics.retryHitBleed)
-                        .padding(.horizontal, DS.Hub.areaTilePadding)
+                        .padding(.horizontal, AdminTileMetrics.squarePadding)
                         .contentShape(Rectangle())
                         .padding(.vertical, -AdminTileMetrics.retryHitBleed)
-                        .padding(.horizontal, -DS.Hub.areaTilePadding)
+                        .padding(.horizontal, -AdminTileMetrics.squarePadding)
                 }
                 .buttonStyle(DSPressStyle())
             } else {
@@ -650,7 +679,7 @@ private struct AdminFlatTileState: View {
                 .dsFont(.subtitle)
                 .monospacedDigit()
                 .foregroundColor(ink)
-                .multilineTextAlignment(.leading)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if line.tone == .good {
                 Image(dsSymbol: "checkmark")
@@ -665,6 +694,7 @@ private struct AdminFlatTileState: View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xs) {
             Text(verbatim: line.text)
                 .dsFont(.subtitle)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             Image(dsSymbol: "arrow.clockwise")
                 .dsGlyph(DS.Glyph.sm, weight: .semibold)
@@ -702,10 +732,10 @@ private struct AdminTilePillLabel: View {
                 .dsFont(.chip)
                 .monospacedDigit()
                 .foregroundColor(ink)
-                .multilineTextAlignment(.leading)
+                .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.xsm)
         .padding(.vertical, DS.Spacing.xxs)
         .frame(minHeight: DS.Hub.tilePillHeight)
         .background(RoundedRectangle(cornerRadius: DS.Hub.tilePillHeight / 2, style: .continuous)

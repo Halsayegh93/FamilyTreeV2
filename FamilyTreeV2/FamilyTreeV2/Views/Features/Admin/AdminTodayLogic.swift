@@ -131,7 +131,8 @@ nonisolated enum AdminTodayLogic {
                 ? (joined == 1 ? "انضمّ عضو جديد هذا الأسبوع"
                     : "انضمّ \(counted(joined, one: "عضو", two: "عضوان", few: "أعضاء", many: "عضواً", single: "عضو")) هذا الأسبوع")
                 : (joined == 1 ? "1 member joined this week" : "\(AdminNumberText.grouped(joined)) members joined this week")
-            return AdminSmartLine(text: text, link: link(.family))
+            // «العائلة» على قائمة من انضمّوا هذا الأسبوع بالعدد نفسه (المالك ٢٠٢٦-١١-٢٧ «ما ينتقل الى القائمة»)
+            return AdminSmartLine(text: text, link: link(.family, .members(.joinedThisWeek)))
         }
         return AdminSmartLine(text: calmText, link: nil)
     }

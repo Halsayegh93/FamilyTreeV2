@@ -955,8 +955,10 @@ struct AdminMembersIndex {
             case .pendingJoin, .none:
                 break
             }
-            if m.isDeceased != true && m.isCountable,
-               let created = ApprovalWorkflow.date(m.createdAt), created >= weekAgo {
+            // القاعدة الواحدة مع حبّة «اليوم» («انضمّ 19 عضواً هذا الأسبوع»)
+            if AdminMembersLogic.joinedThisWeek(deceased: m.isDeceased == true, countable: m.isCountable,
+                                                daughterSon: daughterSons.contains(m.id),
+                                                created: ApprovalWorkflow.date(m.createdAt), weekAgo: weekAgo) {
                 add(.all, .newThisWeek, i)
             }
             if m.isDeceased != true {
