@@ -31,6 +31,8 @@ enum OutsideLineage {
 
 struct CompleteRegistrationPage: View {
     let status: DaughterSons.Status?
+    /// «طلب استكمال البيانات» من الإدارة على الطلب المعلّق (R2): «اسم الوالدة» مميّزاً ويُرسل للطلب نفسه
+    var ask: CompletionAsk.Open? = nil
     var onSent: () -> Void
     /// nil = لا «لاحقاً» (الإعداد مطفأ)
     var onLater: (() -> Void)?
@@ -49,13 +51,14 @@ struct CompleteRegistrationPage: View {
     @State private var busy = false
     @State private var errorText: String?
 
-    init(status: DaughterSons.Status?, onSent: @escaping () -> Void, onLater: (() -> Void)?,
+    init(status: DaughterSons.Status?, ask: CompletionAsk.Open? = nil, onSent: @escaping () -> Void, onLater: (() -> Void)?,
          onLimited: @escaping () -> Void = {}) {
         self.status = status
+        self.ask = ask
         self.onSent = onSent
         self.onLater = onLater
         self.onLimited = onLimited
-        _sent = State(initialValue: status?.pending == true)
+        _sent = State(initialValue: status?.pending == true && ask == nil)
     }
 
     private typealias T = SignupOriginRules.Ar
@@ -67,10 +70,13 @@ struct CompleteRegistrationPage: View {
     var body: some View {
         SignupBoxShell(subtitle: L10n.t(T.completeTitle, "Complete registration")) {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                // السؤال ← «قيد المراجعة» في المربّع نفسه: انزلاق قصير للأمام (A1)
+                // السؤال ← «قيد المراجعة» في المربّع نفسه: انزلاق قصير للأمام (A1)؛ و«طلب استكمال البيانات» من الإدارة (R2)
                 ZStack(alignment: .top) {
                     if sent {
                         VStack(alignment: .leading, spacing: DS.Spacing.md) { sentContent }
+                            .transition(stepTransition)
+                    } else if ask != nil {
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) { askContent }
                             .transition(stepTransition)
                     } else {
                         VStack(alignment: .leading, spacing: DS.Spacing.md) { questionContent }
@@ -128,9 +134,7 @@ struct CompleteRegistrationPage: View {
         if inFamily == true {
             // «نعم» تكشف الاسم والوالد والإرسال في المربّع نفسه — تنزل قليلاً مع تلاشٍ (A1)
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSComposerField(icon: "person.fill", label: L10n.t(T.motherName, "Mother's four-part name"),
-                            placeholder: L10n.t(T.motherNameExample, "e.g. Fatima Ahmad Ali Hassan"),
-                            text: $motherName, tint: DS.Color.female, limit: 120, required: true)
+            motherField
             // خطأ تحت الحقل بعد انتهاء الكتابة، ثم سطر الشرح الدائم (الأجزاء، والمطابقة)
             if motherSettled, let e = R.motherNameError(motherName) {
                 Label {
@@ -174,6 +178,55 @@ struct CompleteRegistrationPage: View {
         }
         if let onLater {
             DSButton(L10n.t(T.later, "Later"), role: .cancel) { onLater() }
+        }
+    }
+
+    private var motherField: some View {
+        DSComposerField(icon: "person.fill", label: L10n.t(T.motherName, "Mother's four-part name"),
+                        placeholder: L10n.t(T.motherNameExample, "e.g. Fatima Ahmad Ali Hassan"),
+                        text: $motherName, tint: DS.Color.female, limit: 120, required: true)
+    }
+
+    // MARK: «طلب استكمال البيانات» (R2)
+
+    @ViewBuilder private var askContent: some View {
+        SignupBoxTitle(icon: "exclamationmark.circle.fill",
+                       title: L10n.t(AdminJoinBoxRules.Ar.memberAskTitle, "Please complete your details"),
+                       tint: DS.Color.warningFill)
+        Text(L10n.t(AdminJoinBoxRules.Ar.memberAskBody, "The admins asked you to complete:")
+             + " " + (ask?.missing.map { AdminJoinBoxRules.fieldLabel($0) }.joined(separator: "، ") ?? ""))
+            .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        if let note = ask?.note, !note.isEmpty {
+            Text(verbatim: note).dsFont(.footnote).foregroundColor(DS.Color.warning)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        motherField.completionAskHighlight(true)
+        if AdminJoinBoxRules.motherNameMissing(motherInFamily: true, motherName: motherName) {
+            Text(L10n.t(AdminJoinBoxRules.Ar.motherNameRequired, "Type your mother's four-part name (at least three words)."))
+                .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        DSButton(L10n.t(T.send, "Send to the admins"), icon: "paperplane.fill", isLoading: busy) { sendAsk() }
+            .disabled(AdminJoinBoxRules.motherNameMissing(motherInFamily: true, motherName: motherName) || busy)
+        if let onLater {
+            DSButton(L10n.t(T.later, "Later"), role: .cancel) { onLater() }
+        }
+    }
+
+    private func sendAsk() {
+        guard !busy else { return }
+        busy = true
+        errorText = nil
+        Task {
+            do {
+                try await CompletionAsk.answer(["mother_name": SignupOriginRules.tidy(motherName)])
+                DSMomentToast.show(L10n.t(T.sentMoment, "Request sent"), moment: .success, section: nil)
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.stepIn) { sent = true }
+            } catch {
+                errorText = CompletionAsk.message(error)
+            }
+            busy = false
         }
     }
 

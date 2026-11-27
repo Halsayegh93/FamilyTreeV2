@@ -630,7 +630,7 @@ struct DSWifeFlowBox: View {
                 }
                 ForEach(Array(list.eligible.enumerated()), id: \.element.id) { i, d in
                     WifeDaughterRow(name: firstName(d), age: WifeCandidateRules.age(d), deceased: d.isDeceased == true,
-                                    kinship: kinshipLine(d, father: father),
+                                    chips: kinshipChips(d, father: father),
                                     isSelected: selectedId == d.id && !addingNew) {
                         withAnimation(DS.Anim.snappy) { selectedId = d.id; addingNew = false; newName = ""; newDeceased = false }
                     }
@@ -663,13 +663,18 @@ struct DSWifeFlowBox: View {
         }
     }
 
-    /// «بنت فلان · زوجة فلان» / «غير متزوجة» تحت اسم البنت — يفرّق المتشابهات (M1)
-    private func kinshipLine(_ d: FamilyMember, father: FamilyMember?) -> String {
+    /// شرائح القيم وحدها تحت اسم البنت (R2، نفس مربّعات «الوارد»): الوالد · الجد · سنة الميلاد · الزوج — بلا تسميات؛
+    /// الزوج المتوقَّع (أبو الشخص في مربّع الأم، والرجل نفسه في مربّع الزوجة) أخضر بعلامة ✓
+    private func kinshipChips(_ d: FamilyMember, father: FamilyMember?) -> [AdminJoinBoxRules.Chip] {
         let dad = father ?? d.fatherId.flatMap { id in people.first { $0.id == id } }
         let husband = d.husbandId.flatMap { id in people.first { $0.id == id } }
-        return MotherPickRules.disambiguationLine(fatherName: dad.map(shownName),
-                                                  husbandName: husband.map(shownName),
-                                                  isMarried: WifeCandidateRules.isMarried(d))
+        let expected: String? = isMother
+            ? personFatherId.flatMap { id in people.first { $0.id == id } }.map(shownName)
+            : husbandName
+        return AdminJoinBoxRules.pickerChips(father: dad.map(shownName),
+                                             husband: husband.map { MotherPickRules.shortName(shownName($0)) },
+                                             birthYear: AdminJoinBoxRules.birthYear(d.birthDate),
+                                             expectedHusband: expected)
     }
 
     /// «لا تظهر N: …» بالقواعد المفعّلة الآن (رقما السيرفر — «المضافة حديثاً» تُذكر ما دامت قاعدتها مفعّلة)
@@ -801,16 +806,20 @@ private struct WifeDaughterRow: View {
     let name: String
     let age: Int?
     var deceased: Bool = false
-    /// «بنت فلان · زوجة فلان» / «غير متزوجة» (M1) — nil = بلا سطر النسب
-    var kinship: String? = nil
+    /// شرائح القيم: الوالد · الجد · الميلاد · الزوج (R2) — فارغة = بلا سطر
+    var chips: [AdminJoinBoxRules.Chip] = []
     let isSelected: Bool
     let action: () -> Void
 
-    /// السطر تحت الاسم: النسب، ثم «متوفاة» للمتوفّاة (بلا عمر — العمر حتى اليوم لا معنى له)، وإلا العمر إن عُرف
+    /// «متوفاة» للمتوفّاة، وإلا العمر إن عُرف ولا سنة ميلاد في الشرائح
     private var detail: String? {
-        let state: String? = deceased ? L10n.t("متوفاة", "Deceased") : age.map { L10n.t("\($0) سنة", "\($0) yrs") }
-        let parts = [kinship, state].compactMap { $0 }.filter { !$0.isEmpty }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        if deceased { return L10n.t("متوفاة", "Deceased") }
+        guard !chips.contains(where: { $0.kind == .birth }) else { return nil }
+        return age.map { L10n.t("\($0) سنة", "\($0) yrs") }
+    }
+
+    private var spoken: String {
+        ([name] + chips.map(AdminJoinBoxRules.spoken) + [detail].compactMap { $0 }).joined(separator: "، ")
     }
 
     var body: some View {
@@ -821,6 +830,9 @@ private struct WifeDaughterRow: View {
                     Text(name)
                         .dsFieldFont(.memberName)
                         .foregroundColor(DS.Color.fieldValue)
+                    if !chips.isEmpty {
+                        AdminValueChips(chips: chips)
+                    }
                     if let detail {
                         Text(verbatim: detail)
                             .dsFont(.caption)
@@ -836,11 +848,14 @@ private struct WifeDaughterRow: View {
             }
             .frame(minHeight: DSBox.fieldMinHeight)
             .dsRowBox()
+            // المختارة: علامة ✓ وإطار — لا باللون وحده
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                .strokeBorder(isSelected ? DS.Color.female : Color.clear, lineWidth: DS.Border.widthBold))
             .contentShape(Rectangle())
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(detail.map { "\(name)، \($0)" } ?? name)
+        .accessibilityLabel(spoken)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

@@ -55,61 +55,6 @@ struct OutsideJoinTag: View {
     }
 }
 
-/// قسم في مربّع الربط: «من خارج العائلة» ← «قبول «من خارج العائلة»» (للأنثى — للذكر خيار «ابن بنت» نفسه في مربّعه)
-struct OutsideJoinApproveSection: View {
-    let member: FamilyMember
-    var onApproved: () -> Void
-
-    @EnvironmentObject private var memberVM: MemberViewModel
-    @State private var busy = false
-    @State private var errorText: String?
-    @State private var confirm = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            OutsideJoinTag(member: member)
-            Text(L10n.t(SignupOriginRules.Ar.approveOutsideNote,
-                        "The account is approved now; on opening the app the person picks the mother and the father's name, then the admins confirm it in the inbox."))
-                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            DSButton(L10n.t(SignupOriginRules.Ar.approveOutside, "Approve «from outside the family»"),
-                     icon: "checkmark", tint: DS.Color.success, isLoading: busy) { confirm = true }
-                .disabled(busy)
-            if let errorText {
-                DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
-            }
-        }
-        .padding(DS.Spacing.md)
-        .dsCard(padding: nil)
-        .dsAlert(L10n.t(SignupOriginRules.Ar.approveOutside, "Approve «from outside the family»"), isPresented: $confirm) {
-            Button(L10n.t("موافقة", "Approve")) { approve() }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(verbatim: member.displayFullName)
-        }
-    }
-
-    private func approve() {
-        guard !busy else { return }
-        busy = true
-        errorText = nil
-        Task {
-            do {
-                try await DaughterSons.approveJoin(memberId: member.id)
-                await DaughterSonsIndex.shared.refresh(force: true)
-                await OutsideJoinStore.shared.refresh(force: true)
-                await memberVM.fetchAllMembers(force: true)
-                busy = false
-                DSMomentToast.show(L10n.t("تمت الموافقة", "Approved"))
-                onApproved()
-            } catch {
-                errorText = DaughterSons.message(error)
-                busy = false
-            }
-        }
-    }
-}
-
 // MARK: - «استكمال التسجيل» في «الوارد»: اسم الوالدة مكتوباً ← المراجع يختارها ← اعتماد
 
 /// بنت مقترحة من `lineage_mother_suggestions` («بنت فلان · زوجة فلان»، وهل زوجها يطابق الوالد المشتق)
@@ -142,23 +87,21 @@ nonisolated struct OutsideLineageDetails: Decodable, Sendable {
     }
 }
 
+/// بطاقة طلب «استكمال التسجيل» في «الوارد» — الضغط يفتح مربّعه الصغير (R2): البيانات واقتراحات الوالدة ← «ربط بالوالدة»
+/// ← «تأكيد الربط» (`decide_lineage_request(…, p_mother_id)` عبر `decideLineage`)، و«رفض مع سبب»
 struct OutsideLineageRequestCard: View {
     let request: AdminRequest
     @ObservedObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject private var memberVM: MemberViewModel
 
-    @State private var suggestions: [LineageMotherSuggestion] = []
-    @State private var loaded = false
-    @State private var picked: UUID?
-    @State private var busy = false
-    @State private var showReject = false
-    @State private var reason = ""
+    @State private var open = false
 
     private typealias T = SignupOriginRules.Ar
 
     var body: some View {
         let d = OutsideLineageDetails.parse(request.details)
-        let pickedRow = suggestions.first { $0.id == picked }
-        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+        let mother = SignupOriginRules.tidy((d?.motherTypedName ?? "") + " " + (d?.motherFamily ?? ""))
+        return Button { open = true } label: {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "arrow.triangle.branch", tint: DS.Color.female)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
@@ -167,166 +110,64 @@ struct OutsideLineageRequestCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text(request.member?.fullName ?? L10n.t("العضو", "the member"))
                         .dsFont(.footnote).foregroundColor(DS.Color.textSecondary).dsNameLines()
+                    if !mother.isEmpty {
+                        Text(L10n.t("الوالدة: ", "Mother: ") + mother)
+                            .dsFont(.caption).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                    }
                 }
                 Spacer(minLength: 0)
                 if let created = request.createdAt {
                     Text(DateHelper.relativeTime(from: created)).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
                 }
+                DSChevron()
             }
-            VStack(spacing: 0) {
-                row(L10n.t("الوالدة", "Mother"), SignupOriginRules.tidy((d?.motherTypedName ?? "") + " " + (d?.motherFamily ?? "")))
-                Divider()
-                row(L10n.t("الوالد", "Father"), d?.fatherName ?? "—", note: L10n.t(T.fatherDerivedNote, "From the registered name."))
-            }
-            .padding(.horizontal, DS.Spacing.sm)
-            .dsCard(padding: nil)
-            Group {
-                DSBoxSectionTitle(title: L10n.t(T.inboxPickMother, "Pick the mother from the family's daughters"),
-                                  icon: "person.fill", tint: DS.Color.female)
-                if !loaded {
-                    DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
-                } else if suggestions.isEmpty {
-                    Text(L10n.t(T.inboxNoSuggestions, "No daughters match this name. Contact the requester or reject."))
-                        .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(suggestions) { m in
-                            suggestionRow(m)
-                            if m.id != suggestions.last?.id { Divider() }
-                        }
-                    }
-                    .dsCard(padding: DS.Spacing.sm)
-                }
-                if let pickedRow, pickedRow.husbandId != nil, !pickedRow.husbandMatches {
-                    DSNoteCard(pickedRow.husbandInFamily
-                               ? L10n.t("زوجها من العائلة — يُربط صاحب الطلب تحت والده في الشجرة، لا هنا.",
-                                        "Her husband is from the family — link the requester under his father in the tree instead.")
-                               : L10n.t("لها زوج مسجّل باسم آخر «\(pickedRow.husbandName ?? "")» — صحّح الشجرة أولاً أو ارفض الطلب.",
-                                        "She has a different recorded husband «\(pickedRow.husbandName ?? "")» — fix the tree first or reject."),
-                               icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
-                }
-            }
-            HStack(spacing: DS.Spacing.sm) {
-                DSButton(L10n.t("موافقة", "Approve"),
-                         icon: "checkmark", tint: DS.Color.success, isLoading: busy) { decide(approve: true) }
-                    .disabled(busy || picked == nil)
-                DSButton(L10n.t("رفض", "Reject"), icon: "xmark", role: .cancel) { reason = ""; showReject = true }
-            }
-            .disabled(busy)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityHint(L10n.t("يفتح الطلب", "Opens the request"))
         .padding(DS.Spacing.md)
         .dsCard(padding: nil, radius: DS.Hub.tileRadius)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: DS.Spacing.xsm, leading: DS.Spacing.lg, bottom: DS.Spacing.xsm, trailing: DS.Spacing.lg))
-        .task(id: request.id) { await load() }
-        .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showReject) {
-            TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $reason)
-                .dsAlertField()
-            Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) { decide(approve: false) }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("يصله السبب ويُرسل بيانات الوالدة من جديد.", "They get the reason and send the mother's details again."))
-        }
-    }
-
-    private func row(_ label: String, _ value: String, note: String? = nil) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
-            Text(label).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
-                .frame(minWidth: DS.Icon.rowLarge + DS.Spacing.lg, alignment: .leading)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(verbatim: value.isEmpty ? "—" : value).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let note { Text(note).dsFont(.caption).foregroundColor(DS.Color.textTertiary) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(minHeight: DS.Icon.tapTarget)
-    }
-
-    private func suggestionRow(_ m: LineageMotherSuggestion) -> some View {
-        let selected = picked == m.id
-        return Button { picked = selected ? nil : m.id } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                DSMemberAvatar(name: m.fullName, avatarUrl: nil, size: DS.Icon.row, roleColor: DS.Color.female)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(verbatim: m.fullName).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    // ما يطابق الاسم المكتوب والوالد المشتق ← شريحة خضراء
-                    NamePartChips(parts: MotherPickRules.markMatches(
-                        MotherPickRules.disambiguationParts(fatherName: m.fatherName, husbandName: m.husbandName),
-                        typedName: OutsideLineageDetails.parse(request.details)?.motherTypedName,
-                        expectedHusband: OutsideLineageDetails.parse(request.details)?.fatherName))
-                    if m.husbandMatches {
-                        Text(L10n.t(T.inboxHusbandMatches, "Her husband matches the father's name"))
-                            .dsFont(.badge).foregroundColor(DS.Color.success)
-                    }
-                }
-                Spacer(minLength: 0)
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .dsGlyph(DS.Glyph.lg)
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private func load() async {
-        do {
-            suggestions = try await SupabaseConfig.client
-                .rpc("lineage_mother_suggestions", params: ["p_request_id": request.id.uuidString]).execute().value
-            // بنت واحدة زوجها يطابق الوالد ← مختارة مسبقاً (المراجع يؤكّد)
-            let matching = suggestions.filter(\.husbandMatches)
-            if picked == nil, matching.count == 1 { picked = matching[0].id }
-        } catch {
-            if !ErrorHelper.isCancellation(error) {
-                Log.warning("[OutsideLineage] lineage_mother_suggestions: \(error.localizedDescription)")
-            }
-        }
-        loaded = true
-    }
-
-    private func decide(approve: Bool) {
-        guard !busy else { return }
-        busy = true
-        Task {
-            let ok = await adminRequestVM.decideLineage(request, approve: approve,
-                                                        reason: approve ? nil : reason,
-                                                        motherId: approve ? picked : nil)
-            busy = false
-            if ok, approve { DSMomentToast.show(L10n.t("تم الاعتماد", "Approved")) }
+        .dsCenterBox(isPresented: $open) {
+            AdminJoinBox(subject: .completion(request),
+                         requestAge: request.createdAt.map { DateHelper.relativeTime(from: $0) },
+                         canDecide: adminRequestVM.canHandleRelativeAdd,
+                         onReject: adminRequestVM.canHandleRelativeAdd ? { reason in
+                             open = false
+                             Task {
+                                 if await adminRequestVM.decideLineage(request, approve: false, reason: reason) {
+                                     DSMomentToast.show(L10n.t("تم الرفض", "Rejected"))
+                                 }
+                             }
+                         } : nil,
+                         onDone: { open = false },
+                         onClose: { open = false })
+                .environmentObject(adminRequestVM)
+                .environmentObject(memberVM)
         }
     }
 }
 
-/// القيم وحدها بنقاط هادئة: الوالد · الجد · سنة الميلاد (· الزوج) — بلا التسميات الرمادية (المالك «شيل الكلمات الصغيرة»)؛
-/// المطابق لبيانات الطلب أخضر، والقارئ الصوتي يقرأ التسمية مع القيمة («الوالد حسن»)
+/// القيم وحدها شرائح (R2): الوالد · الجد · سنة الميلاد (· الزوج) — بلا التسميات الرمادية (المالك «شيل الكلمات الصغيرة»)؛
+/// المطابق لبيانات الطلب أخضر بعلامة ✓، والقارئ الصوتي يقرأ التسمية مع القيمة («الوالد حسن») — نفس `AdminValueChips`
 struct NamePartChips: View {
     let parts: [MotherPickRules.NamePart]
 
     var body: some View {
-        DSChipFlow(spacing: DS.Spacing.xxs) {
-            ForEach(Array(parts.enumerated()), id: \.offset) { i, p in
-                HStack(spacing: DS.Spacing.xxs) {
-                    if i > 0 {
-                        Text(verbatim: "·").foregroundColor(DS.Color.textTertiary).accessibilityHidden(true)
-                    }
-                    Text(verbatim: p.value + (p.matches ? " ✓" : ""))
-                        .foregroundColor(p.matches ? DS.Color.success : DS.Color.textSecondary)
-                        .padding(.horizontal, p.matches ? DS.Spacing.xsm : 0)
-                        .background(Capsule().fill(p.matches ? DS.Color.success.opacity(DS.Opacity.tintFill) : .clear))
-                }
-                .dsFont(.caption)
-                .lineLimit(1)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(p.label + " " + p.value + (p.matches ? L10n.t("، مطابق", ", matches") : ""))
-            }
+        AdminValueChips(chips: parts.map { p in
+            AdminJoinBoxRules.Chip(kind: Self.kind(p.label), value: p.value, matches: p.matches)
+        })
+    }
+
+    private static func kind(_ label: String) -> AdminJoinBoxRules.ChipKind {
+        switch label {
+        case AdminJoinBoxRules.label(.grandfather): return .grandfather
+        case AdminJoinBoxRules.label(.birth): return .birth
+        case AdminJoinBoxRules.label(.husband): return .husband
+        default: return .father
         }
     }
 }

@@ -23,6 +23,8 @@ struct WaitingForApprovalView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 // «بنت بنت العائلة» (B1): احتياط لمن سجّلت قبل «من خارج العائلة» ولم تجد والدها في الشجرة (السيرفر يقرّر الظهور)
                 DaughterLineageCard()
+                // «طلب استكمال البيانات» من الإدارة (R2)
+                CompletionAskCard()
                 actionButtons
             }
         }
@@ -72,7 +74,10 @@ struct WaitingForApprovalView: View {
         VStack(spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 actionTile(L10n.t(SignupOriginRules.Ar.refresh, "Refresh Status"), icon: "arrow.clockwise") {
-                    Task { await authVM.checkUserProfile() }
+                    Task {
+                        await authVM.checkUserProfile()
+                        await CompletionAskStore.shared.refresh()
+                    }
                 }
                 .disabled(authVM.isLoading)
                 actionTile(L10n.t(SignupOriginRules.Ar.editRequest, "Edit Request"), icon: "pencil") {

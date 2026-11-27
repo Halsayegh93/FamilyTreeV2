@@ -284,7 +284,8 @@ struct AdminAllRequestsView: View {
     @State private var joinFilter: SignupOriginRules.JoinFilter = .all
 
     // Join request states
-    @State private var memberToLink: FamilyMember? = nil
+    /// مربّعات الانضمام واستكمال التسجيل (R2): البيانات ← الربط ← التأكيد — مدخل الربط الوحيد
+    @State private var joinBox: AdminJoinBoxSubject? = nil
     /// مربّع «المطابقات المحتملة» لطلب انضمام (العيّنة ١٨)
     @State private var joinMatchesFor: FamilyMember? = nil
     @State private var mergeTarget: (pendingMember: FamilyMember, treeMember: FamilyMember)? = nil
@@ -378,9 +379,12 @@ struct AdminAllRequestsView: View {
                                    onPickFromTree: {
                                        joinMatchesFor = nil
                                        // بعد إغلاق المربّع — مربّع واحد في المرة
-                                       DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { memberToLink = member }
+                                       DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { openJoinBox(member) }
                                    },
                                    onClose: { joinMatchesFor = nil }))
+        }
+        .dsCenterBox(item: $joinBox) { subject in
+            AnyView(joinBoxView(subject))
         }
     }
 
@@ -595,14 +599,6 @@ struct AdminAllRequestsView: View {
                 "سيُحذف الطلب نهائياً من قاعدة البيانات ولا يمكن التراجع.",
                 "This request will be permanently removed and cannot be undone."
             ))
-        }
-        .dsTallBox(item: $memberToLink) { member in   // قائمة أعضاء طويلة (توصية أبل)
-            // طلب الأنثى: المربّع نفسه يفتح «ربط بشجرة النساء» (دخول النساء ٢٠٢٦-١٠-٢٤)
-            LinkToExistingMemberSheet(pendingMember: member,
-                                      suggested: orderedMatchList(for: member).map(\.member),
-                                      onWomanLinked: { recalculateCounts() })
-                .environmentObject(memberVM)
-                .environmentObject(adminRequestVM)
         }
         .dsAlert(
             L10n.t("تأكيد الدمج", "Confirm Merge"),
@@ -1074,7 +1070,9 @@ struct AdminAllRequestsView: View {
         case .open:
             focusHandled = true
             focusMissing = nil
-            if let item { selectedDetail = requestDetail(for: item) }
+            if let item {
+                if case .join(let m) = item { openJoinBox(m) } else { selectedDetail = requestDetail(for: item) }
+            }
         case .policy:
             focusHandled = true
             focusMissing = nil
@@ -1684,7 +1682,47 @@ struct AdminAllRequestsView: View {
     }
 
     private func openDetail(_ e: Entry) {
+        // طلب الانضمام ← مربّعاته الصغيرة (البيانات ← الربط ← التأكيد)؛ «كل التفاصيل» فيها يفتح المربّع الطويل
+        if case .join(let m) = e.item {
+            openJoinBox(m)
+            return
+        }
         selectedDetail = requestDetail(for: e.item)
+    }
+
+    /// يفتح مربّعات الانضمام لطلب (R2)
+    private func openJoinBox(_ member: FamilyMember) {
+        joinBox = .join(member, outside: outsideJoins.contains(member.id))
+    }
+
+    /// مربّع الانضمام: الاقتراحات من مطابقة الاسم الموجودة، والصلاحيات نفسها (`canApprove`/`canReject` للانضمام)
+    private func joinBoxView(_ subject: AdminJoinBoxSubject) -> some View {
+        guard case .join(let member, _) = subject else {
+            return AnyView(EmptyView())
+        }
+        let tiers = joinTiers(for: member)
+        let ordered = (tiers.exact + tiers.near + tiers.weak).map(\.member)
+        return AnyView(AdminJoinBox(
+            subject: subject,
+            suggestedMen: Array(ordered.prefix(6)),
+            preselected: joinPickId(member, tiers),
+            requestAge: Self.requestDate(member.createdAt).map { ageText(days: daysWaiting(since: $0)) },
+            canDecide: canApprove(.joinRequests),
+            onReject: canReject(.joinRequests) ? { reason in
+                joinBox = nil
+                reject(.join(member), reason: reason)
+            } : nil,
+            onDetails: {
+                joinBox = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { selectedDetail = .join(member) }
+            },
+            onDone: {
+                joinBox = nil
+                recalculateCounts()
+            },
+            onClose: { joinBox = nil })
+            .environmentObject(memberVM)
+            .environmentObject(adminRequestVM))
     }
 
     /// الموافقة من الصفّ — نفس نداءات نماذج العرض، و«لحظة النجاح» (إلا «ربط» الانضمام: يفتح تأكيد الدمج أو المنتقي)
@@ -2361,13 +2399,7 @@ struct AdminAllRequestsView: View {
 
     /// زرّ البطاقة والسحب: «ربط» بالمختار (تأكيد الدمج نفسه) — وبلا مختار «اختر من الشجرة» (المنتقي نفسه)
     private func joinApprove(_ member: FamilyMember) {
-        let tiers = joinTiers(for: member)
-        if let pick = tiers.entry(joinPickId(member, tiers)) {
-            mergeTarget = (pendingMember: member, treeMember: pick.member)
-            showMergeConfirm = true
-        } else {
-            memberToLink = member
-        }
+        openJoinBox(member)
     }
 
     private func joinApproveLabel(_ member: FamilyMember) -> String {
@@ -4299,8 +4331,8 @@ struct AdminAllRequestsView: View {
         if case .join(let member) = detail {
             guard boxPhase == .idle else { return }
             selectedDetail = nil
-            // ورقة واحدة في المرة: المنتقي بعد نزول المربّع
-            DispatchQueue.main.asyncAfter(deadline: .now() + AdminRequestBoxMetrics.sheetHandoff) { memberToLink = member }
+            // ورقة واحدة في المرة: مربّعات الربط بعد نزول المربّع
+            DispatchQueue.main.asyncAfter(deadline: .now() + AdminRequestBoxMetrics.sheetHandoff) { openJoinBox(member) }
             return
         }
         boxDecide(detail, execute ? .execute : .approve, id: execute ? "execute" : "approve")
@@ -4679,8 +4711,8 @@ struct AdminAllRequestsView: View {
             switch detail {
             case .join(let member):
                 await MainActor.run {
-                    memberToLink = member
                     selectedDetail = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + AdminRequestBoxMetrics.sheetHandoff) { openJoinBox(member) }
                 }
             case .news(let post):
                 await newsVM.approveNewsPost(postId: post.id)

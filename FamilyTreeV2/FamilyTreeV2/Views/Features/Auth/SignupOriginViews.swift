@@ -153,6 +153,7 @@ struct SignupOriginFlow: View {
     private typealias Step = DSMotionRules.SignupStep
 
     private func step(_ o: SignupOriginRules.Origin?) -> Step { o == nil ? .choose : .form }
+    @ObservedObject private var ask = CompletionAskStore.shared
 
     var body: some View {
         let transition = AnyTransition.dsStep(forward: forward,
@@ -163,13 +164,20 @@ struct SignupOriginFlow: View {
             // فوق بعض أثناء الانتقال (لا يتكدّسان عمودياً)
             ZStack(alignment: .top) {
                 if let origin {
-                    AnyView(SignupFormBox(origin: origin) { go(to: nil) })
+                    AnyView(SignupFormBox(origin: origin, ask: ask.editing ? ask.open : nil,
+                                          prefill: ask.editing ? authVM.currentUser : nil) { go(to: nil) })
                         .transition(transition)
                 } else {
                     AnyView(SignupChooseBox { o in go(to: o) })
                         .transition(transition)
                 }
             }
+        }
+        // «استكمال البيانات» (R2): المربّع نفسه بمصدر الطلب مباشرة — العائلة المحفوظة «المحمدعلي» = من العائلة
+        .onAppear {
+            guard ask.editing, origin == nil, let me = authVM.currentUser else { return }
+            let fam = (me.familyName ?? "").trimmingCharacters(in: .whitespaces)
+            origin = fam.isEmpty || fam == SignupOriginRules.familyName ? .family : .outside
         }
     }
 
@@ -253,7 +261,13 @@ struct SignupChooseBox: View {
 struct SignupFormBox: View {
     @EnvironmentObject var authVM: AuthViewModel
     let origin: SignupOriginRules.Origin
+    /// «طلب استكمال البيانات» المفتوح (R2): الحقول المطلوبة مميّزة، والصورة إن طُلبت
+    var ask: CompletionAsk.Open? = nil
+    /// بياناته المحفوظة — تُملأ بها الحقول عند الاستكمال
+    var prefill: FamilyMember? = nil
     let onBack: () -> Void
+
+    @State private var didPrefill = false
 
     @State private var fullName = ""
     @State private var familyName = ""
@@ -277,8 +291,14 @@ struct SignupFormBox: View {
     private var missing: [SignupOriginRules.Field] {
         R.missingFields(origin: origin, name: fullName, family: familyName, birthChosen: birthDateChosen, age: age, gender: gender)
     }
+    private var highlights: Set<SignupOriginRules.Field> {
+        AdminJoinBoxRules.signupHighlights(ask?.missing ?? [])
+    }
+    /// الصورة مطلوبة من الإدارة — للذكور فقط (النساء بلا صور)
+    private var asksPhoto: Bool { ask?.missing.contains(.photo) == true && R.showsPhoto(gender: gender) }
     private var canSubmit: Bool {
         R.canSubmit(origin: origin, name: fullName, family: familyName, birthChosen: birthDateChosen, age: age, gender: gender)
+            && (!asksPhoto || photo != nil || !(prefill?.avatarUrl ?? "").isEmpty)
     }
 
     var body: some View {
@@ -287,6 +307,10 @@ struct SignupFormBox: View {
                            title: L10n.t(origin == .outside ? SignupText.fromOutside : SignupText.fromFamily,
                                          origin == .outside ? "From outside the family" : "From the family"),
                            tint: origin == .outside ? DS.Color.palmFill : DS.Color.primaryFill)
+            if let ask, let note = ask.note, !note.isEmpty {
+                Text(verbatim: note).dsFont(.footnote).foregroundColor(DS.Color.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             // صورة كبيرة للذكور فقط (المالك ٢٠٢٦-١١-٢٧) — تختفي مع «أنثى»: النساء بلا صور
             if R.showsPhoto(gender: gender) {
                 DSProfilePhotoPicker(selectedImage: $photo, enableCrop: true, cropShape: .circle,
@@ -294,10 +318,12 @@ struct SignupFormBox: View {
                                      trailing: L10n.t(SignupText.photoOptional, "Optional"),
                                      avatarSize: DS.Icon.signupPhoto,
                                      emptyActionTitle: L10n.t(SignupText.addPhoto, "Add photo"))
+                    .completionAskHighlight(asksPhoto)
                     .transition(.dsReveal(reduceMotion: reduceMotion))
             }
             ForEach(Array(R.fields(origin).enumerated()), id: \.offset) { _, field in
                 fieldView(field)
+                    .completionAskHighlight(highlights.contains(field))
             }
             // لماذا الزرّ معطّل: ما ينقص بأسمائه (يختفي حين يكتمل)
             if !missing.isEmpty {
@@ -322,6 +348,7 @@ struct SignupFormBox: View {
                     .layoutPriority(1)
             }
         }
+        .onAppear(perform: fill)
         .animation(reduceMotion ? DSMotion.fade : DSMotion.reveal, value: missing.isEmpty)
         .onChange(of: fullName) { _ in settle(.name) }
         .onChange(of: familyName) { _ in settle(.family) }
@@ -419,6 +446,22 @@ struct SignupFormBox: View {
         }
     }
 
+    /// الحقول من بياناته المحفوظة (مرة واحدة)
+    private func fill() {
+        guard !didPrefill, let m = prefill else { return }
+        didPrefill = true
+        let fam = (m.familyName ?? "").trimmingCharacters(in: .whitespaces)
+        var name = m.fullName.trimmingCharacters(in: .whitespaces)
+        if origin == .outside, !fam.isEmpty, name.hasSuffix(" " + fam) { name = String(name.dropLast(fam.count + 1)) }
+        fullName = name
+        if origin == .outside { familyName = fam }
+        if let d = DateHelper.parse(String((m.birthDate ?? "").prefix(10))) {
+            birthDate = d
+            birthDateChosen = true
+        }
+        if m.gender == "male" || m.gender == "female" { gender = m.gender ?? "" }
+    }
+
     private func hint(_ text: String, error: Bool = false) -> some View {
         Text(text)
             .dsFont(.footnote)
@@ -441,6 +484,8 @@ struct SignupFormBox: View {
             if authVM.registrationError == nil, authVM.status == .pendingApproval {
                 DSMomentToast.show(L10n.t(SignupText.sentMoment, "Request sent"), moment: .success, section: nil)
             }
+            // «استكمال البيانات» (R2): بعد الحفظ يُغلق طلب الإدارة (السيرفر يتحقق أن المطلوب صار في الملف)
+            if authVM.registrationError == nil { await CompletionAskStore.shared.answerAfterSignup() }
         }
     }
 }

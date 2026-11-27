@@ -365,9 +365,23 @@ final class LineageGateStore: ObservableObject {
     @Published var postponed = false
     /// فُتحت الصفحة من بطاقة الرئيسية أو من قسم مقفول
     @Published var pageRequested = false
+    /// «طلب استكمال البيانات» على طلب النسب المعلّق (R2) — يفتح البوابة بحقل «اسم الوالدة» مميّزاً
+    @Published var ask: CompletionAsk.Open?
 
     func refresh() async {
         status = await DaughterSons.fetchStatus()
+        if status?.pending == true {
+            let open = await CompletionAsk.mine()
+            ask = open?.isLineage == true ? open : nil
+        } else {
+            ask = nil
+        }
+    }
+
+    /// أُرسل اسم الوالدة للطلب المفتوح
+    func answeredAsk() {
+        ask = nil
+        pageRequested = false
     }
     func markSent() {
         if let s = status {
@@ -427,6 +441,7 @@ private struct LineageGateModifier: ViewModifier {
         if debugShow { return true }
         guard terms.statusChecked && !terms.needsAcceptance else { return false }
         return (store.status?.needs == true && !store.postponed) || (store.pageRequested && store.isRestricted)
+            || (store.ask != nil && !store.postponed)
     }
 
     func body(content: Content) -> some View {
@@ -445,8 +460,9 @@ private struct LineageGateModifier: ViewModifier {
                 Task { await store.refresh() }
             }
             .fullScreenCover(isPresented: Binding(get: { showGate }, set: { if !$0 { debugShow = false; store.postponed = true; store.pageRequested = false } })) {
-                CompleteRegistrationPage(status: store.status, onSent: { store.markSent() },
-                            onLater: (DaughterSons.allowsLater || store.status?.needs != true)
+                CompleteRegistrationPage(status: store.status, ask: store.ask,
+                            onSent: { store.ask != nil ? store.answeredAsk() : store.markSent() },
+                            onLater: (DaughterSons.allowsLater || store.status?.needs != true || store.ask != nil)
                                 ? { debugShow = false; store.postponed = true; store.pageRequested = false } : nil,
                             onLimited: {
                                 debugShow = false
@@ -1173,29 +1189,6 @@ struct OutsideHusbandBox: View {
                 errorText = DaughterSons.message(error)
             }
             busy = false
-        }
-    }
-}
-
-// MARK: - طلب الانضمام: «كيف ننضمه؟»
-
-/// خياران فوق «ربط بالشجرة»: من أبناء العائلة / ابن بنت من خارج العائلة (يظهر فقط والسيرفر جاهز والمفتاح مفعّل)
-struct JoinKindPicker: View {
-    @Binding var asDaughterSon: Bool
-
-    var body: some View {
-        // خياران = الاختيار الموحّد (طلب المالك ٢٠٢٦-١١-١١)، وشرح المختار تحته
-        DSComposerSection(title: L10n.t("طريقة الانضمام", "How does he join?"), icon: "questionmark.circle", index: 0) {
-            DSChoiceTiles(options: [
-                DSChoiceOption(id: false, title: L10n.t("ربط بالشجرة", "Link to tree"), icon: "link"),
-                DSChoiceOption(id: true, title: DaughterSons.text("option_short", "ابن بنت", "A daughter's son"),
-                               icon: "arrow.triangle.branch")
-            ], selection: $asDaughterSon,
-               note: asDaughterSon
-                ? DaughterSons.text("option_title", "ابن بنت من خارج العائلة", "A daughter's son from outside the family")
-                  + " — " + DaughterSons.text("option_subtitle", "بعد الموافقة يختار أمه واسم أبيه",
-                                              "After approval he picks his mother and his father's name")
-                : L10n.t("من أبناء العائلة، ويُحدَّد مكانه في الشجرة", "A son of the family — pick his place"))
         }
     }
 }

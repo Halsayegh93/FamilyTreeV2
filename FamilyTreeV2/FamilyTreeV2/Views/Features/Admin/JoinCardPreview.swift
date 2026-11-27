@@ -71,6 +71,20 @@ private enum JoinPreviewData {
     }
 }
 
+/// مربّعات «الوارد» الجديدة (R2) بأسماء وهمية: `-uiPreviewJoinCard joinbox|joinbox-link|joinbox-ask`
+private enum JoinBoxPreviewData {
+    static let saud = FamilyMember(firstName: "سعود", fullName: "سعود محمد الصايغ", gender: "male")
+    static let khalid = FamilyMember(firstName: "خالد", fullName: "خالد سعود محمد الصايغ", fatherId: saud.id, gender: "male")
+    static let khalid2 = FamilyMember(firstName: "خالد", fullName: "خالد سعود علي الصايغ", fatherId: saud.id, gender: "male")
+    static let applicant = FamilyMember(firstName: "عبدالله", fullName: "عبدالله خالد سعود محمد",
+                                        familyName: "المحمدعلي", birthDate: "1999-04-22", role: .pending, status: .pending,
+                                        gender: "male", createdAt: DateParsing.isoString(Date().addingTimeInterval(-3600)))
+    static let c1 = FamilyMember(firstName: "عبدالله", fullName: "عبدالله خالد سعود محمد الصايغ",
+                                 birthDate: "1999-01-01", fatherId: khalid.id, gender: "male")
+    static let c2 = FamilyMember(firstName: "عبدالله", fullName: "عبدالله خالد سعود علي الصايغ",
+                                 birthDate: "1987-01-01", fatherId: khalid2.id, gender: "male")
+}
+
 struct JoinCardPreviewScreen: View {
     let mode: String
 
@@ -83,6 +97,25 @@ struct JoinCardPreviewScreen: View {
     }
 
     var body: some View {
+        if mode.hasPrefix("joinbox") {
+            ZStack {
+                DS.Hub.background.ignoresSafeArea()
+                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
+                    AdminJoinBox(subject: .join(JoinBoxPreviewData.applicant, outside: false),
+                                 suggestedMen: [JoinBoxPreviewData.c1, JoinBoxPreviewData.c2],
+                                 preselected: JoinBoxPreviewData.c1.id, requestAge: "قبل ساعة",
+                                 onReject: { _ in }, onDetails: {}, onDone: {}, onClose: {},
+                                 knownPeople: [JoinBoxPreviewData.saud, JoinBoxPreviewData.khalid, JoinBoxPreviewData.khalid2],
+                                 initialStep: mode == "joinbox-link" ? .link : mode == "joinbox-ask" ? .askMissing : .applicant)
+                }
+            }
+            .dsSection(.admin)
+        } else {
+            legacy
+        }
+    }
+
+    private var legacy: some View {
         ZStack {
             DS.Hub.background.ignoresSafeArea()
             ScrollView {
