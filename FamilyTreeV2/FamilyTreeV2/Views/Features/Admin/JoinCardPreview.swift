@@ -105,7 +105,6 @@ struct JoinCardPreviewScreen: View {
                                  suggestedMen: [JoinBoxPreviewData.c1, JoinBoxPreviewData.c2],
                                  preselected: JoinBoxPreviewData.c1.id, requestAge: "قبل ساعة",
                                  onReject: { _ in }, onDetails: {}, onDone: {}, onClose: {},
-                                 knownPeople: [JoinBoxPreviewData.saud, JoinBoxPreviewData.khalid, JoinBoxPreviewData.khalid2],
                                  initialStep: mode == "joinbox-link" ? .link : mode == "joinbox-ask" ? .askMissing : .applicant)
                 }
             }

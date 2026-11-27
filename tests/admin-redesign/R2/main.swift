@@ -72,78 +72,71 @@ check(J.dotIndex(.familyJoin, step: .link), 1, "link box = second dot")
 check(J.dotIndex(.familyJoin, step: .confirm), nil, "confirm box has no dots")
 check(J.dotIndex(.outsideJoin, step: .applicant), nil, "single box has no dots")
 
-// ٣) الشرائح: القيم وحدها بالترتيب، والأخضر = يطابق الطلب
+// ٣) الاقتراح: الاسم الكامل واضحاً (المالك «وضحلي الاسم الكامل»)، كلماته المطابقة للطلب خضراء، وشريحة الميلاد وحدها
+//    (والزوج للمرأة حين يفرّق)
 let a = UUID(), b = UUID(), c = UUID()
 let men: [J.Candidate] = [
-    J.Candidate(id: a, firstName: "عبدالله", father: "خالد", grandfather: "سعود", birthYear: 1999, husband: nil),
-    J.Candidate(id: b, firstName: "عبدالله", father: "خالد", grandfather: "سعود", birthYear: 1987, husband: nil)
+    J.Candidate(id: a, fullName: "عبدالله خالد سعود محمد الصايغ", birthYear: 1999, husband: nil),
+    J.Candidate(id: b, fullName: "عبدالله خالد سعود علي الصايغ", birthYear: 1987, husband: nil)
 ]
 let manExpect = J.Expect(typedName: "عبد الله خالد سعود محمد", birthYear: 1999, expectedHusband: nil)
-let chipsA = J.chips(men[0], among: men, expect: manExpect, women: false)
-check(chipsA.map(\.kind), [.father, .grandfather, .birth], "order: father · grandfather · birth year")
-check(chipsA.map(\.value), ["خالد", "سعود", "1999"], "values only")
-check(chipsA.map(\.matches), [true, true, true], "all match the request → green")
-check(J.chips(men[1], among: men, expect: manExpect, women: false).map(\.matches), [true, true, false],
-      "different birth year → not green")
-check(J.chips(J.Candidate(id: c, firstName: "عبدالله", father: "خالد", grandfather: nil, birthYear: nil, husband: nil),
-              among: [], expect: manExpect, women: false).map(\.kind), [.father], "missing values are skipped")
-check(J.chips(men[0], among: men, expect: J.Expect(typedName: "عبدالله خالد", birthYear: nil, expectedHusband: nil),
-              women: false).map(\.matches), [true, false, false], "no typed grandfather/birth → not green")
-// التطبيع العربي: همزات وتاء مربوطة و«عبد الله»
-let norm = J.Candidate(id: c, firstName: "أسامة", father: "عبد الله", grandfather: "إبراهيم", birthYear: nil, husband: nil)
-check(J.chips(norm, among: [], expect: J.Expect(typedName: "اسامه عبدالله ابراهيم", birthYear: nil, expectedHusband: nil),
-              women: false).map(\.matches), [true, true], "normalised Arabic matches")
-// الرجل لا يُعرض له زوج
-check(J.chips(J.Candidate(id: c, firstName: "x", father: "خالد", grandfather: nil, birthYear: nil, husband: "س"),
-              among: [], expect: manExpect, women: false).map(\.kind), [.father], "men: no husband chip")
+let wordsA = J.nameWords(men[0], expect: manExpect)
+check(wordsA.map(\.text), ["عبدالله", "خالد", "سعود", "محمد", "الصايغ"], "full name, word by word")
+check(wordsA.map(\.matches), [true, true, true, true, false], "words matching the request are green (normalised, «عبد الله»)")
+check(J.nameWords(men[1], expect: manExpect).map(\.matches), [true, true, true, false, false], "different 4th name → not green")
+check(J.chips(men[0], among: men, expect: manExpect, women: false), [J.Chip(kind: .birth, value: "1999", matches: true)],
+      "only the birth-year chip, green when it matches")
+check(J.chips(men[1], among: men, expect: manExpect, women: false).map(\.matches), [false], "other birth year → not green")
+check(J.chips(J.Candidate(id: c, fullName: "عبدالله خالد", birthYear: nil, husband: "س"), among: [], expect: manExpect,
+              women: false), [], "men: no husband chip, no year → no chips")
+let spaced = J.nameWords(J.Candidate(id: c, fullName: "أسامة  عبد الله إبراهيم", birthYear: nil, husband: nil),
+                         expect: J.Expect(typedName: "اسامه عبدالله ابراهيم", birthYear: nil, expectedHusband: nil))
+check(spaced.map(\.text), ["أسامة", "عبد الله", "إبراهيم"], "«عبد الله» stays one word as written")
+check(spaced.map(\.matches), [true, true, true], "hamza / taa marbuta normalised")
+check(J.nameWords(men[0], expect: J.Expect(typedName: "", birthYear: nil, expectedHusband: nil)).map(\.matches),
+      [false, false, false, false, false], "no request name → nothing green")
+check(J.spokenName(men[0]), "عبدالله خالد سعود محمد الصايغ", "VoiceOver reads the full name")
 
 // المرأة: الزوج حين يفرّق بين متشابهتين فقط
-let w1 = J.Candidate(id: a, firstName: "نورة", father: "خالد", grandfather: "سعود", birthYear: 2001, husband: nil)
-let w2 = J.Candidate(id: b, firstName: "نوره", father: "خالد", grandfather: "عبدالله", birthYear: nil, husband: "بدر الكندري")
-let w3 = J.Candidate(id: c, firstName: "نورة", father: "خالد", grandfather: "سعود", birthYear: nil, husband: "بدر الكندري")
+let w1 = J.Candidate(id: a, fullName: "نورة خالد سعود المحمدعلي", birthYear: 2001, husband: nil)
+let w2 = J.Candidate(id: b, fullName: "نوره خالد عبدالله المحمدعلي", birthYear: nil, husband: "بدر الكندري")
+let w3 = J.Candidate(id: c, fullName: "نورة خالد سعود المحمدعلي", birthYear: nil, husband: "بدر الكندري")
 let womanExpect = J.Expect(typedName: "نورة خالد سعود محمد", birthYear: 2001, expectedHusband: nil)
-check(J.chips(w2, among: [w1, w2], expect: womanExpect, women: true).map(\.kind), [.father, .grandfather],
-      "husband hidden when names already differ")
-check(J.chips(w3, among: [w1, w3], expect: womanExpect, women: true).map(\.kind), [.father, .grandfather, .husband],
-      "husband shown when same first · father · grandfather")
-check(J.chips(w3, among: [w1, w3], expect: womanExpect, women: true).map(\.value), ["خالد", "سعود", "بدر الكندري"],
-      "husband value only")
+check(J.chips(w2, among: [w1, w2], expect: womanExpect, women: true), [], "husband hidden when names already differ")
+check(J.chips(w3, among: [w1, w3], expect: womanExpect, women: true),
+      [J.Chip(kind: .husband, value: "بدر الكندري", matches: false)], "husband shown when the names are the same")
+check(J.chipText(J.Chip(kind: .husband, value: "بدر الكندري", matches: false)), "الزوج: بدر الكندري", "«الزوج: …» short chip")
+check(J.chipText(J.Chip(kind: .birth, value: "1999", matches: true)), "1999", "birth chip: the year only")
 check(J.husbandDisambiguates(w3, among: [w3]), false, "alone → husband not needed")
 
 // استكمال التسجيل: الزوج يطابق الوالد المشتق ← أخضر ويُعرض
-let m1 = J.Candidate(id: a, firstName: "فاطمة", father: "عبدالله", grandfather: "أحمد", birthYear: nil, husband: "حسن حسين الموسى")
-let m2 = J.Candidate(id: b, firstName: "فاطمة", father: "عبدالله", grandfather: "محمد", birthYear: 1975, husband: nil)
+let m1 = J.Candidate(id: a, fullName: "فاطمة عبدالله أحمد صالح المحمدعلي", birthYear: nil, husband: "حسن حسين الموسى")
+let m2 = J.Candidate(id: b, fullName: "فاطمة عبدالله محمد المحمدعلي", birthYear: 1975, husband: nil)
 let motherExpect = J.Expect(typedName: "فاطمة عبدالله أحمد صالح", birthYear: nil, expectedHusband: "حسن حسين الموسى")
-check(J.chips(m1, among: [m1, m2], expect: motherExpect, women: true).map(\.kind), [.father, .grandfather, .husband],
-      "completion: husband shown when it matches the derived father")
-check(J.chips(m1, among: [m1, m2], expect: motherExpect, women: true).map(\.matches), [true, true, true],
-      "completion: father · grandfather · husband green")
-check(J.chips(m2, among: [m1, m2], expect: motherExpect, women: true).map(\.matches), [true, false, false],
-      "completion: other grandfather not green")
+check(J.nameWords(m1, expect: motherExpect).map(\.matches), [true, true, true, true, false], "mother: typed four parts green")
+check(J.nameWords(m2, expect: motherExpect).map(\.matches), [true, true, false, false], "mother: other grandfather not green")
+check(J.chips(m1, among: [m1, m2], expect: motherExpect, women: true),
+      [J.Chip(kind: .husband, value: "حسن حسين الموسى", matches: true)], "completion: matching husband shown green")
+check(J.chips(m2, among: [m1, m2], expect: motherExpect, women: true), [J.Chip(kind: .birth, value: "1975", matches: false)],
+      "completion: year only")
 
-// ٤) القارئ الصوتي يقرأ التسمية مع القيمة
-check(J.spoken(J.Chip(kind: .father, value: "خالد", matches: true)), "الوالد خالد، مطابق", "VoiceOver: label + value + match")
+// ٤) القارئ الصوتي للشرائح
 check(J.spoken(J.Chip(kind: .birth, value: "1987", matches: false)), "الميلاد 1987", "VoiceOver: birth")
-check(J.spoken(J.Chip(kind: .husband, value: "بدر", matches: false)), "الزوج بدر", "VoiceOver: husband")
+check(J.spoken(J.Chip(kind: .husband, value: "بدر", matches: true)), "الزوج بدر، مطابق", "VoiceOver: husband + match")
 
-// ٥) بناء المرشّح من الشجرة (الأب والجد بالاسم الأول)
-let gid = UUID(), fid = UUID()
-let names: [UUID: (first: String, fatherId: UUID?)] = [fid: ("خالد", gid), gid: ("سعود", nil)]
-let built = J.candidate(id: a, firstName: "عبدالله", fatherId: fid, birthDate: "1999-04-22", husband: nil) { names[$0] }
-check(built, J.Candidate(id: a, firstName: "عبدالله", father: "خالد", grandfather: "سعود", birthYear: 1999, husband: nil),
-      "candidate from the tree: father · grandfather · birth year")
-check(J.candidate(id: a, firstName: "x", fatherId: nil, birthDate: "bad", husband: "  ") { names[$0] },
-      J.Candidate(id: a, firstName: "x", father: nil, grandfather: nil, birthYear: nil, husband: nil), "no father, bad date")
+// ٥) المرشّح من الشجرة: الاسم الكامل وسنة الميلاد
+check(J.candidate(id: a, fullName: "  عبدالله  خالد ", birthDate: "1999-04-22", husband: nil),
+      J.Candidate(id: a, fullName: "عبدالله خالد", birthYear: 1999, husband: nil), "candidate: tidy full name + year")
+check(J.candidate(id: a, fullName: "x", birthDate: "bad", husband: "  "),
+      J.Candidate(id: a, fullName: "x", birthYear: nil, husband: nil), "bad date, blank husband")
 check(J.birthYear("2001"), 2001, "year only")
 check(J.birthYear(nil), nil, "nil date")
 
-// ٦) مربّعا الأم والزوجة: نفس الشرائح (DSWifeFlow) — الزوج المتوقَّع أخضر
-let wifeParts = J.pickerChips(father: "عبد الله أحمد", husband: "حسن حسين الموسى", birthYear: 1980,
-                              expectedHusband: "حسن حسين")
-check(wifeParts.map(\.kind), [.father, .grandfather, .birth, .husband], "picker chips order")
-check(wifeParts.map(\.value), ["عبدالله", "أحمد", "1980", "حسن حسين الموسى"], "picker chip values (عبد الله one word)")
-check(wifeParts.map(\.matches), [false, false, false, true], "picker: expected husband green")
-check(J.pickerChips(father: nil, husband: nil, birthYear: nil, expectedHusband: nil), [], "picker: nothing known → no chips")
+// ٦) مربّعا الأم والزوجة (DSWifeFlow): الاسم الكامل + الميلاد + الزوج — الزوج المتوقَّع أخضر
+let wifeParts = J.pickerChips(husband: "حسن حسين الموسى", birthYear: 1980, expectedHusband: "حسن حسين")
+check(wifeParts, [J.Chip(kind: .birth, value: "1980", matches: false), J.Chip(kind: .husband, value: "حسن حسين الموسى", matches: true)],
+      "picker chips: year · husband (expected husband green)")
+check(J.pickerChips(husband: nil, birthYear: nil, expectedHusband: nil), [], "picker: nothing known → no chips")
 
 // ٧) «طلب استكمال البيانات»
 typealias MF = AdminJoinBoxRules.MissingField

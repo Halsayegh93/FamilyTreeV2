@@ -629,7 +629,7 @@ struct DSWifeFlowBox: View {
                                 icon: "person.fill.questionmark", style: .inline)
                 }
                 ForEach(Array(list.eligible.enumerated()), id: \.element.id) { i, d in
-                    WifeDaughterRow(name: firstName(d), age: WifeCandidateRules.age(d), deceased: d.isDeceased == true,
+                    WifeDaughterRow(name: shownName(d), age: WifeCandidateRules.age(d), deceased: d.isDeceased == true,
                                     chips: kinshipChips(d, father: father),
                                     isSelected: selectedId == d.id && !addingNew) {
                         withAnimation(DS.Anim.snappy) { selectedId = d.id; addingNew = false; newName = ""; newDeceased = false }
@@ -663,16 +663,14 @@ struct DSWifeFlowBox: View {
         }
     }
 
-    /// شرائح القيم وحدها تحت اسم البنت (R2، نفس مربّعات «الوارد»): الوالد · الجد · سنة الميلاد · الزوج — بلا تسميات؛
-    /// الزوج المتوقَّع (أبو الشخص في مربّع الأم، والرجل نفسه في مربّع الزوجة) أخضر بعلامة ✓
+    /// تحت اسمها الكامل (المالك «وضحلي الاسم الكامل»): سنة الميلاد و«الزوج: …» — الزوج المتوقَّع (أبو الشخص في مربّع
+    /// الأم، والرجل نفسه في مربّع الزوجة) أخضر بعلامة ✓
     private func kinshipChips(_ d: FamilyMember, father: FamilyMember?) -> [AdminJoinBoxRules.Chip] {
-        let dad = father ?? d.fatherId.flatMap { id in people.first { $0.id == id } }
         let husband = d.husbandId.flatMap { id in people.first { $0.id == id } }
         let expected: String? = isMother
             ? personFatherId.flatMap { id in people.first { $0.id == id } }.map(shownName)
             : husbandName
-        return AdminJoinBoxRules.pickerChips(father: dad.map(shownName),
-                                             husband: husband.map { MotherPickRules.shortName(shownName($0)) },
+        return AdminJoinBoxRules.pickerChips(husband: husband.map { MotherPickRules.shortName(shownName($0)) },
                                              birthYear: AdminJoinBoxRules.birthYear(d.birthDate),
                                              expectedHusband: expected)
     }
@@ -827,9 +825,12 @@ private struct WifeDaughterRow: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "person.fill", tint: DS.Color.female)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(name)
+                    // الاسم الكامل واضحاً (سطران إن لزم)
+                    Text(verbatim: name)
                         .dsFieldFont(.memberName)
                         .foregroundColor(DS.Color.fieldValue)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     if !chips.isEmpty {
                         AdminValueChips(chips: chips)
                     }

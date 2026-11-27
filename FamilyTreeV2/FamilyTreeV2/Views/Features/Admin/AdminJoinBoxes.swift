@@ -41,8 +41,6 @@ struct AdminJoinBox: View {
     var onDetails: (() -> Void)? = nil
     var onDone: () -> Void
     let onClose: () -> Void
-    /// أشخاص إضافيون لسلسلة الآباء (معاينة التصوير بلا سيرفر) — فارغة في التطبيق
-    var knownPeople: [FamilyMember] = []
     /// الخطوة الأولى (معاينة التصوير) — البيانات افتراضياً
     var initialStep: Rules.Step = .applicant
 
@@ -338,11 +336,22 @@ struct AdminJoinBox: View {
 
     // MARK: ٢) الاقتراحات
 
+    /// الاقتراح: الاسم الكامل (كلماته المطابقة للطلب خضراء) + شريحة الميلاد (والزوج للمرأة حين يفرّق)
     private struct Suggestion: Identifiable {
         let id: UUID
-        let firstName: String
+        let fullName: String
+        let words: [Rules.NameWord]
         let chips: [Rules.Chip]
-        let spoken: String
+
+        init(_ c: Rules.Candidate, among: [Rules.Candidate], expect: Rules.Expect, women: Bool) {
+            id = c.id
+            fullName = Rules.spokenName(c)
+            words = Rules.nameWords(c, expect: expect)
+            chips = Rules.chips(c, among: among, expect: expect, women: women)
+        }
+
+        /// القارئ الصوتي: الاسم الكامل ثم الشرائح
+        var spoken: String { ([fullName] + chips.map(Rules.spoken)).joined(separator: "، ") }
     }
 
     private var suggestionsTitle: String {
@@ -361,36 +370,21 @@ struct AdminJoinBox: View {
         return Rules.Expect(typedName: applicantName, birthYear: Rules.birthYear(member?.birthDate), expectedHusband: nil)
     }
 
-    private func lookupMan(_ id: UUID) -> (first: String, fatherId: UUID?)? {
-        if let k = knownPeople.first(where: { $0.id == id }) { return (k.firstName, k.fatherId) }
-        if let m = memberVM.member(byId: id) { return (m.firstName.isEmpty ? (m.nameUnits.first ?? "") : m.firstName, m.fatherId) }
-        if let w = women.first(where: { $0.id == id }) { return (w.firstName.isEmpty ? (w.nameUnits.first ?? "") : w.firstName, w.fatherId) }
-        return nil
-    }
-
     private var candidates: [Rules.Candidate] {
         switch source {
         case .familyTree:
-            return suggestedMen.map {
-                Rules.candidate(id: $0.id, firstName: $0.firstName.isEmpty ? ($0.nameUnits.first ?? $0.fullName) : $0.firstName,
-                                fatherId: $0.fatherId, birthDate: $0.birthDate, husband: nil, lookup: lookupMan)
-            }
+            return suggestedMen.map { Rules.candidate(id: $0.id, fullName: $0.fullName, birthDate: $0.birthDate, husband: nil) }
         case .womenDaughters:
             return womenSuggestions.map { w in
                 let husband = w.husbandId.flatMap { id in memberVM.member(byId: id)?.chainThreeName
                     ?? women.first { $0.id == id }?.fullName }
-                return Rules.candidate(id: w.id, firstName: w.firstName.isEmpty ? (w.nameUnits.first ?? w.fullName) : w.firstName,
-                                       fatherId: w.fatherId, birthDate: w.birthDate,
-                                       husband: husband.map { MotherPickRules.shortName($0) }, lookup: lookupMan)
+                return Rules.candidate(id: w.id, fullName: w.fullName, birthDate: w.birthDate,
+                                       husband: husband.map { MotherPickRules.shortName($0) })
             }
         case .motherSuggestions:
             return mothers.map { s in
-                let w = Rules.words(s.fatherName).isEmpty ? [] : (s.fatherName ?? "").split(whereSeparator: \.isWhitespace).map(String.init)
-                let parts = Rules.pickerChips(father: w.joined(separator: " "), husband: nil, birthYear: nil, expectedHusband: nil)
-                return Rules.Candidate(id: s.id, firstName: s.fullName.split(separator: " ").first.map(String.init) ?? s.fullName,
-                                       father: parts.first { $0.kind == .father }?.value,
-                                       grandfather: parts.first { $0.kind == .grandfather }?.value,
-                                       birthYear: nil, husband: s.husbandName.map { MotherPickRules.shortName($0) })
+                Rules.candidate(id: s.id, fullName: s.fullName, birthDate: nil,
+                                husband: s.husbandName.map { MotherPickRules.shortName($0) })
             }
         case .none:
             return []
@@ -399,11 +393,7 @@ struct AdminJoinBox: View {
 
     private var suggestions: [Suggestion] {
         let all = candidates
-        return all.map { c in
-            let chips = Rules.chips(c, among: all, expect: expect, women: source != .familyTree)
-            let spoken = ([c.firstName] + chips.map(Rules.spoken)).joined(separator: "، ")
-            return Suggestion(id: c.id, firstName: c.firstName, chips: chips, spoken: spoken)
-        }
+        return all.map { Suggestion($0, among: all, expect: expect, women: source != .familyTree) }
     }
 
     /// بنات الأب (من طلبها إن اختارته) ثم الأقرب لاسمها في شجرة النساء — بلا المربوطة بحساب آخر
@@ -470,12 +460,10 @@ struct AdminJoinBox: View {
     private func suggestionRow(_ s: Suggestion, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: DS.Spacing.md) {
-                DSMemberAvatar(name: s.firstName, avatarUrl: nil, size: DS.Icon.row,
+                DSMemberAvatar(name: s.fullName, avatarUrl: nil, size: DS.Icon.row,
                                roleColor: source == .familyTree ? DS.Color.brand : DS.Color.female)
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(verbatim: s.firstName)
-                        .dsFont(.rowTitle).fontWeight(.semibold)
-                        .foregroundColor(DS.Color.textPrimary)
+                    AdminFullNameText(words: s.words)
                     if !s.chips.isEmpty { AdminValueChips(chips: s.chips) }
                 }
                 Spacer(minLength: 0)
@@ -526,10 +514,7 @@ struct AdminJoinBox: View {
         // الوالد يقابل الاسم المكتوب بعد الاسم الأول: والده = جد صاحب الطلب
         let fatherExpect = Rules.Expect(typedName: applicantName.split(separator: " ").dropFirst().joined(separator: " "),
                                         birthYear: nil, expectedHusband: nil)
-        let built = list.map { x in
-            Rules.candidate(id: x.id, firstName: x.firstName.isEmpty ? (x.nameUnits.first ?? x.fullName) : x.firstName,
-                            fatherId: x.fatherId, birthDate: x.birthDate, husband: nil, lookup: lookupMan)
-        }
+        let built = list.map { Rules.candidate(id: $0.id, fullName: $0.fullName, birthDate: $0.birthDate, husband: nil) }
         if built.isEmpty {
             Text(L10n.t(T.noSuggestions, "No suggestions for this name."))
                 .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
@@ -537,9 +522,7 @@ struct AdminJoinBox: View {
             VStack(spacing: 0) {
                 ForEach(Array(built.enumerated()), id: \.element.id) { i, c in
                     if i > 0 { Divider() }
-                    let chips = Rules.chips(c, among: built, expect: fatherExpect, women: false)
-                    suggestionRow(Suggestion(id: c.id, firstName: c.firstName, chips: chips,
-                                             spoken: ([c.firstName] + chips.map(Rules.spoken)).joined(separator: "، ")),
+                    suggestionRow(Suggestion(c, among: built, expect: fatherExpect, women: false),
                                   selected: fatherPick?.id == c.id) {
                         fatherPick = fatherPick?.id == c.id ? nil : list.first { $0.id == c.id }
                     }
@@ -828,7 +811,28 @@ struct AdminJoinBox: View {
     }
 }
 
-// MARK: - الشرائح بالقيم وحدها
+// MARK: - الاسم الكامل: كلماته المطابقة للطلب خضراء
+
+/// الاسم الكامل واضحاً (سطران إن لزم)، والكلمة المطابقة لجزء اسم الطلب خضراء وأعرض قليلاً؛ القارئ الصوتي يقرأ الاسم كاملاً
+struct AdminFullNameText: View {
+    let words: [AdminJoinBoxRules.NameWord]
+
+    var body: some View {
+        words.enumerated().reduce(Text(verbatim: "")) { acc, item in
+            let (i, w) = item
+            let piece = Text(verbatim: (i > 0 ? " " : "") + w.text)
+                .foregroundColor(w.matches ? DS.Color.success : DS.Color.textPrimary)
+                .fontWeight(w.matches ? .semibold : .regular)
+            return acc + piece
+        }
+        .dsFont(.rowTitle)
+        .lineLimit(2)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityLabel(words.map(\.text).joined(separator: " "))
+    }
+}
+
+// MARK: - الشرائح: الميلاد و«الزوج: …»
 
 /// «خالد · سعود · 1999 (· الزوج)» — كل قيمة شريحة صغيرة؛ المطابقة لبيانات الطلب خضراء بعلامة ✓، بلا تسميات رمادية،
 /// والقارئ الصوتي يقرأ التسمية مع القيمة («الوالد خالد، مطابق»)
@@ -844,7 +848,7 @@ struct AdminValueChips: View {
                             .dsGlyph(DS.Glyph.micro, weight: .bold)
                             .accessibilityHidden(true)
                     }
-                    Text(verbatim: c.value)
+                    Text(verbatim: AdminJoinBoxRules.chipText(c))
                         .dsFont(.caption)
                         .monospacedDigit()
                         .lineLimit(1)

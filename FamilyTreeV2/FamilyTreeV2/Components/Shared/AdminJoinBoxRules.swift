@@ -182,18 +182,20 @@ enum AdminJoinBoxRules {
         motherInFamily == true && SignupOriginRules.wordCount(SignupOriginRules.tidy(motherName)) < 3
     }
 
-    // MARK: الشرائح
+    // MARK: الاقتراح: الاسم الكامل + شريحة الميلاد (المالك «وضحلي الاسم الكامل»)
+    //
+    // الاسم الكامل واضحاً (سطران إن لزم) بدل شرائح الوالد والجد، وكلماته المطابقة لأجزاء اسم الطلب خضراء (بالموضع نفسه،
+    // تطبيع `NameSearch.words`، و«عبد الله» كلمة واحدة). تحته شريحة سنة الميلاد وحدها (خضراء إن طابقت)، و«الزوج: …»
+    // للمرأة حين يفرّق بين متشابهتين أو يطابق الزوج المتوقَّع.
 
     struct Candidate: Equatable {
         let id: UUID
-        let firstName: String
-        let father: String?
-        let grandfather: String?
+        let fullName: String
         let birthYear: Int?
         let husband: String?
     }
 
-    /// بيانات الطلب التي تُقارن بها الشرائح: الاسم المكتوب (الاسم ثم الوالد ثم الجد)، وسنة الميلاد، والزوج المتوقَّع (الوالد
+    /// بيانات الطلب التي تُقارن بها: الاسم المكتوب (الاسم ثم الوالد ثم الجد…)، وسنة الميلاد، والزوج المتوقَّع (الوالد
     /// المشتق في «استكمال التسجيل»، أو والد الشخص في مربّع الأم)
     struct Expect: Equatable {
         let typedName: String
@@ -209,12 +211,38 @@ enum AdminJoinBoxRules {
         let matches: Bool
     }
 
+    struct NameWord: Equatable {
+        let text: String
+        let matches: Bool
+    }
+
     static func words(_ s: String?) -> [String] { NameSearch.words(s ?? "") }
 
     private static func clean(_ s: String?) -> String? {
         let t = (s ?? "").split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return t.isEmpty ? nil : t
     }
+
+    /// كلمات الاسم كما كُتبت — «عبد الله» كلمة واحدة بمسافتها
+    static func displayWords(_ full: String) -> [String] {
+        var w: [String] = []
+        for part in full.split(whereSeparator: \.isWhitespace).map(String.init) {
+            if let last = w.last, last == "عبد" { w[w.count - 1] = last + " " + part } else { w.append(part) }
+        }
+        return w
+    }
+
+    /// الاسم الكامل كلمةً كلمة، والمطابقة لجزء اسم الطلب في موضعها خضراء
+    static func nameWords(_ c: Candidate, expect: Expect) -> [NameWord] {
+        let typed = words(expect.typedName)
+        return displayWords(c.fullName).enumerated().map { i, w in
+            let key = words(w).joined()
+            return NameWord(text: w, matches: i < typed.count && !key.isEmpty && key == typed[i])
+        }
+    }
+
+    /// القارئ الصوتي يقرأ الاسم الكامل
+    static func spokenName(_ c: Candidate) -> String { clean(c.fullName) ?? "" }
 
     /// الزوج يطابق المتوقَّع: أول كلمتين بعد التطبيع
     static func husbandMatches(_ husband: String?, expected: String?) -> Bool {
@@ -224,20 +252,13 @@ enum AdminJoinBoxRules {
 
     /// مرشّحة أخرى بنفس الاسم الأول والوالد والجد ← الزوج يفرّق بينهما
     static func husbandDisambiguates(_ c: Candidate, among: [Candidate]) -> Bool {
-        let key = { (x: Candidate) in [words(x.firstName).first, words(x.father).first, words(x.grandfather).first] }
+        let key = { (x: Candidate) in Array(words(x.fullName).prefix(3)) }
         let mine = key(c)
         return among.contains { $0.id != c.id && key($0) == mine }
     }
 
     static func chips(_ c: Candidate, among: [Candidate], expect: Expect, women: Bool) -> [Chip] {
-        let typed = words(expect.typedName)
         var out: [Chip] = []
-        if let f = clean(c.father) {
-            out.append(Chip(kind: .father, value: f, matches: typed.count > 1 && words(f).first == typed[1]))
-        }
-        if let g = clean(c.grandfather) {
-            out.append(Chip(kind: .grandfather, value: g, matches: typed.count > 2 && words(g).first == typed[2]))
-        }
         if let y = c.birthYear {
             out.append(Chip(kind: .birth, value: String(y), matches: expect.birthYear == y))
         }
@@ -250,12 +271,14 @@ enum AdminJoinBoxRules {
         return out
     }
 
-    /// مربّعا الأم والزوجة (DSWifeFlow): الوالد والجد من اسم والدها الكامل، الميلاد، والزوج — الأخضر = الزوج المتوقَّع
-    static func pickerChips(father: String?, husband: String?, birthYear: Int?, expectedHusband: String?) -> [Chip] {
-        let w = joinedAbd(father)
+    /// نصّ الشريحة: السنة وحدها، و«الزوج: …»
+    static func chipText(_ chip: Chip) -> String {
+        chip.kind == .husband ? text("الزوج: ", "Husband: ") + chip.value : chip.value
+    }
+
+    /// مربّعا الأم والزوجة (DSWifeFlow): الميلاد والزوج — الأخضر = الزوج المتوقَّع
+    static func pickerChips(husband: String?, birthYear: Int?, expectedHusband: String?) -> [Chip] {
         var out: [Chip] = []
-        if let f = w.first { out.append(Chip(kind: .father, value: f, matches: false)) }
-        if w.count > 1 { out.append(Chip(kind: .grandfather, value: w[1], matches: false)) }
         if let birthYear { out.append(Chip(kind: .birth, value: String(birthYear), matches: false)) }
         if let h = clean(husband) {
             out.append(Chip(kind: .husband, value: h, matches: husbandMatches(h, expected: expectedHusband)))
@@ -263,22 +286,9 @@ enum AdminJoinBoxRules {
         return out
     }
 
-    /// «عبد الله» كلمة واحدة (نفس قاعدة البحث) بلا تغيير الحروف
-    private static func joinedAbd(_ s: String?) -> [String] {
-        var w: [String] = []
-        for part in (s ?? "").split(whereSeparator: \.isWhitespace).map(String.init) {
-            if let last = w.last, last == "عبد" { w[w.count - 1] = last + part } else { w.append(part) }
-        }
-        return w
-    }
-
-    /// المرشّح من الشجرة: الوالد والجد بالاسم الأول عبر سلسلة الآباء
-    static func candidate(id: UUID, firstName: String, fatherId: UUID?, birthDate: String?, husband: String?,
-                          lookup: (UUID) -> (first: String, fatherId: UUID?)?) -> Candidate {
-        let father = fatherId.flatMap(lookup)
-        let grandfather = father?.fatherId.flatMap(lookup)
-        return Candidate(id: id, firstName: firstName, father: clean(father?.first), grandfather: clean(grandfather?.first),
-                         birthYear: birthYear(birthDate), husband: clean(husband))
+    /// المرشّح من الشجرة: الاسم الكامل وسنة الميلاد
+    static func candidate(id: UUID, fullName: String, birthDate: String?, husband: String?) -> Candidate {
+        Candidate(id: id, fullName: clean(fullName) ?? "", birthYear: birthYear(birthDate), husband: clean(husband))
     }
 
     static func birthYear(_ date: String?) -> Int? {
