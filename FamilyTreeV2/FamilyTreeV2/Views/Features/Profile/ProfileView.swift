@@ -1073,6 +1073,36 @@ struct ProfileView: View {
             .accessibilityHint(L10n.t("تعديل", "Edit"))
     }
 
+    /// «الأم: سهيلة علي موسى …» — أمّ ابن البنت من عقدته في شجرة النساء، للقراءة فقط (M1)
+    private func womenTreeMotherLine(_ mother: WomanMember) -> some View {
+        let name = mother.fullName.isEmpty ? mother.firstName : mother.fullName
+        return HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
+            Image(systemName: "person.fill")
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
+                .foregroundColor(DS.Color.female)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(L10n.t("الأم", "Mother"))
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textSecondary)
+                Text(name)
+                    .dsFont(.rowTitle)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .blur(radius: womenRevealed ? 0 : 5)   // ستر أسماء النساء كبقية الخانات
+            }
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if mother.isDeceased {
+                DSStatusChip(text: L10n.t("متوفاة", "Deceased"), tint: DS.Color.deceased, size: .mini)
+            }
+        }
+        .profileCell()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.t("الأم: ", "Mother: ") + name
+                            + (mother.isDeceased ? L10n.t("، متوفاة", ", deceased") : ""))
+    }
+
     /// «من أين الزوجة؟» + الإضافة بالاسم في مربّع عند الخانة نفسها (طلب المالك)
     private func wifeSourcePopover<V: View>(_ anchor: V, editing wife: WomenFamilyEntry? = nil) -> some View {
         // مربّع بالمنتصف كبقية المربّعات (كان منبثقاً بسهم عند الخانة)
@@ -1123,12 +1153,20 @@ struct ProfileView: View {
         let wifeEntries = parents.filter { $0.role == .wife }
         // صف الأم يظهر لكل عضو، والزوجة لمن له أسرة — الإضافة/الاختيار مقيّدة على النفس.
         let showParents = true
+        // ابن البنت (ومن مكانه في شجرة النساء، M1): أمّه من عقدته هناك — سطر للقراءة باسمها كاملاً، بلا «إضافة»
+        // ولا تعديل (دوال «أمّي» تكتب `profiles.mother_id` الذي لا يحمل أمّاً من شجرة النساء)
+        let womenTreeMother = memberVM.currentMemberWomenPlace != nil ? motherEntry : nil
         return VStack(spacing: DS.Spacing.sm) {
+            if let womenTreeMother {
+                womenTreeMotherLine(womenTreeMother.member)
+            }
             // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
             if showParents {
                 LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                     // خانة الأم (ثابتة أولاً)
-                    if let motherEntry {
+                    if womenTreeMother != nil {
+                        // سطرها فوق الشبكة
+                    } else if let motherEntry {
                         familyMemberButton(motherEntry)
                     } else {
                         // إضافة/اختيار الأم متاحة لأي عضو (set_self_mother/add_self_mother مقيّدة على النفس)
@@ -2275,6 +2313,8 @@ private struct ProfileWifeFamilyBox: View {
     /// حتى لا تُخفى أمه «المتزوجة بغير أبيه» من قائمة بنات أبيها (كان يُدفع لإضافة أم مكرّرة)
     private var personFatherId: UUID? {
         if let f = me.fatherId { return f }
+        // ابن البنت: أبوه في عقدته بشجرة النساء (من «عائلتي» — يشمل عقدة صفّ ابن البنت، M1)، وإلا العقدة المربوطة
+        if let f = memberVM.currentMemberWomenPlace?.parentId { return f }
         guard let node = WomenStore.womanByLinkedUser[me.id] else { return nil }
         return WomenStore.cache.first { $0.id == node }?.fatherId
     }

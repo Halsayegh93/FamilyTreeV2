@@ -189,17 +189,31 @@ enum WifeCandidateRules {
         return list
     }
 
-    /// بنات الأب للأم: بلا زوج أو زوجها أبو صاحب العقدة (المتوفّاة تظهر — قد تكون الأم متوفّاة)، وعدد من سواهنّ
+    /// بنات الأب للأم: بلا زوج، أو زوجها أبو صاحب العقدة — أبوه في شجرة العائلة أو أبو عقدته في شجرة النساء
+    /// (ابن البنت، M1) — أو هي أمّه المسجّلة في عقدته (المتوفّاة تظهر — قد تكون الأم متوفّاة)، وعدد من سواهنّ
     static func motherDaughters(of fatherId: UUID, personId: UUID, personFatherId: UUID?, in people: [FamilyMember],
                                 showsHidden: Bool) -> (eligible: [FamilyMember], hidden: Int) {
+        let node = womenNode(for: personId, in: people)
+        let fathers = MotherPickRules.personFatherIds(profileFatherId: personFatherId, womenNodeFatherId: node?.fatherId)
+        let nodeIds: Set<UUID> = Set([personId, node?.id].compactMap { $0 })
         let all = people.filter {
-            $0.fatherId == fatherId && $0.isFemale && $0.id != personId
+            $0.fatherId == fatherId && $0.isFemale && !nodeIds.contains($0.id)
                 && (showsHidden || !$0.isHiddenFromTree)
                 && !$0.firstName.trimmingCharacters(in: .whitespaces).isEmpty
         }
-        let eligible = all.filter { $0.husbandId == nil || ($0.husbandId != nil && $0.husbandId == personFatherId) }
+        let eligible = all.filter {
+            MotherPickRules.isMotherCandidate(daughterId: $0.id, husbandId: $0.husbandId, personFatherIds: fathers,
+                                              knownMotherId: node?.motherId)
+        }
             .sorted { $0.sortOrder < $1.sortOrder }
         return (eligible, all.count - eligible.count)
+    }
+
+    /// عقدة الشخص في شجرة النساء: نسخته بمعرّفه، وإلا العقدة المربوطة بحسابه (ابن البنت — `linked_user_id`)
+    static func womenNode(for personId: UUID, in people: [FamilyMember]) -> FamilyMember? {
+        if let own = people.first(where: { $0.id == personId }) { return own }
+        guard let linked = WomenStore.womanByLinkedUser[personId] else { return nil }
+        return people.first { $0.id == linked }
     }
 
     /// طلب «الأب غير موجود» للإدارة: الاسم المكتوب ولمن (طلب المالك ٢٠٢٦-١٠-٢٥ «زر صغير إذا الأب غير موجود… تعديل
@@ -616,6 +630,7 @@ struct DSWifeFlowBox: View {
                 }
                 ForEach(Array(list.eligible.enumerated()), id: \.element.id) { i, d in
                     WifeDaughterRow(name: firstName(d), age: WifeCandidateRules.age(d), deceased: d.isDeceased == true,
+                                    kinship: kinshipLine(d, father: father),
                                     isSelected: selectedId == d.id && !addingNew) {
                         withAnimation(DS.Anim.snappy) { selectedId = d.id; addingNew = false; newName = ""; newDeceased = false }
                     }
@@ -646,6 +661,15 @@ struct DSWifeFlowBox: View {
                 }
             }
         }
+    }
+
+    /// «بنت فلان · زوجة فلان» / «غير متزوجة» تحت اسم البنت — يفرّق المتشابهات (M1)
+    private func kinshipLine(_ d: FamilyMember, father: FamilyMember?) -> String {
+        let dad = father ?? d.fatherId.flatMap { id in people.first { $0.id == id } }
+        let husband = d.husbandId.flatMap { id in people.first { $0.id == id } }
+        return MotherPickRules.disambiguationLine(fatherName: dad.map(shownName),
+                                                  husbandName: husband.map(shownName),
+                                                  isMarried: WifeCandidateRules.isMarried(d))
     }
 
     /// «لا تظهر N: …» بالقواعد المفعّلة الآن (رقما السيرفر — «المضافة حديثاً» تُذكر ما دامت قاعدتها مفعّلة)
@@ -777,13 +801,16 @@ private struct WifeDaughterRow: View {
     let name: String
     let age: Int?
     var deceased: Bool = false
+    /// «بنت فلان · زوجة فلان» / «غير متزوجة» (M1) — nil = بلا سطر النسب
+    var kinship: String? = nil
     let isSelected: Bool
     let action: () -> Void
 
-    /// السطر تحت الاسم: «متوفاة» للمتوفّاة (بلا عمر — العمر حتى اليوم لا معنى له)، وإلا العمر إن عُرف
+    /// السطر تحت الاسم: النسب، ثم «متوفاة» للمتوفّاة (بلا عمر — العمر حتى اليوم لا معنى له)، وإلا العمر إن عُرف
     private var detail: String? {
-        if deceased { return L10n.t("متوفاة", "Deceased") }
-        return age.map { L10n.t("\($0) سنة", "\($0) yrs") }
+        let state: String? = deceased ? L10n.t("متوفاة", "Deceased") : age.map { L10n.t("\($0) سنة", "\($0) yrs") }
+        let parts = [kinship, state].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     var body: some View {
@@ -795,8 +822,9 @@ private struct WifeDaughterRow: View {
                         .dsFieldFont(.memberName)
                         .foregroundColor(DS.Color.fieldValue)
                     if let detail {
-                        Text(detail)
+                        Text(verbatim: detail)
                             .dsFont(.caption)
+                            .fixedSize(horizontal: false, vertical: true)
                             .foregroundColor(deceased ? DS.Color.deceased : DS.Color.textTertiary)
                     }
                 }

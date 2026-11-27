@@ -65,20 +65,11 @@ nonisolated enum FamilyTreeMenOnly {
 
     /// الكلمة الأولى بعد التطبيع: بلا مسافات زائدة، أ/إ/آ/ٱ ← ا، ى ← ي، ة في الآخر ← ه، بلا تطويل ولا تشكيل ولا محارف خفية
     static func normalizedFirstName(_ typed: String) -> String {
-        // المحارف الخفية والتطويل والتشكيل تُحذف قبل التقطيع (قد تأتي ملتصقة بالمسافة)
-        var cleaned = ""
-        for s in typed.unicodeScalars {
-            switch s.value {
-            case 0x0640, 0x064B...0x065F, 0x0670, 0x06D6...0x06ED, 0x200B...0x200F, 0xFEFF: continue
-            case 0x0622, 0x0623, 0x0625, 0x0671: cleaned.unicodeScalars.append("ا")
-            case 0x0649: cleaned.unicodeScalars.append("ي")
-            default: cleaned.unicodeScalars.append(s)
-            }
-        }
+        // التطبيع الواحد (`ArabicTextNormalizer.normalizeLetters`، M1): المحارف الخفية والتطويل والتشكيل تُحذف قبل
+        // التقطيع (قد تأتي ملتصقة بالمسافة)، والحروف تتوحّد كالبحث
+        let cleaned = ArabicTextNormalizer.normalizeLetters(typed)
         guard let first = cleaned.split(whereSeparator: { $0.isWhitespace }).first else { return "" }
-        var word = String(first)
-        if word.hasSuffix("ة") { word = String(word.dropLast()) + "ه" }
-        return word.lowercased()
+        return String(first).lowercased()
     }
 
     /// `women`: صفوف شجرة النساء (الاسم الأول، أنثى؟) · `men`: الأسماء الأولى لذكور شجرة العائلة

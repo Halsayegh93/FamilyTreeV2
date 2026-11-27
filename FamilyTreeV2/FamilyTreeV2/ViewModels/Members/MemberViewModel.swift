@@ -47,6 +47,9 @@ class MemberViewModel: ObservableObject {
     @Published var currentMemberChildren: [FamilyMember] = []
     /// عائلة العضو من شجرة النساء (الأم + الزوجة + الأبناء) — عرض فقط.
     @Published var currentMemberWomenFamily: [WomenFamilyEntry] = []
+    /// عقدة العضو في شجرة النساء حين يكون مكانه هناك لا في شجرة العائلة (ابن البنت، M1): أبوه `parentId` وأمّه
+    /// `motherId` منها — `profiles.mother_id` لا يحمل أمّاً من شجرة النساء. nil = نسخته العادية أو لا عقدة
+    @Published var currentMemberWomenPlace: WomanMember?
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
@@ -387,8 +390,18 @@ class MemberViewModel: ObservableObject {
                 .order("sort_order", ascending: true)
                 .execute().value
 
-            let selfRows = try await selfTask
+            var selfRows = try await selfTask
             var related = try await relatedTask
+            // بلا أي عقدة (ابن بنت لم تُربط عقدته بحسابه): عقدته من صفّه في `daughter_son_lineage` (يقرأ صفّه هو،
+            // والإدارة الكل) — نداء إضافي لهذه الحالة وحدها، لا لكل رجل
+            if selfRows.isEmpty,
+               let lineageNode = await Self.lineageWomenNodeId(for: userId),
+               let rows: [WomanMember] = try? await supabase.from("women_members")
+                   .select().eq("id", value: lineageNode.uuidString).limit(1).execute().value {
+                selfRows += rows
+            }
+            // مكانه في شجرة النساء (ابن البنت): عقدة غير نسخته بمعرّفه — أمّه وأبوه منها
+            let place = selfRows.first { $0.id != userId }
             let node = selfRows.first { $0.id == userId } ?? selfRows.first
             var nodeIds: Set<UUID> = [userId]
             if let node, node.id != userId {
@@ -402,7 +415,7 @@ class MemberViewModel: ObservableObject {
                 let known = Set(related.map(\.id))
                 related += more.filter { !known.contains($0.id) }
             }
-            let motherId = node?.motherId
+            let motherId = node?.motherId ?? place?.motherId
 
             func named(_ m: WomanMember) -> Bool {
                 !m.firstName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -427,11 +440,23 @@ class MemberViewModel: ObservableObject {
                 entries.append(WomenFamilyEntry(member: c, role: .child))
             }
             self.currentMemberWomenFamily = entries
+            if userId == currentUser?.id {
+                let placed = MotherPickRules.isPlacedInWomenTree(accountId: userId, nodeId: place?.id)
+                self.currentMemberWomenPlace = placed ? place : nil
+            }
         } catch {
             // تعثّر الجلب (شبكة، إلغاء أثناء السحب للتحديث) لا يمسح ما يظهر — كان يُفرّغ «عائلتي»
             // فتختفي الأم والزوجة والبنات (بلاغ المالك ٢٠٢٦-١٠-٣١)
             Log.warning("[Women] تعذّر جلب عائلة شجرة النساء: \(error.localizedDescription)")
         }
+    }
+
+    /// عقدة ابن البنت من صفّه في `daughter_son_lineage` — nil = ليس ابن بنت أو تعذّرت القراءة
+    private static func lineageWomenNodeId(for profileId: UUID) async -> UUID? {
+        struct Row: Decodable { let women_node_id: UUID? }
+        let rows: [Row]? = try? await SupabaseConfig.client.from("daughter_son_lineage")
+            .select("women_node_id").eq("profile_id", value: profileId.uuidString).limit(1).execute().value
+        return rows?.first?.women_node_id ?? nil
     }
 
     /// إضافة ابن/ابنة للعائلة عبر RPC add_family_child مع توجيه حسب الجنس:

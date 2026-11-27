@@ -1,5 +1,6 @@
 // فحص «شجرة العائلة للرجال فقط» (Views/Features/Tree/FamilyTreeMenOnly.swift، الوحدة G1، طلب المالك ٢٠٢٦-١١-٢٧) — بلا محاكي:
 //   xcrun swiftc -D ADMIN_LOGIC_TEST -o /private/tmp/claude-501/g1-logic \
+//     FamilyTreeV2/FamilyTreeV2/Core/ArabicTextNormalizer.swift \
 //     FamilyTreeV2/FamilyTreeV2/Views/Features/Tree/FamilyTreeMenOnly.swift tests/admin-redesign/G1/main.swift \
 //     && /private/tmp/claude-501/g1-logic
 //
