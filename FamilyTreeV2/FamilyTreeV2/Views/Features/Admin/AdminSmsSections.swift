@@ -1,9 +1,10 @@
 import SwiftUI
 
-// MARK: - بطاقات صفحة «رسائل رمز الدخول (KWT SMS)» السفلى ومربّعات أدواتها
+// MARK: - أقسام صفحة «رسائل رمز الدخول (KWT SMS)» السفلى ومربّعات أدواتها (شكل الإدارة v2 «أ»، ٢٠٢٦-١١-٢٧)
 //
-// آخر الإرسالات (فحص الحالة) · التنبيهات (المالك يعدّل، المدير يقرأ — في صفحة «إعدادات الإرسال») · طريقة العمل، ومربّعات
-// «فحص رقم» و«المرسلون» و«التغطية». كل بطاقة نوع مستقل يُرسم خلف `AnyView` في `AdminSmsView` (حارس المكدس).
+// آخر الإرسالات (فحص الحالة) · تنبيهات الرصيد (المالك يعدّل، غيره يقرأ) · الأدوات · صفّ «طلبات رمز الدخول» · طريقة العمل
+// (مطويّة)، ومربّعات «التحقق من رقم» و«المرسلون» و«التغطية». كل قسم نوع مستقل يُرسم خلف `AnyView` في `AdminSmsView`
+// (حارس المكدس). الصفوف بشكل صفوف اللوحة (`AdminControlRow`/`AdminTapRow` داخل `AdminRowsCardBody`) — لا مربّعات.
 
 // MARK: آخر الإرسالات
 
@@ -17,37 +18,39 @@ struct SmsRecentCard: View {
     var body: some View {
         let all = overview.recent
         let rows = showsAll ? all : Array(all.prefix(Self.collapsedCount))
-        VStack(alignment: .leading, spacing: 0) {
-            AdminCardHeader(title: L10n.t("آخر الإرسالات", "Recent sends")) {
-                if all.count > Self.collapsedCount {
-                    Button { showsAll.toggle() } label: {
-                        AdminCardLinkLabel(title: showsAll ? L10n.t("عرض أقل", "Show less")
-                                                           : L10n.t("الكل (\(all.count))", "All (\(all.count))"),
-                                           showsChevron: !showsAll)
+        SmsSection(title: L10n.t("آخر الإرسالات", "Recent sends"), link: toggle(all.count)) {
+            VStack(alignment: .leading, spacing: 0) {
+                if rows.isEmpty {
+                    Text(L10n.t("لا إرسال خلال آخر يومين.", "No sends in the last two days."))
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(minHeight: DS.Hub.rowMinHeight)
+                } else {
+                    ForEach(rows) { send in
+                        SmsSendRow(send: send, actions: actions)
+                        if send.id != rows.last?.id { AdminRowDivider() }
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            if rows.isEmpty {
-                Text(L10n.t("لا إرسال خلال آخر يومين.", "No sends in the last two days."))
+                Text(L10n.t("السجل التفصيلي يبقى \(SmsText.days(overview.retentionDays))، والأرقام اليومية تبقى. الرقم لا يُحفظ — يظهر آخر 4 خانات من بصمته.",
+                            "Detailed rows are kept \(overview.retentionDays) days; daily numbers stay. Numbers are never stored — only the last 4 characters of a fingerprint show."))
                     .dsFont(.subtitle)
                     .foregroundColor(DS.Color.textTertiary)
-                    .padding(.vertical, DS.Spacing.sm)
-            } else {
-                ForEach(rows) { send in
-                    SmsSendRow(send: send, actions: actions)
-                    if send.id != rows.last?.id { AdminRowDivider() }
-                }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, DS.Spacing.sm)
             }
-            Text(L10n.t("السجل التفصيلي يبقى \(SmsText.days(overview.retentionDays))، والأرقام اليومية تبقى. الرقم لا يُحفظ — يظهر آخر 4 خانات من بصمته.",
-                        "Detailed rows are kept \(overview.retentionDays) days; daily numbers stay. Numbers are never stored — only the last 4 characters of a fingerprint show."))
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
+    }
+
+    /// «الكل (N)» / «عرض أقل» في طرف العنوان — حين يزيد عن خمسة
+    private func toggle(_ count: Int) -> AnyView? {
+        guard count > Self.collapsedCount else { return nil }
+        return AnyView(Button { showsAll.toggle() } label: {
+            AdminCardLinkLabel(title: showsAll ? L10n.t("عرض أقل", "Show less") : L10n.t("الكل (\(count))", "All (\(count))"),
+                               showsChevron: !showsAll)
+        }
+        .buttonStyle(.plain))
     }
 }
 
@@ -68,19 +71,19 @@ private struct SmsSendRow: View {
                 }
                 if !meta.isEmpty {
                     Text(verbatim: meta)
-                        .dsFont(.footnote)
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let code = send.errorCode {
                     Text(verbatim: SmsText.errorLine(code))
-                        .dsFont(.footnote)
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let status = send.deliveryStatus {
                     Text(verbatim: statusLine(status))
-                        .dsFont(.footnote)
+                        .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -95,7 +98,7 @@ private struct SmsSendRow: View {
 
     private var timeText: some View {
         Text(verbatim: SmsText.time(send.at))
-            .dsFont(.hubRow)
+            .dsFont(.hubValue)
             .monospacedDigit()
             .foregroundColor(DS.Color.textPrimary)
             .lineLimit(1)
@@ -155,9 +158,9 @@ private struct SmsOutcomeChips: View {
 
 // MARK: تنبيهات الرصيد
 
-/// عتبات تنبيه الرصيد وفواصله — المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف الضغط)، المدير يقرأ. مكانها الوحيد
-/// (كانت تُشرح ثانيةً في «طريقة العمل»)، ومعها «آخر تنبيه»
-struct SmsAlertsRows: View {
+/// عتبات تنبيه الرصيد وفواصله — قسم مستقل (كان مجموعة داخل «إعدادات الإرسال»). المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف
+/// الضغط)، غيره يقرأ. مكانها الوحيد، ومعها «آخر تنبيه»
+struct SmsAlertsCard: View {
     /// من النظرة (الأحدث من السيرفر) — احتياط إن لم تصل أعمدة `app_settings` بعد
     let alerts: SmsOverview.Alerts?
     @EnvironmentObject var authVM: AuthViewModel
@@ -175,50 +178,48 @@ struct SmsAlertsRows: View {
         let canEdit = authVM.canManageSettings && appSettingsVM.settings.smsLowThreshold != nil
         // حدود المبدّل صالحة دائماً (أدنى ≤ أعلى) ولو وصلت قيم غريبة
         let lowUpper = max(Self.lowMax, value.lowThreshold, value.urgentThreshold)
-        VStack(alignment: .leading, spacing: 0) {
-            Text(L10n.t("تنبيهات الرصيد", "Balance alerts"))
-                .dsFont(.hubRow)
-                .foregroundColor(DS.Color.textPrimary)
-                .padding(.top, DS.Spacing.md)
-            AdminRowsCardBody {
-            if canEdit {
-                stepperRow("exclamationmark.triangle.fill", DS.Color.warning, L10n.t("منخفض تحت", "Low below"),
-                           value.lowThreshold, min(value.urgentThreshold, lowUpper)...lowUpper, 10, .points) {
-                    var a = value; a.lowThreshold = $0; save(a)
+        SmsSection(title: L10n.t("تنبيهات الرصيد", "Balance alerts")) {
+            VStack(alignment: .leading, spacing: 0) {
+                AdminRowsCardBody(dividerInset: AdminRowDivider.iconInset) {
+                    if canEdit {
+                        stepperRow("exclamationmark.triangle.fill", DS.Color.warning, L10n.t("منخفض تحت", "Low below"),
+                                   value.lowThreshold, min(value.urgentThreshold, lowUpper)...lowUpper, 10, .points) {
+                            var a = value; a.lowThreshold = $0; save(a)
+                        }
+                        stepperRow("flame.fill", DS.Color.error, L10n.t("عاجل تحت", "Urgent below"),
+                                   value.urgentThreshold, 0...max(0, value.lowThreshold), 5, .points) {
+                            var a = value; a.urgentThreshold = $0; save(a)
+                        }
+                        stepperRow("clock.arrow.circlepath", DS.Color.warning, L10n.t("تكرار المنخفض كل", "Repeat low every"),
+                                   value.lowRepeatHours, 6...168, 6, .hours) {
+                            var a = value; a.lowRepeatHours = $0; save(a)
+                        }
+                        stepperRow("clock.arrow.circlepath", DS.Color.error, L10n.t("تكرار العاجل كل", "Repeat urgent every"),
+                                   value.urgentRepeatHours, 1...168, 1, .hours) {
+                            var a = value; a.urgentRepeatHours = $0; save(a)
+                        }
+                    } else {
+                        SmsValueRow(icon: "exclamationmark.triangle.fill", tint: DS.Color.warning, title: L10n.t("منخفض", "Low"),
+                                    value: value.lowThreshold == 0 ? L10n.t("مطفأ", "Off")
+                                        : L10n.t("أقل من \(value.lowThreshold) · كل \(value.lowRepeatHours) ساعة",
+                                                 "Below \(value.lowThreshold) · every \(value.lowRepeatHours) h"))
+                        SmsValueRow(icon: "flame.fill", tint: DS.Color.error, title: L10n.t("عاجل", "Urgent"),
+                                    value: value.urgentThreshold == 0 ? L10n.t("مطفأ", "Off")
+                                        : L10n.t("أقل من \(value.urgentThreshold) · كل \(value.urgentRepeatHours) ساعة",
+                                                 "Below \(value.urgentThreshold) · every \(value.urgentRepeatHours) h"))
+                    }
+                    if let last = lastAlert.flatMap({ AdminTodayText.since($0) }) {
+                        SmsValueRow(icon: "bell.badge.fill", tint: DS.Color.slate, title: L10n.t("آخر تنبيه", "Last alert"), value: last)
+                    }
                 }
-                stepperRow("flame.fill", DS.Color.error, L10n.t("عاجل تحت", "Urgent below"),
-                           value.urgentThreshold, 0...max(0, value.lowThreshold), 5, .points) {
-                    var a = value; a.urgentThreshold = $0; save(a)
-                }
-                stepperRow("clock.arrow.circlepath", DS.Color.warning, L10n.t("تكرار المنخفض كل", "Repeat low every"),
-                           value.lowRepeatHours, 6...168, 6, .hours) {
-                    var a = value; a.lowRepeatHours = $0; save(a)
-                }
-                stepperRow("clock.arrow.circlepath", DS.Color.error, L10n.t("تكرار العاجل كل", "Repeat urgent every"),
-                           value.urgentRepeatHours, 1...168, 1, .hours) {
-                    var a = value; a.urgentRepeatHours = $0; save(a)
-                }
-            } else {
-                SmsKVRow(icon: "exclamationmark.triangle.fill", label: L10n.t("منخفض", "Low"),
-                         value: value.lowThreshold == 0 ? L10n.t("مطفأ", "Off")
-                                                        : L10n.t("أقل من \(value.lowThreshold) · كل \(value.lowRepeatHours) ساعة",
-                                                                 "Below \(value.lowThreshold) · every \(value.lowRepeatHours) h"),
-                         tint: DS.Color.warning)
-                SmsKVRow(icon: "flame.fill", label: L10n.t("عاجل", "Urgent"),
-                         value: value.urgentThreshold == 0 ? L10n.t("مطفأ", "Off")
-                                                           : L10n.t("أقل من \(value.urgentThreshold) · كل \(value.urgentRepeatHours) ساعة",
-                                                                    "Below \(value.urgentThreshold) · every \(value.urgentRepeatHours) h"),
-                         tint: DS.Color.error)
+                Text(footnote(canEdit: canEdit))
+                    .dsFont(.subtitle)
+                    .foregroundColor(saveFailed ? DS.Color.error : DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, DS.Spacing.sm)
             }
-            if let last = lastAlert.flatMap({ AdminTodayText.since($0) }) {
-                SmsKVRow(icon: "bell.badge.fill", label: L10n.t("آخر تنبيه", "Last alert"), value: last)
-            }
-            }
-            Text(footnote(canEdit: canEdit))
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, DS.Spacing.sm)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
         }
     }
 
@@ -249,9 +250,9 @@ struct SmsAlertsRows: View {
 
     private func stepperRow(_ icon: String, _ tint: Color, _ label: String, _ value: Int, _ range: ClosedRange<Int>,
                             _ step: Int, _ unit: ApprovalHoursStepper.Unit, onChange: @escaping (Int) -> Void) -> some View {
-        SmsKVRow(icon: icon, label: label, tint: tint, combines: false) {
-            ApprovalHoursStepper(value: value, range: range, step: step, label: label, onChange: onChange, unit: unit)
-        }
+        AdminControlRow(icon: icon, tint: tint, title: label,
+                        control: AnyView(ApprovalHoursStepper(value: value, range: range, step: step, label: label,
+                                                              onChange: onChange, unit: unit)))
     }
 
     /// يظهر فوراً، ويُحفظ بعد توقّف الضغط ثلثي ثانية (الأربعة في تحديث واحد)، ثم تُعاد نظرة الرصيد
@@ -274,20 +275,97 @@ struct SmsAlertsRows: View {
     }
 }
 
+/// صفّ قيمة للقراءة: مربّع الأيقونة + العنوان (+ شرح) + القيمة في الطرف — بديل المبدّل لمن لا يعدّل
+struct SmsValueRow: View {
+    let icon: String
+    var tint: Color = DS.Color.sea
+    let title: String
+    var subtitle: String? = nil
+    let value: String
+
+    var body: some View {
+        AdminControlRow(icon: icon, tint: tint, title: title, subtitle: subtitle,
+                        control: AnyView(AdminRowValue(text: value)
+                            .multilineTextAlignment(.trailing)))
+            .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - الأدوات
+
+/// «إرسال رسالة تجريبية إلى رقم المالك» (المالك، بتأكيد) · «التحقق من رقم» (مربّع) — صفّ لكل أداة
+struct SmsToolsSection: View {
+    @ObservedObject var actions: SmsPageActions
+    @EnvironmentObject private var authVM: AuthViewModel
+
+    var body: some View {
+        SmsSection(title: L10n.t("الأدوات", "Tools")) {
+            AdminSectionCard(spacing: 0) {
+                AdminRowsCardBody {
+                    ForEach(SmsPageLogic.tools(isOwner: authVM.isOwner), id: \.self) { tool in
+                        row(tool)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func row(_ tool: SmsPageLogic.Tool) -> some View {
+        switch tool {
+        case .testSend:
+            let busy = actions.isBusy("test")
+            AdminTapRow(icon: "paperplane.fill", tint: DS.Color.sea,
+                        title: L10n.t("إرسال رسالة تجريبية إلى رقم المالك", "Send a test message to my number"),
+                        subtitle: busy ? L10n.t("جارٍ الإرسال…", "Sending…")
+                                       : L10n.t("نقطة واحدة · مرة كل 10 دقائق", "1 point · once every 10 minutes"),
+                        tap: busy ? .none : .action { actions.confirmTest = true })
+        case .validate:
+            AdminTapRow(icon: "phone.fill", tint: DS.Color.sea,
+                        title: L10n.t("التحقق من رقم", "Check a number"),
+                        subtitle: L10n.t("هل يصل رمز الدخول لهذا الرقم؟", "Will a sign-in code reach this number?"),
+                        tap: .action { actions.box = .validate })
+        }
+    }
+}
+
+// MARK: - صفّ «طلبات رمز الدخول»
+
+/// باب واحد إلى «طلبات رمز الدخول» (`SmsAttemptsListPage`) — بحبّة «2 جديدة» حمراء ما دامت تنبيهات مريبة لم تُقرأ.
+/// صفّ وحده بلا عنوان قسم (اسمه عنوانه)
+struct SmsAttemptsDoorSection: View {
+    @EnvironmentObject private var notificationVM: NotificationViewModel
+
+    var body: some View {
+        let unread = notificationVM.notifications.filter { !$0.read && $0.kind == AdminNotices.smsSuspicious }.count
+        AdminSectionCard(spacing: 0) {
+            AdminTapRow(icon: "person.badge.key.fill", tint: unread > 0 ? DS.Color.error : DS.Color.sea,
+                        title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
+                        subtitle: unread > 0 ? L10n.t("محاولات دخول مريبة لم تطّلع عليها", "Suspicious sign-in attempts you haven't seen")
+                                             : L10n.t("من طلب رمز دخول، وكم مرة", "Who asked for a sign-in code, and how often"),
+                        value: SmsPageLogic.attemptsValue(unread: unread),
+                        valueIcon: unread > 0 ? "exclamationmark.triangle.fill" : nil,
+                        valueTint: DS.Color.error,
+                        tap: .page { AnyView(SmsAttemptsListPage()) })
+        }
+    }
+}
+
 // MARK: - طريقة العمل
 
-/// «طريقة العمل» (كانت «كيف تشتغل رسائل الدخول») — بطاقة صفحتها `SmsHowItWorksPage` من ⋯ (تبسيط ٢٠٢٦-١٠-٢٢): المسار، ما يُحفظ،
-/// رمز الدخول (لا يُحفظ ولا يُعرض — 20261029110000)، من يرى ماذا، معنى «ناجحة» و«مشبوهة»، ورابط الشحن. الحدود والتنبيهات لم تعد تُشرح هنا ثانيةً — مكانهما
-/// «إعدادات الإرسال» و«تنبيهات الرصيد» (الدفعة ج). النص نفسه سيُنقل للأندرويد
+/// «طريقة العمل» مطويّة آخر الصفحة (كانت صفحة من ⋯): المسار، ما يُحفظ، رمز الدخول (لا يُحفظ ولا يُعرض — 20261029110000)،
+/// من يرى ماذا، معنى «ناجحة» و«مشبوهة». الحدود والتنبيهات تُشرح في قسميهما لا هنا. النص نفسه سيُنقل للأندرويد
 struct SmsHowItWorksCard: View {
     let overview: SmsOverview?
     @ObservedObject private var attempts = SmsLoginAttemptsStore.shared
+    @State private var open = false
 
     private var sender: SmsOverview.Sender { overview?.sender ?? SmsOverview.Sender() }
 
     var body: some View {
-        AdminSectionCard {
-            AdminRowsCardBody {
+        AdminSectionCard(title: L10n.t("طريقة العمل", "How it works"), spacing: 0, isOpen: $open,
+                         summary: L10n.t("المسار · ما يُحفظ · رمز الدخول · من يرى ماذا",
+                                         "The path · what's kept · the sign-in code · who sees what")) {
+            AdminRowsCardBody(dividerInset: AdminRowDivider.iconInset) {
                 SmsHowRow(icon: "paperplane.fill", tint: DS.Color.sea,
                           title: L10n.t("المسار", "The path"),
                           text: pathText)
@@ -333,25 +411,23 @@ struct SmsHowItWorksCard: View {
     }
 }
 
-/// صفّ شرح: رمز ملوّن + عنوان عريض + نص (+ تحذير كهرماني، + سطر صغير)
+/// صفّ شرح: مربّع الأيقونة + عنوان + نص (+ تحذير كهرماني)
 private struct SmsHowRow: View {
     let icon: String
     let tint: Color
     let title: String
     let text: String
     var warning: String? = nil
-    var note: String? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: DS.Spacing.md) {
-            AdminIconSquare(symbol: icon, tint: tint, side: DS.Hub.miniIcon, radius: DS.Hub.miniIconRadius,
-                            glyph: DS.Glyph.md)
+            AdminIconSquare(symbol: icon, tint: tint, filled: true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(title)
-                    .dsFont(.hubRow)
+                    .dsFont(.body)
                     .foregroundColor(DS.Color.textPrimary)
                 Text(verbatim: text)
-                    .dsFont(.footnote)
+                    .dsFont(.subtitle)
                     .foregroundColor(DS.Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let warning {
@@ -360,15 +436,9 @@ private struct SmsHowRow: View {
                     } icon: {
                         Image(systemName: "exclamationmark.triangle.fill").dsGlyph(DS.Glyph.sm)
                     }
-                    .dsFont(.footnote)
+                    .dsFont(.subtitle)
                     .foregroundColor(DS.Color.warning.dsReadableGlyph)
                     .padding(.top, DS.Spacing.xxs)
-                }
-                if let note {
-                    Text(verbatim: note)
-                        .dsFont(.caption)
-                        .monospacedDigit()
-                        .foregroundColor(DS.Color.textTertiary)
                 }
             }
             Spacer(minLength: 0)

@@ -321,7 +321,7 @@ final class SmsBalanceStore: ObservableObject {
     static let defaultLowThreshold: Double = 50
     static let defaultUrgentThreshold: Double = 10
     /// مرجع مقياس الرصيد في رأس الصفحة («من ١٠٠»)
-    static let gaugeReference: Double = 100
+    static let gaugeReference: Double = SmsPageLogic.gaugeReference
     /// صفحة شراء الرصيد في حساب KWT SMS (تحوّل لتسجيل الدخول عند المزوّد إن لم يكن مسجّلاً) — الرابط الوحيد للشحن
     static let rechargeURL = URL(string: "https://www.kwtsms.com/cportal/buy/")!
 
@@ -543,6 +543,16 @@ extension SmsBalanceStore.Level {
         case .good:    return DS.Color.success
         case .low:     return DS.Color.warning
         case .urgent:  return DS.Color.error
+        }
+    }
+
+    /// حلقة الرصيد وكلمة حاله فوق الكحلي (رأس صفحة الرسائل v2): ألوان سطر الحالة فوق الكحلي — ثابتة في الوضعين
+    var bandRing: Color {
+        switch self {
+        case .unknown: return DS.Hub.lineZero
+        case .good:    return DS.Hub.statusOk
+        case .low:     return DS.Hub.statusWarn
+        case .urgent:  return DS.Hub.kpiHot
         }
     }
 

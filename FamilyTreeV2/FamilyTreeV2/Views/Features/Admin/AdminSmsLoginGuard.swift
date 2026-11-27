@@ -2,13 +2,14 @@ import SwiftUI
 import Supabase
 import Combine
 
-// MARK: - «حماية رسائل الدخول» في صفحة «إعدادات الإرسال» (السيرفر الحي ٢٠٢٦-١٠-٢٢)
+// MARK: - «حماية رسائل الدخول» — قسم في صفحة «رسائل رمز الدخول» بعد «إعدادات الإرسال» (السيرفر الحي ٢٠٢٦-١٠-٢٢)
 //
 // خمسة مفاتيح من `app_config` (السيرفر يطبّقها على كل طلب رمز): رمز واحد ما دام الأول صالحاً، أقصى رسائل للرقم باليوم،
 // وقفل الرقم بعد عدد طلبات خلال دقائق لمدة محددة. القراءة: `app_config()` (`{values, meta, can_edit…}` — فكّ متسامح:
 // القيم في `values` أو في الجذر، والمدى من `meta.min/max` إن وُجد وإلا مدى ثابت هنا). الحفظ: `set_app_config(p_key, p_value)`
 // للمالك فقط (غيره 42501)، كل مفتاح وحده بعد توقّف الضغط؛ الأخطاء بـ `hint` (`bad_value` نص السيرفر، `unknown_key`).
-// المدير يقرأ فقط. البطاقة نوع مستقل خلف `AnyView` (حارس المكدس). «فك القفل» لرقم في «تفاصيل الرقم».
+// المدير يقرأ فقط. قسم في صفحة الرسائل (v2: صفوف `AdminControlRow`) نوع مستقل خلف `AnyView` (حارس المكدس). «فك القفل» لرقم
+// في «تفاصيل الرقم».
 
 /// مفتاح واحد من «حماية رسائل الدخول»
 struct SmsGuardKey: Identifiable, Equatable {
@@ -144,22 +145,34 @@ struct SmsLoginGuardCard: View {
     var body: some View {
         let canEdit = authVM.isOwner && store.canEdit != false && store.state == .loaded
         let keys = SmsGuardKey.all.filter { store.values[$0.id] != nil }
-        AdminRowsCard(title: L10n.t("حماية رسائل الدخول", "Sign-in message protection"),
-                      footnote: footnote(canEdit: canEdit, empty: keys.isEmpty)) {
+        SmsSection(title: L10n.t("حماية رسائل الدخول", "Sign-in message protection")) {
             if store.state == .loaded || !store.values.isEmpty {
-                if keys.isEmpty {
-                    DSNoteCard(L10n.t("السيرفر لم يرسل هذه الإعدادات بعد.", "The server hasn't sent these settings yet."),
-                               icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+                VStack(alignment: .leading, spacing: 0) {
+                    if keys.isEmpty {
+                        AdminInfoRow(icon: "exclamationmark.triangle.fill", tint: DS.Color.warning,
+                                     title: L10n.t("السيرفر لم يرسل هذه الإعدادات بعد.", "The server hasn't sent these settings yet."))
+                    }
+                    AdminRowsCardBody(dividerInset: AdminRowDivider.iconInset) {
+                        ForEach(keys) { key in
+                            row(key, canEdit: canEdit)
+                        }
+                    }
+                    if let note = footnote(canEdit: canEdit, empty: keys.isEmpty) {
+                        Text(note)
+                            .dsFont(.subtitle)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, DS.Spacing.sm)
+                    }
                 }
-                ForEach(keys) { key in
-                    row(key, canEdit: canEdit)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .adminCard()
             } else if store.state == .failed {
-                DSNoteCard(L10n.t("تعذّر جلب الحماية الآن — اسحب للتحديث.", "Couldn't load the protection — pull to refresh."),
-                           icon: "wifi.exclamationmark", tint: DS.Color.warning)
+                AdminPageStateCard(.error(L10n.t("تعذّر جلب الحماية الآن", "Couldn't load the protection"),
+                                          message: L10n.t("اسحب للتحديث أو أعد المحاولة.", "Pull to refresh or retry."),
+                                          retry: { Task { await store.refresh() } }))
             } else {
-                DSPageLoader(L10n.t("جاري جلب الحماية…", "Loading protection…"),
-                             size: DS.Icon.loaderArtInline, fillsSpace: false)
+                AdminPageStateCard(.loading(L10n.t("جاري جلب الحماية…", "Loading protection…"), rows: 3))
             }
         }
         .task { await store.refresh() }
@@ -178,21 +191,21 @@ struct SmsLoginGuardCard: View {
         let shownRange = key.shown(range.lowerBound)...key.shown(range.upperBound)
         VStack(alignment: .leading, spacing: 0) {
             if canEdit {
-                SmsKVRow(icon: key.icon, label: key.title, note: key.note, tint: DS.Color.primary, combines: false) {
-                    ApprovalHoursStepper(value: key.shown(stored), range: shownRange, step: 1, label: key.title,
-                                         onChange: { save(key, key.stored($0)) }, unit: key.unit,
-                                         ladder: key.ladder.map(key.shown),
-                                         zeroText: key.storedInSeconds ? L10n.t("مطفأ", "Off") : nil)
-                }
+                AdminControlRow(icon: key.icon, tint: DS.Color.sea, title: key.title, subtitle: key.note,
+                                control: AnyView(ApprovalHoursStepper(value: key.shown(stored), range: shownRange, step: 1,
+                                                                      label: key.title,
+                                                                      onChange: { save(key, key.stored($0)) }, unit: key.unit,
+                                                                      ladder: key.ladder.map(key.shown),
+                                                                      zeroText: key.storedInSeconds ? L10n.t("مطفأ", "Off") : nil)))
             } else {
-                SmsKVRow(icon: key.icon, label: key.title, value: readText(key, stored), note: key.note, tint: DS.Color.primary)
+                SmsValueRow(icon: key.icon, title: key.title, subtitle: key.note, value: readText(key, stored))
             }
             if let error = errors[key.id] {
                 Text(error)
-                    .dsFont(.footnote)
+                    .dsFont(.subtitle)
                     .foregroundColor(DS.Color.error)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, DS.Icon.section + DS.Spacing.sm)
+                    .padding(.leading, AdminRowDivider.iconInset)
                     .padding(.bottom, DS.Spacing.sm)
             }
         }

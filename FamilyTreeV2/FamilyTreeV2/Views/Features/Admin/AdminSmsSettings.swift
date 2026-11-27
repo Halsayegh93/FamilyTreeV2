@@ -9,7 +9,7 @@ import SwiftUI
 // الحدود الأربعة (`app_settings`: الانتظار ٣٠–٦٠٠ ث · لنفس الرقم بالساعة ١–٢٠ · للجميع بالساعة ٢٠–١٠٠٠ · حفظ
 // «محاولات الدخول» ٧–٩٠ يوماً): تُقرأ من النظرة (`limits`/`retention`)، المالك يعدّل (تُحفظ الأربعة معاً بعد توقّف الضغط —
 // `updateSmsLimits`)، المدير يقرأ. سيرفر أقدم بلا `wait_seconds` أو النظرة لم تصل ← للقراءة.
-// منذ تبسيط ٢٠٢٦-١٠-٢٢ البطاقة في صفحتها `SmsSettingsPage` (من ⋯ في رأس الصفحة) لا في الصفحة المتمرّرة.
+// منذ ٢٠٢٦-١١-٢٧ (شكل الإدارة v2) قسم في الصفحة نفسها بصفوف مجمّعة — لم تعد صفحة من ⋯.
 // «اسم المرسل»: من `sms_admin_overview().sender`؛ المالك يغيّره من قائمة KWT المعتمدة عبر `kwtsms-admin`
 // (`senderid` ثم `set_sender`) — لا يُكتب في `app_settings` من التطبيق أبداً. بطاقة نوع مستقل خلف `AnyView` (حارس المكدس).
 
@@ -26,6 +26,8 @@ struct SmsSendingLimits: Equatable {
     static let retentionLadder = [7, 14, 21, 30, 45, 60, 90]
 }
 
+/// «إعدادات الإرسال» قسماً في الصفحة (كانت صفحة من ⋯): صفوف مجمّعة في بطاقة واحدة — الحدود الأربعة (درجات «−/+»)،
+/// اسم المرسل، الدول المتاحة، نص الرسالة ومعاينتها. المالك يعدّل، وغيره يرى القيم كلمات و«للاطلاع فقط — التعديل للمالك»
 struct SmsSendingSettingsCard: View {
     let overview: SmsOverview?
     @ObservedObject var actions: SmsPageActions
@@ -39,55 +41,64 @@ struct SmsSendingSettingsCard: View {
     var body: some View {
         let value = draft ?? saved
         // لا تعديل قبل معرفة القيم الحالية (النظرة) ولا على سيرفر أقدم بلا الأعمدة
-        let canEdit = authVM.canManageSettings && overview?.limitsEditable == true
-        AdminRowsCard(title: L10n.t("إعدادات الإرسال", "Sending settings"), footnote: footnote(canEdit: canEdit)) {
-            if canEdit {
-                stepperRow("hourglass", DS.Color.info, L10n.t("الانتظار بين رمزين", "Wait between two codes"),
-                           note: L10n.t("30 ثانية كحدّ أدنى", "At least 30 seconds"),
-                           value.waitSeconds, AppSettingsViewModel.smsWaitRange, .seconds, ladder: SmsSendingLimits.waitLadder) {
-                    var v = value; v.waitSeconds = $0; save(v)
+        let canEdit = SmsPageLogic.settingsEditable(canManageSettings: authVM.canManageSettings,
+                                                    limitsEditable: overview?.limitsEditable)
+        SmsSection(title: L10n.t("إعدادات الإرسال", "Sending settings")) {
+            VStack(alignment: .leading, spacing: 0) {
+                AdminRowsCardBody(dividerInset: AdminRowDivider.iconInset) {
+                    if canEdit {
+                        stepperRow("hourglass", L10n.t("الانتظار بين رمزين", "Wait between two codes"),
+                                   note: L10n.t("30 ثانية كحدّ أدنى", "At least 30 seconds"),
+                                   value.waitSeconds, AppSettingsViewModel.smsWaitRange, .seconds, ladder: SmsSendingLimits.waitLadder) {
+                            var v = value; v.waitSeconds = $0; save(v)
+                        }
+                        stepperRow("phone.fill", L10n.t("رموز للرقم نفسه في الساعة", "Codes per number per hour"),
+                                   value.perNumberHour, AppSettingsViewModel.smsPerNumberHourRange, .count) {
+                            var v = value; v.perNumberHour = $0; save(v)
+                        }
+                        stepperRow("person.3.fill", L10n.t("رموز للجميع بالساعة", "Codes for everyone per hour"),
+                                   value.allHour, AppSettingsViewModel.smsAllHourRange, .count, ladder: SmsSendingLimits.allHourLadder) {
+                            var v = value; v.allHour = $0; save(v)
+                        }
+                        stepperRow("archivebox.fill", L10n.t("حفظ «طلبات رمز الدخول»", "Keep “Sign-in code requests”"),
+                                   note: L10n.t("التقليل يحذف الأقدم تدريجياً، والزيادة لا تعيد ما حُذف.",
+                                                "Lowering deletes older rows gradually; raising doesn't bring them back."),
+                                   value.retentionDays, AppSettingsViewModel.loginAttemptsRetentionRange, .days,
+                                   ladder: SmsSendingLimits.retentionLadder) {
+                            var v = value; v.retentionDays = $0; save(v)
+                        }
+                    } else {
+                        SmsValueRow(icon: "hourglass", title: L10n.t("الانتظار بين رمزين", "Wait between two codes"),
+                                    value: L10n.t("\(value.waitSeconds) ثانية", "\(value.waitSeconds) s"))
+                        SmsValueRow(icon: "phone.fill", title: L10n.t("رموز للرقم نفسه في الساعة", "Codes per number per hour"),
+                                    value: L10n.t("حتى \(value.perNumberHour)", "Up to \(value.perNumberHour)"))
+                        SmsValueRow(icon: "person.3.fill", title: L10n.t("رموز للجميع بالساعة", "Codes for everyone per hour"),
+                                    value: L10n.t("حتى \(value.allHour)", "Up to \(value.allHour)"))
+                        SmsValueRow(icon: "archivebox.fill", title: L10n.t("حفظ «طلبات رمز الدخول»", "Keep “Sign-in code requests”"),
+                                    value: SmsText.days(value.retentionDays))
+                    }
+                    SmsSenderRow(sender: sender, canChange: authVM.isOwner) {
+                        actions.box = authVM.isOwner ? .sender : .senders
+                    }
+                    AdminControlRow(icon: "globe", tint: DS.Color.sea, title: L10n.t("الدول المتاحة", "Available countries"),
+                                    subtitle: L10n.t("الكويت فقط — أرقام جوال الكويت (+965) التي تبدأ بـ 4 أو 5 أو 6 أو 9.",
+                                                     "Kuwait only — +965 mobile numbers starting with 4, 5, 6 or 9."),
+                                    control: AnyView(AdminPillButton(title: L10n.t("عرض", "View"), icon: "list.bullet") {
+                                        actions.box = .coverage
+                                    }
+                                    .fixedSize()
+                                    .accessibilityHint(L10n.t("يعرض الدول المتاحة في حساب KWT SMS",
+                                                              "Shows the countries enabled on the KWT SMS account"))))
+                    SmsMessagePreviewRow()
                 }
-                stepperRow("phone.fill", DS.Color.sea, L10n.t("رموز للرقم نفسه في الساعة", "Codes per number per hour"),
-                           value.perNumberHour, AppSettingsViewModel.smsPerNumberHourRange, .count) {
-                    var v = value; v.perNumberHour = $0; save(v)
-                }
-                stepperRow("person.3.fill", DS.Color.primary, L10n.t("رموز للجميع بالساعة", "Codes for everyone per hour"),
-                           value.allHour, AppSettingsViewModel.smsAllHourRange, .count, ladder: SmsSendingLimits.allHourLadder) {
-                    var v = value; v.allHour = $0; save(v)
-                }
-                stepperRow("archivebox.fill", DS.Color.slate, L10n.t("حفظ «طلبات رمز الدخول»", "Keep “Sign-in code requests”"),
-                           note: L10n.t("التقليل يحذف الأقدم تدريجياً، والزيادة لا تعيد ما حُذف.",
-                                        "Lowering deletes older rows gradually; raising doesn't bring them back."),
-                           value.retentionDays, AppSettingsViewModel.loginAttemptsRetentionRange, .days,
-                           ladder: SmsSendingLimits.retentionLadder) {
-                    var v = value; v.retentionDays = $0; save(v)
-                }
-            } else {
-                SmsKVRow(icon: "hourglass", label: L10n.t("الانتظار بين رمزين", "Wait between two codes"),
-                         value: L10n.t("\(value.waitSeconds) ثانية", "\(value.waitSeconds) s"), tint: DS.Color.info)
-                SmsKVRow(icon: "phone.fill", label: L10n.t("رموز للرقم نفسه في الساعة", "Codes per number per hour"),
-                         value: L10n.t("حتى \(value.perNumberHour)", "Up to \(value.perNumberHour)"), tint: DS.Color.sea)
-                SmsKVRow(icon: "person.3.fill", label: L10n.t("رموز للجميع بالساعة", "Codes for everyone per hour"),
-                         value: L10n.t("حتى \(value.allHour)", "Up to \(value.allHour)"), tint: DS.Color.primary)
-                SmsKVRow(icon: "archivebox.fill", label: L10n.t("حفظ «طلبات رمز الدخول»", "Keep “Sign-in code requests”"),
-                         value: SmsText.days(value.retentionDays), tint: DS.Color.slate)
+                Text(footnote(canEdit: canEdit))
+                    .dsFont(.subtitle)
+                    .foregroundColor(saveFailed ? DS.Color.error : DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, DS.Spacing.sm)
             }
-            SmsSenderRow(sender: sender, canChange: authVM.isOwner) {
-                actions.box = authVM.isOwner ? .sender : .senders
-            }
-            SmsKVRow(icon: "globe", label: L10n.t("الدول المتاحة", "Available countries"),
-                     note: L10n.t("أرقام جوال الكويت (+965) التي تبدأ بـ 4 أو 5 أو 6 أو 9.",
-                                  "+965 mobile numbers starting with 4, 5, 6 or 9."),
-                     tint: DS.Color.primary, combines: false) {
-                HStack(spacing: DS.Spacing.xs) {
-                    SmsKVValue(text: L10n.t("الكويت فقط", "Kuwait only"))
-                    DSChipButton(L10n.t("عرض", "View"), icon: "list.bullet", size: .small) { actions.box = .coverage }
-                        .accessibilityHint(L10n.t("يعرض الدول المتاحة في حساب KWT SMS", "Shows the countries enabled on the KWT SMS account"))
-                }
-            }
-            SmsMessagePreviewRow()
-            // تنبيهات الرصيد: مجموعة ثانية في البطاقة نفسها (كانت بطاقة منفصلة)
-            SmsAlertsRows(alerts: overview?.alerts)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
         }
     }
 
@@ -112,13 +123,12 @@ struct SmsSendingSettingsCard: View {
                        : AdminPageHeader.readOnlyText + ". " + fact
     }
 
-    private func stepperRow(_ icon: String, _ tint: Color, _ label: String, note: String? = nil, _ value: Int,
+    private func stepperRow(_ icon: String, _ label: String, note: String? = nil, _ value: Int,
                             _ range: ClosedRange<Int>, _ unit: ApprovalHoursStepper.Unit, ladder: [Int]? = nil,
                             onChange: @escaping (Int) -> Void) -> some View {
-        SmsKVRow(icon: icon, label: label, note: note, tint: tint, combines: false) {
-            ApprovalHoursStepper(value: value, range: range, step: 1, label: label, onChange: onChange, unit: unit,
-                                 ladder: ladder)
-        }
+        AdminControlRow(icon: icon, tint: DS.Color.sea, title: label, subtitle: note,
+                        control: AnyView(ApprovalHoursStepper(value: value, range: range, step: 1, label: label,
+                                                              onChange: onChange, unit: unit, ladder: ladder)))
     }
 
     /// يظهر فوراً، ويُحفظ بعد توقّف الضغط ثلثي ثانية (الأربعة في تحديث واحد)، ثم تُعاد النظرة (والمحاولات إن تغيّر الحفظ)
@@ -147,12 +157,12 @@ struct SmsSendingSettingsCard: View {
     }
 }
 
-/// «نص الرسالة» ومعاينتها (كانت في بطاقة «الإعداد» المكررة)
+/// «نص الرسالة» ومعاينتها تحت الصفّ (فقاعة رسالة كما تصل الجوال)
 private struct SmsMessagePreviewRow: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            SmsKVRow(icon: "text.bubble.fill", label: L10n.t("نص الرسالة", "Message text"),
-                     value: L10n.t("53 حرفاً · نقطة واحدة", "53 characters · 1 point"))
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            SmsValueRow(icon: "text.bubble.fill", title: L10n.t("نص الرسالة", "Message text"),
+                        value: L10n.t("53 حرفاً · نقطة واحدة", "53 characters · 1 point"))
             Text(verbatim: "عائلة المحمدعلي: رمز الدخول 123456. لا تشاركه مع أحد.")
                 .dsFont(.callout)
                 .foregroundColor(DS.Color.textPrimary)
@@ -162,60 +172,57 @@ private struct SmsMessagePreviewRow: View {
                 .background(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .fill(DS.Color.cardBackgroundSoft))
                 .environment(\.layoutDirection, .rightToLeft)
+                .padding(.leading, AdminRowDivider.iconInset)
                 .padding(.bottom, DS.Spacing.sm)
                 .accessibilityLabel(L10n.t("معاينة الرسالة", "Message preview"))
         }
     }
 }
 
-/// «اسم المرسل»: الاسم + «افتراضي»، و«تغيير» للمالك أو «المعتمدون» للمدير (قائمة KWT للقراءة)
+/// «اسم المرسل»: الاسم + «افتراضي» وسطر شرحه، و«تغيير» للمالك أو «المعتمدة» لغيره (قائمة KWT للقراءة)
 private struct SmsSenderRow: View {
     let sender: SmsOverview.Sender
     let canChange: Bool
     let onChange: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            HStack(spacing: DS.Spacing.sm) {
-                Image(dsSymbol: "tag.fill")
-                    .dsGlyph(DS.Glyph.md, weight: .semibold)
-                    .foregroundColor(DS.Color.accent.dsReadableGlyph)
-                    .frame(width: DS.Icon.section)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(L10n.t("اسم المرسل", "Sender name"))
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textSecondary)
-                    HStack(spacing: DS.Spacing.xsm) {
-                        Text(verbatim: sender.current)
-                            .dsFont(.hubRow)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .lineLimit(1)
-                        if sender.isDefault {
-                            DSStatusChip(text: L10n.t("افتراضي", "Default"), tint: DS.Color.slate, size: .mini)
-                        }
+        HStack(alignment: .center, spacing: DS.Spacing.md) {
+            AdminIconSquare(symbol: "tag.fill", tint: DS.Color.sea, filled: true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(L10n.t("اسم المرسل", "Sender name"))
+                    .dsFont(.body)
+                    .foregroundColor(DS.Color.textPrimary)
+                HStack(spacing: DS.Spacing.xsm) {
+                    Text(verbatim: sender.current)
+                        .dsFont(.hubValue)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(1)
+                        .environment(\.layoutDirection, .leftToRight)
+                    if sender.isDefault {
+                        AdminValueChip(text: L10n.t("افتراضي", "Default"))
                     }
                 }
-                .accessibilityElement(children: .combine)
-                Spacer(minLength: DS.Spacing.sm)
-                if canChange {
-                    DSChipButton(L10n.t("تغيير", "Change"), icon: "arrow.left.arrow.right", size: .small, action: onChange)
-                        .accessibilityHint(L10n.t("يختار اسم مرسل من القائمة المعتمدة في حساب KWT SMS",
-                                                  "Picks a sender name from the approved list on the KWT SMS account"))
-                } else {
-                    DSChipButton(L10n.t("المعتمدة", "Approved"), icon: "list.bullet", size: .small, action: onChange)
-                        .accessibilityHint(L10n.t("يعرض أسماء المرسل المعتمدة في حساب KWT SMS",
-                                                  "Shows the approved sender names on the KWT SMS account"))
-                }
+                Text(note)
+                    .dsFont(.subtitle)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(note)
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, DS.Icon.section + DS.Spacing.sm)
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: DS.Spacing.xs)
+            if canChange {
+                AdminPillButton(title: L10n.t("تغيير", "Change"), icon: "arrow.left.arrow.right", action: onChange)
+                    .fixedSize()
+                    .accessibilityHint(L10n.t("يختار اسم مرسل من القائمة المعتمدة في حساب KWT SMS",
+                                              "Picks a sender name from the approved list on the KWT SMS account"))
+            } else {
+                AdminPillButton(title: L10n.t("المعتمدة", "Approved"), icon: "list.bullet", action: onChange)
+                    .fixedSize()
+                    .accessibilityHint(L10n.t("يعرض أسماء المرسل المعتمدة في حساب KWT SMS",
+                                              "Shows the approved sender names on the KWT SMS account"))
+            }
         }
-        .padding(.vertical, DS.Spacing.sm + 1)
-        .frame(minHeight: DS.Icon.tapTarget)
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(minHeight: DS.Hub.rowMinHeightTwoLines)
     }
 
     private var note: String {
