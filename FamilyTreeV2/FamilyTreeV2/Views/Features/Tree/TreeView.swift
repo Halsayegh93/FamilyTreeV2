@@ -994,6 +994,13 @@ struct TreeView: View {
         }
     }
 
+    /// مكان الحساب في شجرة النساء لا شجرة العائلة: عقدة مربوطة بحسابه هناك (`linked_user_id`)، أو ابن بنت معلَّم
+    /// (`LineageGateStore` — قبل وصول شجرة النساء)
+    static func placeIsInWomenTree(_ user: FamilyMember?) -> Bool {
+        guard let user else { return false }
+        return WomenStore.womanByLinkedUser[user.id] != nil || LineageGateStore.shared.status?.flagged == true
+    }
+
     // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
     // الأزرار = زرّ الرأس الموحّد على السطح بمقاس الشريط (`DSHeaderButton(.surface, size: .toolbar)` ٣٤،
     // والجانبي `.mini` ٢٧) برمز بحبر الشجرة، والتبويب = `FamilyTreeTabBar` (`DSSegmentedSwitch(.compact)`)،
@@ -1015,6 +1022,11 @@ struct TreeView: View {
                        cachedMemberById[currentUserID] != nil {
                         currentLocationMemberID = userMember.id
                         centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
+                    } else if treeTab != nil, Self.placeIsInWomenTree(authVM.currentUser) {
+                        // ابن البنت (وحساب المرأة) مكانه في شجرة النساء تحت أمّه، لا في شجرة العائلة — كان يقول له
+                        // «حسابك غير مربوط… طلب الانضمام لدى الإدارة» وهو مربوط (بلاغ المالك ٢٠٢٦-١١-٢٧، «حسين علي محمد
+                        // الصاغة»). ينقله لتبويب النساء، وهي تتمركز على عقدته (`autoLocate` + `.openWomenTree`)
+                        NotificationCenter.default.post(name: .openWomenTree, object: nil)
                     } else {
                         showNotInTree = true
                     }
