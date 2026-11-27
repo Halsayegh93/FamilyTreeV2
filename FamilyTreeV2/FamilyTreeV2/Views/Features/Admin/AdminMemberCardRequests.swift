@@ -8,8 +8,11 @@ import SwiftUI
 //   • «موافقة…» تعرض المعاينة ثم تؤكّد — `approveFromBox` = `approveFromPush` = دالة النوع ← `decide_admin_request`
 //     (نفس صلاحيات «الوارد»: `canApproveFromBox`).
 //   • «رفض» يسأل عن السبب كما في «الوارد» — `rejectFromBox` (`canRejectFromBox`).
-//   • «فتح في الوارد ‹» دائماً (`MemberPendingRequestsLink`) — والطلب داخل مسار الموافقات (مرحلة) يعرضه وحده.
-// بلا طلبات: «لا طلبات عنه الآن». الشريط وكل طلب لهما `.id` تقفز إليه الرقاقة وشارات «طلب» في الصفوف.
+//   • «فتح في الوارد ‹» دائماً (`MemberPendingRequestsLink`) — والطلب داخل مسار الموافقات (مرحلة) يعرضه وحده، وكذلك
+//     كل نوع لا يقرّره الشريط (`AdminMemberCardLogic.boxDecidableTypes`): «تغيير الرقم» (`phoneChangeRequests`، م٢)،
+//     وطلب انضمام صاحب الورقة المعلّق، و«الصلة بالعائلة»…
+// بلا طلبات: «لا طلبات عنه/عنها الآن». الشريط وكل طلب لهما `.id` تقفز إليه الرقاقة وشارات «طلب» في الصفوف.
+// على ورقتك لا شريط ولا شارة (م١ — `AdminMemberCardLogic.showsRequests`).
 
 @MainActor
 enum AdminMemberCardRequests {
@@ -17,11 +20,13 @@ enum AdminMemberCardRequests {
 
     static func anchor(_ id: UUID) -> String { "member-card-request-\(id.uuidString)" }
 
-    /// الطلبات المعلّقة عنه من مخازن «الوارد»، الأحدث أولاً وبلا تكرار
+    /// الطلبات المعلّقة عنه من مخازن «الوارد»، الأحدث أولاً وبلا تكرار — ومعها طلبات تغيير الرقم (نموذجها
+    /// `PhoneChangeRequest`) وطلب انضمامه المعلّق، «فتح في الوارد» وحده
     static func about(_ m: FamilyMember, nodeId: UUID?, vm: AdminRequestViewModel) -> [AdminRequest] {
         let pools: [[AdminRequest]] = [vm.treeEditRequests, vm.deceasedRequests, vm.nameChangeRequests,
                                        vm.photoSuggestionRequests, vm.childAddRequests, vm.lineageRequests,
-                                       vm.relativeAddRequests, vm.relativeRemoveRequests]
+                                       vm.relativeAddRequests, vm.relativeRemoveRequests,
+                                       vm.phoneChangeRequests.map(asAdminRequest), joinRequest(m, vm: vm)]
         var seen = Set<UUID>()
         return pools.joined()
             .filter { $0.status == ApprovalStatus.pending.rawValue }
@@ -33,6 +38,22 @@ enum AdminMemberCardRequests {
             }
             .filter { seen.insert($0.id).inserted }
             .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+    }
+
+    /// طلب تغيير الرقم بنموذج الشريط (الأعمدة نفسها في `admin_requests`)
+    static func asAdminRequest(_ p: PhoneChangeRequest) -> AdminRequest {
+        AdminRequest(id: p.id, memberId: p.memberId, requesterId: p.requesterId ?? p.memberId, requestType: p.requestType,
+                     newValue: p.newValue, status: p.status, details: p.details, createdAt: p.createdAt, member: p.member,
+                     stage: p.stage)
+    }
+
+    /// طلب انضمام صاحب الورقة المعلّق (الدور «طلب انضمام»): صفّه في «الوارد» بمرحلته إن كان المسار شغّالاً، وإلا بمعرّف
+    /// العضو نفسه (`AdminAllRequestsView` يفتح صفّ العضو المعلّق بمعرّفه)
+    static func joinRequest(_ m: FamilyMember, vm: AdminRequestViewModel) -> [AdminRequest] {
+        guard m.role == .pending else { return [] }
+        if let row = vm.joinApprovalRequests.first(where: { $0.memberId == m.id }) { return [row] }
+        return [AdminRequest(id: m.id, memberId: m.id, requesterId: m.id, requestType: RequestType.joinRequest.rawValue,
+                             status: ApprovalStatus.pending.rawValue, details: nil, createdAt: m.createdAt, member: m)]
     }
 
     static func key(_ r: AdminRequest) -> AdminMemberCardLogic.RequestKey {
@@ -71,6 +92,9 @@ enum AdminMemberCardRequests {
         case DaughterSons.requestType: return L10n.t("طلب الصلة بالعائلة", "Relation to the family request")
         case RequestType.relativeAdd.rawValue: return L10n.t("إضافة قريبة", "Add a relative")
         case RequestType.relativeRemove.rawValue: return L10n.t("حذف قريب", "Remove a relative")
+        case RequestType.phoneChange.rawValue: return L10n.t("تغيير رقم الهاتف", "Phone number change")
+        case RequestType.joinRequest.rawValue, RequestType.linkRequest.rawValue:
+            return L10n.t("طلب انضمام قيد المراجعة", "Join request under review")
         default: return L10n.t("طلب", "Request")
         }
     }
@@ -114,8 +138,7 @@ struct AdminMemberRequestsStrip: View {
     @State private var failure: String?
 
     private var title: String {
-        requests.isEmpty ? L10n.t("طلبات عنه", "Requests about them")
-                         : L10n.t("طلبات عنه · \(requests.count)", "Requests about them · \(requests.count)")
+        AdminMemberCardLogic.requestsTitle(count: requests.count, female: member.isFemale, arabic: L10n.isArabic)
     }
 
     var body: some View {
@@ -125,7 +148,7 @@ struct AdminMemberRequestsStrip: View {
                 .foregroundColor(DS.Color.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             if requests.isEmpty {
-                Text(L10n.t("لا طلبات عنه الآن.", "No requests about them now."))
+                Text(verbatim: AdminMemberCardLogic.noRequests(female: member.isFemale, arabic: L10n.isArabic))
                     .dsFont(.subtitle)
                     .foregroundColor(DS.Color.textTertiary)
             } else {
@@ -133,8 +156,8 @@ struct AdminMemberRequestsStrip: View {
                     if index > 0 { AdminRowDivider() }
                     item(r).id(AdminMemberCardRequests.anchor(r.id))
                 }
-                Text(L10n.t("«موافقة» تعرض المعاينة قبل التنفيذ. الطلب في مرحلة مراجعة يُفتح في «الوارد» فقط. القرار هنا هو نداء «الوارد» نفسه.",
-                            "«Approve» previews before applying. A request in a review stage opens in the inbox only. The decision here is the inbox's own call."))
+                Text(L10n.t("«موافقة» تعرض المعاينة قبل التنفيذ، والقرار هنا هو نداء «الوارد» نفسه. الطلب في مرحلة مراجعة، وتغيير الرقم والانضمام والصلة بالعائلة، تُفتح في «الوارد» فقط.",
+                            "«Approve» previews before applying; the decision here is the inbox's own call. A request in a review stage, a phone change, a join or a relation request opens in the inbox only."))
                     .dsFont(.subtitle)
                     .foregroundColor(DS.Color.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -157,7 +180,8 @@ struct AdminMemberRequestsStrip: View {
         let sender = byId(r.requesterId).flatMap { AdminMemberSheetLogic.firstName($0.firstName, full: $0.fullName) }
             ?? L10n.t("عضو", "A member")
         let when = DateHelper.relativeTime(from: r.createdAt)
-        let actions = AdminMemberCardLogic.requestActions(stage: r.stage, workflowOn: adminRequestVM.approvalsWorkflowOn,
+        let actions = AdminMemberCardLogic.requestActions(type: r.requestType, stage: r.stage,
+                                                          workflowOn: adminRequestVM.approvalsWorkflowOn,
                                                           canApprove: adminRequestVM.canApproveFromBox(r),
                                                           canReject: adminRequestVM.canRejectFromBox(r))
         return HStack(alignment: .top, spacing: DS.Spacing.md) {
@@ -265,6 +289,8 @@ struct AdminMemberRequestsStrip: View {
             }
         case RequestType.nameChange.rawValue, RequestType.familyChange.rawValue:
             return pair(member.fullName, r.newValue)
+        case RequestType.phoneChange.rawValue:
+            return L10n.t("رقم جديد — يُراجَع في «الوارد»", "A new number — reviewed in the inbox")
         default:
             return nil
         }
@@ -399,10 +425,12 @@ private struct AdminMemberRequestAlerts: ViewModifier {
 /// «طلبان عنه ‹» — رابط قفز فقط إلى الشريط في «إجراءات الإدارة»
 struct AdminMemberRequestsChip: View {
     let count: Int
+    /// «طلبان عنها» على ورقة المرأة
+    var female: Bool = false
     let jump: () -> Void
 
     var body: some View {
-        if let text = AdminMemberCardLogic.requestsChip(count: count, arabic: L10n.isArabic) {
+        if let text = AdminMemberCardLogic.requestsChip(count: count, female: female, arabic: L10n.isArabic) {
             Button(action: jump) {
                 HStack(spacing: DS.Spacing.sm) {
                     Image(systemName: "tray")

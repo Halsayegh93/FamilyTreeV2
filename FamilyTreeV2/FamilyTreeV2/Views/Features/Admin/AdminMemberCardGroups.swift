@@ -22,8 +22,6 @@ struct AdminMemberCardHandlers {
     let jumpToRequest: (AdminCardRow) -> Void
     /// مفتاح «الظهور»: true = أخفِه (يسأل أولاً)، false = أظهِره
     let setHidden: (Bool) -> Void
-    /// «الأم» ← شجرة النساء (nil فوق مربّع آخر — V8)
-    let openWomen: (() -> Void)?
 }
 
 // MARK: - ذاكرة المجموعات (لكل مشاهد)
@@ -59,8 +57,7 @@ struct AdminMemberGroupCard<Rows: View>: View {
         self.pendingRows = pendingRows
         self.viewer = viewer
         self.rows = rows
-        _stored = State(initialValue: UserDefaults.standard.object(
-            forKey: AdminMemberCardLogic.storageKey(group, viewer: viewer)) as? Bool)
+        _stored = State(initialValue: AdminMemberGroupMemory.stored(group, viewer: viewer))
     }
 
     static func title(_ group: AdminCardGroup) -> String {
@@ -73,6 +70,11 @@ struct AdminMemberGroupCard<Rows: View>: View {
 
     private var locked: Bool {
         AdminMemberCardLogic.locked(group, requestRows: requestRows, pendingRows: pendingRows)
+    }
+
+    /// مفتاح الطيّ لمن ينطوي فقط — المقفولة بلا مفتاح
+    private var canFold: Bool {
+        AdminMemberCardLogic.canFold(group, requestRows: requestRows, pendingRows: pendingRows)
     }
 
     private var lockTag: String? {
@@ -89,7 +91,7 @@ struct AdminMemberGroupCard<Rows: View>: View {
                 stored = value
                 AdminMemberGroupMemory.remember(value, group, viewer: viewer)
             })
-        AdminSectionCard(title: Self.title(group), tag: lockTag, isOpen: locked ? nil : open, subtitle: summary) {
+        AdminSectionCard(title: Self.title(group), tag: lockTag, isOpen: canFold ? open : nil, subtitle: summary) {
             AdminRowsCardBody { rows() }
         }
     }
@@ -173,6 +175,8 @@ struct AdminMemberFactRow: View {
     var tag: AdminMemberTag? = nil
     /// nil = «غير مسجّل»
     var value: String? = nil
+    /// القيمة الغائبة بعد كلمة مؤنثة: «غير مسجّلة» (الأم، الزوجة، الصورة، السيرة، الوفاة، الصلة بالعائلة)
+    var feminine: Bool = false
     /// بلا قيمة أصلاً (مفتاح، حبّة) — لا «غير مسجّل»
     var hidesValue: Bool = false
     var valueIsNumber: Bool = false
@@ -188,7 +192,7 @@ struct AdminMemberFactRow: View {
 
     private var stacked: Bool { typeSize.isAccessibilitySize }
     private var shownValue: String? {
-        hidesValue ? nil : AdminMemberCardLogic.value(value, arabic: L10n.isArabic)
+        hidesValue ? nil : AdminMemberCardLogic.value(value, arabic: L10n.isArabic, feminine: feminine)
     }
     private var missing: Bool { (value ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -284,6 +288,8 @@ struct AdminMemberDataGroup: View {
     let member: FamilyMember
     let isProfile: Bool
     let canEdit: Bool
+    /// ح٢: «الجنس» أمر عائلة (نقل بين الشجرتين) — مقفول على ورقتك؛ بقية «البيانات» بـ`canEdit`
+    let familyAdmin: Bool
     let requestRows: Set<AdminCardRow>
     let pendingRows: Set<AdminCardRow>
     let viewer: UUID?
@@ -317,6 +323,11 @@ struct AdminMemberDataGroup: View {
 
     private var hasPhoto: Bool { PhotoNudgeLogic.hasPhoto(avatar: m.avatarUrl, photo: m.photoURL) }
 
+    /// «موجودة» · «بلا صورة» · «لا توجد صورة لهذا العضو»
+    private var photoText: String {
+        AdminMemberCardLogic.photoValue(hasPhoto: hasPhoto, unavailable: m.avatarUnavailable == true, arabic: L10n.isArabic)
+    }
+
     private var thumbnail: String? {
         guard hasPhoto, !m.isFemale else { return nil }
         return [m.avatarUrl, m.photoURL].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
@@ -338,14 +349,15 @@ struct AdminMemberDataGroup: View {
         ]
         if m.isDeceased == true {
             parts.append(AdminMemberCardLogic.part(death.map { L10n.t("وفاة \($0)", "Died \($0)") },
-                                                   label: L10n.t("الوفاة", "Death"), arabic: ar))
+                                                   label: L10n.t("الوفاة", "Death"), arabic: ar, feminine: true))
         }
         parts.append(AdminMemberCardLogic.part(genderText, label: L10n.t("الجنس", "Gender"), arabic: ar))
         if !m.isFemale {
-            parts.append(AdminMemberCardLogic.part(hasPhoto ? L10n.t("صورة", "Photo") : nil, label: L10n.t("الصورة", "Photo"), arabic: ar))
+            // الملخّص والصفّ بكلمة واحدة: «صورة» · «بلا صورة» · «لا توجد صورة لهذا العضو»
+            parts.append(hasPhoto ? L10n.t("صورة", "Photo") : photoText)
         }
         parts.append(AdminMemberCardLogic.part(bioCount > 0 ? L10n.t("سيرة", "Biography") : nil,
-                                               label: L10n.t("السيرة", "Biography"), arabic: ar))
+                                               label: L10n.t("السيرة", "Biography"), arabic: ar, feminine: true))
         return AdminMemberCardLogic.summary(parts)
     }
 
@@ -371,7 +383,7 @@ struct AdminMemberDataGroup: View {
                 let incomplete = AdminMemberFacts.deathIncomplete(m)
                 AdminMemberFactRow(icon: "calendar.badge.clock", tint: DS.Color.deceased, title: L10n.t("الوفاة", "Death"),
                                    subtitle: incomplete ? AdminMemberGap.deathIncomplete.title : nil,
-                                   value: death, valueIsNumber: death != nil && m.deathDateUnknown != true,
+                                   value: death, feminine: true, valueIsNumber: death != nil && m.deathDateUnknown != true,
                                    hasRequest: requestRows.contains(.death),
                                    action: edits ? {
                                        handlers.openBox(AdminMemberFacts.isBlank(m.deathDate) || m.deathDateUnknown == true
@@ -385,7 +397,7 @@ struct AdminMemberDataGroup: View {
                                subtitle: L10n.t("التغيير ينقله بين الشجرتين، ويسأل أولاً",
                                                 "Changing it moves them between the trees; asks first"),
                                value: genderText, hasRequest: requestRows.contains(.gender),
-                               action: canEdit ? {
+                               action: familyAdmin ? {
                                    if AdminMemberFacts.isBlank(m.gender) && isProfile { handlers.openBox(.gender(m)) }
                                    else { handlers.openFamily(.gender(m)) }
                                } : nil,
@@ -393,14 +405,14 @@ struct AdminMemberDataGroup: View {
             // باب واحد للصورة: إضافة أو تبديل (لا صور للإناث في التطبيق — طلب المالك ٢٠٢٦-١١-٢٤)
             if !m.isFemale {
                 AdminMemberFactRow(icon: "photo", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"),
-                                   value: hasPhoto ? L10n.t("موجودة", "Added") : nil, thumbnail: thumbnail,
+                                   value: photoText, thumbnail: thumbnail,
                                    hasRequest: requestRows.contains(.photo),
                                    action: edits ? { handlers.openBox(.photo(m)) } : nil,
                                    actionHint: hasPhoto ? L10n.t("تبديل", "Replace") : L10n.t("إضافة", "Add"),
                                    jump: jump(.photo))
             }
             AdminMemberFactRow(icon: "doc.text", tint: DS.Color.accent, title: L10n.t("السيرة", "Biography"),
-                               value: bioText, hasRequest: requestRows.contains(.bio),
+                               value: bioText, feminine: true, hasRequest: requestRows.contains(.bio),
                                action: edits ? { handlers.openTall(.editAll(m)) } : nil,
                                actionHint: bioCount == 0 ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"),
                                jump: jump(.bio))
@@ -422,14 +434,12 @@ struct AdminMemberAccountGroup: View {
 
     private var phone: String { (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// م١٠: كلمة الرأس نفسها («بدون حساب») ثم «لم يسجّل الدخول بعد» — لا «غير مسجّل · آخر دخول غير مسجّل»
     var summary: String {
-        let ar = L10n.isArabic
-        let registered = AdminMemberAccountSection.registerWord(facts.status)
-        let seen = facts.account?.lastSeen.map { L10n.t("آخر دخول \(AdminMemberSheetFacts.dateText($0))",
-                                                        "Last seen \(AdminMemberSheetFacts.dateText($0))") }
-        return AdminMemberCardLogic.summary([registered,
-                                             AdminMemberCardLogic.part(seen, label: L10n.t("آخر دخول", "Last sign-in"),
-                                                                       arabic: ar)])
+        AdminMemberCardLogic.accountSummary(statusWord: AdminMemberAccountSection.registerWord(facts.status),
+                                            lastSeen: facts.account?.lastSeen.map(AdminMemberSheetFacts.dateText),
+                                            hasAccount: facts.account != nil, female: member.isFemale,
+                                            arabic: L10n.isArabic)
     }
 
     var body: some View {
@@ -448,7 +458,7 @@ struct AdminMemberAccountGroup: View {
                                                                  icon: facts.status == .registered ? "checkmark" : nil)))
             AdminMemberFactRow(icon: "clock", tint: DS.Color.sea, title: L10n.t("آخر دخول", "Last sign-in"),
                                subtitle: facts.usageLine,
-                               value: facts.account?.lastSeen.map(AdminMemberSheetFacts.dateText),
+                               value: facts.lastSeenText(female: member.isFemale),
                                valueIsNumber: facts.account?.lastSeen != nil)
             if let devices { devices }
         }

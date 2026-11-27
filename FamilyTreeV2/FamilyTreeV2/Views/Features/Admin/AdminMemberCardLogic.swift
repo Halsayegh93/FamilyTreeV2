@@ -14,6 +14,9 @@ import Foundation
 //   ٣) قاعدة «مرحلة الموافقة»: الطلب داخل مسار الموافقات (أو المسار شغّال) = «فتح في الوارد» وحده.
 //   ٤) كلمة «غير مسجّل» لكل قيمة غائبة، وسطور ملخّص المجموعات.
 //   ٥) أزرار الرأس، و«الصلة بالعائلة» (كانت «النسب» — تسمية المالك ٢٠٢٦-١١-٢٦) وما يحفظه مربّعها.
+//   ٦) نقد «المنتقد» على v3: قفل أوامر العائلة على ورقتك (ح٢)، موانع نقل الجنس ومنها الحساب (ح١)، «فك الربط» للابن (ح٣)،
+//      الأنواع التي يقرّرها الشريط (`boxDecidableTypes`)، التأنيث («غير مسجّلة»، «عنها»)، منتقي الزوج بلا محارمها (م٥)،
+//      والمعرّف الجديد بعد النقل (م٦).
 
 nonisolated enum AdminMemberCardLogic {
 
@@ -130,11 +133,19 @@ nonisolated enum AdminMemberCardLogic {
         case approve, reject, openInbox
     }
 
-    /// داخل مسار الموافقات (مرحلة أو المسار شغّال) = «فتح في الوارد» وحده. غير ذلك: «موافقة»/«رفض» لمن يملكها
-    /// (نفس فحوص «الوارد» — `canApproveFromBox`/`canRejectFromBox`) ثم «فتح في الوارد» دائماً
-    static func requestActions(stage: String?, workflowOn: Bool, canApprove: Bool, canReject: Bool) -> [RequestAction] {
+    /// الأنواع التي يقبلها/يرفضها الشريط ومربّع الإشعار بدوالها الموجودة (`approveFromPush` + دالة الرفض لكل نوع) —
+    /// المصدر الواحد (`AdminRequestViewModel.boxAllowed` يقرأ منه). غيرها («تغيير الرقم»، «الصلة بالعائلة»، الانضمام…)
+    /// «فتح في الوارد» وحده
+    static let boxDecidableTypes: Set<String> = [
+        "tree_edit", "deceased_report", "name_change", "photo_suggestion", "news_report",
+    ]
+
+    /// داخل مسار الموافقات (مرحلة أو المسار شغّال) أو نوع لا يقرّره الشريط = «فتح في الوارد» وحده. غير ذلك:
+    /// «موافقة»/«رفض» لمن يملكها (نفس فحوص «الوارد» — `canApproveFromBox`/`canRejectFromBox`) ثم «فتح في الوارد» دائماً
+    static func requestActions(type: String, stage: String?, workflowOn: Bool, canApprove: Bool,
+                               canReject: Bool) -> [RequestAction] {
         let inStage = !(stage ?? "").trimmingCharacters(in: .whitespaces).isEmpty
-        guard !inStage, !workflowOn else { return [.openInbox] }
+        guard !inStage, !workflowOn, boxDecidableTypes.contains(type) else { return [.openInbox] }
         var out: [RequestAction] = []
         if canApprove { out.append(.approve) }
         if canReject { out.append(.reject) }
@@ -142,20 +153,87 @@ nonisolated enum AdminMemberCardLogic {
         return out
     }
 
-    // MARK: ٤) «غير مسجّل» وسطور الملخّص
-
-    static func notRecorded(arabic: Bool = true) -> String { arabic ? "غير مسجّل" : "Not recorded" }
-
-    /// القيمة كما هي، أو «غير مسجّل» — لا فراغ أبداً
-    static func value(_ raw: String?, arabic: Bool = true) -> String {
-        let v = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return v.isEmpty ? notRecorded(arabic: arabic) : v
+    /// م١: «طلبات عنه» (الشريط، الرقاقة، شارات «طلب») لمن يقرّر طلبات الشجرة، ولا على ورقتك — طلباتك يعالجها غيرك
+    /// (`boxAllowed`)، وبطاقة «إجراءات الإدارة» لا تُرسم على ورقتك فلا مرساة تقفز إليها
+    static func showsRequests(isSelf: Bool, seesRequests: Bool) -> Bool {
+        seesRequests && !isSelf
     }
 
-    /// جزء من سطر الملخّص: القيمة، أو «السيرة غير مسجّل»
-    static func part(_ value: String?, label: String, arabic: Bool = true) -> String {
+    // MARK: ٤) «غير مسجّل» وسطور الملخّص
+
+    /// «غير مسجّل»، و«غير مسجّلة» بعد كلمة مؤنثة (الأم، الزوجة، الصورة، السيرة، الوفاة، الصلة بالعائلة)
+    static func notRecorded(arabic: Bool = true, feminine: Bool = false) -> String {
+        arabic ? (feminine ? "غير مسجّلة" : "غير مسجّل") : "Not recorded"
+    }
+
+    /// القيمة كما هي، أو «غير مسجّل/ة» — لا فراغ أبداً
+    static func value(_ raw: String?, arabic: Bool = true, feminine: Bool = false) -> String {
+        let v = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return v.isEmpty ? notRecorded(arabic: arabic, feminine: feminine) : v
+    }
+
+    /// جزء من سطر الملخّص: القيمة، أو «السيرة غير مسجّلة»
+    static func part(_ value: String?, label: String, arabic: Bool = true, feminine: Bool = false) -> String {
         let v = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return v.isEmpty ? "\(label) \(notRecorded(arabic: arabic))" : v
+        return v.isEmpty ? "\(label) \(notRecorded(arabic: arabic, feminine: feminine))" : v
+    }
+
+    /// «عنه» / «عنها» — الكرت يُفتح للنساء أيضاً
+    static func aboutWord(female: Bool, arabic: Bool = true) -> String {
+        arabic ? (female ? "عنها" : "عنه") : "about them"
+    }
+
+    /// عنوان الشريط: «طلبات عنها» · «طلبات عنه · 3»
+    static func requestsTitle(count: Int, female: Bool, arabic: Bool = true) -> String {
+        let base = arabic ? "طلبات \(aboutWord(female: female))" : "Requests about them"
+        return count > 0 ? "\(base) · \(count)" : base
+    }
+
+    /// الشريط بلا طلبات: «لا طلبات عنها الآن.»
+    static func noRequests(female: Bool, arabic: Bool = true) -> String {
+        arabic ? "لا طلبات \(aboutWord(female: female)) الآن." : "No requests about them now."
+    }
+
+    /// عنوان مربّع الصلة وصفّها في مربّعه: «صلته بالعائلة» / «صلتها بالعائلة»
+    static func lineageTitle(female: Bool, arabic: Bool = true) -> String {
+        arabic ? (female ? "صلتها بالعائلة" : "صلته بالعائلة") : "Relation to the family"
+    }
+
+    /// صفّ «الأبناء والبنات» وملخّص «العائلة» بكلمة واحدة: العدد، أو «لا أبناء مسجّلون»
+    static func childrenValue(sons: Int, daughters: Int, arabic: Bool = true) -> String {
+        childrenSummary(sons: sons, daughters: daughters, arabic: arabic)
+            ?? (arabic ? "لا أبناء مسجّلون" : "No children recorded")
+    }
+
+    /// صفّ «الصورة»: «موجودة» · «بلا صورة» · «لا توجد صورة لهذا العضو» (`avatar_unavailable` — لا تُطلب)
+    static func photoValue(hasPhoto: Bool, unavailable: Bool, arabic: Bool = true) -> String {
+        if hasPhoto { return arabic ? "موجودة" : "Added" }
+        if unavailable { return arabic ? "لا توجد صورة لهذا العضو" : "No photo exists" }
+        return arabic ? "بلا صورة" : "No photo"
+    }
+
+    /// كلمة «بلا حساب» الواحدة في الكرت — هي كلمة الرأس (`AdminMemberStatus.treeOnly`)
+    static func noAccountWord(arabic: Bool = true) -> String { arabic ? "بدون حساب" : "No account" }
+
+    /// «آخر دخول»: التاريخ، أو «لم يسجّل الدخول بعد» لمن لا حساب له (لا «غير مسجّل» — لم يدخل أبداً)
+    static func lastSeen(_ date: String?, hasAccount: Bool, female: Bool, arabic: Bool = true) -> String {
+        if let date = date?.trimmingCharacters(in: .whitespaces), !date.isEmpty { return date }
+        guard hasAccount else {
+            return arabic ? (female ? "لم تسجّل الدخول بعد" : "لم يسجّل الدخول بعد") : "Not signed in yet"
+        }
+        return arabic ? "غير معروف" : "Unknown"
+    }
+
+    /// ملخّص «الحساب»: كلمة الحال (كالرأس) ثم آخر دخول — «بدون حساب · لم يسجّل الدخول بعد» · «مسجّل · آخر دخول 2/11/2026»
+    static func accountSummary(statusWord: String, lastSeen date: String?, hasAccount: Bool, female: Bool,
+                               arabic: Bool = true) -> String {
+        let seen: String
+        if let date = date?.trimmingCharacters(in: .whitespaces), !date.isEmpty {
+            seen = arabic ? "آخر دخول \(date)" : "Last seen \(date)"
+        } else {
+            seen = lastSeen(nil, hasAccount: hasAccount, female: female, arabic: arabic)
+        }
+        return summary([statusWord, seen])
     }
 
     static func summary(_ parts: [String]) -> String {
@@ -198,11 +276,12 @@ nonisolated enum AdminMemberCardLogic {
         return arabicCount(count, one: "زوجة", two: "زوجتان", few: "زوجات", many: "زوجة")
     }
 
-    /// رقاقة القفز تحت الرأس: «طلبان عنه» — nil بلا طلبات
-    static func requestsChip(count: Int, arabic: Bool = true) -> String? {
+    /// رقاقة القفز تحت الرأس: «طلبان عنه» / «طلبان عنها» — nil بلا طلبات
+    static func requestsChip(count: Int, female: Bool = false, arabic: Bool = true) -> String? {
         guard count > 0 else { return nil }
         if !arabic { return count == 1 ? "1 request about them" : "\(count) requests about them" }
-        return arabicCount(count, one: "طلب عنه", two: "طلبان عنه", few: "طلبات عنه", many: "طلباً عنه")
+        let about = aboutWord(female: female)
+        return arabicCount(count, one: "طلب \(about)", two: "طلبان \(about)", few: "طلبات \(about)", many: "طلباً \(about)")
     }
 
     // MARK: ٥) أزرار الرأس
@@ -237,6 +316,11 @@ nonisolated enum AdminMemberCardLogic {
         return nil
     }
 
+    /// ت٥: خيارات المربّع لجنسه — «ابن بنت» و«زوج من خارج العائلة» للرجل، و«زوجة من خارج العائلة» للمرأة
+    static func lineageOptions(female: Bool) -> [Lineage] {
+        female ? [.family, .outsideWife] : [.family, .daughterSon, .outsideHusband]
+    }
+
     /// ما يفعله «حفظ» في مربّع «صلته بالعائلة» — بنداءات السيرفر الموجودة فقط
     enum LineageSave: String, Equatable {
         /// الاختيار هو الحالي — لا شيء يُحفظ
@@ -247,22 +331,27 @@ nonisolated enum AdminMemberCardLogic {
         case decideRequest
         /// طلب انضمام معلّق لرجل: «ابن بنت من خارج العائلة» (`approve_join_as_daughter_son`)
         case approveJoin
+        /// م٣: الطلب (أو الانضمام) داخل مسار الموافقات — القرار في «الوارد» بمراحله، والزرّ «فتح في الوارد»
+        case openInbox
+        /// ت٥: «من خارج العائلة» يحسبه السيرفر من الروابط (`trg_women_outside_flag`) — لا يُكتب باليد، والزرّ معطّل بشرحه
+        case automatic
         /// لا نداء على السيرفر لهذا التغيير — الزرّ معطّل بملاحظة «يحتاج تحديث السيرفر»
         case needsServer
     }
 
     static func lineageSave(choice: Lineage, current: Lineage?, isProfile: Bool, hasPendingLineageRequest: Bool,
-                            isPendingJoin: Bool, isMale: Bool) -> LineageSave {
+                            requestInWorkflow: Bool = false, isPendingJoin: Bool, joinInWorkflow: Bool = false,
+                            isMale: Bool) -> LineageSave {
         if choice == current { return .current }
         switch choice {
         case .family:
             return isProfile && current == nil ? .linkFather : .needsServer
         case .daughterSon:
-            if hasPendingLineageRequest { return .decideRequest }
-            if isPendingJoin && isMale && isProfile && current == nil { return .approveJoin }
+            if hasPendingLineageRequest { return requestInWorkflow ? .openInbox : .decideRequest }
+            if isPendingJoin && isMale && isProfile && current == nil { return joinInWorkflow ? .openInbox : .approveJoin }
             return .needsServer
         case .outsideHusband, .outsideWife:
-            return .needsServer
+            return .automatic
         }
     }
 
@@ -277,5 +366,116 @@ nonisolated enum AdminMemberCardLogic {
             if isSon(item) { sons.append(item) } else { daughters.append(item) }
         }
         return (sons, daughters)
+    }
+
+    // MARK: ح٢ ورقتك — أوامر العائلة والإدارة مقفولة
+
+    /// أوامر العائلة (الجنس، الزوجات/الزوج، الأبناء، الظهور، الصلة، الأب) لمن يعدّل، ولا على ورقتك أنت —
+    /// «البيانات» (الميلاد، الصورة، السيرة) تبقى كما في التصميم
+    static func familyAdmin(canEdit: Bool, memberId: UUID, viewerId: UUID?) -> Bool {
+        canEdit && memberId != viewerId
+    }
+
+    // MARK: ح١ نقل الجنس — من له حساب لا يُنقل
+
+    /// له حساب في التطبيق؟ true يقيناً · false لا · nil لا يُعرف بعد (مخزن الحسابات لم يُحمَّل). دور إداري أو «طلب انضمام»
+    /// (سجّل بنفسه) أو أنت أو موقوف أو قبل الشروط أو عقدة شجرة نساء مربوطة بحساب أو في مخزن الحسابات = له حساب
+    static func appAccount(role: String, isViewer: Bool, frozen: Bool, looksRegistered: Bool, linkedLogin: Bool,
+                           inAccountsStore: Bool, storeLoaded: Bool) -> Bool? {
+        let staff: Set<String> = ["owner", "admin", "monitor", "supervisor", "pending"]
+        if staff.contains(role) || isViewer || frozen || looksRegistered || linkedLogin || inAccountsStore { return true }
+        return storeLoaded ? false : nil
+    }
+
+    /// ما يمنع «انقله» (السيرفر لا يمنع حذف من له حساب — `move_child_gender` إلى أنثى يحذف ملفه)
+    enum GenderMoveBlock: Equatable {
+        /// «له حساب في التطبيق — لا يُنقل»
+        case account
+        /// مخزن الحسابات لم يُحمَّل — «تعذّر التحقق»
+        case unverified
+        /// إلى أنثى بلا أب في الشجرة — البنت تُنقل تحت أبيها
+        case noFather
+        /// إلى أنثى وله أبناء/بنات/زوجات مربوطون — يرفضه السيرفر (`family_links_protected`)
+        case linked(sons: Int, daughters: Int, wives: Int)
+        /// إلى ذكر ولها زوج مربوط
+        case linkedHusband
+        /// إلى ذكر وأبوها ليس رجلاً في شجرة العائلة
+        case fatherOutside
+    }
+
+    static func genderMoveBlock(toFemale: Bool, account: Bool?, hasFather: Bool, sons: Int, daughters: Int, wives: Int,
+                                hasHusband: Bool, fatherInFamily: Bool) -> GenderMoveBlock? {
+        guard let account else { return .unverified }
+        if account { return .account }
+        if toFemale {
+            guard hasFather else { return .noFather }
+            if sons + daughters + wives > 0 { return .linked(sons: sons, daughters: daughters, wives: wives) }
+            return nil
+        }
+        if hasHusband { return .linkedHusband }
+        return fatherInFamily ? nil : .fatherOutside
+    }
+
+    /// سطر «يُحذف» في مربّع النقل — لا «الحساب» (من له حساب لا يُنقل أصلاً)
+    static func genderMoveLoses(toFemale: Bool, arabic: Bool = true) -> String {
+        if toFemale {
+            return arabic ? "الصورة · رقم الهاتف · السيرة · الدور" : "Photo · phone number · biography · role"
+        }
+        return arabic ? "لا شيء من بياناتها — تُنقل لشجرة العائلة ابناً تحت أبيه"
+                      : "Nothing — moves to the family tree as a son under his father"
+    }
+
+    // MARK: ح٣ «فك الربط» للابن
+
+    /// الابن بلا أبناء فقط: فكّ أبيه يُخرجه من شجرة العائلة (`full_name` = اسمه الأول) — ومن له أبناء يخرج فرعه كله معه،
+    /// فيُعطَّل ويُوجَّه إلى «الأب ← تغيير» في ورقته
+    static func sonUnlinkAllowed(childCount: Int) -> Bool { childCount == 0 }
+
+    // MARK: م٥ «ربط زوج من العائلة» — لا محارمها
+
+    /// رجال لا يُعرضون زوجاً لها: أبوها وأجدادها، وأبناء كلٍّ منهم (أعمامها وإخوتها)، وذكور ذرّية أبيها (أبناء إخوتها…)،
+    /// وأبناؤها وذكور ذرّيتهم. `fatherOf` = أب كل رجل في شجرة العائلة
+    static func husbandBlocked(fatherId: UUID?, sonIds: [UUID], fatherOf: [UUID: UUID]) -> Set<UUID> {
+        var sonsOf: [UUID: [UUID]] = [:]
+        for (son, father) in fatherOf { sonsOf[father, default: []].append(son) }
+        func descendants(_ roots: [UUID]) -> Set<UUID> {
+            var out = Set<UUID>()
+            var stack = roots
+            while let next = stack.popLast() {
+                guard out.insert(next).inserted else { continue }
+                stack += sonsOf[next] ?? []
+            }
+            return out
+        }
+        var blocked = Set<UUID>()
+        if let fatherId {
+            var chain: [UUID] = []
+            var up: UUID? = fatherId
+            var seen = Set<UUID>()
+            while let a = up, seen.insert(a).inserted { chain.append(a); up = fatherOf[a] }
+            blocked.formUnion(chain)
+            for ancestor in chain.dropFirst() { blocked.formUnion(sonsOf[ancestor] ?? []) }
+            blocked.formUnion(descendants([fatherId]))
+        }
+        blocked.formUnion(descendants(sonIds))
+        return blocked
+    }
+
+    /// يظهر مرشّحاً زوجاً؟ رجل حيّ بالغ (العمر المجهول لا يُحكم عليه) له اسم، وليس «طلب انضمام»
+    static func husbandEligible(isMale: Bool, isPending: Bool, hasName: Bool, isDeceased: Bool, age: Int?,
+                                minAge: Int) -> Bool {
+        guard isMale, !isPending, hasName, !isDeceased else { return false }
+        if let age, age < minAge { return false }
+        return true
+    }
+
+    // MARK: م٦ بعد نقل الجنس
+
+    /// المعرّف الذي يعرضه الكرت: النقل بين الشجرتين يُنشئ سجلاً جديداً (`move_child_gender` يرجع معرّفه)
+    static func resolved(_ id: UUID, moved: [UUID: UUID]) -> UUID {
+        var current = id
+        var seen: Set<UUID> = [id]
+        while let next = moved[current], seen.insert(next).inserted { current = next }
+        return current
     }
 }

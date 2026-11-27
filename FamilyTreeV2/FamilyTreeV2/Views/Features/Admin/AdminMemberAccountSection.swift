@@ -24,7 +24,8 @@ enum AdminMemberAccountSection {
         case .registered: return L10n.t("مسجّل", "Registered")
         case .frozen: return L10n.t("موقوف", "Suspended")
         case .pendingJoin: return L10n.t("قيد المراجعة", "Under review")
-        case .treeOnly, .deceased: return L10n.t("غير مسجّل", "Not registered")
+        // م١٠: كلمة الرأس نفسها (`AdminMemberStatus.treeOnly`) — كلمة واحدة لـ«بلا حساب» في الكرت كله
+        case .treeOnly, .deceased: return AdminMemberCardLogic.noAccountWord(arabic: L10n.isArabic)
         case nil: return AdminStoreHealthText.placeholder
         }
     }
@@ -201,7 +202,8 @@ struct AdminMemberAdminSection: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(shape.fill(DS.Color.cardBackground))
         .clipShape(shape)
-        .overlay(shape.strokeBorder(DS.Hub.memberAdminStroke, lineWidth: DS.Border.widthBold))
+        // ت١: خطّ البطاقة الرفيع كبقية بطاقات اللوحة — الشريط الكحلي يفصلها وحده
+        .overlay(shape.strokeBorder(DS.Hub.cardStroke, lineWidth: DS.Card.strokeWidth))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(Self.title))
     }
@@ -214,11 +216,12 @@ struct AdminMemberAdminSection: View {
         case .phone:
             // «رقم الهاتف» (نُقل من «العضو»): تعديله بمربّع الرقم، و«امسح» لمن لا حساب دخول له
             HStack(spacing: DS.Spacing.sm) {
+                // ت٦: أمر بلا رقم (الرقم نفسه مرة واحدة في «الحساب») — عنوانه فعله، بلا سطر تحته
                 AdminMemberTapRow(hint: phone.isEmpty ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"),
                                   action: { openBox(.phone(member)) }) {
-                    AdminMemberRow(icon: "phone.fill", tint: DS.Color.sea, title: L10n.t("رقم الهاتف", "Phone number"),
-                                   subtitle: phone.isEmpty ? L10n.t("إضافة رقم", "Add a number")
-                                                           : L10n.t("تعديل الرقم أو مسحه", "Edit or clear the number"),
+                    AdminMemberRow(icon: "phone.fill", tint: DS.Color.sea,
+                                   title: phone.isEmpty ? L10n.t("إضافة رقم هاتف", "Add a phone number")
+                                                        : L10n.t("تعديل الرقم أو مسحه", "Edit or clear the number"),
                                    showsChevron: true,
                                    busy: busy == AdminMemberConfirm.unlinkPhone.id || busy == AdminMemberConfirm.clearPhone.id)
                 }

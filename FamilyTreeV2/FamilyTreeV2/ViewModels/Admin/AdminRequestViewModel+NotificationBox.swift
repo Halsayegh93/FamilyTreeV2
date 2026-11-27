@@ -25,11 +25,9 @@ extension AdminRequestViewModel {
         }
     }
 
-    /// أنواع يقبلها/يرفضها المربّع بدوالها الموجودة (`approveFromPush` + دالة الرفض لكل نوع)
-    private static let boxDecidableTypes: Set<String> = [
-        RequestType.treeEdit.rawValue, RequestType.deceasedReport.rawValue, RequestType.nameChange.rawValue,
-        RequestType.photoSuggestion.rawValue, RequestType.newsReport.rawValue,
-    ]
+    /// أنواع يقبلها/يرفضها المربّع بدوالها الموجودة (`approveFromPush` + دالة الرفض لكل نوع) — المصدر الواحد في
+    /// `AdminMemberCardLogic` (يُفحص في tests/admin-redesign/V3، ويقرؤه شريط «طلبات عنه» في كرت العضو)
+    private static var boxDecidableTypes: Set<String> { AdminMemberCardLogic.boxDecidableTypes }
 
     private func boxAllowed(_ request: AdminRequest) -> Bool {
         guard request.status == ApprovalStatus.pending.rawValue,

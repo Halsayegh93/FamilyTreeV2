@@ -2297,8 +2297,11 @@ class MemberViewModel: ObservableObject {
     // MARK: - Update Children Order
     
     // دالة لتحديث ترتيب الأبناء بناءً على القائمة الجديدة
-    func updateChildrenOrder(for fatherId: UUID, newOrder: [FamilyMember]) async {
+    /// false = فشل حفظ ترتيب واحد على الأقل (السبب في `errorMessage`) — كرت العضو يعرضه بدل اهتزاز النجاح (نقد V3 ح٣)
+    @discardableResult
+    func updateChildrenOrder(for fatherId: UUID, newOrder: [FamilyMember]) async -> Bool {
         self.isLoading = true
+        var failed: Error?
         
         // 1) تحديث الترتيب في الذاكرة مباشرة لظهور أسرع
         for (index, child) in newOrder.enumerated() {
@@ -2325,15 +2328,21 @@ class MemberViewModel: ObservableObject {
                     .execute()
             } catch {
                 Log.error("فشل تحديث ترتيب \(child.firstName) إلى \(index): \(error)")
+                failed = failed ?? error
             }
         }
+        if let failed {
+            errorMessage = AuthViewModel.serverMessage(failed, fallback: L10n.t("تعذّر حفظ ترتيب الأبناء كاملاً. حاول مرة أخرى.",
+                                                                                 "Couldn't save the whole order. Try again."))
+        }
         
-        // 3) مزامنة نهائية مع الشجرة بعد الحفظ
-        await fetchAllMembers(force: false)
+        // 3) مزامنة نهائية مع الشجرة بعد الحفظ (الفشل يرجع الترتيب كما هو على السيرفر)
+        await fetchAllMembers(force: failed != nil)
         if fatherId == self.currentUser?.id {
             await fetchChildren(for: fatherId)
         }
         self.isLoading = false
+        return failed == nil
     }
     
     // MARK: - Update Member Phone
@@ -2597,8 +2606,14 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - Update Member Father
     
-    func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    /// false = لم يُحفظ (السبب في `errorMessage`، ورسالة السيرفر العربية إن وُجدت — حارس روابط العائلة…). كان الخطأ يُبتلع
+    /// فيظهر رفض السيرفر في كرت العضو نجاحاً (نقد V3 ح٣)
+    @discardableResult
+    func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else {
+            errorMessage = L10n.t("لا يوجد اتصال بالإنترنت.", "No internet connection.")
+            return false
+        }
         self.isLoading = true
         // التقط الأب القديم قبل التحديث (نستخدم اسمه لا UUID للعرض)
         let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }
@@ -2648,8 +2663,13 @@ class MemberViewModel: ObservableObject {
             Log.info("تم تحديث ربط الأب + إعادة بناء full_name → cascade للذرّية")
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
+            errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر حفظ ربط الأب. حاول مرة أخرى.",
+                                                                                "Couldn't save the father link. Try again."))
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
     
     // MARK: - Update Member Health And Birth

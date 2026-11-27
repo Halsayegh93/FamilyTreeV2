@@ -9,9 +9,12 @@ import SwiftUI
 // (ب) «تغيير الجنس»: ما يبقى وما يُحذف، والمانع (أبناء/زوجات مربوطون)، ثم `move_child_gender`
 //     (`MemberViewModel.moveChildGender`) — رفض السيرفر يُعرض برسالته.
 // (ج) «الأبناء والبنات»: قائمة واحدة (الأبناء `profiles.father_id`، البنات `women_members.parent_id`)، الترتيب بالسحب
-//     (`updateChildrenOrder` للأبناء، `WomenStore.reorder` للبنات — كلٌّ بجدوله)، «فك الربط» للابن بتأكيد
-//     (`updateMemberFather(…, nil)`)، و«إضافة ابن / بنت» (`AddSonByAdminSheet` ← `add_family_child`) و«ربط من الشجرة»
-//     (`updateMemberFather`). فكّ ربط البنت لا نداء له ← معطّل «يحتاج تحديث السيرفر».
+//     (`updateChildrenOrder` للأبناء، `WomenStore.reorder` للبنات — كلٌّ بجدوله)، «فك الربط» للابن بلا أبناء بتأكيد صادق
+//     (`updateMemberFather(…, nil)` — يخرج من شجرة العائلة ويصير اسمه الكامل اسمه الأول)، ومن له أبناء معطّل («الأب ←
+//     تغيير» في ورقته)، و«إضافة ابن / بنت» (`AddSonByAdminSheet` ← `add_family_child`) و«ربط من الشجرة»
+//     (`updateMemberFather`). فشل السيرفر يظهر برسالته (`errorMessage`). فكّ ربط البنت لا نداء له ← «يحتاج تحديث السيرفر».
+// (و) «الأم»: منتقي بنات العائلة (`DSWifeFlowBox(relation: .mother)`) ← `WomenStore.setMotherId` (ومعه زوجاً لأبيه إن
+//     لم يكن لها زوج) — نفس مسار شجرة النساء للإدارة.
 // (د) «صلته بالعائلة» (كانت «تصحيح النسب» — تسمية المالك): أربعة خيارات بشرح قصير؛ الحفظ بما له نداء فقط
 //     (`AdminMemberCardLogic.lineageSave`): ربط الأب، `decide_lineage_request`، `approve_join_as_daughter_son` — وغيرها
 //     معطّل «يحتاج تحديث السيرفر».
@@ -21,6 +24,8 @@ import SwiftUI
 /// مربّعات «العائلة» والجنس — بنوع مستقل (حارس المكدس)
 enum AdminMemberFamilyBox: Identifiable {
     case spouses(FamilyMember), gender(FamilyMember), children(FamilyMember), lineage(FamilyMember)
+    /// م٤: «الأم» — منتقي الأم
+    case mother(FamilyMember)
 
     var id: String {
         switch self {
@@ -28,12 +33,13 @@ enum AdminMemberFamilyBox: Identifiable {
         case .gender(let m): return "genderMove-\(m.id)"
         case .children(let m): return "children-\(m.id)"
         case .lineage(let m): return "lineage-\(m.id)"
+        case .mother(let m): return "mother-\(m.id)"
         }
     }
 
     var member: FamilyMember {
         switch self {
-        case .spouses(let m), .gender(let m), .children(let m), .lineage(let m): return m
+        case .spouses(let m), .gender(let m), .children(let m), .lineage(let m), .mother(let m): return m
         }
     }
 }
@@ -59,18 +65,29 @@ private func adminFamilyFailure(_ error: Error) -> String {
 // MARK: - قائمة بالسحب (ترتيب)
 
 /// قائمة أصلية في وضع الترتيب: مقبض السحب لكل صفّ (القارئ الصوتي: «نقل لأعلى/لأسفل» من القائمة نفسها). بلا تمرير خاص —
-/// ارتفاعها بعدد صفوفها، والمربّع يتمرّر
+/// ارتفاعها مجموع صفوفها المقيسة (ت٣: مع الخط الكبير يطول الصفّ — الاسم والشارة — فكان آخر صفّ يُقصّ)، والمربّع يتمرّر
 struct AdminMemberReorderList<Row: View>: View {
     @Binding var items: [FamilyMember]
     var reorders: Bool = true
     @ViewBuilder let row: (FamilyMember) -> Row
-    @ScaledMetric(relativeTo: .subheadline) private var rowHeight: CGFloat = 60
+    /// تقدير الصفّ قبل قياسه — يكبر مع الخط
+    @ScaledMetric(relativeTo: .subheadline) private var estimate: CGFloat = DS.Hub.memberReorderRow
+    @State private var heights: [UUID: CGFloat] = [:]
+
+    private var total: CGFloat {
+        items.reduce(0) { sum, m in sum + max(heights[m.id] ?? estimate, estimate) } + DS.Spacing.xs
+    }
 
     var body: some View {
         List {
             ForEach(items) { m in
                 row(m)
-                    .frame(minHeight: rowHeight)
+                    .frame(minHeight: estimate)
+                    .background(GeometryReader { g in
+                        Color.clear
+                            .onAppear { heights[m.id] = g.size.height }
+                            .onChange(of: g.size.height) { heights[m.id] = $0 }
+                    })
                     .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.xs, bottom: 0, trailing: DS.Spacing.xs))
                     .listRowBackground(Color.clear)
             }
@@ -79,7 +96,7 @@ struct AdminMemberReorderList<Row: View>: View {
         .listStyle(.plain)
         .environment(\.editMode, .constant(reorders ? .active : .inactive))
         .scrollDisabled(true)
-        .frame(height: rowHeight * CGFloat(items.count) + DS.Spacing.xs)
+        .frame(height: total)
     }
 }
 
@@ -89,6 +106,8 @@ private struct AdminMemberLinkRow: View {
     var note: String? = nil
     var tag: AdminMemberTag? = nil
     var unlinkEnabled: Bool = true
+    /// للقارئ الصوتي: لماذا «فك الربط» معطّل
+    var disabledHint: String = L10n.t("يحتاج تحديث السيرفر", "Needs a server update")
     var busy: Bool = false
     let unlink: () -> Void
 
@@ -105,7 +124,7 @@ private struct AdminMemberLinkRow: View {
                         .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .minimumScaleFactor(DSBox.buttonLabelMinScale)
                 }
             }
             Spacer(minLength: DS.Spacing.sm)
@@ -122,8 +141,7 @@ private struct AdminMemberLinkRow: View {
                 .buttonStyle(.borderless)
                 .disabled(!unlinkEnabled)
                 .accessibilityLabel(Text(L10n.t("فك ربط \(name)", "Unlink \(name)")))
-                .accessibilityHint(Text(unlinkEnabled ? L10n.t("يسأل أولاً", "Asks first")
-                                                      : L10n.t("يحتاج تحديث السيرفر", "Needs a server update")))
+                .accessibilityHint(Text(unlinkEnabled ? L10n.t("يسأل أولاً", "Asks first") : disabledHint))
             }
         }
         .accessibilityElement(children: .contain)
@@ -164,6 +182,8 @@ struct AdminMemberSpousesBox: View {
     @State private var working: UUID?
     @State private var failure: String?
     @State private var unlinkTarget: FamilyMember?
+    /// م٥: الزوج المختار ينتظر التأكيد قبل `setHusbandId`
+    @State private var husbandTarget: FamilyMember?
     @State private var name = ""
     @State private var deceased = false
     @State private var search = ""
@@ -194,8 +214,23 @@ struct AdminMemberSpousesBox: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { unlinkTarget = nil }
         } message: {
-            Text(L10n.t("«\(unlinkTarget?.shortFullName ?? "")» تبقى في الشجرة، ويُفكّ ربطها بـ«\(displayName)» فقط. يُسجَّل التغيير.",
-                        "«\(unlinkTarget?.shortFullName ?? "")» stays in the tree; only the link to «\(displayName)» is removed. The change is logged."))
+            // م١٠: فكّ زوج المرأة — «يبقى… ربطه»
+            Text(female
+                 ? L10n.t("«\(unlinkTarget?.shortFullName ?? "")» يبقى في الشجرة، ويُفكّ ربطه بـ«\(displayName)» فقط. يُسجَّل التغيير.",
+                          "«\(unlinkTarget?.shortFullName ?? "")» stays in the tree; only the link to «\(displayName)» is removed. The change is logged.")
+                 : L10n.t("«\(unlinkTarget?.shortFullName ?? "")» تبقى في الشجرة، ويُفكّ ربطها بـ«\(displayName)» فقط. يُسجَّل التغيير.",
+                          "«\(unlinkTarget?.shortFullName ?? "")» stays in the tree; only the link to «\(displayName)» is removed. The change is logged."))
+        }
+        .dsAlert(L10n.t("ربط زوج؟", "Link a husband?"), isPresented: Binding(get: { husbandTarget != nil },
+                                                                          set: { if !$0 { husbandTarget = nil } })) {
+            Button(L10n.t("اربطه", "Link")) {
+                if let man = husbandTarget { linkHusband(man) }
+                husbandTarget = nil
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { husbandTarget = nil }
+        } message: {
+            Text(L10n.t("«\(husbandTarget?.shortFullName ?? "")» زوجاً لـ«\(displayName)» في شجرة النساء، وتُعلَّم «متزوجة». يُسجَّل التغيير، وتقدر تفكّ الربط من هنا.",
+                        "«\(husbandTarget?.shortFullName ?? "")» becomes «\(displayName)»'s husband in the women's tree and she's marked married. Logged; you can unlink it here."))
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -215,13 +250,14 @@ struct AdminMemberSpousesBox: View {
             canSubmit: !busy,
             isBusy: busy,
             hasUnsavedChanges: orderChanged,
+            // م٧: الثانويان بإطار ذهبي و«تم» وحده ممتلئ — يتجاوران ما اتّسع النصّان كاملين، وإلا صفّ لكلٍّ
             extraActions: [
                 DSComposerAction(id: "link", title: L10n.t("ربط من العائلة", "Link from the family"), icon: "person.2",
-                                 isEnabled: !busy && (!female || count == 0)) {
+                                 isEnabled: !busy && (!female || count == 0), style: .outlined) {
                     failure = nil; search = ""; step = female ? .pickHusband : .linkFamily
                 },
                 DSComposerAction(id: "outside", title: L10n.t("إضافة من خارج العائلة", "Add from outside"), icon: "plus",
-                                 isEnabled: !busy && outsideReady) {
+                                 isEnabled: !busy && outsideReady, style: .outlined) {
                     failure = nil; name = ""; deceased = false; step = .outside
                 }
             ],
@@ -298,10 +334,25 @@ struct AdminMemberSpousesBox: View {
         }
     }
 
-    // MARK: «الزوج» من العائلة — منتقي الرجال
+    // MARK: «الزوج» من العائلة — منتقي الرجال (م٥: بلا محارمها ولا القُصّر ولا المتوفين، وتأكيد قبل الربط)
 
     private var husbandPicker: some View {
-        let men = memberVM.allMembers.filter { !$0.isFemale && $0.role != .pending && $0.hasName && $0.id != member.id }
+        let f = family
+        let node = f.nodeId ?? member.id
+        // أب كل رجل في شجرة العائلة، وأبناؤها (عقدتها أمّهم في شجرة النساء أو في ملفاتهم)
+        let fatherOf = Dictionary(memberVM.allMembers.compactMap { m in m.fatherId.map { (m.id, $0) } },
+                                  uniquingKeysWith: { a, _ in a })
+        let sons = Set(store.people.filter { !$0.isFemale && ($0.motherId == node || $0.motherId == member.id) }.map(\.id)
+                       + memberVM.allMembers.filter { $0.motherId == node || $0.motherId == member.id }.map(\.id))
+        let blocked = AdminMemberCardLogic.husbandBlocked(fatherId: f.father?.id ?? member.fatherId, sonIds: Array(sons),
+                                                          fatherOf: fatherOf)
+        let minAge = WifeCandidateRules.minimumAge
+        let men = memberVM.allMembers.filter {
+            $0.id != member.id && !blocked.contains($0.id)
+                && AdminMemberCardLogic.husbandEligible(isMale: !$0.isFemale, isPending: $0.role == .pending,
+                                                       hasName: $0.hasName, isDeceased: $0.isDeceased == true,
+                                                       age: WifeCandidateRules.age($0), minAge: minAge)
+        }
         return DSMemberPickerBox(
             title: L10n.t("ربط زوج من العائلة", "Link a husband from the family"),
             subtitle: displayName,
@@ -310,13 +361,17 @@ struct AdminMemberSpousesBox: View {
             search: $search,
             requiresSpecificQuery: true,
             listsAllWhenEmpty: false,
-            onPick: { man in
-                guard let node = family.nodeId else { return }
-                write("setHusbandId \(node) → \(man.id)") {
-                    try await WomenStore.setHusbandId(womanId: node, husbandId: man.id)
-                }
-            },
+            hintMessage: L10n.t("لا يظهر محارمها ولا من دون \(minAge) سنة ولا المتوفون.",
+                                "Her close relatives, men under \(minAge) and the deceased aren't listed."),
+            onPick: { man in husbandTarget = man },
             onCancel: { step = .list })
+    }
+
+    private func linkHusband(_ man: FamilyMember) {
+        guard let node = family.nodeId else { return }
+        write("setHusbandId \(node) → \(man.id)") {
+            try await WomenStore.setHusbandId(womanId: node, husbandId: man.id)
+        }
     }
 
     // MARK: «إضافة من خارج العائلة»
@@ -415,11 +470,17 @@ struct AdminMemberSpousesBox: View {
 struct AdminMemberGenderMoveBox: View {
     let member: FamilyMember
     let isProfile: Bool
+    /// م٦: نُقل — القديم ← الجديد (الكرت يتبع السجل الجديد بدل «العضو غير موجود»)
+    let onMoved: (UUID, UUID) -> Void
     @EnvironmentObject private var memberVM: MemberViewModel
+    @EnvironmentObject private var authVM: AuthViewModel
     @ObservedObject private var store = AdminMemberCardFamilyStore.shared
+    @ObservedObject private var accounts = AdminAccountsStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var busy = false
     @State private var failure: String?
+    /// نُقل لكن لم تُربط الأم — المربّع يبقى بسطره و«تم»
+    @State private var motherFailed = false
 
     private var toFemale: Bool { !member.isFemale }
     private var target: String { toFemale ? "female" : "male" }
@@ -428,33 +489,56 @@ struct AdminMemberGenderMoveBox: View {
         AdminMemberCardFamily.make(member, isProfile: isProfile, memberVM: memberVM, store: store)
     }
 
-    /// ما يمنع النقل محلياً (السيرفر يرفضه أيضاً) — nil = لا مانع
-    private var blocker: String? {
+    /// ح١: له حساب في التطبيق؟ (nil = مخزن الحسابات لم يُحمَّل بعد) — السيرفر لا يمنع، والنقل إلى أنثى يحذف ملفه
+    private var account: Bool? {
+        let node = family.nodeId
+        return AdminMemberCardLogic.appAccount(
+            role: member.role.rawValue, isViewer: member.id == authVM.currentUser?.id, frozen: member.status == .frozen,
+            looksRegistered: member.looksRegistered,
+            linkedLogin: node.flatMap { WomenStore.linkedUserByWoman[$0] } != nil,
+            inAccountsStore: accounts.info(member.id) != nil,
+            // عقدة شجرة النساء بلا ملف: حسابها رابطها (`linked_user_id`)، لا مخزن الحسابات
+            storeLoaded: isProfile ? accounts.loaded : true)
+    }
+
+    /// ما يمنع النقل محلياً — nil = لا مانع
+    private var block: AdminMemberCardLogic.GenderMoveBlock? {
         let f = family
-        if toFemale {
-            guard member.fatherId != nil else {
-                return L10n.t("لا أب له في الشجرة — اربطه بأبيه أولاً، فالبنت تُنقل تحت أبيها.",
-                              "No father in the tree — link him first; a daughter moves under her father.")
-            }
-            let kids = f.sons.count + f.daughters.count
-            if kids > 0 || !f.spouses.isEmpty {
-                let what = [AdminMemberCardLogic.childrenSummary(sons: f.sons.count, daughters: f.daughters.count,
-                                                                 arabic: L10n.isArabic),
-                            f.spousesSummary(female: false)].compactMap { $0 }.joined(separator: L10n.t(" و", " and "))
-                return L10n.t("له \(what) مربوطون: فكّ ربطهم أولاً، وإلا يرفض السيرفر النقل.",
-                              "\(what) are linked: unlink them first, or the server refuses the move.")
-            }
-            return nil
-        }
-        if !f.spouses.isEmpty {
-            return L10n.t("لها زوج مربوط: فكّ ربطه أولاً.", "She has a linked husband: unlink him first.")
-        }
         let node = f.nodeId.flatMap(store.node)
-        guard let pid = node?.fatherId ?? member.fatherId, memberVM.member(byId: pid) != nil else {
+        let fatherId = node?.fatherId ?? member.fatherId
+        return AdminMemberCardLogic.genderMoveBlock(
+            toFemale: toFemale, account: account, hasFather: member.fatherId != nil,
+            sons: f.sons.count, daughters: f.daughters.count, wives: toFemale ? f.spouses.count : 0,
+            hasHusband: !toFemale && !f.spouses.isEmpty,
+            fatherInFamily: fatherId.flatMap { memberVM.member(byId: $0) } != nil)
+    }
+
+    private var blocker: String? {
+        guard let block else { return nil }
+        switch block {
+        case .account:
+            return toFemale ? L10n.t("له حساب في التطبيق — لا يُنقل بين الشجرتين: النقل يحذف ملفه ويبقى حسابه بلا ملف.",
+                                     "Has an app account — can't be moved: the move deletes the profile and orphans the account.")
+                            : L10n.t("لها حساب في التطبيق — لا تُنقل بين الشجرتين.",
+                                     "Has an app account — can't be moved between the trees.")
+        case .unverified:
+            return L10n.t("تعذّر التحقق من حساب العضو في التطبيق — أغلق المربّع وحاول بعد قليل.",
+                          "Couldn't check the member's app account — close and try again shortly.")
+        case .noFather:
+            return L10n.t("لا أب له في الشجرة — اربطه بأبيه أولاً، فالبنت تُنقل تحت أبيها.",
+                          "No father in the tree — link him first; a daughter moves under her father.")
+        case .linked(let sons, let daughters, let wives):
+            let what = [AdminMemberCardLogic.childrenSummary(sons: sons, daughters: daughters, arabic: L10n.isArabic),
+                        AdminMemberCardLogic.spousesSummary(count: wives, female: false, arabic: L10n.isArabic)]
+                .compactMap { $0 }.joined(separator: L10n.t(" و", " and "))
+            return L10n.t("له \(what) مربوطون: فكّ ربطهم أولاً، وإلا يرفض السيرفر النقل.",
+                          "\(what) are linked: unlink them first, or the server refuses the move.")
+        case .linkedHusband:
+            return L10n.t("لها زوج مربوط: فكّ ربطه أولاً.", "She has a linked husband: unlink him first.")
+        case .fatherOutside:
             return L10n.t("أبوها ليس في شجرة العائلة — الابن يُنقل تحت أبيه.",
                           "Her father isn't in the family tree — a son moves under his father.")
         }
-        return nil
     }
 
     private var keeps: String {
@@ -464,14 +548,18 @@ struct AdminMemberGenderMoveBox: View {
                           "Name · father · birth and death dates · visibility · mother")
     }
 
-    private var loses: String {
-        toFemale ? L10n.t("الصورة · الحساب ورقم الهاتف · السيرة · الدور",
-                          "Photo · account and phone · biography · role")
-                 : L10n.t("لا شيء من بياناتها — تُنقل لشجرة العائلة ابناً تحت أبيه",
-                          "Nothing — moves to the family tree as a son under his father")
-    }
+    /// ح١: بلا «الحساب» — من له حساب لا يُنقل أصلاً
+    private var loses: String { AdminMemberCardLogic.genderMoveLoses(toFemale: toFemale, arabic: L10n.isArabic) }
 
     var body: some View {
+        Group {
+            if motherFailed { AnyView(movedWithoutMother) } else { AnyView(confirmStep) }
+        }
+        .task { if !accounts.loaded { await accounts.refresh() } }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private var confirmStep: some View {
         DSComposer(
             title: toFemale ? L10n.t("تغيير الجنس إلى أنثى؟", "Change to female?") : L10n.t("تغيير الجنس إلى ذكر؟", "Change to male?"),
             subtitle: member.shortFullName,
@@ -500,13 +588,32 @@ struct AdminMemberGenderMoveBox: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             if let blocker {
-                DSNoteCard(blocker, icon: "link", tint: DS.Color.error)
+                DSNoteCard(blocker, icon: block == .account || block == .unverified ? "person.crop.circle.badge.exclamationmark" : "link",
+                           tint: DS.Color.error)
             }
             if let failure {
                 DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// م٦: نُقل لكن ربط الأم فشل — يُقال بوضوح، والكرت صار على السجل الجديد (صفّ «الأم» يربطها)
+    private var movedWithoutMother: some View {
+        DSComposer(
+            title: L10n.t("تم النقل", "Moved"),
+            subtitle: member.shortFullName,
+            icon: "checkmark",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("تم", "Done"),
+            showsCancel: false,
+            canSubmit: true,
+            onSubmit: { dismiss() },
+            onCancel: { dismiss() }
+        ) {
+            DSNoteCard(L10n.t("نُقل، لكن لم تُربط الأم — اربطها من صفّ «الأم» في الكرت أو من شجرة النساء.",
+                              "Moved, but the mother wasn't linked — link her from the «Mother» row or the women's tree."),
+                       icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+        }
     }
 
     private func move() {
@@ -514,6 +621,7 @@ struct AdminMemberGenderMoveBox: View {
         let childId = isProfile ? member.id : (family.nodeId ?? member.id)
         if DebugAdminProbe.dryRun("move_child_gender \(childId) → \(target)") { dismiss(); return }
         let motherId = family.mother?.id
+        let cardId = member.id
         busy = true
         failure = nil
         Task { @MainActor in
@@ -524,12 +632,20 @@ struct AdminMemberGenderMoveBox: View {
                 memberVM.errorMessage = nil
                 return
             }
-            // النقل يُنشئ سجلاً جديداً بلا الأم — أعِدها (أفضل جهد، كما في شجرة النساء)
-            if let motherId, newId != childId { try? await WomenStore.setMotherId(childId: newId, motherId: motherId) }
+            // النقل يُنشئ سجلاً جديداً بلا الأم — أعِدها، وإن فشل فقُل ذلك (كان `try?` يضيّعه بصمت)
+            var motherLinked = true
+            if let motherId, newId != childId {
+                do { try await WomenStore.setMotherId(childId: newId, motherId: motherId) } catch { motherLinked = false }
+            }
             await store.refresh(force: true)
             busy = false
-            DSMomentToast.show(L10n.t("تم النقل", "Moved"), moment: .success)
-            dismiss()
+            if newId != cardId { onMoved(cardId, newId) }
+            if motherLinked {
+                DSMomentToast.show(L10n.t("تم النقل", "Moved"), moment: .success)
+                dismiss()
+            } else {
+                motherFailed = true
+            }
         }
     }
 }
@@ -572,8 +688,11 @@ struct AdminMemberChildrenBox: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { unlinkTarget = nil }
         } message: {
-            Text(L10n.t("«\(unlinkTarget?.shortFullName ?? "")» يبقى في الشجرة بلا أب. يُسجَّل التغيير ويمكن ربطه من جديد.",
-                        "«\(unlinkTarget?.shortFullName ?? "")» stays in the tree without a father. Logged; can be linked again."))
+            // ح٣: نصّ صادق — بلا أب لا يُرسم في شجرة العائلة، و`full_name` يصير اسمه الأول
+            let name = unlinkTarget?.shortFullName ?? ""
+            let first = unlinkTarget.flatMap { AdminMemberSheetLogic.firstName($0.firstName, full: $0.fullName) } ?? name
+            Text(L10n.t("«\(name)» يخرج من شجرة العائلة حتى يُربط من جديد، ويصير اسمه الكامل «\(first)» وحده. يُسجَّل التغيير.",
+                        "«\(name)» leaves the family tree until relinked, and his full name becomes «\(first)». The change is logged."))
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -589,11 +708,12 @@ struct AdminMemberChildrenBox: View {
             canSubmit: !busy,
             isBusy: busy,
             hasUnsavedChanges: orderChanged,
+            // م٧: الثانويان بإطار ذهبي و«تم» وحده ممتلئ
             extraActions: [
                 DSComposerAction(id: "add", title: L10n.t("إضافة ابن / بنت", "Add son / daughter"), icon: "plus",
-                                 isEnabled: !busy) { addChild() },
+                                 isEnabled: !busy, style: .outlined) { addChild() },
                 DSComposerAction(id: "link", title: L10n.t("ربط من الشجرة", "Link from the tree"), icon: "tree",
-                                 isEnabled: !busy) { failure = nil; search = ""; picking = true }
+                                 isEnabled: !busy, style: .outlined) { failure = nil; search = ""; picking = true }
             ],
             onSubmit: { orderChanged ? saveOrder() : dismiss() },
             onCancel: { dismiss() }
@@ -604,16 +724,27 @@ struct AdminMemberChildrenBox: View {
             } else {
                 AdminMemberReorderList(items: $order, reorders: order.count > 1) { child in
                     let son = sonIds.contains(child.id)
+                    let kids = grandchildren(child)
+                    // ح٣: من له أبناء لا يُفكّ (يخرج فرعه كله) — «الأب ← تغيير» في ورقته
                     AdminMemberLinkRow(name: child.firstName.isEmpty ? child.shortFullName : child.firstName,
+                                       note: son && kids > 0 ? L10n.t("له أبناء", "Has children") : nil,
                                        tag: AdminMemberTag(text: son ? L10n.t("ابن", "Son") : L10n.t("بنت", "Daughter"),
                                                            tone: son ? .neutral : .daughterSon),
-                                       unlinkEnabled: son, busy: working == child.id) { unlinkTarget = child }
+                                       unlinkEnabled: son && AdminMemberCardLogic.sonUnlinkAllowed(childCount: kids),
+                                       disabledHint: son ? L10n.t("له أبناء — غيّر أباه من ورقته", "Has children — change his father from his card")
+                                                         : L10n.t("يحتاج تحديث السيرفر", "Needs a server update"),
+                                       busy: working == child.id) { unlinkTarget = child }
                 }
                 Text(L10n.t("اسحب للترتيب. الأبناء والبنات يُحفظ ترتيب كلٍّ منهم في شجرته.",
                             "Drag to order. Sons and daughters each keep their order in their own tree."))
                     .dsFont(.subtitle)
                     .foregroundColor(DS.Color.textTertiary)
                     .fixedSize(horizontal: false, vertical: true)
+                if family.sons.contains(where: { grandchildren($0) > 0 }) {
+                    DSNoteCard(L10n.t("«فك الربط» معطّل لمن له أبناء: يخرج فرعه كله من شجرة العائلة. لتصحيح أبيه افتح ورقته ← «الأب» ← تغيير.",
+                                      "«Unlink» is off for a son with children: his whole branch would leave the family tree. To fix his father open his card → «Father» → Change."),
+                               icon: "info.circle", tint: DS.Color.info)
+                }
                 if !family.daughters.isEmpty {
                     AdminMemberNeedsServerNote(text: L10n.t("«فك الربط» للبنت (لا نداء يفرّغ أبا البنت في شجرة النساء).",
                                                             "«Unlink» for a daughter (no call clears her father in the women's tree)."))
@@ -643,16 +774,33 @@ struct AdminMemberChildrenBox: View {
             hintMessage: L10n.t("من لا أب له في الشجرة فقط.", "Only members without a father in the tree."),
             onPick: { son in
                 write("updateMemberFather \(son.id) → \(member.id)") {
-                    await memberVM.updateMemberFather(memberId: son.id, fatherId: member.id)
+                    try Self.saved(await memberVM.updateMemberFather(memberId: son.id, fatherId: member.id), memberVM)
                 }
             },
             onCancel: { picking = false })
     }
 
+    /// أبناء الابن وبناته (شجرة الرجال وشجرة النساء)
+    private func grandchildren(_ son: FamilyMember) -> Int {
+        memberVM.allMembers.filter { $0.fatherId == son.id }.count
+            + store.people.filter { $0.isFemale && $0.fatherId == son.id }.count
+    }
+
     private func unlink(_ son: FamilyMember) {
+        // ح٣: لا يُفكّ من له أبناء (الزرّ معطّل — وهذا حارس ثانٍ)
+        guard AdminMemberCardLogic.sonUnlinkAllowed(childCount: grandchildren(son)) else { return }
         working = son.id
         write("updateMemberFather \(son.id) → nil") {
-            await memberVM.updateMemberFather(memberId: son.id, fatherId: nil)
+            try Self.saved(await memberVM.updateMemberFather(memberId: son.id, fatherId: nil), memberVM)
+        }
+    }
+
+    /// ح٣: رفض السيرفر لا يظهر نجاحاً — رسالته (`errorMessage`) في المربّع
+    private static func saved(_ ok: Bool, _ vm: MemberViewModel) throws {
+        guard ok else {
+            let message = vm.errorMessage ?? L10n.t("تعذّر الحفظ. حاول مرة أخرى.", "Couldn't save. Try again.")
+            vm.errorMessage = nil
+            throw WomenWriteFailure(message: message)
         }
     }
 
@@ -662,7 +810,9 @@ struct AdminMemberChildrenBox: View {
         let daughtersChanged = parts.daughters.map(\.id) != family.daughters.map(\.id)
         let fatherId = member.id
         write("children order sons:\(sonsChanged) daughters:\(daughtersChanged)") {
-            if sonsChanged { await memberVM.updateChildrenOrder(for: fatherId, newOrder: parts.sons) }
+            if sonsChanged {
+                try Self.saved(await memberVM.updateChildrenOrder(for: fatherId, newOrder: parts.sons), memberVM)
+            }
             if daughtersChanged { try await WomenStore.reorder(orderedIds: parts.daughters.map(\.id)) }
         }
     }
@@ -704,6 +854,8 @@ struct AdminMemberLineageBox: View {
     let branch: String?
     /// «من العائلة» لمن لا صلة له: الورقة تغلق المربّع وتفتح ربط الأب (`LinkFatherSheet`)
     let linkFather: () -> Void
+    /// م٣: الطلب/الانضمام داخل مسار الموافقات — يُغلق الكرت ويفتح «الوارد» عليه
+    let openInbox: (AdminRequest) -> Void
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var adminRequestVM: AdminRequestViewModel
@@ -712,8 +864,15 @@ struct AdminMemberLineageBox: View {
     @State private var choice: AdminMemberCardLogic.Lineage?
     @State private var busy = false
     @State private var failure: String?
+    /// م٣: تأكيد قبل القرار (نصّ المسار القديم `PendingMemberSheets`)
+    @State private var confirmJoin = false
+    @State private var confirmDecide = false
+    /// م٤: منتقي الأم داخل المربّع نفسه
+    @State private var pickingMother = false
 
     private typealias Lin = AdminMemberCardLogic.Lineage
+
+    private var female: Bool { member.isFemale }
 
     private var family: AdminMemberCardFamily {
         AdminMemberCardFamily.make(member, isProfile: isProfile, memberVM: memberVM, store: store)
@@ -723,45 +882,95 @@ struct AdminMemberLineageBox: View {
         adminRequestVM.lineageRequests.first { $0.memberId == member.id && $0.status == ApprovalStatus.pending.rawValue }
     }
 
+    /// طلب انضمامه المعلّق (صفّه في مسار الموافقات إن وُجد) — لـ«فتح في الوارد»
+    private var joinRequest: AdminRequest? {
+        AdminMemberCardRequests.joinRequest(member, vm: adminRequestVM).first
+    }
+
+    private var workflowOn: Bool { adminRequestVM.approvalsWorkflowOn }
+
     private var save: AdminMemberCardLogic.LineageSave {
         guard let choice else { return .current }
+        let requestStage = !(pendingRequest?.stage ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        let joinStage = !(joinRequest?.stage ?? "").trimmingCharacters(in: .whitespaces).isEmpty
         return AdminMemberCardLogic.lineageSave(choice: choice, current: family.lineage, isProfile: isProfile,
                                                 hasPendingLineageRequest: pendingRequest != nil && authVM.canApproveTreeRequests,
-                                                isPendingJoin: member.role == .pending, isMale: !member.isFemale)
+                                                requestInWorkflow: workflowOn || requestStage,
+                                                isPendingJoin: member.role == .pending, joinInWorkflow: workflowOn || joinStage,
+                                                isMale: !female)
     }
 
     private var actionTitle: String {
         switch save {
         case .linkFather: return L10n.t("اختر الأب", "Pick the father")
-        case .decideRequest: return L10n.t("وافق على طلبه", "Approve the request")
+        case .decideRequest: return female ? L10n.t("وافق على طلبها", "Approve the request") : L10n.t("وافق على طلبه", "Approve the request")
         case .approveJoin: return L10n.t("اقبله ابن بنت", "Accept as daughter's son")
-        case .current, .needsServer: return L10n.t("حفظ", "Save")
+        case .openInbox: return L10n.t("فتح في الوارد", "Open in inbox")
+        case .current, .needsServer, .automatic: return L10n.t("حفظ", "Save")
         }
     }
 
     var body: some View {
-        DSComposer(
-            title: L10n.t("صلته بالعائلة", "Relation to the family"),
+        Group {
+            if pickingMother {
+                AnyView(AdminMemberMotherBox(member: member, isProfile: isProfile) { pickingMother = false })
+            } else {
+                AnyView(options)
+            }
+        }
+        .onAppear { if choice == nil { choice = family.lineage } }
+        .dsAlert(DaughterSons.text("option_title", "ابن بنت من خارج العائلة", "A daughter's son from outside the family"),
+                 isPresented: $confirmJoin) {
+            Button(L10n.t("موافقة", "Approve")) { approveJoin() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("يُقبل حساب \(member.displayFullName) ويكمل نسبه من التطبيق.",
+                        "\(member.displayFullName)'s account is approved; he completes his lineage in the app."))
+        }
+        .dsAlert(L10n.t("الموافقة على طلب «الصلة بالعائلة»؟", "Approve the relation request?"), isPresented: $confirmDecide) {
+            Button(L10n.t("موافقة", "Approve")) { decide() }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("يُعتمد «ابن بنت» لـ\(member.displayFullName) وتُربط أمّه كما في طلبه.",
+                        "«Daughter's son» is confirmed for \(member.displayFullName) and his mother linked as requested."))
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private var options: some View {
+        // ت٥: الخيارات التي تنطبق على جنسه فقط
+        let list = AdminMemberCardLogic.lineageOptions(female: female)
+        return DSComposer(
+            title: AdminMemberCardLogic.lineageTitle(female: female, arabic: L10n.isArabic),
             subtitle: member.shortFullName,
             icon: "tag",
             tint: DS.Color.actionNavy,
             actionTitle: actionTitle,
-            canSubmit: !busy && (save == .linkFather || save == .decideRequest || save == .approveJoin),
+            canSubmit: !busy && [.linkFather, .decideRequest, .approveJoin, .openInbox].contains(save),
             isBusy: busy,
             hasUnsavedChanges: choice != nil && choice != family.lineage,
             onSubmit: submit,
             onCancel: { dismiss() }
         ) {
             VStack(spacing: 0) {
-                ForEach(Lin.allCases, id: \.self) { option in
+                ForEach(list, id: \.self) { option in
                     optionRow(option)
-                    if option != Lin.allCases.last { AdminRowDivider() }
+                    if option != list.last { AdminRowDivider() }
                 }
             }
             .dsCard()
-            if save == .needsServer {
+            switch save {
+            case .needsServer:
                 AdminMemberNeedsServerNote(text: L10n.t("لا نداء على السيرفر يغيّر هذه الصلة مباشرة.",
                                                         "No server call changes this relation directly."))
+            case .automatic:
+                DSNoteCard(automaticNote, icon: "arrow.triangle.branch", tint: DS.Color.info)
+            case .openInbox:
+                DSNoteCard(L10n.t("الطلب في مسار الموافقات — القرار من «الوارد» بمراحله.",
+                                  "The request is in the approvals path — decide it in the inbox."),
+                           icon: "tray", tint: DS.Color.info)
+            default:
+                EmptyView()
             }
             Text(currentLine)
                 .dsFont(.subtitle)
@@ -772,64 +981,90 @@ struct AdminMemberLineageBox: View {
                 DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
-        .onAppear { choice = family.lineage }
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    /// ت٥: «من خارج العائلة» يحسبه السيرفر من الروابط (`trg_women_outside_flag`) — لا يُكتب باليد
+    private var automaticNote: String {
+        choice == .outsideWife
+            ? L10n.t("تُحسب تلقائياً من الروابط: بلا أب في الشجرة ومتزوّجة من رجل في العائلة.",
+                     "Computed automatically from the links: no father in the tree and married to a family man.")
+            : L10n.t("تُحسب تلقائياً من الروابط: رجل بلا أب ولا أمّ في الشجرة، زوج لبنت من العائلة.",
+                     "Computed automatically from the links: a man with no father or mother in the tree, married to a family daughter.")
     }
 
     /// «الحالي: ابن بنت · اعتمده حسن · 20/11/2026»
     private var currentLine: String {
-        let now = family.lineageTag(branch: branch) ?? AdminMemberCardLogic.notRecorded(arabic: L10n.isArabic)
+        let now = family.lineageTag(branch: branch)
+            ?? AdminMemberCardLogic.notRecorded(arabic: L10n.isArabic, feminine: true)
         let by = family.lineageSetBy(byId: memberVM.member(byId:))
         return L10n.t("الحالي: ", "Now: ") + [now, by].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func optionRow(_ option: Lin) -> some View {
         let selected = choice == option
-        return Button { choice = option } label: {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .dsGlyph(DS.Glyph.xl, weight: .regular)
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(AdminMemberCardFamily.title(option))
-                        .dsFont(.rowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(AdminMemberCardFamily.explanation(option))
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if option == .daughterSon, selected { motherLine }
+        return VStack(alignment: .leading, spacing: 0) {
+            Button { choice = option } label: {
+                HStack(alignment: .top, spacing: DS.Spacing.md) {
+                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                        .dsGlyph(DS.Glyph.xl, weight: .regular)
+                        .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(AdminMemberCardFamily.title(option))
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                        Text(AdminMemberCardFamily.explanation(option, female: female))
+                            .dsFont(.subtitle)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(.vertical, DS.Spacing.sm)
+                .frame(minHeight: DS.Icon.tapTarget)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
+            .buttonStyle(AdminRowPressStyle())
+            .accessibilityAddTraits(selected ? [.isSelected] : [])
+            if option == .daughterSon, selected { motherLine }
         }
-        .buttonStyle(AdminRowPressStyle())
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
-    /// «ابن بنت» يحتاج أمّاً: الحالية، أو أمّه كما في طلبه المعلّق
+    /// «ابن بنت» يحتاج أمّاً: الحالية بسهم ‹ يفتح منتقي الأم (م٤)، أو أمّه كما في طلبه المعلّق (للاطلاع)
     @ViewBuilder
     private var motherLine: some View {
         let requested = pendingRequest.flatMap { LineageRequestDetails.parse($0.details) }
-        let name = AdminMemberCardFamily.firstName(family.mother).map { $0 }
-            ?? requested?.motherName ?? requested?.newMother?.name
-        HStack(spacing: DS.Spacing.xs) {
+        let current = AdminMemberCardFamily.firstName(family.mother)
+        let name = current ?? requested?.motherName ?? requested?.newMother?.name
+        let canPick = pendingRequest == nil && family.nodeId != nil
+        let face = HStack(spacing: DS.Spacing.xs) {
             Text(L10n.t("الأم:", "Mother:")).dsFont(.chip)
-            Text(verbatim: name ?? AdminMemberCardLogic.notRecorded(arabic: L10n.isArabic)).dsFont(.chip)
+            Text(verbatim: name ?? AdminMemberCardLogic.notRecorded(arabic: L10n.isArabic, feminine: true)).dsFont(.chip)
+            Spacer(minLength: DS.Spacing.sm)
+            if canPick { DSChevron() }
         }
         .foregroundColor(DS.Color.textSecondary)
-        .padding(DS.Spacing.sm)
+        .padding(.horizontal, DS.Spacing.md)
+        .frame(minHeight: DS.Icon.tapTarget)
         .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous).fill(DS.Color.cardBackgroundSoft))
+        .padding(.leading, AdminRowDivider.iconInset)
+        .padding(.bottom, DS.Spacing.sm)
+        if canPick {
+            Button { pickingMother = true } label: { face.contentShape(Rectangle()) }
+                .buttonStyle(AdminRowPressStyle())
+                .accessibilityHint(Text(name == nil ? L10n.t("يختار أمّه من بنات العائلة", "Picks his mother from the family daughters")
+                                                    : L10n.t("يغيّر أمّه", "Changes his mother")))
+        } else {
+            face
+        }
         if pendingRequest != nil {
             Text(L10n.t("له طلب «الصلة بالعائلة» معلّق — الموافقة تُنشئ صلته بأمّه كما في الطلب.",
                         "A pending relation request — approving links him to his mother as requested."))
                 .dsFont(.subtitle)
                 .foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.leading, AdminRowDivider.iconInset)
+                .padding(.bottom, DS.Spacing.sm)
         }
     }
 
@@ -838,19 +1073,29 @@ struct AdminMemberLineageBox: View {
         case .linkFather:
             linkFather()
         case .decideRequest:
-            guard let request = pendingRequest else { return }
-            run("decide_lineage_request \(request.id)") {
-                try await DaughterSons.decide(requestId: request.id, approve: true, reason: nil)
-                await adminRequestVM.fetchPolicyRequests()
-            }
+            confirmDecide = true
         case .approveJoin:
-            let id = member.id
-            run("approve_join_as_daughter_son \(id)") {
-                try await DaughterSons.approveJoin(memberId: id)
-                await DaughterSonsIndex.shared.refresh(force: true)
-            }
-        case .current, .needsServer:
+            confirmJoin = true
+        case .openInbox:
+            if let request = pendingRequest ?? joinRequest { openInbox(request) }
+        case .current, .needsServer, .automatic:
             break
+        }
+    }
+
+    private func decide() {
+        guard let request = pendingRequest else { return }
+        run("decide_lineage_request \(request.id)") {
+            try await DaughterSons.decide(requestId: request.id, approve: true, reason: nil)
+            await adminRequestVM.fetchPolicyRequests()
+        }
+    }
+
+    private func approveJoin() {
+        let id = member.id
+        run("approve_join_as_daughter_son \(id)") {
+            try await DaughterSons.approveJoin(memberId: id)
+            await DaughterSonsIndex.shared.refresh(force: true)
         }
     }
 
@@ -871,6 +1116,101 @@ struct AdminMemberLineageBox: View {
             } catch {
                 busy = false
                 failure = DaughterSons.message(error)
+            }
+        }
+    }
+}
+
+// MARK: - (و) «الأم» — منتقي الأم (م٤)
+
+/// بنت من بنات العائلة تصير أمّه — مسار الإدارة نفسه في شجرة النساء (`linkFamilyMother`/`addMotherUnderFather`):
+/// `WomenStore.setMotherId` على عقدته، وتصير زوجةً لأبيه إن لم يكن لها زوج. بلا عقدة في شجرة النساء: لا ربط من هنا
+struct AdminMemberMotherBox: View {
+    let member: FamilyMember
+    let isProfile: Bool
+    /// داخل مربّع «الصلة»: يرجع إليه — nil = يُغلق المربّع
+    var onDone: (() -> Void)? = nil
+    @EnvironmentObject private var memberVM: MemberViewModel
+    @ObservedObject private var store = AdminMemberCardFamilyStore.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var busy = false
+    @State private var failure: String?
+
+    private var family: AdminMemberCardFamily {
+        AdminMemberCardFamily.make(member, isProfile: isProfile, memberVM: memberVM, store: store)
+    }
+
+    var body: some View {
+        let f = family
+        Group {
+            if let node = f.nodeId {
+                AnyView(DSWifeFlowBox(
+                    mode: .direct, relation: .mother, husbandId: node, personFatherId: f.father?.id,
+                    husbandName: member.shortFullName, people: store.people, isLoading: !store.loaded, showsHidden: true,
+                    isBusy: busy, error: failure,
+                    onLink: { daughter, _ in link(daughter, node: node, personFather: f.father?.id) },
+                    onAddUnderFather: { name, father in
+                        add(name, father: father, node: node, personFather: f.father?.id, deceased: false)
+                    },
+                    onCancel: close)
+                    .addsDeceased { name, father in
+                        add(name, father: father, node: node, personFather: f.father?.id, deceased: true)
+                    })
+            } else {
+                AnyView(DSComposer(title: L10n.t("الأم", "Mother"), subtitle: member.shortFullName, icon: "heart",
+                                   tint: DS.Color.actionNavy, actionTitle: "", showsAction: false,
+                                   cancelTitle: L10n.t("إغلاق", "Close"), canSubmit: false,
+                                   onSubmit: {}, onCancel: close) {
+                    DSNoteCard(L10n.t("لا عقدة له في شجرة النساء بعد — الأم تُربط من شجرة النساء.",
+                                      "No node in the women's tree yet — link the mother from the women's tree."),
+                               tint: DS.Color.warning)
+                })
+            }
+        }
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+    }
+
+    private func close() {
+        if let onDone { onDone() } else { dismiss() }
+    }
+
+    private func link(_ daughter: FamilyMember, node: UUID, personFather: UUID?) {
+        write("mother link \(daughter.id) → \(node)") {
+            if let personFather, daughter.husbandId == nil {
+                try await WomenStore.setHusbandId(womanId: daughter.id, husbandId: personFather)
+            }
+            try await WomenStore.setMotherId(childId: node, motherId: daughter.id)
+        }
+    }
+
+    private func add(_ name: String, father: FamilyMember, node: UUID, personFather: UUID?, deceased: Bool) {
+        let sort = (store.people.filter { $0.fatherId == father.id }.map(\.sortOrder).max() ?? -1) + 1
+        let fatherFull = father.fullName
+        write("mother add under \(father.id) for \(node)") {
+            let newId = try await WomenStore.addFamilyChild(parentId: father.id, name: name, gender: "female",
+                                                            birthDate: nil, sortOrder: sort, parentFullName: fatherFull,
+                                                            isDeceased: deceased)
+            if let personFather { try await WomenStore.setHusbandId(womanId: newId, husbandId: personFather) }
+            try await WomenStore.setMotherId(childId: node, motherId: newId)
+        }
+    }
+
+    /// كتابة واحدة: الدوّارة، ثم إعادة الجلب والرجوع؛ الفشل برسالة السيرفر والمربّع كما هو
+    private func write(_ label: String, _ work: @escaping () async throws -> Void) {
+        guard !busy else { return }
+        failure = nil
+        if DebugAdminProbe.dryRun("member card \(label)") { close(); return }
+        busy = true
+        Task { @MainActor in
+            do {
+                try await work()
+                await store.refresh(force: true)
+                busy = false
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                close()
+            } catch {
+                busy = false
+                failure = adminFamilyFailure(error)
             }
         }
     }

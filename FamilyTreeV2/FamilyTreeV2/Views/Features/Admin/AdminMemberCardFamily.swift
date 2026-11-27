@@ -187,6 +187,11 @@ struct AdminMemberCardFamily {
         AdminMemberCardLogic.childrenSummary(sons: sons.count, daughters: daughters.count, arabic: L10n.isArabic)
     }
 
+    /// «ابن وبنتان» أو «لا أبناء مسجّلون» — الصفّ وسطر الملخّص
+    var childrenValue: String {
+        AdminMemberCardLogic.childrenValue(sons: sons.count, daughters: daughters.count, arabic: L10n.isArabic)
+    }
+
     var childrenNames: String? {
         AdminMemberSheetLogic.childrenLine((sons + daughters).map(\.firstName))
     }
@@ -236,10 +241,13 @@ struct AdminMemberCardFamily {
         }
     }
 
-    /// شرح كل خيار في مربّع «صلته بالعائلة»
-    static func explanation(_ lineage: Lineage) -> String {
+    /// شرح كل خيار في مربّع «صلته/صلتها بالعائلة» (م١٠: «أبوها… وتظهر تحت أبيها» للمرأة)
+    static func explanation(_ lineage: Lineage, female: Bool = false) -> String {
         switch lineage {
         case .family:
+            if female {
+                return L10n.t("أبوها في شجرة العائلة، وتظهر تحت أبيها.", "Her father is in the family tree; shown under him.")
+            }
             return L10n.t("أبوه في شجرة العائلة، ويظهر تحت أبيه.", "His father is in the family tree; shown under him.")
         case .daughterSon:
             return L10n.t("أبوه من خارج العائلة وأمّه من بنات العائلة. يظهر في شجرة النساء تحت أمّه.",
@@ -293,13 +301,16 @@ struct AdminMemberFamilyGroup: View {
                                                    label: L10n.t("الأب", "Father"), arabic: ar))
         }
         if family.lineage == .daughterSon || !family.isProfile || female {
-            parts.append(AdminMemberCardLogic.part(AdminMemberCardFamily.firstName(family.mother).map { L10n.t("أمّه \($0)", "Mother \($0)") },
-                                                   label: L10n.t("الأم", "Mother"), arabic: ar))
+            parts.append(AdminMemberCardLogic.part(AdminMemberCardFamily.firstName(family.mother).map {
+                female ? L10n.t("أمّها \($0)", "Mother \($0)") : L10n.t("أمّه \($0)", "Mother \($0)")
+            }, label: L10n.t("الأم", "Mother"), arabic: ar, feminine: true))
         }
         parts.append(AdminMemberCardLogic.part(family.spousesSummary(female: female),
-                                               label: female ? L10n.t("الزوج", "Husband") : L10n.t("الزوجة", "Wife"), arabic: ar))
+                                               label: female ? L10n.t("الزوج", "Husband") : L10n.t("الزوجة", "Wife"),
+                                               arabic: ar, feminine: !female))
         if !female {
-            parts.append(family.childrenSummary ?? L10n.t("بلا أبناء", "No children"))
+            // م١٠: الملخّص والصفّ بكلمة واحدة («لا أبناء مسجّلون»)
+            parts.append(family.childrenValue)
         }
         return AdminMemberCardLogic.summary(parts)
     }
@@ -344,29 +355,32 @@ struct AdminMemberFamilyGroup: View {
                                    actionHint: family.father == nil ? L10n.t("ربط", "Link") : L10n.t("تغيير", "Change"),
                                    jump: jump(.father))
             }
+            // م٤: منتقي الأم (بنات العائلة — `DSWifeFlowBox(relation: .mother)` ← `WomenStore.setMotherId`)، لا شجرة النساء
             AdminMemberFactRow(icon: "heart", tint: DS.Color.palm, title: L10n.t("الأم", "Mother"),
-                               tag: motherTag, value: AdminMemberCardFamily.firstName(family.mother),
+                               tag: motherTag, value: AdminMemberCardFamily.firstName(family.mother), feminine: true,
                                hasRequest: requestRows.contains(.mother),
-                               action: handlers.openWomen, actionHint: L10n.t("يفتح شجرة النساء", "Opens the women's tree"),
+                               action: canEdit && family.nodeId != nil ? { handlers.openFamily(.mother(m)) } : nil,
+                               actionHint: family.mother == nil ? L10n.t("إضافة", "Add") : L10n.t("تغيير", "Change"),
                                jump: jump(.mother))
             AdminMemberFactRow(icon: "heart", tint: DS.Color.palm, title: spouseTitle, subtitle: spouseNames,
                                tag: family.anySpouseOutside ? AdminMemberTag(text: L10n.t("من خارج العائلة", "From outside the family"),
                                                                             tone: .outside) : nil,
-                               value: spouseValue, hasRequest: requestRows.contains(.spouses),
+                               value: spouseValue, feminine: !female, hasRequest: requestRows.contains(.spouses),
                                action: canEdit && family.nodeId != nil ? { handlers.openFamily(.spouses(m)) } : nil,
                                actionHint: L10n.t("إدارة", "Manage"), jump: jump(.spouses))
             if !female {
                 AdminMemberFactRow(icon: "person.2", tint: DS.Color.palm, title: L10n.t("الأبناء والبنات", "Sons and daughters"),
-                                   subtitle: family.childrenNames, value: family.childrenSummary,
+                                   subtitle: family.childrenNames, value: family.childrenValue,
                                    hasRequest: requestRows.contains(.children),
                                    action: canManageChildren && family.isProfile ? { handlers.openFamily(.children(m)) } : nil,
                                    actionHint: L10n.t("إدارة", "Manage"), jump: jump(.children))
             }
             visibilityRow
+            // م١١: «من العائلة» وحدها — الفرع في الرأس
             AdminMemberFactRow(icon: "tag", tint: DS.Color.palm, title: L10n.t("الصلة بالعائلة", "Relation to the family"),
                                subtitle: family.lineageSetBy(byId: byId),
-                               tag: family.lineage.map { .lineage($0, text: family.lineageTag(branch: branch)) },
-                               value: family.lineage == nil ? nil : "", hidesValue: family.lineage != nil,
+                               tag: family.lineage.map { .lineage($0, text: family.lineageTag(branch: nil)) },
+                               value: family.lineage == nil ? nil : "", feminine: true, hidesValue: family.lineage != nil,
                                hasRequest: requestRows.contains(.lineage),
                                action: canEdit ? { handlers.openFamily(.lineage(m)) } : nil,
                                actionHint: L10n.t("تعديل", "Edit"), jump: jump(.lineage))
@@ -383,7 +397,9 @@ struct AdminMemberFamilyGroup: View {
         let note: String? = {
             if family.hiddenByFamily { return L10n.t("أخفاها أهلها — الإظهار منهم", "Hidden by her family — only they can show her") }
             if family.lineage == .daughterSon { return L10n.t("ابن بنت: في شجرة النساء فقط", "Daughter's son: women's tree only") }
-            return family.hidden ? L10n.t("مخفي عن الأعضاء", "Hidden from members") : nil
+            if family.hidden { return female ? L10n.t("مخفية عن الأعضاء", "Hidden from members")
+                                             : L10n.t("مخفي عن الأعضاء", "Hidden from members") }
+            return nil
         }()
         // ابن البنت بلا عقدة محمّلة: لا مفتاح على ملفه في شجرة الرجال (السيرفر يرفض إظهاره هناك)
         let canToggle = canEdit && !family.hiddenByFamily
@@ -396,11 +412,13 @@ struct AdminMemberFamilyGroup: View {
                                    .labelsHidden()
                                    .tint(DS.Color.toggleOn)
                                    .disabled(pendingRows.contains(.visibility))
-                                   .accessibilityHint(Text(family.hidden ? L10n.t("يُظهره", "Shows them")
+                                   .accessibilityHint(Text(family.hidden ? (female ? L10n.t("يُظهرها", "Shows her")
+                                                                                   : L10n.t("يُظهره", "Shows them"))
                                                                          : L10n.t("يسأل قبل الإخفاء", "Asks before hiding")))))
         } else {
             AdminMemberFactRow(icon: "tree", tint: DS.Color.palm, title: title, subtitle: note,
-                               value: family.hidden ? L10n.t("مخفي", "Hidden") : L10n.t("ظاهر", "Shown"))
+                               value: family.hidden ? (female ? L10n.t("مخفية", "Hidden") : L10n.t("مخفي", "Hidden"))
+                                                    : (female ? L10n.t("ظاهرة", "Shown") : L10n.t("ظاهر", "Shown")))
         }
     }
 }

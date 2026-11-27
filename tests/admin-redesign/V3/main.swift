@@ -88,18 +88,36 @@ check(C.isAbout(personId: me, nodeId: me, requestMemberId: other, targetMemberId
 
 // MARK: ٣) قاعدة «مرحلة الموافقة»: داخل المسار = «فتح في الوارد» وحده
 
-check(C.requestActions(stage: nil, workflowOn: false, canApprove: true, canReject: true),
+check(C.requestActions(type: "tree_edit", stage: nil, workflowOn: false, canApprove: true, canReject: true),
       [Q.approve, .reject, .openInbox], "plain request, full rights → موافقة · رفض · فتح في الوارد")
-check(C.requestActions(stage: "specialist_review", workflowOn: false, canApprove: true, canReject: true),
-      [Q.openInbox], "request inside an approval stage → only «فتح في الوارد»")
-check(C.requestActions(stage: nil, workflowOn: true, canApprove: true, canReject: true),
+// قيم `ApprovalStage` الحقيقية (`admin_requests.stage`): review · info · approve · execute
+for stage in ["review", "info", "approve", "execute"] {
+    check(C.requestActions(type: "tree_edit", stage: stage, workflowOn: false, canApprove: true, canReject: true),
+          [Q.openInbox], "request in stage «\(stage)» → only «فتح في الوارد»")
+}
+check(C.requestActions(type: "tree_edit", stage: nil, workflowOn: true, canApprove: true, canReject: true),
       [Q.openInbox], "approvals path switched on → decide in the inbox only")
-check(C.requestActions(stage: nil, workflowOn: false, canApprove: false, canReject: true),
+check(C.requestActions(type: "tree_edit", stage: nil, workflowOn: false, canApprove: false, canReject: true),
       [Q.reject, .openInbox], "may reject but not approve → no «موافقة»")
-check(C.requestActions(stage: nil, workflowOn: false, canApprove: false, canReject: false),
+check(C.requestActions(type: "tree_edit", stage: nil, workflowOn: false, canApprove: false, canReject: false),
       [Q.openInbox], "outside the role's domain → open in the inbox only")
-check(C.requestActions(stage: "", workflowOn: false, canApprove: true, canReject: true),
+check(C.requestActions(type: "tree_edit", stage: "", workflowOn: false, canApprove: true, canReject: true),
       [Q.approve, .reject, .openInbox], "empty stage string = no stage")
+// الشريط يقرّر خمسة أنواع فقط (`boxDecidableTypes` — نفس مربّع الإشعار)، والباقي «فتح في الوارد» وحده
+check(C.boxDecidableTypes, Set(["tree_edit", "deceased_report", "name_change", "photo_suggestion", "news_report"]),
+      "box-decidable types = the five the notification box decides")
+for type in ["tree_edit", "deceased_report", "name_change", "photo_suggestion"] {
+    check(C.requestActions(type: type, stage: nil, workflowOn: false, canApprove: true, canReject: true),
+          [Q.approve, .reject, .openInbox], "\(type) → decided here")
+}
+for type in ["phone_change", "lineage_request", "child_add", "family_change", "relative_add", "join_request"] {
+    check(C.requestActions(type: type, stage: nil, workflowOn: false, canApprove: true, canReject: true),
+          [Q.openInbox], "\(type) → «فتح في الوارد» only, even for someone who may approve")
+}
+// م١: على ورقتك لا شريط ولا شارة «طلب» (الطلبات عنك يعالجها غيرك)
+check(C.showsRequests(isSelf: true, seesRequests: true), false, "own card → no requests about you")
+check(C.showsRequests(isSelf: false, seesRequests: true), true, "someone else's card → requests about them")
+check(C.showsRequests(isSelf: false, seesRequests: false), false, "viewer who doesn't decide tree requests → none")
 
 // MARK: ٤) «غير مسجّل»
 
@@ -117,7 +135,11 @@ check(C.childrenSummary(sons: 5, daughters: 2), "5 أبناء وبنتان", "5 
 check(C.childrenSummary(sons: 2, daughters: 0), "ابنان", "2 sons")
 check(C.childrenSummary(sons: 0, daughters: 1), "بنت", "1 daughter")
 check(C.childrenSummary(sons: 11, daughters: 3), "11 ابناً و3 بنات", "11 sons, 3 daughters")
-check(C.childrenSummary(sons: 0, daughters: 0), nil, "no children → nil (row says «غير مسجّل»)")
+check(C.childrenSummary(sons: 0, daughters: 0), nil, "no children → nil (the summary and the row use `childrenValue`)")
+// م١٠: الملخّص والصفّ بكلمة واحدة
+check(C.childrenValue(sons: 0, daughters: 0), "لا أبناء مسجّلون", "no children → «لا أبناء مسجّلون» (summary and row)")
+check(C.childrenValue(sons: 1, daughters: 2), "ابن وبنتان", "children → the count wording")
+check(C.childrenValue(sons: 0, daughters: 0, arabic: false), "No children recorded", "English")
 check(C.spousesSummary(count: 1, female: false), "زوجة", "one wife")
 check(C.spousesSummary(count: 2, female: false), "زوجتان", "two wives")
 check(C.spousesSummary(count: 3, female: false), "3 زوجات", "three wives")
@@ -127,6 +149,40 @@ check(C.requestsChip(count: 1), "طلب عنه", "chip: one request")
 check(C.requestsChip(count: 2), "طلبان عنه", "chip: two requests")
 check(C.requestsChip(count: 4), "4 طلبات عنه", "chip: four")
 check(C.requestsChip(count: 0), nil, "chip: none → no chip")
+
+// MARK: م١٠ التأنيث: «غير مسجّلة» بعد المؤنث، و«عنها» على ورقة المرأة
+check(C.notRecorded(), "غير مسجّل", "masculine default")
+check(C.notRecorded(feminine: true), "غير مسجّلة", "feminine → «غير مسجّلة»")
+check(C.value(nil, feminine: true), "غير مسجّلة", "«الأم» / «الزوجة» / «السيرة» / «الوفاة» with no value")
+check(C.value("سهيله", feminine: true), "سهيله", "value kept as is")
+check(C.part(nil, label: "السيرة", feminine: true), "السيرة غير مسجّلة", "summary: «السيرة غير مسجّلة»")
+check(C.part(nil, label: "الزوجة", feminine: true), "الزوجة غير مسجّلة", "summary: «الزوجة غير مسجّلة»")
+check(C.part(nil, label: "الأب"), "الأب غير مسجّل", "summary: «الأب غير مسجّل» stays masculine")
+check(C.notRecorded(arabic: false, feminine: true), "Not recorded", "English has no gender")
+check(C.aboutWord(female: false), "عنه", "«عنه» for a man")
+check(C.aboutWord(female: true), "عنها", "«عنها» for a woman")
+check(C.requestsChip(count: 1, female: true), "طلب عنها", "chip on a woman's card")
+check(C.requestsChip(count: 2, female: true), "طلبان عنها", "two on a woman's card")
+check(C.requestsTitle(count: 0, female: true), "طلبات عنها", "strip title, none")
+check(C.requestsTitle(count: 3, female: false), "طلبات عنه · 3", "strip title with the count")
+check(C.noRequests(female: true), "لا طلبات عنها الآن.", "empty strip on a woman's card")
+check(C.noRequests(female: false), "لا طلبات عنه الآن.", "empty strip on a man's card")
+check(C.lineageTitle(female: true), "صلتها بالعائلة", "«صلتها بالعائلة»")
+check(C.lineageTitle(female: false), "صلته بالعائلة", "«صلته بالعائلة»")
+// الصورة: الكلمتان القديمتان
+check(C.photoValue(hasPhoto: true, unavailable: false), "موجودة", "photo → «موجودة»")
+check(C.photoValue(hasPhoto: false, unavailable: false), "بلا صورة", "no photo → «بلا صورة»")
+check(C.photoValue(hasPhoto: false, unavailable: true), "لا توجد صورة لهذا العضو", "marked unavailable → «لا توجد صورة لهذا العضو»")
+// الحساب: كلمة الرأس نفسها، و«لم يسجّل الدخول بعد» بدل «آخر دخول غير مسجّل»
+check(C.lastSeen(nil, hasAccount: false, female: false), "لم يسجّل الدخول بعد", "never signed in (man)")
+check(C.lastSeen(nil, hasAccount: false, female: true), "لم تسجّل الدخول بعد", "never signed in (woman)")
+check(C.lastSeen("2/11/2026", hasAccount: true, female: false), "2/11/2026", "last sign-in date")
+check(C.lastSeen(nil, hasAccount: true, female: false), "غير معروف", "account, date unknown → «غير معروف»")
+check(C.accountSummary(statusWord: "بدون حساب", lastSeen: nil, hasAccount: false, female: false),
+      "بدون حساب · لم يسجّل الدخول بعد", "summary follows the header word")
+check(C.accountSummary(statusWord: "مسجّل", lastSeen: "2/11/2026", hasAccount: true, female: false),
+      "مسجّل · آخر دخول 2/11/2026", "registered summary")
+check(C.noAccountWord(), "بدون حساب", "one word for «no account» across the card (= header)")
 
 // MARK: ٥) أزرار الرأس
 
@@ -169,9 +225,19 @@ check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPend
 check(C.lineageSave(choice: .daughterSon, current: .family, isProfile: true, hasPendingLineageRequest: false,
                     isPendingJoin: false, isMale: true), .needsServer, "family man → daughter's son needs the server")
 check(C.lineageSave(choice: .outsideHusband, current: nil, isProfile: true, hasPendingLineageRequest: false,
-                    isPendingJoin: false, isMale: true), .needsServer, "mark outside husband → needs the server")
+                    isPendingJoin: false, isMale: true), .automatic, "outside husband → computed from the links (ت٥)")
 check(C.lineageSave(choice: .outsideWife, current: .family, isProfile: false, hasPendingLineageRequest: false,
-                    isPendingJoin: false, isMale: false), .needsServer, "mark outside wife → needs the server")
+                    isPendingJoin: false, isMale: false), .automatic, "outside wife → computed from the links (ت٥)")
+// م٣: داخل مسار الموافقات = «فتح في الوارد» بدل القرار من هنا
+check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPendingLineageRequest: true,
+                    requestInWorkflow: true, isPendingJoin: false, isMale: true), .openInbox,
+      "pending lineage request inside the approvals path → open in the inbox")
+check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPendingLineageRequest: false,
+                    isPendingJoin: true, joinInWorkflow: true, isMale: true), .openInbox,
+      "pending join inside the approvals path → open in the inbox")
+// ت٥: خيارات لا تنطبق على جنسه مخفية
+check(C.lineageOptions(female: false), [Lin.family, .daughterSon, .outsideHusband], "a man: family · daughter's son · outside husband")
+check(C.lineageOptions(female: true), [Lin.family, .outsideWife], "a woman: family · outside wife")
 
 // MARK: ترتيب الأبناء والبنات — قائمة واحدة، والحفظ لكل جدول بترتيبه
 check(C.partitionChildren(["s1", "d1", "s2", "d2"], isSon: { $0.hasPrefix("s") }).sons, ["s1", "s2"],
@@ -194,6 +260,99 @@ check(S.adminCard(isSelf: false, living: false, photo: true, register: true, dev
                   phone: true, requests: false)?.items, [.photo, .delete], "deceased → no phone row")
 check(S.adminCard(isSelf: false, living: true, photo: false, register: false, devices: false, commands: noCommands),
       nil, "old call (no phone, no strip) unchanged → no empty card")
+
+// MARK: ح٢ ورقتك: لا أوامر عائلة ولا إدارة على نفسك (الجنس، الزوجات، الأبناء، الظهور، الصلة، الأب)
+check(C.familyAdmin(canEdit: true, memberId: me, viewerId: me), false, "own card → family commands locked")
+check(C.familyAdmin(canEdit: true, memberId: other, viewerId: me), true, "someone else, may edit → family commands")
+check(C.familyAdmin(canEdit: false, memberId: other, viewerId: me), false, "read-only viewer → none")
+check(C.familyAdmin(canEdit: true, memberId: other, viewerId: nil), true, "viewer not known yet → permission alone")
+// رقاقات الناقص على ورقتك: البيانات فقط (لا الجنس ولا الأب ولا الإظهار ولا الرقم)
+typealias Mi = AdminMemberSheetLogic.Missing
+check(AdminMemberSheetLogic.missingChips(gaps: [.noBirth, .noGender], problems: [.orphan, .hidden, .dupPhone],
+                                         canEdit: true, ownCard: true), [Mi.noBirth],
+      "own card → only the birth chip")
+check(AdminMemberSheetLogic.missingChips(gaps: [.noBirth, .noGender], problems: [.orphan], canEdit: true),
+      [Mi.noBirth, .noGender, .orphan], "someone else → every chip (unchanged)")
+
+// MARK: ح١ نقل الجنس: من له حساب لا يُنقل (السيرفر لا يمنعه — النقل إلى أنثى يحذف ملفه)
+check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: true, storeLoaded: true), true, "in the accounts store → has an account")
+check(C.appAccount(role: "monitor", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: false), true, "admin role → has an account (store not needed)")
+check(C.appAccount(role: "pending", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: true), true, "pending join → signed up, has a login")
+check(C.appAccount(role: "member", isViewer: true, frozen: false, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: true), true, "yourself → has an account")
+check(C.appAccount(role: "member", isViewer: false, frozen: true, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: true), true, "suspended account → has an account")
+check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: true, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: true), true, "accepted the terms / registration platform → login")
+check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: true,
+                   inAccountsStore: false, storeLoaded: true), true, "women's-tree node linked to a login → account")
+check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: false), nil, "accounts store not loaded → unknown")
+check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
+                   inAccountsStore: false, storeLoaded: true), false, "tree-only member → no account")
+typealias GB = AdminMemberCardLogic.GenderMoveBlock
+check(C.genderMoveBlock(toFemale: true, account: true, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: true), GB.account, "young registered man, no kids → blocked")
+check(C.genderMoveBlock(toFemale: true, account: nil, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: true), GB.unverified, "store not loaded → «تعذّر التحقق»")
+check(C.genderMoveBlock(toFemale: false, account: true, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: true), GB.account, "a woman with an account → blocked too")
+check(C.genderMoveBlock(toFemale: true, account: false, hasFather: false, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: false), GB.noFather, "no father → link him first")
+check(C.genderMoveBlock(toFemale: true, account: false, hasFather: true, sons: 2, daughters: 1, wives: 1,
+                        hasHusband: false, fatherInFamily: true), GB.linked(sons: 2, daughters: 1, wives: 1),
+      "linked children or wives → unlink first")
+check(C.genderMoveBlock(toFemale: false, account: false, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: true, fatherInFamily: true), GB.linkedHusband, "a woman with a linked husband")
+check(C.genderMoveBlock(toFemale: false, account: false, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: false), GB.fatherOutside, "her father isn't a family man")
+check(C.genderMoveBlock(toFemale: true, account: false, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: true), nil, "tree-only son, no links → may move")
+check(C.genderMoveLoses(toFemale: true).contains("الحساب"), false, "«يُحذف» no longer lists «الحساب»")
+check(C.genderMoveLoses(toFemale: true), "الصورة · رقم الهاتف · السيرة · الدور", "what a move to female removes")
+
+// MARK: ح٣ «فك الربط» للابن
+check(C.sonUnlinkAllowed(childCount: 0), true, "a son without children → unlink (asks first, honest text)")
+check(C.sonUnlinkAllowed(childCount: 3), false, "a son with children → disabled; change the father from his card")
+
+// MARK: م٥ «ربط زوج من العائلة»: لا محارمها
+let G0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a0")! // جدّها
+let F0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")! // أبوها
+let U0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a2")! // عمّها
+let C0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a3")! // ابن عمّها
+let B0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a4")! // أخوها
+let N0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a5")! // ابن أخيها
+let S0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a6")! // ابنها
+let SS = UUID(uuidString: "00000000-0000-0000-0000-0000000000a7")! // ابن ابنها
+let X0 = UUID(uuidString: "00000000-0000-0000-0000-0000000000a8")! // غريب
+let fatherOf: [UUID: UUID] = [F0: G0, U0: G0, C0: U0, B0: F0, N0: B0, SS: S0]
+let blocked = C.husbandBlocked(fatherId: F0, sonIds: [S0], fatherOf: fatherOf)
+check(blocked, Set([G0, F0, U0, B0, N0, S0, SS]), "father chain, uncles, brothers and nephews, her sons and grandsons")
+check(blocked.contains(C0), false, "her cousin may be her husband")
+check(blocked.contains(X0), false, "an unrelated man may be her husband")
+check(C.husbandBlocked(fatherId: nil, sonIds: [], fatherOf: fatherOf), Set<UUID>(), "no father, no sons → nobody blocked")
+check(C.husbandEligible(isMale: true, isPending: false, hasName: true, isDeceased: false, age: 30, minAge: 18), true,
+      "a living adult man")
+check(C.husbandEligible(isMale: true, isPending: false, hasName: true, isDeceased: false, age: 12, minAge: 18), false,
+      "a minor → hidden")
+check(C.husbandEligible(isMale: true, isPending: false, hasName: true, isDeceased: true, age: 70, minAge: 18), false,
+      "the deceased → hidden")
+check(C.husbandEligible(isMale: true, isPending: false, hasName: true, isDeceased: false, age: nil, minAge: 18), true,
+      "birth date unknown → not judged by age")
+check(C.husbandEligible(isMale: true, isPending: true, hasName: true, isDeceased: false, age: 30, minAge: 18), false,
+      "pending join → hidden")
+
+// MARK: م٦ بعد نقل الجنس: الكرت يتبع المعرّف الجديد
+let oldId = UUID(uuidString: "00000000-0000-0000-0000-0000000000b1")!
+let newId = UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!
+let newer = UUID(uuidString: "00000000-0000-0000-0000-0000000000b3")!
+check(C.resolved(oldId, moved: [oldId: newId]), newId, "moved → the card shows the new record")
+check(C.resolved(oldId, moved: [oldId: newId, newId: newer]), newer, "moved twice → the latest record")
+check(C.resolved(X0, moved: [oldId: newId]), X0, "not moved → unchanged")
+check(C.resolved(oldId, moved: [oldId: newId, newId: oldId]), newId, "a loop never hangs (stops before revisiting)")
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

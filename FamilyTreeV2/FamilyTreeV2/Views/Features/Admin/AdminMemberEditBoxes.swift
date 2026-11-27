@@ -369,6 +369,32 @@ struct EditGenderSheet: View {
     private static let startGender = "male"
     @State private var gender: String = EditGenderSheet.startGender
     @State private var isSaving = false
+    /// نقد V3 ح١: «أنثى» نقلٌ بين الشجرتين (`move_child_gender` يحذف ملفه) — لا يُنقل من له حساب
+    @ObservedObject private var accounts = AdminAccountsStore.shared
+
+    /// له حساب في التطبيق؟ nil = مخزن الحسابات لم يُحمَّل بعد
+    private var account: Bool? {
+        AdminMemberCardLogic.appAccount(role: member.role.rawValue,
+                                        isViewer: member.id == memberVM.authVM?.currentUser?.id,
+                                        frozen: member.status == .frozen, looksRegistered: member.looksRegistered,
+                                        linkedLogin: false, inAccountsStore: accounts.info(member.id) != nil,
+                                        storeLoaded: accounts.loaded)
+    }
+
+    /// ما يمنع «أنثى» — nil = لا مانع (و«ذكر» يكتب العمود فقط)
+    private var femaleBlock: String? {
+        guard gender == "female" else { return nil }
+        switch account {
+        case true?:
+            return L10n.t("له حساب في التطبيق — لا يُنقل إلى شجرة النساء: النقل يحذف ملفه ويبقى حسابه بلا ملف.",
+                          "Has an app account — can't move to the women's tree: the move deletes the profile and orphans the account.")
+        case nil:
+            return L10n.t("تعذّر التحقق من حسابه في التطبيق — حاول بعد قليل.",
+                          "Couldn't check the app account — try again shortly.")
+        case false?:
+            return nil
+        }
+    }
 
     var body: some View {
         DSComposer(
@@ -377,7 +403,7 @@ struct EditGenderSheet: View {
             icon: "person.fill.questionmark",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
-            canSubmit: true,
+            canSubmit: femaleBlock == nil,
             isBusy: isSaving,
             hasUnsavedChanges: gender != Self.startGender,
             onSubmit: save,
@@ -391,7 +417,10 @@ struct EditGenderSheet: View {
                 .dsStaggerIn(1)
 
             // الأنثى مكانها شجرة النساء — كان الحفظ يكتب العمود فقط فتبقى في شجرة الرجال
-            if gender == "female" {
+            if let femaleBlock {
+                DSNoteCard(femaleBlock, icon: "person.crop.circle.badge.exclamationmark", tint: DS.Color.error)
+                    .dsStaggerIn(2)
+            } else if gender == "female" {
                 DSNoteCard(L10n.t("ستُنقل إلى شجرة النساء تحت أبيها، بدون الرقم والصورة.",
                                   "She will move to the women's tree under her father, without phone and photo."),
                            tint: DS.Color.warning)
@@ -401,12 +430,14 @@ struct EditGenderSheet: View {
                 DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
+        .task { if !accounts.loaded { await accounts.refresh() } }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     @State private var failure: String?
 
     private func save() {
+        guard femaleBlock == nil else { return }
         if DebugAdminProbe.dryRun("gender \(gender) \(member.id)") { dismiss(); return }
         isSaving = true
         failure = nil

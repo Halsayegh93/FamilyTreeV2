@@ -110,6 +110,8 @@ enum DSMotion {
     static let fade = Animation.easeOut(duration: 0.2)
     /// مهلة بين إغلاق مربّع وفتح/إغلاق ما بعده (لا يُعرض اثنان في اللحظة نفسها)
     static let boxHandoff: TimeInterval = 0.35
+    /// كبسولة «تراجع» بعد أمر يُتراجع عنه (إخفاء العضو من الشجرة في كرت العضو) — كم ثانية تبقى
+    static let undoWindow: TimeInterval = 6
 
     /// تأخير عنصر في التسلسل
     static func staggerDelay(_ index: Int, base: Double) -> Double {
@@ -448,8 +450,21 @@ struct DSComposer<Content: View>: View {
             else if !extraActions.isEmpty && inlineExtra == nil && !extraInline {
                 VStack(spacing: DSBox.buttonSpacing) {
                     ForEach(extraRows.indices, id: \.self) { row in
-                        HStack(spacing: DSBox.buttonSpacing) {
-                            ForEach(extraRows[row]) { extraButton($0) }
+                        let items = extraRows[row]
+                        if items.count > 1 && items.contains(where: { $0.style == .outlined }) {
+                            // ذو الإطار: جنباً إلى جنب إن اتّسع النصّان كاملين، وإلا صفّ لكلٍّ
+                            ViewThatFits(in: .horizontal) {
+                                HStack(spacing: DSBox.buttonSpacing) {
+                                    ForEach(items) { extraButton($0, singleLine: true) }
+                                }
+                                VStack(spacing: DSBox.buttonSpacing) {
+                                    ForEach(items) { extraButton($0) }
+                                }
+                            }
+                        } else {
+                            HStack(spacing: DSBox.buttonSpacing) {
+                                ForEach(items) { extraButton($0) }
+                            }
                         }
                     }
                 }
@@ -633,8 +648,9 @@ struct DSComposer<Content: View>: View {
         return rows
     }
 
-    /// زرّ إجراء آخر — وجه الزرّ الواحد بدوره (الحذف/الرفض أحمر، الثانوي رمادي، أو لون معنى)
-    private func extraButton(_ item: DSComposerAction) -> AnyView {
+    /// زرّ إجراء آخر — وجه الزرّ الواحد بدوره (الحذف/الرفض أحمر، الثانوي رمادي، أو لون معنى، أو بإطار ذهبي).
+    /// `singleLine`: محاولة «جنباً إلى جنب» — النص بعرضه الكامل فيُقاس طوله الحقيقي (`ViewThatFits`)
+    private func extraButton(_ item: DSComposerAction, singleLine: Bool = false) -> AnyView {
         // «حذف» في صفّ الحبّات: رمز فقط مع الخط الكبير جداً (ثلاث حبّات لا تتّسع بنصوصها)
         let softDelete = extraInline && item.role == .destructive && item.tint == nil
         let iconOnly = softDelete && item.icon != nil && showsAction && showsCancel
@@ -651,14 +667,18 @@ struct DSComposer<Content: View>: View {
                 .accessibilityLabel(item.title)
             )
         }
+        let outlined = item.style == .outlined
         return AnyView(Button(action: item.action) {
             HStack(spacing: DSBox.buttonSpacing) {
                 if let icon = item.icon {
                     Image(dsSymbol: icon).dsGlyph(DSButtonSize.regular.glyph)
                 }
-                if !iconOnly { Text(item.title) }
+                if !iconOnly {
+                    if singleLine { Text(item.title).fixedSize() } else { Text(item.title) }
+                }
             }
-            .modifier(DSButtonFace(role: item.role, tint: item.tint, enabled: item.isEnabled && !isBusy))
+            .modifier(DSButtonFace(role: item.role, tint: item.tint, enabled: item.isEnabled && !isBusy,
+                                   outlined: outlined))
         }
         .disabled(!item.isEnabled || isBusy)
         .accessibilityLabel(item.title))
@@ -1913,5 +1933,10 @@ struct DSComposerAction: Identifiable {
     var isEnabled: Bool = true
     /// true = صفّ مستقل بعرض كامل (لا يُقرن بزرّ آخر)
     var fullRow: Bool = false
+    /// الشكل: ممتلئ (الافتراضي)، أو بإطار ذهبي للإجراء الثانوي فوق «تم» الممتلئ (v3-boxes، نقد V3 م٧). زرّان بإطار في صفّ
+    /// يتجاوران ما اتّسع نصّاهما كاملين، وإلا يصير كلٌّ بعرض الصفّ — لا قصّ ولا اختصار
+    var style: Style = .filled
     let action: () -> Void
+
+    enum Style { case filled, outlined }
 }

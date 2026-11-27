@@ -1871,6 +1871,9 @@ struct DSButtonFace: ViewModifier {
     var tint: Color? = nil
     var fullWidth: Bool = true
     var enabled: Bool = true
+    /// الإجراء الثانوي بإطار ذهبي على أرضية البطاقة ونصّ أساسي (v3-boxes، نقد V3 م٧): «تم» وحده ممتلئ. النص بحشوة جانبية
+    /// دائماً (لا يلمس الحافة) ويلتفّ بدل أن يُقصّ
+    var outlined: Bool = false
     /// وضع العرض: الزرّ «بعرض السطر» في الصفحات لا يتجاوز `DS.Landscape.buttonMaxWidth` ويتوسّط سطره
     /// (داخل المربّعات الوسطية يبقى بعرض المربّع — المربّع نفسه محدود العرض)
     @Environment(\.dsLandscape) private var landscape
@@ -1882,10 +1885,11 @@ struct DSButtonFace: ViewModifier {
         return content
             .font(size.font)
             // «إلغاء» خفيف: نصّ ثانوي على تعبئة فاتحة جداً (طلب المالك ٢٠٢٦-١١-١٠ «خفيف»)
-            .foregroundColor(cancel ? DS.Color.textPrimary : .white)
-            // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
-            .dsButtonLabelFit()
-            .padding(.horizontal, fullWidth ? 0 : (size == .compact ? DS.Spacing.md : DS.Spacing.lg))
+            .foregroundColor(cancel || outlined ? DS.Color.textPrimary : .white)
+            // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧) — وذو الإطار يلتفّ
+            .modifier(DSButtonLabelLines(wraps: outlined))
+            .padding(.horizontal, outlined ? DSBox.buttonOutlinedPadding
+                                           : (fullWidth ? 0 : (size == .compact ? DS.Spacing.md : DS.Spacing.lg)))
             .frame(maxWidth: fullWidth ? (capped ? DS.Landscape.buttonMaxWidth : .infinity) : nil)
             .frame(minHeight: size.height)
             .background { fill }
@@ -1899,7 +1903,10 @@ struct DSButtonFace: ViewModifier {
 
     @ViewBuilder
     private var fill: some View {
-        if let tint {
+        if outlined {
+            DSBox.buttonShape.fill(DS.Color.cardBackground)
+                .overlay(DSBox.buttonShape.strokeBorder(DS.Color.accentLight, lineWidth: DS.Border.widthBold))
+        } else if let tint {
             // لون المعنى بدرجة تعبئته (النص أبيض) — لا بحبره الفاتح في الداكن
             DSBox.buttonShape.fill(tint.dsSolidFill)
         } else if role == .destructive {
@@ -1952,6 +1959,29 @@ extension Color {
         if self == DS.Color.accent { return DS.Color.goldFill }
         return self
     }
+}
+
+/// نص وجه الزرّ: سطر يصغر (`dsButtonLabelFit`)، أو — ذو الإطار — يلتفّ حتى `DSBox.buttonLabelWrapLines` في الوسط
+private struct DSButtonLabelLines: ViewModifier {
+    let wraps: Bool
+    func body(content: Content) -> some View {
+        if wraps {
+            content
+                .lineLimit(DSBox.buttonLabelWrapLines)
+                .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, DS.Spacing.xs)
+        } else {
+            content.dsButtonLabelFit()
+        }
+    }
+}
+
+extension DSBox {
+    /// الزرّ ذو الإطار: حشوة النص الجانبية (لا يلمس الحافة)، وأقصى أسطره قبل التصغير
+    static let buttonOutlinedPadding: CGFloat = DS.Spacing.md
+    static let buttonLabelWrapLines = 3
 }
 
 extension View {
@@ -2701,8 +2731,11 @@ extension DS {
         /// زرّ «حذف العضو نهائياً»: إطار أحمر خافت وزاويته
         static let memberDeleteStroke = DS.Color.error.opacity(DS.Opacity.tintStroke)
         static let memberDeleteRadius: CGFloat = familyControlRadius
-        /// F4: إطار بطاقة «إجراءات الإدارة» — كحلي يفصل أوامر الإدارة عن معلومات العضو (طلب المالك ٢٠٢٦-١١-٢٦)
-        static let memberAdminStroke = DS.Color.primary.opacity(DS.Opacity.selectedStroke)
+        /// V3 (م٨): صندوق رمز زرّ الرأس بارتفاع ثابت ومحاذاة سفلية — أسماء الأزرار على خطّ واحد مهما اختلف طول الرمز
+        /// (`tree` أطول من `pencil`/`phone`). يكبر مع «حجم النص» (`@ScaledMetric` في الرأس)
+        static let memberActionGlyphBox: CGFloat = 26
+        /// قوائم الترتيب في مربّعات كرت العضو (الزوجات، الأبناء والبنات): تقدير ارتفاع الصفّ قبل قياسه — يكبر مع الخط
+        static let memberReorderRow: CGFloat = 60
         // MARK: ── V2-3 ورقة العضو — نهاية ──
     }
 }

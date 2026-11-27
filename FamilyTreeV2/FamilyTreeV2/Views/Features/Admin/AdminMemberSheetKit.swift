@@ -213,6 +213,10 @@ struct AdminMemberHeaderActions: View {
     let actions: [AdminMemberHeaderAction]
     let perform: (AdminMemberHeaderAction) -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// م٨/م٩: صندوق الرمز بارتفاع ثابت (الأسماء على خطّ واحد) والرمز نفسه يكبران مع «حجم النص»
+    @ScaledMetric(relativeTo: .caption) private var glyphBox: CGFloat = DS.Hub.memberActionGlyphBox
+    @ScaledMetric(relativeTo: .caption) private var columnGlyph: CGFloat = DS.Glyph.xxl
+    @ScaledMetric(relativeTo: .subheadline) private var tileGlyph: CGFloat = DS.Glyph.lg
 
     var body: some View {
         let large = typeSize.isAccessibilitySize
@@ -247,12 +251,14 @@ struct AdminMemberHeaderActions: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// V3 (طلب المالك): بلا إطار — رمز ذهبي صغير (٢٢) واسمه تحته، ومساحة لمس ٤٤ غير مرئية
+    /// V3 (طلب المالك): بلا إطار — رمز ذهبي صغير (٢٢) واسمه تحته، ومساحة لمس ٤٤ غير مرئية. الرمز في صندوق بارتفاع
+    /// ثابت ومحاذاة سفلية (م٨: `tree` أطول من `pencil` فكان «في الشجرة» أدنى من الباقي)
     private func column(_ action: AdminMemberHeaderAction) -> some View {
         VStack(spacing: DS.Spacing.xs) {
             Image(dsSymbol: action.symbol)
-                .dsGlyph(DS.Glyph.xxl, weight: .regular)
+                .dsGlyph(columnGlyph, weight: .regular)
                 .foregroundColor(DS.Color.accentLight)
+                .frame(height: glyphBox, alignment: .bottom)
             Text(action.title)
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textOnPrimary)
@@ -263,12 +269,13 @@ struct AdminMemberHeaderActions: View {
         .contentShape(Rectangle())
     }
 
-    /// من أحجام إمكانية الوصول: الرمز واسمه في سطر، بلا إطار، ولمس ٤٤
+    /// من أحجام إمكانية الوصول: الرمز واسمه في سطر، بلا إطار، ولمس ٤٤ — الرمز يكبر مع الخط (م٩: كان ١٦ ثابتاً بجانب اسم ضخم)
     private func tile(_ action: AdminMemberHeaderAction) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(dsSymbol: action.symbol)
-                .dsGlyph(DS.Glyph.lg, weight: .medium)
+                .dsGlyph(tileGlyph, weight: .medium)
                 .foregroundColor(DS.Color.accentLight)
+                .frame(minWidth: tileGlyph)
             Text(action.title)
                 .dsFont(.button)
                 .foregroundColor(DS.Color.textOnPrimary)
@@ -456,11 +463,11 @@ struct AdminMemberLockNote: View {
     private var text: String {
         switch note {
         case .selfOwner:
-            return L10n.t("هذا حسابك، وأنت المالك: لا إيقاف ولا منع رقم ولا حذف من هنا، ولا «طلب تغيير الصورة» لصورتك.",
-                          "This is your account and you're the owner: no suspending, blocking or deleting here, and no photo-change request for your own photo.")
+            return L10n.t("هذا حسابك، وأنت المالك: لا أوامر عائلة على ورقتك (الجنس، الروابط، الظهور، الصلة) ولا إيقاف ولا منع رقم ولا حذف، ولا «طلب تغيير الصورة» لصورتك.",
+                          "This is your account and you're the owner: no family commands on your own card (gender, links, visibility, relation), no suspending, blocking or deleting, and no photo-change request for your own photo.")
         case .selfAccount:
-            return L10n.t("هذا حسابك: لا إيقاف ولا منع رقم ولا حذف من هنا، ولا «طلب تغيير الصورة» لصورتك.",
-                          "This is your account: no suspending, blocking or deleting here, and no photo-change request for your own photo.")
+            return L10n.t("هذا حسابك: لا أوامر عائلة على ورقتك (الجنس، الروابط، الظهور، الصلة) ولا إيقاف ولا منع رقم ولا حذف، ولا «طلب تغيير الصورة» لصورتك.",
+                          "This is your account: no family commands on your own card (gender, links, visibility, relation), no suspending, blocking or deleting, and no photo-change request for your own photo.")
         case .ownerAccount:
             return L10n.t("حساب المالك: لا إيقاف ولا منع رقم ولا حذف من هنا.",
                           "The owner's account: no suspending, blocking or deleting here.")

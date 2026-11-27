@@ -102,11 +102,13 @@ nonisolated enum AdminMemberSheetLogic {
     }
 
     /// رقاقة لكل ناقص تحت الرأس: لمن يعدّل فقط، النواقص ثم مشكلات الشجرة بلا تكرار. «الصورة ناقصة» بلا رقاقة — بيتها صفّ
-    /// «الصورة» (بلا صورة + «نبّهه يضيف صورة» + سهمه). فارغة = لا شيء تحت الرأس
-    static func missingChips(gaps: [Missing], problems: [Missing], canEdit: Bool) -> [Missing] {
+    /// «الصورة» (بلا صورة + «نبّهه يضيف صورة» + سهمه). فارغة = لا شيء تحت الرأس.
+    /// V3 (ح٢): على ورقتك البيانات فقط — لا الجنس (نقل بين الشجرتين) ولا مشكلات الشجرة (الأب، الإظهار، الرقم المكرر)
+    static func missingChips(gaps: [Missing], problems: [Missing], canEdit: Bool, ownCard: Bool = false) -> [Missing] {
         guard canEdit else { return [] }
         var seen = Set<Missing>()
-        return (gaps + problems).filter { $0 != .noPhoto && seen.insert($0).inserted }
+        let list = ownCard ? gaps.filter { $0 != .noGender } : gaps + problems
+        return list.filter { $0 != .noPhoto && seen.insert($0).inserted }
     }
 
     /// قيمة الصفوف بالاسم الأول فقط (الاسم الكامل مرة واحدة في الرأس): الاسم الأول المحفوظ، وإلا أول كلمة من الكامل؛
