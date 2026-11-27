@@ -192,6 +192,8 @@ struct MainTabView: View {
             isLimited: status?.limited == true,
             hasLineageRow: status?.flagged == true,
             isCompleted: status?.completed != false,
+            // حساب مراجعة أبل يبقى في فئته ولو لم يستكمل — نفس `my_member_category()` على السيرفر
+            isReviewAccount: AppConfigValues.shared.reviewAccountIds.contains(me.id),
             isDaughterChildNode: false,
             isOutsideNode: false,
             isFemale: me.isFemale))

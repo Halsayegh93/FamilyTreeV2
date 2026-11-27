@@ -75,16 +75,33 @@ func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
     var cal = Calendar(identifier: .gregorian); cal.timeZone = D.kuwait
     return cal.date(from: c)!
 }
+func cand(_ id: Int, full: String = "", first: String = "", pending: Bool = true, memberRole: Bool = true,
+          father: Bool = false, review: Bool = false, login: Bool = true, created: Date?) -> D.Candidate {
+    D.Candidate(id: uid(id), fullName: full, firstName: first, pending: pending, memberRole: memberRole,
+                hasFather: father, isReview: review, hasLogin: login, created: created)
+}
 let cands = [
-    D.Candidate(id: uid(20), name: "", pending: true, hasLogin: true, created: day(2026, 11, 18)),
-    D.Candidate(id: uid(21), name: "  ", pending: true, hasLogin: true, created: day(2026, 11, 25)),
-    D.Candidate(id: uid(22), name: "سالم", pending: true, hasLogin: true, created: day(2026, 11, 25)),   // له اسم
-    D.Candidate(id: uid(23), name: "", pending: false, hasLogin: true, created: day(2026, 11, 25)),      // مفعّل
-    D.Candidate(id: uid(24), name: "", pending: true, hasLogin: false, created: day(2026, 11, 25)),      // بلا دخول
-    D.Candidate(id: uid(25), name: "بدون اسم", pending: true, hasLogin: true, created: nil),
+    cand(20, created: day(2026, 11, 18)),
+    cand(21, full: "  ", first: " ", created: day(2026, 11, 25)),
+    cand(22, full: "سالم", created: day(2026, 11, 25)),                    // له اسم كامل
+    cand(26, first: "سالم", created: day(2026, 11, 25)),                   // له اسم أول — السيرفر لا يحذفه
+    cand(23, pending: false, created: day(2026, 11, 25)),                  // مفعّل
+    cand(24, login: false, created: day(2026, 11, 25)),                    // بلا دخول
+    cand(27, memberRole: false, created: day(2026, 11, 25)),               // مشرف/مدير
+    cand(28, father: true, created: day(2026, 11, 25)),                    // مربوط بأب
+    cand(29, review: true, created: day(2026, 11, 25)),                    // حساب المراجعة
+    cand(30, full: "بدون اسم", created: day(2026, 11, 25)),                // نص «بدون اسم» ليس فارغاً على السيرفر
+    cand(25, created: nil),
 ]
 let nameless = D.nameless(cands)
-check(nameless, [uid(21), uid(20), uid(25)], "blank/«بدون اسم» + pending + login, newest first, undated last")
+check(nameless, [uid(21), uid(20), uid(25)], "same rule as server cleanup, newest first, undated last")
+check(D.addedLine(day(2025, 5, 3)), "أُضيف في 3 مايو 2025", "added line with year")
+check(D.addedLine(nil), nil, "no date → no added line")
+check(D.childrenLine(0, female: false), "بلا أبناء", "no children")
+check(D.childrenLine(1, female: false), "له ابن واحد", "one child")
+check(D.childrenLine(2, female: true), "لها ابنان", "two children (woman)")
+check(D.childrenLine(3, female: false), "له 3 أبناء", "three children")
+check(D.childrenLine(12, female: false), "له 12 ابناً", "twelve children")
 check(D.registeredLine(day(2026, 11, 25)), "سُجّل في 25 نوفمبر", "registered line")
 check(D.registeredLine(day(2026, 1, 3)), "سُجّل في 3 يناير", "registered line January")
 check(D.registeredLine(nil), nil, "no date → no line")

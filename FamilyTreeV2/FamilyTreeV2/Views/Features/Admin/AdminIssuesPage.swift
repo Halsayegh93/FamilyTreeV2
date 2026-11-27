@@ -5,13 +5,14 @@ import SwiftUI
 //
 // صفّ ظاهر في جذر «العائلة» تحت «يحتاج مراجعتك» (`AdminIssuesRow`، يختفي حين لا شيء) يفتح هذه الصفحة بثلاث قوائم:
 //  ١) «أسماء مكررة» — نفس الأب ونفس الاسم الأول بعد التطبيع (`AdminDuplicateNames`)، شجرة الرجال للجميع وشجرة النساء للمالك
-//     والمدير (من يرى النساء في «العائلة»). المجموعة صفّ: الاسم · «أبناء فلان» · كل شخص بسطر (سنة الميلاد · «له حساب» ·
+//     والمدير (من يرى النساء في «العائلة»). المجموعة صفّ: الاسم · «أبناء فلان»/«بنات فلان» (شجرة النساء) · كل شخص باسمه الكامل (سطران) وسطر فرق (عدد الأبناء ·
+//     الزوج للمرأة · «أُضيف في …») ثم (سنة الميلاد · «له حساب» ·
 //     «متوفى») يفتح ورقة العضو (`AdminMemberSheet`) أو مربّع المرأة (`WomanDetailSheet`). «ليسا مكرّرين» محلي لكل مستخدم
 //     (`AdminDuplicateDismissStore`). لا دمج ولا حذف هنا.
 //  ٢) «مشكلات الشجرة» — الأنواع الخمسة بأعدادها، كلٌّ يفتح قائمتها الموجودة بأزرار إصلاحها
 //     (`AdminReviewListPage(.problems, start: .problem(…))`).
 //  ٣) «أرقام بدون أسماء» (المالك والمدير) — دخلوا برمز الدخول ولم يكملوا التسجيل: الرقم كاملاً · «سُجّل في …» · «الإشعارات
-//     مفعّلة» · اتصال وواتساب. لا حذف (تُحذف تلقائياً بعد ٣٠ يوماً).
+//     مفعّلة» (جهاز مسجّل في `device_tokens`) · اتصال وواتساب. لا حذف (تُحذف تلقائياً بعد ٣٠ يوماً).
 
 /// «ليسا مكرّرين» — مراجعة محلية لكل مستخدم على جهازه (UserDefaults، مثل `AdminLivingVerifiedStore`)، بلا عمود سيرفر
 @MainActor
@@ -75,9 +76,12 @@ struct AdminIssuesData {
             out.women = AdminDuplicateNames.groups(women.map { .init(id: $0.id, parent: $0.fatherId, firstName: $0.firstName) },
                                                    excluding: profileIds, dismissed: dismissed)
         }
+        let review = AppConfigValues.shared.reviewAccountIds
         out.nameless = AdminDuplicateNames.nameless(members.map { m in
-            .init(id: m.id, name: m.fullName, pending: m.status == .pending,
-                  hasLogin: hasLogin(m.id, accounts: accounts), created: created(m, accounts: accounts))
+            .init(id: m.id, fullName: m.fullName, firstName: m.firstName, pending: m.status == .pending,
+                  memberRole: m.role == .member || m.role == .pending, hasFather: m.fatherId != nil,
+                  isReview: review.contains(m.id), hasLogin: hasLogin(m.id, accounts: accounts),
+                  created: created(m, accounts: accounts))
         })
         return out
     }
@@ -96,7 +100,7 @@ struct AdminIssuesData {
 // MARK: - صفّ «العائلة»
 
 /// «المكرر والأخطاء» تحت بطاقة «يحتاج مراجعتك» بشكلها نفسه (`AdminMembersReviewRow`): مربّع الرمز · العنوان · السطر ·
-/// حبّة العدد · السهم
+/// حبّة العدد · السهم — بلون التنبيه الهادئ نفسه (لا أحمر: ليست أعطالاً عاجلة)
 struct AdminIssuesRow: View {
     let count: Int
     let line: String
@@ -113,10 +117,10 @@ struct AdminIssuesRow: View {
             HStack(spacing: DS.Spacing.md) {
                 Image(systemName: "person.2.badge.gearshape")
                     .dsGlyph(DS.Glyph.lg, weight: .medium)
-                    .foregroundColor(DS.Color.error)
+                    .foregroundColor(DS.Color.warning)
                     .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
                     .background(RoundedRectangle(cornerRadius: DS.Hub.tileIconRadius, style: .continuous)
-                        .fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
+                        .fill(DS.Color.warning.opacity(DS.Opacity.tintFill)))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(Self.title)
@@ -153,11 +157,11 @@ struct AdminIssuesRow: View {
         Text(verbatim: AdminNumberText.grouped(count))
             .dsFont(.badge)
             .monospacedDigit()
-            .foregroundColor(DS.Color.error)
+            .foregroundColor(DS.Color.warning)
             .lineLimit(1)
             .padding(.horizontal, DS.Spacing.smd)
             .frame(minHeight: DS.Hub.familyReviewPill)
-            .background(Capsule().fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
+            .background(Capsule().fill(DS.Color.warning.opacity(DS.Opacity.tintFill)))
             .fixedSize()
     }
 
@@ -180,6 +184,8 @@ struct AdminIssuesPage: View {
     @ObservedObject private var accounts = AdminAccountsStore.shared
     @ObservedObject private var sons = DaughterSonsIndex.shared
     @ObservedObject private var dismissed = AdminDuplicateDismissStore.shared
+    /// «الإشعارات مفعّلة» = جهاز مسجّل برمز صالح في `device_tokens` (لا فئة الاستخدام)
+    @ObservedObject private var devices = AdminDeviceReachStore.shared
     @Environment(\.openURL) private var openURL
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -188,6 +194,9 @@ struct AdminIssuesPage: View {
     @State private var women: [FamilyMember] = WomenStore.cache
     @State private var sheet: AdminMemberSheetContext?
     @State private var selectedWoman: FamilyMember?
+    /// عدد الأبناء لكل معرّف (شجرة الرجال بالأب، شجرة النساء بالأصل أو الأم) — يفرّق بين المكرّرين
+    @State private var menChildren: [UUID: Int] = [:]
+    @State private var womenChildren: [UUID: Int] = [:]
 
     init() {}
 
@@ -233,7 +242,10 @@ struct AdminIssuesPage: View {
         rebuild()
         await sons.refresh()
         await accounts.refresh(force: force)
-        if seesAll { await loadWomen(force: force) }
+        if seesAll {
+            await loadWomen(force: force)
+            await devices.refresh(force: force)
+        }
         rebuild()
     }
 
@@ -254,6 +266,16 @@ struct AdminIssuesPage: View {
                                         branchName: { names.branchName(for: $0) })
         data = AdminIssuesData.make(members: memberVM.allMembers, women: women, accounts: accounts,
                                     dismissed: dismissed.signatures, seesAll: seesAll)
+        var men: [UUID: Int] = [:]
+        for m in memberVM.allMembers where m.status != .deleted {
+            if let f = m.fatherId { men[f, default: 0] += 1 }
+        }
+        menChildren = men
+        var wc: [UUID: Int] = [:]
+        for w in women {
+            for parent in Set([w.fatherId, w.motherId].compactMap { $0 }) { wc[parent, default: 0] += 1 }
+        }
+        womenChildren = wc
     }
 
     // MARK: المحتوى
@@ -311,7 +333,7 @@ struct AdminIssuesPage: View {
                     Text(verbatim: group.name)
                         .dsFont(.hubSection)
                         .foregroundColor(DS.Color.textPrimary)
-                    Text(verbatim: fatherLine(group.parent, inWomen: inWomen))
+                    Text(verbatim: fatherLine(group, inWomen: inWomen))
                         .dsFont(.subtitle)
                         .foregroundColor(DS.Color.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -344,6 +366,7 @@ struct AdminIssuesPage: View {
     private func personRow(_ id: UUID, number: Int, in group: AdminDuplicateNames.Group, inWomen: Bool) -> some View {
         let person = inWomen ? women.first { $0.id == id } : memberVM.member(byId: id)
         let tags = person.map { chips($0, inWomen: inWomen) } ?? []
+        let facts = person.map { differences($0, inWomen: inWomen) } ?? []
         return Button {
             open(id, in: group, inWomen: inWomen)
         } label: {
@@ -359,12 +382,16 @@ struct AdminIssuesPage: View {
                     Text(verbatim: person?.fullName.isEmpty == false ? person!.fullName : group.name)
                         .dsFont(.hubRow)
                         .foregroundColor(DS.Color.textPrimary)
-                        .dsNameLines()
-                    if tags.isEmpty {
-                        Text(L10n.t("بلا تاريخ ميلاد ولا حساب", "No birth date and no account"))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !facts.isEmpty {
+                        Text(verbatim: facts.joined(separator: " · "))
                             .dsFont(.subtitle)
-                            .foregroundColor(DS.Color.textTertiary)
-                    } else {
+                            .monospacedDigit()
+                            .foregroundColor(DS.Color.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !tags.isEmpty {
                         DSChipFlow(spacing: DS.Spacing.xs, lineSpacing: DS.Spacing.xs) {
                             ForEach(tags, id: \.text) { AdminMemberTagPill(tag: $0) }
                         }
@@ -395,12 +422,31 @@ struct AdminIssuesPage: View {
         return out
     }
 
-    /// «أبناء فلان» — الأب من الشجرة نفسها (شجرة النساء: عقدتها أو ملفه)
-    private func fatherLine(_ parent: UUID, inWomen: Bool) -> String {
+    /// ما يفرّق بين شخصين بلا ميلاد ولا حساب: عدد الأبناء · الزوج (للمرأة) · «أُضيف في …» بتوقيت الكويت
+    private func differences(_ m: FamilyMember, inWomen: Bool) -> [String] {
+        var out: [String] = []
+        let kids = (inWomen ? womenChildren[m.id] : menChildren[m.id]) ?? 0
+        let female = inWomen || m.isFemale
+        out.append(AdminDuplicateNames.childrenLine(kids, female: female))
+        if female, let hid = m.husbandId {
+            let husband = women.first { $0.id == hid } ?? memberVM.member(byId: hid)
+            if let husband {
+                let name = husband.shortFullName.isEmpty ? husband.fullName : husband.shortFullName
+                if !name.isEmpty { out.append(L10n.t("الزوج: \(name)", "Husband: \(name)")) }
+            }
+        }
+        if let added = AdminDuplicateNames.addedLine(m.createdAt.flatMap(DateParsing.iso)) { out.append(added) }
+        return out
+    }
+
+    /// «أبناء فلان» (شجرة الرجال) أو «بنات فلان» (شجرة النساء) — الأب من الشجرة نفسها (شجرة النساء: عقدتها أو ملفه)
+    private func fatherLine(_ group: AdminDuplicateNames.Group, inWomen: Bool) -> String {
+        let parent = group.parent
         let father = (inWomen ? women.first { $0.id == parent } : nil) ?? memberVM.member(byId: parent)
         guard let father else { return L10n.t("الأب غير معروف", "Unknown father") }
         let name = father.shortFullName.isEmpty ? father.fullName : father.shortFullName
-        return L10n.t("أبناء \(name)", "Children of \(name)")
+        // صفوف شجرة النساء كلها إناث (عقد الرجال المنسوخة مستبعدة من التجميع)
+        return inWomen ? L10n.t("بنات \(name)", "Daughters of \(name)") : L10n.t("أبناء \(name)", "Children of \(name)")
     }
 
     private func open(_ id: UUID, in group: AdminDuplicateNames.Group, inWomen: Bool) {
@@ -456,15 +502,14 @@ struct AdminIssuesPage: View {
                     }
                 }
             }
-            footnote(L10n.t("دخلوا برمز الدخول ولم يكملوا نموذج التسجيل. تُحذف تلقائياً بعد 30 يوماً إن لم يُستكمل التسجيل.",
-                            "They entered the login code but never filled the sign-up form. Removed automatically after 30 days if not completed."))
+            footnote(L10n.t("دخلوا برمز الدخول ولم يكملوا نموذج التسجيل. تُحذف تلقائياً بعد 30 يوماً إن لم يُستكمل التسجيل ولم يُرسل أي طلب.",
+                            "They entered the login code but never filled the sign-up form. Removed automatically after 30 days if sign-up isn't completed and no request was sent."))
         }
     }
 
     private func namelessRow(_ m: FamilyMember) -> some View {
         let line = AdminDuplicateNames.registeredLine(AdminIssuesData.created(m, accounts: accounts))
-        let usage = accounts.info(m.id)?.usage
-        let push = usage == .active || usage == .idle
+        let push = devices.rows?.contains { $0.memberId == m.id && $0.isValid } == true
         return HStack(spacing: DS.Spacing.md) {
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 Text(verbatim: KuwaitPhone.display(m.phoneNumber))

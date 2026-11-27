@@ -6,7 +6,7 @@ import Foundation
 //    التشكيل، أ/إ/آ/ٱ ← ا، ى ← ي، «ة» آخر الكلمة ← «ه») وبلا مسافات («عبد الله» = «عبدالله»). شجرة الرجال: `profiles`
 //    بـ`father_id`؛ شجرة النساء: `women_members` بـ`parent_id` بلا عقد الرجال المنسوخة (معرّفها في `profiles`).
 //    «ليسا مكرّرين» يخفي المجموعة محلياً بتوقيعها (الأب + المعرّفات) — إن أُضيف ثالث بالاسم نفسه تعود.
-// ٢) «أرقام بدون أسماء»: حسابات دخلت برمز الدخول ولم تكمل نموذج التسجيل (بلا اسم، «معلّق»، لها حساب دخول).
+// ٢) «أرقام بدون أسماء»: حسابات دخلت برمز الدخول ولم تكمل نموذج التسجيل — شرط الحذف التلقائي على السيرفر (`isNameless`).
 // فحصه بلا محاكي: tests/admin-redesign/N1.
 
 nonisolated enum AdminDuplicateNames {
@@ -72,23 +72,35 @@ nonisolated enum AdminDuplicateNames {
 
     // MARK: أرقام بدون أسماء
 
+    /// نفس شرط الحذف التلقائي على السيرفر (`private.cleanup_nameless_signups`) بما يعرفه التطبيق:
+    /// الاسم الكامل والأول فارغان، «معلّق»، الدور عضو/معلّق، بلا أب، ليس حساب المراجعة، وله حساب دخول.
+    /// (طلبات الإدارة وصفّ النسب وعقدة شجرة النساء يفحصها السيرفر وحده.)
     struct Candidate: Equatable {
         let id: UUID
-        let name: String
+        let fullName: String
+        let firstName: String
         /// الحالة «معلّق»
         let pending: Bool
+        /// الدور `member` أو `pending`
+        let memberRole: Bool
+        let hasFather: Bool
+        /// حساب مراجعة أبل (`review_account_ids`)
+        let isReview: Bool
         /// له حساب دخول (دخل برمز الدخول)
         let hasLogin: Bool
         let created: Date?
     }
 
+    static func isNameless(_ r: Candidate) -> Bool {
+        r.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && r.firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && r.pending && r.memberRole && !r.hasFather && !r.isReview && r.hasLogin
+    }
+
     /// من دخل ولم يكمل التسجيل — الأحدث أولاً، وبلا تاريخ في الآخر
     static func nameless(_ rows: [Candidate]) -> [UUID] {
         rows.enumerated()
-            .filter { _, r in
-                let name = r.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                return (name.isEmpty || name == "بدون اسم") && r.pending && r.hasLogin
-            }
+            .filter { _, r in isNameless(r) }
             .sorted { a, b in
                 switch (a.element.created, b.element.created) {
                 case let (x?, y?) where x != y: return x > y
@@ -113,6 +125,28 @@ nonisolated enum AdminDuplicateNames {
         let c = cal.dateComponents([.day, .month], from: date)
         guard let d = c.day, let m = c.month, (1...12).contains(m) else { return nil }
         return "سُجّل في \(d) \(months[m - 1])"
+    }
+
+    /// «أُضيف في 25 نوفمبر 2025» بتوقيت الكويت — يفرّق بين شخصين في «أسماء مكررة»
+    static func addedLine(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = kuwait
+        let c = cal.dateComponents([.day, .month, .year], from: date)
+        guard let d = c.day, let m = c.month, let y = c.year, (1...12).contains(m) else { return nil }
+        return "أُضيف في \(d) \(months[m - 1]) \(y)"
+    }
+
+    /// «له 3 أبناء» · «له ابن واحد» · «له ابنان» · «بلا أبناء» (للمرأة «لها»)
+    static func childrenLine(_ n: Int, female: Bool) -> String {
+        let has = female ? "لها" : "له"
+        switch n {
+        case ..<1: return "بلا أبناء"
+        case 1: return "\(has) ابن واحد"
+        case 2: return "\(has) ابنان"
+        case 3...10: return "\(has) \(n) أبناء"
+        default: return "\(has) \(n) ابناً"
+        }
     }
 
     // MARK: المدخل
