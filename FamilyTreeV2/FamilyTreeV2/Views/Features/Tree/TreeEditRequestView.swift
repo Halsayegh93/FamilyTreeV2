@@ -342,6 +342,12 @@ struct TreeEditRequestView: View {
             )
 
         case .editPhone:
+            // الرقم لصاحب الحساب فقط (المالك «رقمه فقط»، والسيرفر يرفضه عن غيره)
+            guard member.id == adminRequestVM.currentUser?.id else {
+                errorMessage = L10n.t(ErrorHelper.phoneNotSelfMessage, "Only the account owner can change the number.")
+                showErrorAlert = true
+                return
+            }
             guard let normalized = KuwaitPhone.normalizedForStorage(country: phoneCountry, rawLocalDigits: localPhoneDigits) else {
                 errorMessage = L10n.t("رقم الهاتف غير صالح", "Invalid phone number")
                 showErrorAlert = true
@@ -440,6 +446,7 @@ struct TreeEditRequestView: View {
                 showSuccessAlert = true
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
+                errorMessage = adminRequestVM.lastTreeEditError.map { L10n.t($0, "Only the account owner can change the number.") }
                 showErrorAlert = true
             }
         }

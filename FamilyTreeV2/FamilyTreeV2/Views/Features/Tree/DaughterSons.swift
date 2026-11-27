@@ -532,12 +532,23 @@ struct LineageLockedView: View {
     var style: DSEmptyStyle = .page
     /// nil = يفتح الصفحة مباشرة · مربّع تفاصيل العضو يُغلق نفسه أولاً
     var onOpen: (() -> Void)? = nil
+    /// القسم مخفي بلا رسالة ووصل إليه برابط/إشعار: nil = الرجوع للرئيسية (`leaveHiddenSection`) · المربّع يُغلق نفسه
+    var onHidden: (() -> Void)? = nil
     @ObservedObject private var store = LineageGateStore.shared
 
     var body: some View {
         let pending = store.isPending
-        // «صلاحيات محدودة»: لا رسالة ولا زرّ — المدخل نفسه مخفي (`hides`)، وهذا احتياط لمسار وصل إليه
-        if store.locksSilently { return AnyView(Color.clear) }
+        // «صلاحيات محدودة» / قسم أطفأته الفئة: لا رسالة ولا زرّ — المدخل نفسه مخفي (`hides`)، ومن وصل برابط أو إشعار
+        // يرجع للرئيسية بهدوء (لا صفحة فارغة، ولا ذكر للصلاحيات — قاعدة المالك)
+        if store.locksSilently {
+            return AnyView(DS.Color.background
+                .onAppear {
+                    if let onHidden { onHidden() } else {
+                        NotificationCenter.default.post(name: .leaveHiddenSection, object: nil)
+                    }
+                }
+                .accessibilityHidden(true))
+        }
         return AnyView(DSEmptyView(
             pending ? DaughterSons.text("locked_pending_title", SignupOriginRules.Ar.pendingTitle, "Your account is under review")
                     : DaughterSons.text("locked_title", SignupOriginRules.Ar.lockedTitle, "Complete your registration to see this section"),

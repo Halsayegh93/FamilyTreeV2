@@ -176,6 +176,10 @@ struct HomeNewsView: View {
                 activeSubPage = nil
             }
         }
+        // قسم مخفي عن هذا الحساب وصل إليه برابط أو إشعار: يرجع للرئيسية بهدوء (بلا صفحة فارغة ولا رسالة)
+        .onReceive(NotificationCenter.default.publisher(for: .leaveHiddenSection)) { _ in
+            if activeSubPage != nil { activeSubPage = nil }
+        }
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             if activeSubPage != nil { activeSubPage = nil }

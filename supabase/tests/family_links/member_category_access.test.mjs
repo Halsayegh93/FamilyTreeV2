@@ -13,10 +13,15 @@ process.on('unhandledRejection', e => { console.log('خطأ:', e.message, (e.que
 const REPO = fileURLToPath(new URL('../../', import.meta.url));
 const MIG = readFileSync(`${REPO}/migrations/20261127190000_member_category_access.sql`, 'utf8');
 const RB = readFileSync(`${REPO}/rollback/20261127190000_member_category_access_rollback.sql`, 'utf8');
+// الفئة السابعة «لم يستكمل التسجيل» (20261127210000) — تُجرَّب فوق 20261127190000 ثم تُتراجع قبل تراجعه
+const MIG2 = readFileSync(`${REPO}/migrations/20261127210000_member_category_incomplete.sql`, 'utf8');
+const RB2 = readFileSync(`${REPO}/rollback/20261127210000_member_category_incomplete_rollback.sql`, 'utf8');
 const id = n => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
 // نفس الأسماء التي تُدرجها كتلة الحي المنسوخة: المالك، المدير، المراقب، المشرف، عضو
 const O = id(1), A = id(2), MON = id(3), S = id(4), M = id(5);
 const W = id(6), DS = id(7), DD = id(8), LIM = id(9), OSW = id(10), OSH = id(11), PEND = id(12), DDN = id(13), FROZ = id(14);
+// لم يستكمل: ابن بنت · بنت بنت أرسلت اسم الوالدة وتنتظر · حساب المراجعة في الحالة نفسها
+const INC = id(15), INCF = id(16), REV = id(17);
 let pass = 0, fail = 0;
 const ok = (c, m, x = '') => { if (c) { pass++; console.log('✓', m); } else { fail++; console.log('✗', m, x); } };
 const unmark = s => s.replaceAll('<BS>', '\\').replaceAll('<FFFF>', '￿').replaceAll('<BT>', '`');
@@ -87,13 +92,22 @@ insert into public.profiles (id, role, status, full_name, first_name, gender, fa
   ('${OSH}', 'member', 'active', 'زوج بنت', 'خالد', 'male', null, null, false),
   ('${PEND}', 'pending', 'pending', 'معلّق', 'معلّق', 'male', null, null, false),
   ('${DDN}', 'member', 'active', 'بنت بنت بعقدتها', 'سارة', 'female', null, null, true),
-  ('${FROZ}', 'member', 'frozen', 'موقوف', 'موقوف', 'male', null, null, false);
+  ('${FROZ}', 'member', 'frozen', 'موقوف', 'موقوف', 'male', null, null, false),
+  ('${INC}', 'member', 'active', 'ابن بنت لم يستكمل', 'ناصر', 'male', null, null, false),
+  ('${INCF}', 'member', 'active', 'بنت بنت تنتظر الإدارة', 'ريم', 'female', null, null, true),
+  ('${REV}', 'member', 'active', 'حساب المراجعة', 'مراجعة', 'male', null, null, false);
 update public.profiles set father_id = '${O}' where id = '${M}';
 
 create table public.daughter_son_lineage (profile_id uuid primary key references public.profiles(id) on delete cascade,
   approved_by uuid, approved_at timestamptz default now(), women_node_id uuid, completed_at timestamptz, limited_at timestamptz);
 insert into public.daughter_son_lineage (profile_id, completed_at, limited_at) values
-  ('${DS}', now(), null), ('${DD}', now(), null), ('${LIM}', null, now()), ('${S}', null, now());
+  ('${DS}', now(), null), ('${DD}', now(), null), ('${LIM}', null, now()), ('${S}', null, now()),
+  ('${INC}', null, null), ('${INCF}', null, null), ('${REV}', null, null);
+-- «حساب المراجعة» (الحي: app_config.review_account_ids) — بديل صغير في القاعدة المعزولة
+create table public.test_review_ids(id uuid);
+insert into public.test_review_ids values ('${REV}');
+create function public.review_account_ids() returns uuid[] language sql stable as
+  $f$ select coalesce(array_agg(id), '{}'::uuid[]) from public.test_review_ids $f$;
 create table public.women_members (id uuid primary key default gen_random_uuid(), full_name text, gender text default 'female',
   parent_id uuid references public.women_members(id), mother_id uuid references public.women_members(id),
   husband_id uuid, linked_user_id uuid, is_outside_family boolean not null default false);
@@ -277,6 +291,47 @@ await set(O, JSON.stringify({ family_man: { contact: false } }));
 await db.exec(MIG);
 ok(JSON.stringify((await db.query(`select value from public.app_config where key = 'member_category_access'`)).rows[0].value)
    === '{"family_man":{"contact":false}}', 'إعادة التطبيق لا تمسّ اختيار المالك');
+
+// ══════════ 20261127210000: «لم يستكمل التسجيل» ══════════
+const MID = await md5s();
+const catOf = who => one(who, `select public.my_member_category()`);
+const tables = ['diwaniyas', 'projects', 'family_archive', 'women_members'];
+const seen = async who => Promise.all(tables.map(t => count(who, t)));
+const INC0 = JSON.stringify(await seen(INC)), INCF0 = JSON.stringify(await seen(INCF)), REV0 = JSON.stringify(await seen(REV));
+ok(await catOf(INC) === 'daughter_son' && await catOf(INCF) === 'daughter_daughter', 'قبل: لم يستكمل = ابن/بنت بنت');
+await db.exec(MIG2);
+ok(await catOf(INC) === 'incomplete', '«لم يستكمل التسجيل»: ابن بنت بلا completed_at ولا limited_at');
+ok(await catOf(INCF) === 'incomplete', '«لم يستكمل التسجيل»: بنت بنت أرسلت اسم الوالدة وتنتظر');
+ok(await catOf(REV) === 'daughter_son', 'حساب المراجعة يبقى في فئته اليوم');
+ok(await catOf(LIM) === 'limited' && await catOf(DS) === 'daughter_son' && await catOf(DD) === 'daughter_daughter'
+   && await catOf(S) === 'staff' && await catOf(M) === 'family_man' && await catOf(DDN) === 'daughter_daughter',
+   'المحدود أولاً، ومن استكمل والباقون كما كانوا');
+ok(JSON.stringify(await seen(INC)) === INC0 && JSON.stringify(await seen(INCF)) === INCF0 && JSON.stringify(await seen(REV)) === REV0,
+   'الافتراضي = اليوم: ما يراه «لم يستكمل» لم يتغيّر (قفل «استكمال التسجيل» كما هو)', `${INC0} ${JSON.stringify(await seen(INC))}`);
+ok(await sees(INC, 'news.comment') === true && await sees(INC, 'member_details.contact') === true, 'بلا صفّ في الجدول: كل الخانات ظاهرة');
+const cfgB = (await db.query(`select value from public.app_config where key = 'member_category_access'`)).rows[0].value;
+r = await set(O, JSON.stringify({ ...cfgB, incomplete: { 'news.comment': false } }));
+ok(r.ok, 'الفحص يقبل الفئة الجديدة، والمالك يعدّلها', JSON.stringify(r));
+ok(await tryInsert(INC, `insert into public.news_comments (content) values ('x')`) === '42501'
+   && await tryInsert(DS, `insert into public.news_comments (content) values ('x')`) === true
+   && await tryInsert(REV, `insert into public.news_comments (content) values ('x')`) === true,
+   'المطفأ لـ«لم يستكمل» يُمنع عليه وحده (لا ابن البنت المستكمل ولا حساب المراجعة)');
+await db.exec(`update public.daughter_son_lineage set completed_at = now() where profile_id = '${INC}'`);
+ok(await catOf(INC) === 'daughter_son', 'بعد اعتماد الإدارة يعود ابن بنت تلقائياً');
+await db.exec(`update public.daughter_son_lineage set completed_at = null where profile_id = '${INC}'`);
+r = await set(O, JSON.stringify({ incompletes: {} }));
+ok(!r.ok && r.code === '22023', 'ما زالت الفئة غير المعروفة تُرفض');
+await db.exec(MIG2);
+ok(await catOf(INC) === 'incomplete', 'إعادة تطبيق 20261127210000 آمنة');
+await db.exec(RB2);
+const MID2 = await md5s();
+ok(Object.keys(MID).every(k => MID2[k] === MID[k]) && Object.keys(MID2).every(k => MID[k]), 'تراجع 20261127210000: الدوال كما في 20261127190000 حرفياً',
+   Object.keys(MID2).filter(k => MID2[k] !== MID[k]).join());
+const cfgR = (await db.query(`select value from public.app_config where key = 'member_category_access'`)).rows[0].value;
+ok(cfgR.incomplete === undefined && JSON.stringify(cfgR.family_man) === '{"contact":false}', 'تراجعه يحذف صفّ «incomplete» وحده', JSON.stringify(cfgR));
+ok(await catOf(INC) === 'daughter_son' && (await set(O, JSON.stringify(cfgR))).ok, 'وبعده الفئة والفحص كما كانا');
+await db.exec(MIG2);
+await db.exec(RB2);
 
 // ══════════ التراجع ══════════
 await db.exec(RB);

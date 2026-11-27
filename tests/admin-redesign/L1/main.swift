@@ -145,5 +145,22 @@ L10n.isArabic = false
 check(L.yearsText(5), "5 yrs", "English plural")
 L10n.isArabic = true
 
+// بند ١٥ (المالك ٢٠٢٦-١١-٢٧ «خله عن طريق زوجته أو ابنه المضاف مع طلب أو هو بنفسه»): صورة زوج البنت من خارج العائلة
+let hp = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, hv = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+func photoTarget(male: Bool = true, outside: Bool = true, linked: UUID? = hp, viewer: UUID? = hv,
+                 wife: Bool = false, son: Bool = false) -> UUID? {
+    L.outsideHusbandPhotoTarget(nodeIsMale: male, nodeIsOutside: outside, linkedProfile: linked, viewer: viewer,
+                                viewerIsWife: wife, viewerIsSon: son)
+}
+check(photoTarget(wife: true), hp, "his wife → photo request on his account")
+check(photoTarget(son: true), hp, "his son → photo request on his account")
+check(photoTarget(), nil, "anyone else → no photo tile")
+check(photoTarget(male: false, wife: true), nil, "women never get photos")
+check(photoTarget(outside: false, son: true), nil, "family man → his photo is in the family tree, not here")
+check(photoTarget(linked: nil, wife: true), nil, "no account → nowhere to apply the photo (no tile)")
+check(photoTarget(viewer: hp, wife: true), nil, "the husband himself → from his own profile")
+check(L.womenHonesty("req.addPhoto", isFemale: false, hasHusband: false, hasFatherWives: false), .afterApproval,
+      "photo applies on approval")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

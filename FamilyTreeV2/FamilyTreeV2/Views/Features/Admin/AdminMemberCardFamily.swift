@@ -33,6 +33,8 @@ final class AdminMemberCardFamilyStore: ObservableObject {
         let womenNodeId: UUID?
         /// «صلاحيات محدودة» (الأم ليست من العائلة، 20261127160000) — للإدارة وحدها؛ قبل الترحيل غائب
         let limitedAt: String?
+        /// اكتمل التسجيل (اعتمدت الإدارة الأم) — فارغ = «لم يستكمل التسجيل» في الشارة
+        let completedAt: String?
 
         enum CodingKeys: String, CodingKey {
             case profileId = "profile_id"
@@ -40,6 +42,7 @@ final class AdminMemberCardFamilyStore: ObservableObject {
             case approvedAt = "approved_at"
             case womenNodeId = "women_node_id"
             case limitedAt = "limited_at"
+            case completedAt = "completed_at"
         }
     }
 
@@ -104,6 +107,8 @@ struct AdminMemberCardFamily {
     let daughters: [FamilyMember]
     let lineage: Lineage?
     let lineageRow: AdminMemberCardFamilyStore.LineageRow?
+    /// جنس العضو — «ابن بنت» أو «بنت بنت» في الشارة
+    let isFemale: Bool
     /// عقدة شجرة النساء التي يُخفيها مفتاح «الظهور» (ابن البنت والمرأة) — nil = ملفه في شجرة الرجال
     let visibilityNode: FamilyMember?
     let hidden: Bool
@@ -171,6 +176,7 @@ struct AdminMemberCardFamily {
         }
 
         self.lineageRow = lineageRow
+        isFemale = female
         lineage = AdminMemberCardLogic.lineage(isDaughterSon: daughterSon || lineageRow != nil,
                                                outsideFlag: node.map { outside.contains($0) } ?? false,
                                                isFemale: female,
@@ -222,14 +228,11 @@ struct AdminMemberCardFamily {
         case .family:
             return [Self.title(.family), branch].compactMap { $0 }.joined(separator: " · ")
         case .daughterSon:
-            // «صلاحيات محدودة» — الإدارة وحدها ترى الحالة (المالك: لا يُعرض للعضو شيء)
-            if lineageRow?.limitedAt != nil {
-                return Self.title(.daughterSon) + " · " + L10n.t(SignupOriginRules.Ar.limitedTag, "Limited access")
-            }
-            if let mom = Self.firstName(mother) {
-                return Self.title(.daughterSon) + " · " + L10n.t("أمّه \(mom)", "mother \(mom)")
-            }
-            return Self.title(.daughterSon)
+            // «ابن بنت»/«بنت بنت» بجنسه وحالته — الإدارة وحدها ترى الحالة (المالك: لا يُعرض للعضو شيء)
+            return AdminMemberCardLogic.daughterChildTag(female: isFemale, limited: lineageRow?.limitedAt != nil,
+                                                         completed: lineageRow?.completedAt != nil,
+                                                         hasRow: lineageRow != nil, mother: Self.firstName(mother),
+                                                         arabic: L10n.isArabic)
         case .outsideHusband, .outsideWife:
             return Self.title(lineage)
         }
@@ -278,7 +281,7 @@ struct AdminMemberCardFamily {
     /// شارة الرأس: «ابن بنت» أو «من خارج العائلة» — nil لمن من العائلة
     var headerTag: String? {
         switch lineage {
-        case .daughterSon: return Self.title(.daughterSon)
+        case .daughterSon: return AdminMemberCardLogic.daughterChildTitle(female: isFemale, arabic: L10n.isArabic)
         case .outsideHusband, .outsideWife: return L10n.t("من خارج العائلة", "From outside the family")
         default: return nil
         }

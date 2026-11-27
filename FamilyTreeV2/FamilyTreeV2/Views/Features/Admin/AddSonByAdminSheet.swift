@@ -135,7 +135,8 @@ struct AddSonByAdminSheet: View {
             tint: DS.Color.actionNavy,
             actionTitle: isEditMode ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add"),
             actionIcon: isEditMode ? "checkmark" : "plus",
-            canSubmit: !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            canSubmit: !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && (isEditMode || FamilyTreeMenOnly.genderChosen(selectedGender)),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: submitAction,
@@ -246,6 +247,7 @@ struct AddSonByAdminSheet: View {
             showMenOnly = true
             return
         }
+        guard FamilyTreeMenOnly.genderChosen(selectedGender) else { return }
         if AddChildChecks.isMoreThanFirstName(firstName) {
             saveErrorText = AddChildChecks.firstNameOnlyMessage
             showSaveError = true

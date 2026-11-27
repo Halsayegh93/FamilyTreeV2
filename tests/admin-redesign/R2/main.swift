@@ -163,7 +163,8 @@ check(J.Ar.askConfirmLine, "يصل العضو إشعار بهذا النص، و�
 check(SignupOriginRules.canSendCompletion(motherInFamily: true, motherName: "   ", fatherName: "حسن حسين"), false,
       "«نعم» + empty mother's name → can't send")
 check(J.motherNameMissing(motherInFamily: true, motherName: "فاطمة"), true, "«نعم» + one word → show the requirement")
-check(J.motherNameMissing(motherInFamily: true, motherName: "فاطمة عبدالله أحمد"), false, "three words → fine")
+check(J.motherNameMissing(motherInFamily: true, motherName: "فاطمة عبدالله أحمد"), true, "three words → still missing (four-part)")
+check(J.motherNameMissing(motherInFamily: true, motherName: "فاطمة عبدالله أحمد حسن"), false, "four words → fine")
 check(J.motherNameMissing(motherInFamily: false, motherName: ""), false, "«لا» → no name asked")
 
 // ٩) النصوص رسمية (بلا «أبوك/أمك» وبلا عامية)

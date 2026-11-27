@@ -384,7 +384,7 @@ struct DeathDatesHeadline: View {
     private var progressText: String {
         guard let s = stats else { return L10n.t("اكتمل — من —", "— of — complete") }
         let need = s.full + s.incomplete
-        return L10n.t("اكتمل \(s.full) من \(need)", "\(s.full) of \(need) complete")
+        return L10n.t("اكتمل \(s.full) من \(need) من الرجال", "\(s.full) of \(need) men complete")
     }
 }
 

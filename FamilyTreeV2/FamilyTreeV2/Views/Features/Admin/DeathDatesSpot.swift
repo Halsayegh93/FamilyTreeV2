@@ -119,12 +119,13 @@ struct DeathDatesCampaignCard: View {
         .adminCard()
     }
 
-    /// «لهم تاريخ كامل 3 من 367» — العدد نفسه في رأس صفحة الحملة («اكتمل 3 من 367»)
+    /// «لهم تاريخ كامل 3 من 367 من الرجال» — العدد للرجال (شجرة العائلة) وحدهم، وبطاقة «الراحلون» تجمع الرجال ونساء
+    /// العائلة، فيُذكر «من الرجال» صراحة حتى لا يُظنّ الرقمان متعارضين. العدد نفسه في رأس صفحة الحملة
     private var progressText: String {
         guard let s = stats else { return L10n.t("لهم تاريخ كامل — من —", "— of — have a full date") }
         let full = AdminNumberText.grouped(s.full)
         let need = AdminNumberText.grouped(s.full + s.incomplete)
-        return L10n.t("لهم تاريخ كامل \(full) من \(need)", "\(full) of \(need) have a full date")
+        return L10n.t("لهم تاريخ كامل \(full) من \(need) من الرجال", "\(full) of \(need) men have a full date")
     }
 
     private var percentText: String {

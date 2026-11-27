@@ -16,6 +16,7 @@ private extension MemberCategory {
         case .familyWoman: return DS.Color.femaleFill
         case .daughterSon, .daughterDaughter: return DS.Color.palmFill
         case .limited: return DS.Color.slateFill
+        case .incomplete: return DS.Color.goldFill
         case .outsideSpouse: return DS.Color.seaFill
         }
     }
@@ -103,6 +104,16 @@ struct MemberAccessCategoryPage: View {
                     ForEach(MemberScreen.screens, id: \.self) { s in
                         screenRow(s, legacy: legacy)
                         if expanded.contains(s) {
+                            // الشاشة مخفية: ما بداخلها مطفأ رمادي، وسطر صغير واحد يقول لماذا
+                            if !s.children.isEmpty
+                                && !MemberAccess.sees(s, category: category, matrix: matrix, legacyLimited: legacy) {
+                                Text(L10n.t("مخفية مع الشاشة", "Hidden with the screen"))
+                                    .dsFont(.subtitle)
+                                    .foregroundColor(DS.Color.textTertiary)
+                                    .padding(.leading, DS.Hub.iconSquare + DS.Spacing.md)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .transition(.dsReveal(reduceMotion: reduceMotion))
+                            }
                             // ما بداخل الشاشة ينزل قليلاً مع تلاشٍ، ويختفي أسرع — «تقليل الحركة»: تلاشٍ
                             ForEach(s.children, id: \.self) { child in
                                 childRow(child, parent: s, legacy: legacy)
@@ -219,12 +230,13 @@ struct MemberAccessCategoryPage: View {
     }
 
     private func toggle(_ s: MemberScreen, on: Bool, enabled: Bool) -> some View {
-        Toggle(s.title, isOn: Binding(get: { on }, set: { save(MemberAccess.setting(s, to: $0, category: category, matrix: matrix)) }))
+        // المعطّل مع شاشته المخفية يبدو مطفأً (لا أخضر باهت يوحي بأنه ظاهر)
+        Toggle(s.title, isOn: Binding(get: { enabled && on }, set: { save(MemberAccess.setting(s, to: $0, category: category, matrix: matrix)) }))
             .labelsHidden()
             .tint(DS.Color.toggleOn)
             .disabled(!canEdit || !enabled)
             .opacity(enabled ? 1 : DS.Opacity.disabled)
-            .accessibilityValue(on ? L10n.t("ظاهر", "Visible") : L10n.t("مخفي", "Hidden"))
+            .accessibilityValue(enabled && on ? L10n.t("ظاهر", "Visible") : L10n.t("مخفي", "Hidden"))
     }
 
     // MARK: الحفظ (المالك — `set_app_config`)

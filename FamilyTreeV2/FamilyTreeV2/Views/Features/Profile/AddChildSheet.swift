@@ -114,7 +114,8 @@ struct AddChildSheet: View {
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("إضافة", "Add"),
             actionIcon: "plus",
-            canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting),
+            canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting)
+                && FamilyTreeMenOnly.genderChosen(selectedGender),
             isBusy: memberVM.isLoading || isSubmitting,
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: saveChild,
@@ -294,6 +295,7 @@ struct AddChildSheet: View {
             showMenOnly = true
             return
         }
+        guard FamilyTreeMenOnly.genderChosen(selectedGender) else { return }
         isSubmitting = true
         Task {
             defer { isSubmitting = false }

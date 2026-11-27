@@ -144,7 +144,7 @@ struct MemberDetailsView: View {
         let box = LineageLockedView(section: section, style: .card, onOpen: {
             dismiss()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { LineageGateStore.shared.openPage() }
-        })
+        }, onHidden: { dismiss() })
         .padding(DS.Spacing.lg)
         .background(GeometryReader { geo in
             Color.clear

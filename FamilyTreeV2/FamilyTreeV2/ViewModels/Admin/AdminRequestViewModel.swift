@@ -50,6 +50,8 @@ class AdminRequestViewModel: ObservableObject {
     @Published private(set) var approvalsWorkflowOn: Bool = false
     private var approvalsFlagSink: AnyCancellable?
     @Published var isLoading: Bool = false
+    /// سبب رفض آخر طلب تعديل شجرة (رسالة رسمية معروفة، مثل «تغيير الرقم متاح لصاحب الحساب فقط.») — nil = عامة
+    @Published var lastTreeEditError: String?
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
 
@@ -185,7 +187,7 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Private Helpers
 
-    private var currentUser: FamilyMember? { authVM?.currentUser }
+    var currentUser: FamilyMember? { authVM?.currentUser }
     private var canModerate: Bool { authVM?.canModerate ?? false }
     private var isAdmin: Bool { authVM?.isAdmin ?? false }
     /// قبول/رفض الطلبات: owner+admin+monitor (المشرف يقدر يقبل بس لا يرفض).
@@ -453,6 +455,7 @@ class AdminRequestViewModel: ObservableObject {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else { return false }
         self.isLoading = true
+        self.lastTreeEditError = nil
         defer { self.isLoading = false }
 
         do {
@@ -517,6 +520,7 @@ class AdminRequestViewModel: ObservableObject {
             return true
         } catch {
             Log.error("[TreeEdit] Submit failed: \(error.localizedDescription)")
+            lastTreeEditError = ErrorHelper.adminRequestMessage(error)
             return false
         }
     }

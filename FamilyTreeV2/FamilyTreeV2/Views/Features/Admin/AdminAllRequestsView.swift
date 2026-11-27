@@ -722,7 +722,7 @@ struct AdminAllRequestsView: View {
         return outsideJoins.contains(m.id) ? .outside : .family
     }
 
-    /// طلبات «استكمال التسجيل» (الوالدة من العائلة) — تُعدّ مع «من خارج العائلة»، وبيتها صفحة الطلبات الأخرى
+    /// طلبات «استكمال التسجيل» (الوالدة من العائلة) — صفّ واحد تحت «من خارج العائلة» بعددها هي، وبيتها صفحة الطلبات الأخرى
     private var typedLineageCount: Int {
         adminRequestVM.lineageRequests.filter { SignupOriginRules.isTypedLineage(details: $0.details) }.count
     }
@@ -730,9 +730,9 @@ struct AdminAllRequestsView: View {
     /// شرائح المصدر بأعدادها — تظهر حين يوجد طلب انضمام أو «استكمال التسجيل»
     @ViewBuilder
     private func joinOriginChips(_ m: InboxModel) -> some View {
-        let counts = SignupOriginRules.originCounts(joins: m.entries.compactMap { joinOrigin($0.item) },
-                                                    typedLineage: typedLineageCount)
-        if counts.family + counts.outside > 0 && !isSelectMode {
+        // رقم الشريحة = صفوف طلبات الانضمام الظاهرة تحتها؛ «استكمال التسجيل» صفّ مستقل يحمل عدده هو
+        let counts = SignupOriginRules.originCounts(joins: m.entries.compactMap { joinOrigin($0.item) })
+        if counts.family + counts.outside + typedLineageCount > 0 && !isSelectMode {
             AnyView(DSFilterChips(options: [
                 DSFilterOption(id: SignupOriginRules.JoinFilter.all, title: L10n.t(SignupOriginRules.Ar.inboxAll, "All")),
                 DSFilterOption(id: .family, title: L10n.t(SignupOriginRules.Ar.inboxFamilyJoins, "Join requests from the family"),

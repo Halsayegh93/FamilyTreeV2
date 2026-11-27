@@ -146,6 +146,8 @@ struct SignupCheckBadge: View {
 struct SignupOriginFlow: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var origin: SignupOriginRules.Origin?
+    /// ما كُتب في مربّع البيانات — يبقى مع «رجوع» والعودة (لا يُعاد بناؤه فارغاً)
+    @State private var draft = SignupDraft()
     /// اتجاه آخر انتقال — يُضبط قبل التبديل فيخرج المربّع القديم في الجهة الصحيحة
     @State private var forward = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -165,7 +167,7 @@ struct SignupOriginFlow: View {
             ZStack(alignment: .top) {
                 if let origin {
                     AnyView(SignupFormBox(origin: origin, ask: ask.editing ? ask.open : nil,
-                                          prefill: ask.editing ? authVM.currentUser : nil) { go(to: nil) })
+                                          prefill: ask.editing ? authVM.currentUser : nil, draft: $draft) { go(to: nil) })
                         .transition(transition)
                 } else {
                     AnyView(SignupChooseBox { o in go(to: o) })
@@ -258,6 +260,19 @@ struct SignupChooseBox: View {
 
 // MARK: - ٢) البيانات — مربّع واحد ثم الإرسال مباشرة
 
+/// بيانات مربّع التسجيل — في التدفّق لا في المربّع، فتبقى مع «رجوع» والعودة
+struct SignupDraft {
+    var didPrefill = false
+    var fullName = ""
+    var familyName = ""
+    var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
+    var birthDateChosen = false
+    /// مطلوب بلا اختيار مسبق (مثل التسجيل السابق)
+    var gender = ""
+    /// صورة الذكر (اختيارية) — تُسقط إن تحوّل الجنس إلى «أنثى»
+    var photo: UIImage?
+}
+
 struct SignupFormBox: View {
     @EnvironmentObject var authVM: AuthViewModel
     let origin: SignupOriginRules.Origin
@@ -265,18 +280,9 @@ struct SignupFormBox: View {
     var ask: CompletionAsk.Open? = nil
     /// بياناته المحفوظة — تُملأ بها الحقول عند الاستكمال
     var prefill: FamilyMember? = nil
+    /// ما كُتب — يملكه التدفّق فيبقى مع «رجوع» والعودة
+    @Binding var draft: SignupDraft
     let onBack: () -> Void
-
-    @State private var didPrefill = false
-
-    @State private var fullName = ""
-    @State private var familyName = ""
-    @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
-    @State private var birthDateChosen = false
-    /// مطلوب بلا اختيار مسبق (مثل التسجيل السابق)
-    @State private var gender = ""
-    /// صورة الذكر (اختيارية) — تُسقط إن تحوّل الجنس إلى «أنثى»
-    @State private var photo: UIImage?
     /// الخطأ تحت الحقل يظهر بعد أن يتوقّف العضو عن الكتابة (لا مع كل حرف)
     @State private var nameSettled = true
     @State private var familySettled = true
@@ -285,20 +291,20 @@ struct SignupFormBox: View {
     private typealias R = SignupOriginRules
 
     private var age: Int? {
-        guard birthDateChosen else { return nil }
-        return Calendar(identifier: .gregorian).dateComponents([.year], from: birthDate, to: Date()).year
+        guard draft.birthDateChosen else { return nil }
+        return Calendar(identifier: .gregorian).dateComponents([.year], from: draft.birthDate, to: Date()).year
     }
     private var missing: [SignupOriginRules.Field] {
-        R.missingFields(origin: origin, name: fullName, family: familyName, birthChosen: birthDateChosen, age: age, gender: gender)
+        R.missingFields(origin: origin, name: draft.fullName, family: draft.familyName, birthChosen: draft.birthDateChosen, age: age, gender: draft.gender)
     }
     private var highlights: Set<SignupOriginRules.Field> {
         AdminJoinBoxRules.signupHighlights(ask?.missing ?? [])
     }
     /// الصورة مطلوبة من الإدارة — للذكور فقط (النساء بلا صور)
-    private var asksPhoto: Bool { ask?.missing.contains(.photo) == true && R.showsPhoto(gender: gender) }
+    private var asksPhoto: Bool { ask?.missing.contains(.photo) == true && R.showsPhoto(gender: draft.gender) }
     private var canSubmit: Bool {
-        R.canSubmit(origin: origin, name: fullName, family: familyName, birthChosen: birthDateChosen, age: age, gender: gender)
-            && (!asksPhoto || photo != nil || !(prefill?.avatarUrl ?? "").isEmpty)
+        R.canSubmit(origin: origin, name: draft.fullName, family: draft.familyName, birthChosen: draft.birthDateChosen, age: age, gender: draft.gender)
+            && (!asksPhoto || draft.photo != nil || !(prefill?.avatarUrl ?? "").isEmpty)
     }
 
     var body: some View {
@@ -311,9 +317,11 @@ struct SignupFormBox: View {
                 Text(verbatim: note).dsFont(.footnote).foregroundColor(DS.Color.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // صورة كبيرة للذكور فقط (المالك ٢٠٢٦-١١-٢٧) — تختفي مع «أنثى»: النساء بلا صور
-            if R.showsPhoto(gender: gender) {
-                DSProfilePhotoPicker(selectedImage: $photo, enableCrop: true, cropShape: .circle,
+            // «الجنس» أولاً، ثم الصورة الكبيرة بعد «ذكر» وحده (المالك ٢٠٢٦-١١-٢٧) — النساء بلا صور
+            fieldView(.gender)
+                .completionAskHighlight(highlights.contains(.gender))
+            if R.showsPhoto(gender: draft.gender) {
+                DSProfilePhotoPicker(selectedImage: $draft.photo, enableCrop: true, cropShape: .circle,
                                      title: L10n.t("الصورة الشخصية", "Profile Photo"),
                                      trailing: L10n.t(SignupText.photoOptional, "Optional"),
                                      avatarSize: DS.Icon.signupPhoto,
@@ -321,7 +329,7 @@ struct SignupFormBox: View {
                     .completionAskHighlight(asksPhoto)
                     .transition(.dsReveal(reduceMotion: reduceMotion))
             }
-            ForEach(Array(R.fields(origin).enumerated()), id: \.offset) { _, field in
+            ForEach(Array(R.fields(origin).filter { $0 != .gender }.enumerated()), id: \.offset) { _, field in
                 fieldView(field)
                     .completionAskHighlight(highlights.contains(field))
             }
@@ -350,11 +358,11 @@ struct SignupFormBox: View {
         }
         .onAppear(perform: fill)
         .animation(reduceMotion ? DSMotion.fade : DSMotion.reveal, value: missing.isEmpty)
-        .onChange(of: fullName) { _ in settle(.name) }
-        .onChange(of: familyName) { _ in settle(.family) }
-        .onChange(of: gender) { g in
+        .onChange(of: draft.fullName) { _ in settle(.name) }
+        .onChange(of: draft.familyName) { _ in settle(.family) }
+        .onChange(of: draft.gender) { g in
             guard !R.showsPhoto(gender: g) else { return }
-            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.revealOut) { photo = nil }
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.revealOut) { draft.photo = nil }
         }
         .dsAlert(L10n.t("تعذّر التسجيل", "Registration Failed"),
                  isPresented: Binding(get: { authVM.registrationError != nil },
@@ -375,9 +383,9 @@ struct SignupFormBox: View {
                                               origin == .outside ? "Three-part name" : "Full name (4 parts)"),
                                 placeholder: L10n.t(origin == .outside ? SignupText.outsideNameExample : SignupText.familyNameExample,
                                                     origin == .outside ? "e.g. Mohammad Hassan Hussain" : "e.g. Mohammad Abdullah Ali Ahmad"),
-                                text: $fullName, limit: 100, required: true)
-                if nameSettled, let e = R.nameError(fullName, origin: origin) {
-                    fieldError(e, english: origin == .outside ? "Write the full three-part name." : "Write at least your first and father's name.")
+                                text: $draft.fullName, limit: 100, required: true)
+                if nameSettled, let e = R.nameError(draft.fullName, origin: origin) {
+                    fieldError(e, english: origin == .outside ? "Write the full three-part name." : "Write the full four-part name.")
                 }
                 hint(L10n.t(origin == .outside ? SignupText.outsideNameHint : SignupText.familyNameHint,
                             origin == .outside ? "First, father's and grandfather's name, without the family name."
@@ -387,21 +395,21 @@ struct SignupFormBox: View {
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 DSComposerField(icon: "person.2.fill", label: L10n.t(SignupText.familyName, "Family"),
                                 placeholder: L10n.t(SignupText.familyPlaceholder, "e.g. Al-Mousa"),
-                                text: $familyName, limit: 50, required: true)
-                if familySettled, let e = R.familyError(familyName) {
+                                text: $draft.familyName, limit: 50, required: true)
+                if familySettled, let e = R.familyError(draft.familyName) {
                     fieldError(e, english: "Write the family name (at least two letters).")
                 }
             }
         case .birth:
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 DSDateFieldRow(icon: "calendar", title: L10n.t(SignupText.birthDate, "Birth date") + " *",
-                               hasDate: birthDateChosen, dateText: DSDateText.display(birthDate)) {
+                               hasDate: draft.birthDateChosen, dateText: DSDateText.display(draft.birthDate)) {
                     dsPresentDatePicker(title: L10n.t(SignupText.birthDate, "Birth date"),
-                                        initial: birthDate, allowClear: false) { picked in
+                                        initial: draft.birthDate, allowClear: false) { picked in
                         guard let picked else { return }
                         withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) {
-                            birthDate = picked
-                            birthDateChosen = true
+                            draft.birthDate = picked
+                            draft.birthDateChosen = true
                         }
                     }
                 }
@@ -415,7 +423,7 @@ struct SignupFormBox: View {
                 }
             }
         case .gender:
-            DSGenderPicker(selection: $gender, required: true, buttons: true, check: true)
+            DSGenderPicker(selection: $draft.gender, required: true, buttons: true, check: true)
         }
     }
 
@@ -435,10 +443,10 @@ struct SignupFormBox: View {
 
     /// بعد الكتابة: يخفي الخطأ فوراً، ويعيد فحصه بعد مهلة قصيرة إن لم تتغيّر الكتابة (`DSMotionRules.Timing.settle`)
     private func settle(_ field: Settle) {
-        let snapshot = field == .name ? fullName : familyName
+        let snapshot = field == .name ? draft.fullName : draft.familyName
         if field == .name { nameSettled = false } else { familySettled = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + DSMotionRules.Timing.settle) {
-            let now = field == .name ? fullName : familyName
+            let now = field == .name ? draft.fullName : draft.familyName
             guard now == snapshot else { return }
             withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) {
                 if field == .name { nameSettled = true } else { familySettled = true }
@@ -448,18 +456,18 @@ struct SignupFormBox: View {
 
     /// الحقول من بياناته المحفوظة (مرة واحدة)
     private func fill() {
-        guard !didPrefill, let m = prefill else { return }
-        didPrefill = true
+        guard !draft.didPrefill, let m = prefill else { return }
+        draft.didPrefill = true
         let fam = (m.familyName ?? "").trimmingCharacters(in: .whitespaces)
         var name = m.fullName.trimmingCharacters(in: .whitespaces)
         if origin == .outside, !fam.isEmpty, name.hasSuffix(" " + fam) { name = String(name.dropLast(fam.count + 1)) }
-        fullName = name
-        if origin == .outside { familyName = fam }
+        draft.fullName = name
+        if origin == .outside { draft.familyName = fam }
         if let d = DateHelper.parse(String((m.birthDate ?? "").prefix(10))) {
-            birthDate = d
-            birthDateChosen = true
+            draft.birthDate = d
+            draft.birthDateChosen = true
         }
-        if m.gender == "male" || m.gender == "female" { gender = m.gender ?? "" }
+        if m.gender == "male" || m.gender == "female" { draft.gender = m.gender ?? "" }
     }
 
     private func hint(_ text: String, error: Bool = false) -> some View {
@@ -471,12 +479,12 @@ struct SignupFormBox: View {
 
     private func submit() {
         guard canSubmit, !authVM.isLoading else { return }
-        let name = R.tidy(fullName)
-        let family = R.familyToSave(origin: origin, typed: familyName)
+        let name = R.tidy(draft.fullName)
+        let family = R.familyToSave(origin: origin, typed: draft.familyName)
         let outside = origin == .outside
-        let g = gender
-        let b = birthDate
-        let image = R.photoToSend(photo, gender: g)
+        let g = draft.gender
+        let b = draft.birthDate
+        let image = R.photoToSend(draft.photo, gender: g)
         Task {
             await authVM.registerNewUser(firstName: name, familyName: family, birthDate: b, gender: g,
                                          avatarImage: image, outsideFamily: outside)
@@ -498,7 +506,7 @@ struct SignupFormBox: View {
 
 #Preview("من خارج العائلة") {
     SignupBoxShell(subtitle: "التسجيل") {
-        SignupFormBox(origin: .outside, onBack: {})
+        SignupFormBox(origin: .outside, draft: .constant(SignupDraft()), onBack: {})
     }
     .environmentObject(AuthViewModel())
 }

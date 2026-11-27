@@ -191,6 +191,7 @@ struct MainTabView: View {
             isActive: me.role == .member && (me.status ?? .active) == .active,
             isLimited: status?.limited == true,
             hasLineageRow: status?.flagged == true,
+            isCompleted: status?.completed != false,
             isDaughterChildNode: false,
             isOutsideNode: false,
             isFemale: me.isFemale))
@@ -211,6 +212,11 @@ struct MainTabView: View {
             DSScreenCrossfade.run { selectedTab = 4 }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
+            DSScreenCrossfade.run { selectedTab = 0 }
+        }
+        // قسم مخفي عن هذا الحساب (رابط أو إشعار): الرئيسية بهدوء — بلا صفحة فارغة ولا رسالة عن الصلاحيات
+        .onReceive(NotificationCenter.default.publisher(for: .leaveHiddenSection)) { _ in
+            guard selectedTab != 0 else { return }
             DSScreenCrossfade.run { selectedTab = 0 }
         }
         // «افتح الأخبار» من إعلان الفتح: الرئيسية ← صفحة الأخبار (من تبويب آخر: حتى تُبنى الرئيسية)
@@ -352,4 +358,6 @@ extension Notification.Name {
     static let openAdminReviewForKind = Notification.Name("openAdminReviewForKind")
     /// يفتح تاب الرئيسية ويدفع مركز الإشعارات + يفتح شيت تفاصيل الطلب لو فيه deep-link
     static let openHomeNotificationsCenter = Notification.Name("openHomeNotificationsCenter")
+    /// قسم مخفي عن الحساب وصل إليه برابط/إشعار — يرجع للرئيسية ويُغلق الصفحة الفرعية (`LineageLockedView`)
+    static let leaveHiddenSection = Notification.Name("leaveHiddenSection")
 }

@@ -30,6 +30,8 @@ nonisolated enum MemberCategory: String, CaseIterable, Hashable {
     case daughterSon = "daughter_son"
     case daughterDaughter = "daughter_daughter"
     case limited
+    /// «لم يستكمل التسجيل» (بند ١٣، المالك ٢٠٢٦-١١-٢٧): صفّ نسب بلا `completed_at` ولا `limited_at` — افتراضه افتراض ابن البنت
+    case incomplete
     case outsideSpouse = "outside_spouse"
 
     var titleAr: String {
@@ -39,6 +41,7 @@ nonisolated enum MemberCategory: String, CaseIterable, Hashable {
         case .daughterSon: return "ابن بنت"
         case .daughterDaughter: return "بنت بنت"
         case .limited: return "عضو بصلاحيات محدودة"
+        case .incomplete: return "لم يستكمل التسجيل"
         case .outsideSpouse: return "زوج أو زوجة من خارج العائلة"
         }
     }
@@ -49,6 +52,7 @@ nonisolated enum MemberCategory: String, CaseIterable, Hashable {
         case .daughterSon: return "Daughter's son"
         case .daughterDaughter: return "Daughter's daughter"
         case .limited: return "Limited member"
+        case .incomplete: return "Registration not completed"
         case .outsideSpouse: return "Spouse from outside the family"
         }
     }
@@ -60,6 +64,7 @@ nonisolated enum MemberCategory: String, CaseIterable, Hashable {
         case .daughterSon: return "أبناء البنات من خارج العائلة"
         case .daughterDaughter: return "بنات البنات من خارج العائلة"
         case .limited: return "من أجاب «لا» على «هل الأم من العائلة؟»"
+        case .incomplete: return "أبناء وبنات البنات قبل استكمال التسجيل"
         case .outsideSpouse: return "أزواج البنات والزوجات من عائلات أخرى"
         }
     }
@@ -70,6 +75,7 @@ nonisolated enum MemberCategory: String, CaseIterable, Hashable {
         case .daughterSon: return "Sons of the family's daughters"
         case .daughterDaughter: return "Daughters of the family's daughters"
         case .limited: return "Answered “No” to “Is your mother from the family?”"
+        case .incomplete: return "Daughters' sons and daughters before completing registration"
         case .outsideSpouse: return "Daughters' husbands and wives from other families"
         }
     }
@@ -80,6 +86,7 @@ nonisolated enum MemberCategory: String, CaseIterable, Hashable {
         case .daughterSon: return "figure.and.child.holdinghands"
         case .daughterDaughter: return "figure.and.child.holdinghands"
         case .limited: return "lock.fill"
+        case .incomplete: return "hourglass"
         case .outsideSpouse: return "heart.fill"
         }
     }
@@ -386,6 +393,10 @@ nonisolated enum MemberAccess {
         var isLimited: Bool
         /// صفّ في `daughter_son_lineage`
         var hasLineageRow: Bool
+        /// `daughter_son_lineage.completed_at` (اعتمدت الإدارة الأم) — بلا صفّ: لا معنى له
+        var isCompleted: Bool = true
+        /// حساب المراجعة (`review_account_ids()`) — يبقى في فئته اليوم ولو لم يستكمل
+        var isReviewAccount: Bool = false
         /// عقدته في شجرة النساء لها أمّ، وأبوها غائب أو من خارج العائلة
         var isDaughterChildNode: Bool
         /// عقدته في شجرة النساء `is_outside_family`
@@ -396,6 +407,7 @@ nonisolated enum MemberAccess {
     static func category(_ f: Facts) -> MemberCategory? {
         if f.isStaff || !f.isActive { return nil }
         if f.isLimited { return .limited }
+        if f.hasLineageRow && !f.isCompleted && !f.isReviewAccount { return .incomplete }
         if f.hasLineageRow || f.isDaughterChildNode { return f.isFemale ? .daughterDaughter : .daughterSon }
         if f.isOutsideNode { return .outsideSpouse }
         return f.isFemale ? .familyWoman : .familyMan

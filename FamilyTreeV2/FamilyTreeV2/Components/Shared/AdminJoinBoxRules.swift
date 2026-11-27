@@ -177,9 +177,9 @@ enum AdminJoinBoxRules {
         })
     }
 
-    /// «نعم» واسم الوالدة أقل من ثلاث كلمات ← يظهر سطر «مطلوب» (الإرسال معطّل حتى يكتمل)
+    /// «نعم» واسم الوالدة أقل من أربعة أجزاء ← يظهر سطر «مطلوب» (الإرسال معطّل حتى يكتمل)
     static func motherNameMissing(motherInFamily: Bool?, motherName: String) -> Bool {
-        motherInFamily == true && SignupOriginRules.wordCount(SignupOriginRules.tidy(motherName)) < 3
+        motherInFamily == true && !SignupOriginRules.motherNameComplete(motherName)
     }
 
     // MARK: الاقتراح: الاسم الكامل + شريحة الميلاد (المالك «وضحلي الاسم الكامل»)
@@ -366,7 +366,7 @@ enum AdminJoinBoxRules {
         static let memberAskBody = "طلبت الإدارة استكمال البيانات التالية:"
         static let memberAskButton = "استكمال البيانات"
         static let memberAskRequired = "مطلوب من الإدارة"
-        static let motherNameRequired = "يُرجى كتابة اسم الوالدة الرباعي (ثلاث كلمات على الأقل)."
+        static let motherNameRequired = "يُرجى كتابة اسم الوالدة الرباعي، بدون اسم العائلة."
         static let addPhoto = "إضافة صورة شخصية"
 
         static var all: [String] {

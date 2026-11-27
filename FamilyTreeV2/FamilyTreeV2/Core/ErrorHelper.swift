@@ -33,6 +33,16 @@ enum ErrorHelper {
         return raw.contains("429") || raw.contains("rate")
     }
 
+    /// «تغيير الرقم لصاحب الحساب فقط» (المالك ٢٠٢٦-١١-٢٧ «رقمه فقط») — السيرفر يرفض `edit_phone` عن غيره
+    static let phoneNotSelfMessage = "تغيير الرقم متاح لصاحب الحساب فقط."
+
+    /// رسالة رسمية لرفض السيرفر طلبَ تعديل معروفاً — nil = الرسالة العامة
+    static func adminRequestMessage(_ error: Error) -> String? {
+        let raw = description(error)
+        if raw.contains("admin_request_phone_not_self") { return phoneNotSelfMessage }
+        return nil
+    }
+
     /// هل الخطأ بسبب عدم وجود جلسة؟
     static func isNoSession(_ error: Error) -> Bool {
         let raw = description(error)

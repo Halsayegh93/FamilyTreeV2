@@ -7,7 +7,7 @@ import Supabase
 // «هل الأم من العائلة؟»
 //   نعم ← في المربّع نفسه: «اسم الوالدة الرباعي» + سطر الوالد للاطلاع (من الاسم المسجّل) + «إرسال إلى الإدارة»
 //         = `submit_outside_lineage` (20261127160000) ← الإدارة تختار الوالدة من بنات العائلة وتعتمد ← شجرة النساء.
-//   لا  ← `mark_outside_mother` مباشرة: لا اسم ولا طلب، والحساب «بصلاحيات محدودة» بلا أي رسالة له، ويُغلق المربّع.
+//   لا  ← تأكيد («تأكيد» / «رجوع») ثم `mark_outside_mother`: لا اسم ولا طلب، والحساب «بصلاحيات محدودة» بلا أي رسالة له، ويُغلق المربّع.
 
 enum OutsideLineage {
     static func submit(motherName: String) async throws {
@@ -50,6 +50,8 @@ struct CompleteRegistrationPage: View {
     @State private var motherSettled = true
     @State private var busy = false
     @State private var errorText: String?
+    /// تأكيد «لا» قبل إرسالها (لا رجوع عنها من التطبيق)
+    @State private var confirmNo = false
 
     init(status: DaughterSons.Status?, ask: CompletionAsk.Open? = nil, onSent: @escaping () -> Void, onLater: (() -> Void)?,
          onLimited: @escaping () -> Void = {}) {
@@ -84,6 +86,13 @@ struct CompleteRegistrationPage: View {
                     }
                 }
                 .onChange(of: motherName) { _ in settleMother() }
+                .dsAlert(L10n.t(T.confirmNoTitle, "Confirm your choice"), isPresented: $confirmNo) {
+                    Button(L10n.t(T.confirm, "Confirm"), role: .destructive) { markLimited() }
+                    Button(L10n.t(T.back, "Back"), role: .cancel) {}
+                } message: {
+                    Text(L10n.t(T.confirmNoBody,
+                                "Your mother is not from the Al-Mohammad Ali family. This choice can't be changed later in the app."))
+                }
                 if let errorText {
                     Text(errorText).dsFont(.footnote).foregroundColor(DS.Color.error)
                         .fixedSize(horizontal: false, vertical: true)
@@ -126,8 +135,9 @@ struct CompleteRegistrationPage: View {
             answerTile(L10n.t(T.yes, "Yes"), icon: "checkmark", tint: DS.Color.palmFill, selected: inFamily == true) {
                 withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) { inFamily = true }
             }
+            // «لا» نهائية: تأكيد قبل التسجيل على السيرفر، و«رجوع» تُبقي السؤال كما هو
             answerTile(L10n.t(T.no, "No"), icon: "xmark", tint: DS.Color.slateFill, selected: inFamily == false) {
-                markLimited()
+                confirmNo = true
             }
             .disabled(busy)
         }
@@ -138,7 +148,7 @@ struct CompleteRegistrationPage: View {
             // خطأ تحت الحقل بعد انتهاء الكتابة، ثم سطر الشرح الدائم (الأجزاء، والمطابقة)
             if motherSettled, let e = R.motherNameError(motherName) {
                 Label {
-                    Text(L10n.t(e, "Write at least three parts of her name, without the family name."))
+                    Text(L10n.t(e, "Write her four-part name, without the family name."))
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "exclamationmark.circle.fill").dsGlyph(DS.Glyph.sm)
@@ -146,30 +156,14 @@ struct CompleteRegistrationPage: View {
                 .dsFont(.footnote).foregroundColor(DS.Color.error)
                 .transition(.dsReveal(reduceMotion: reduceMotion))
             }
+            // سطر شرح واحد قصير (ملاحظة المنتقد: كانت أربعة أسطر يتكرّر فيها «بدون اسم العائلة»)
             Text(L10n.t(T.motherNameHelp, "Her first name, her father's, grandfather's and great-grandfather's — without the family name."))
                 .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(L10n.t(T.motherNameHint, "Without the family name. The admins match it to your mother's record."))
-                .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-            if let f = fatherName {
-                Text(verbatim: L10n.t(T.fatherLine(f), "Father: \(f) — from your registered name."))
-                    .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
+            if fatherName == nil {
                 Text(L10n.t(T.fatherMissing, "Your father's name is incomplete — contact the admins."))
                     .dsFont(.footnote).foregroundColor(DS.Color.warning)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-            // لماذا الزرّ معطّل
-            if !canSend, fatherName != nil {
-                Label {
-                    Text(L10n.t(T.missingLine([T.motherName]), "To send, complete: mother's four-part name"))
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "info.circle").dsGlyph(DS.Glyph.sm)
-                }
-                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
             }
             DSButton(L10n.t(T.send, "Send to the admins"), icon: "paperplane.fill", isLoading: busy) { send() }
                 .disabled(!canSend || busy)

@@ -27,17 +27,29 @@ enum SignupOriginRules {
         origin == .outside ? [.name, .family, .birth, .gender] : [.name, .birth, .gender]
     }
 
-    /// صورة التسجيل للذكور فقط: تظهر ما لم يُختر «أنثى» (وقبل اختيار الجنس)، وتُرسل للذكر وحده
-    static func showsPhoto(gender: String) -> Bool { gender.lowercased() != "female" }
+    /// صورة التسجيل للذكور فقط: «الجنس» أولاً، والصورة تظهر بعد اختيار «ذكر» وحده، وتُرسل للذكر وحده
+    static func showsPhoto(gender: String) -> Bool { gender.lowercased() == "male" }
     static func photoToSend<T>(_ photo: T?, gender: String) -> T? { gender.lowercased() == "male" ? photo : nil }
 
     static func wordCount(_ s: String) -> Int { s.split(whereSeparator: \.isWhitespace).count }
 
-    /// «من العائلة»: الاسم الرباعي (كلمتان على الأقل) · «من خارج العائلة»: الاسم الثلاثي (ثلاث كلمات، بلا العائلة)
+    /// أجزاء الاسم بتطبيع البحث الواحد (`NameSearch.words`): «عبد الله» جزء واحد كـ«عبدالله»
+    static func nameParts(_ s: String) -> Int { NameSearch.words(s).count }
+
+    /// عدد الأجزاء المطلوب: الرباعي (من العائلة) أربعة · الثلاثي (من خارج العائلة) ثلاثة
+    static func requiredParts(_ origin: Origin) -> Int { origin == .outside ? 3 : 4 }
+
+    /// اسم الوالدة الرباعي (بلا اسم العائلة)
+    static let motherNameParts = 4
+
+    /// «من العائلة»: الاسم الرباعي (أربعة أجزاء) · «من خارج العائلة»: الاسم الثلاثي (ثلاثة أجزاء، بلا العائلة)
     static func nameValid(_ s: String, origin: Origin) -> Bool {
         let n = tidy(s)
-        return wordCount(n) >= (origin == .outside ? 3 : 2) && n.filter(\.isLetter).count >= 2 && n.count <= 100
+        return nameParts(n) >= requiredParts(origin) && n.filter(\.isLetter).count >= 2 && n.count <= 100
     }
+
+    /// اسم الوالدة مكتمل؟ (أربعة أجزاء على الأقل)
+    static func motherNameComplete(_ s: String) -> Bool { nameParts(tidy(s)) >= motherNameParts }
 
     static func familyValid(_ s: String) -> Bool {
         let f = tidy(s)
@@ -89,7 +101,7 @@ enum SignupOriginRules {
 
     static func motherNameError(_ s: String) -> String? {
         let m = tidy(s)
-        guard !m.isEmpty, wordCount(m) < 3 else { return nil }
+        guard !m.isEmpty, !motherNameComplete(m) else { return nil }
         return Ar.motherNameShort
     }
 
@@ -124,10 +136,10 @@ enum SignupOriginRules {
         return w.dropFirst().joined(separator: " ")
     }
 
-    /// يُرسل؟ «نعم» · اسم الوالدة (ثلاث كلمات على الأقل من الرباعي، بلا العائلة) · اسم الوالد من الاسم المسجّل
+    /// يُرسل؟ «نعم» · اسم الوالدة الرباعي (أربعة أجزاء، بلا العائلة) · اسم الوالد من الاسم المسجّل
     static func canSendCompletion(motherInFamily: Bool?, motherName: String, fatherName: String?) -> Bool {
         let m = tidy(motherName)
-        return motherInFamily == true && fatherName != nil && wordCount(m) >= 3 && m.count <= 120
+        return motherInFamily == true && fatherName != nil && motherNameComplete(m) && m.count <= 120
     }
 
     /// طلب «استكمال التسجيل» في «الوارد» (`outside_typed`): اسم الوالدة مكتوباً
@@ -140,7 +152,7 @@ enum SignupOriginRules {
     // MARK: «الوارد»: طلبات الانضمام من العائلة / من خارج العائلة (المالك ٢٠٢٦-١١-٢٧)
     //
     // المصدر من خطوة التسجيل: علامة `outsideMarker` = من خارج العائلة؛ غيرها (ومنها القديمة بلا علامة) = من العائلة.
-    // طلبات «استكمال التسجيل» (`outside_typed`) تُعدّ مع «من خارج العائلة».
+    // طلبات «استكمال التسجيل» (`outside_typed`) لا تُعدّ في الشريحة: لها صفّ واحد تحتها بعددها هي (الرقم = الصفوف الظاهرة).
 
     enum JoinOrigin: Equatable { case family, outside }
 
@@ -164,9 +176,9 @@ enum SignupOriginRules {
         var outside: Int
     }
 
-    static func originCounts(joins: [JoinOrigin], typedLineage: Int) -> OriginCounts {
+    static func originCounts(joins: [JoinOrigin]) -> OriginCounts {
         OriginCounts(family: joins.filter { $0 == .family }.count,
-                     outside: joins.filter { $0 == .outside }.count + max(0, typedLineage))
+                     outside: joins.filter { $0 == .outside }.count)
     }
 
     static func tidy(_ s: String) -> String {
@@ -223,6 +235,10 @@ enum SignupOriginRules {
         static let motherQuestion = "هل الأم من العائلة؟"
         static let yes = "نعم"
         static let no = "لا"
+        /// تأكيد «لا» — بلا أي ذكر للصلاحيات (قاعدة المالك)
+        static let confirmNoTitle = "تأكيد الاختيار"
+        static let confirmNoBody = "الوالدة ليست من عائلة المحمدعلي. لا يمكن تغيير هذا الاختيار لاحقاً من التطبيق."
+        static let confirm = "تأكيد"
         static let motherName = "اسم الوالدة الرباعي"
         static let motherNamePlaceholder = "الاسم الأول واسم والدها وجدها وجد والدها"
         static let motherNameHint = "بدون اسم العائلة. تطابق الإدارة الاسم مع سجلّ الوالدة في الشجرة."
@@ -277,10 +293,10 @@ enum SignupOriginRules {
         static let outsideNameExample = "مثال: محمد حسن حسين"
         static let motherNameExample = "مثال: فاطمة أحمد علي حسن"
         static let motherNameHelp = "الاسم الأول واسم والدها وجدها وجد والدها، بدون اسم العائلة."
-        static let familyNameShort = "يُرجى كتابة الاسم الأول واسم الوالد على الأقل."
+        static let familyNameShort = "يُرجى كتابة الاسم الرباعي كاملاً: الاسم الأول واسم الوالد والجد وجد الوالد."
         static let outsideNameShort = "يُرجى كتابة الاسم الثلاثي كاملاً: الاسم الأول واسم الوالد والجد."
         static let familyShort = "يُرجى كتابة اسم العائلة بحرفين على الأقل."
-        static let motherNameShort = "يُرجى كتابة اسم الوالدة ثلاثياً على الأقل، بدون اسم العائلة."
+        static let motherNameShort = "يُرجى كتابة اسم الوالدة رباعياً، بدون اسم العائلة."
         static let missingPrefix = "لإرسال الطلب يُرجى استكمال: "
         static func missingLine(_ labels: [String]) -> String { missingPrefix + labels.joined(separator: "، ") }
         static let photoOptional = "اختيارية"
@@ -290,7 +306,7 @@ enum SignupOriginRules {
              familyFullName, outsideFullName, familyNameHint, outsideNameHint, familyName, familyPlaceholder, birthDate, gender,
              submit, back, under13, guardian, signOut,
              waitingTitle, waitingBody, waitingChip, refresh, editRequest, contactAdmin, deleteAccount,
-             completeTitle, approvedLine, motherQuestion, yes, no, motherName, motherNamePlaceholder, motherNameHint,
+             completeTitle, approvedLine, motherQuestion, yes, no, confirmNoTitle, confirmNoBody, confirm, motherName, motherNamePlaceholder, motherNameHint,
              fatherLine("فلان"), fatherMissing, send, later, pendingTitle, sentBody, goToApp, rejectedTitle, rejectedBody,
              lockedTitle, lockedBody, homeBody, limitedTag,
              motherPlaceholder, motherHint, motherNotFound, fatherPlaceholder,

@@ -257,7 +257,8 @@ struct AdminJoinBox: View {
                 .padding(.vertical, DS.Spacing.xxs)
                 .background(Capsule().fill(tag.fill))
             HStack(spacing: DS.Spacing.md) {
-                DSMemberAvatar(name: applicantName, avatarUrl: member?.avatarUrl,
+                // لا صورة لأنثى أبداً — الحرف الأول بدلها
+                DSMemberAvatar(name: applicantName, avatarUrl: female ? nil : member?.avatarUrl,
                                size: compact ? DS.Icon.rowLarge : DS.Icon.avatar,
                                roleColor: female ? DS.Color.female : DS.Color.brand)
                     .accessibilityHidden(true)
@@ -479,10 +480,14 @@ struct AdminJoinBox: View {
             .padding(.horizontal, DS.Spacing.md)
             .padding(.vertical, DS.Spacing.sm)
             .frame(minHeight: DS.Icon.tapTarget)
-            .background(selected ? DS.Color.cardBackgroundSoft : Color.clear)
-            // المختار: علامة ✓ وإطار — لا باللون وحده
-            .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
-                .strokeBorder(selected ? DS.Color.primary : Color.clear, lineWidth: DS.Border.widthBold))
+            // المختار: علامة ✓ وإطار — لا باللون وحده. الإطار والخلفية داخلان قليلاً عن إطار القائمة فلا يتقاطعان
+            // في الركن (ملاحظة المنتقد)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                .fill(selected ? DS.Color.cardBackgroundSoft : Color.clear)
+                .padding(DS.Spacing.xxs))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                .strokeBorder(selected ? DS.Color.primary : Color.clear, lineWidth: DS.Border.widthBold)
+                .padding(DS.Spacing.xxs))
             // الاختيار: ✓ والإطار يتبدّلان بتباطؤ سريع لا قفزة
             .animation(reduceMotion ? DSMotion.fade : DSMotion.tap, value: selected)
             .contentShape(Rectangle())

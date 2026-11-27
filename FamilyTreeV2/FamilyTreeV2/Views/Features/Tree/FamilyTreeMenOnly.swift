@@ -32,10 +32,15 @@ nonisolated enum FamilyTreeMenOnly {
         return hasWomenPath ? .redirectToWomenTree : .blockOnly
     }
 
-    /// الجنس الذي يبقى في المربّع بعد الاختيار — «أنثى» لا تُقبل، فيبقى ما كان (وإن كان أنثى خطأً يرجع ذكراً)
+    /// الجنس الذي يبقى في المربّع بعد الاختيار — «أنثى» لا تُقبل: يبقى الحقل فارغاً (بلا اختيار) حتى يختار المستخدم
+    /// بنفسه، ولا يُختار «ذكر» عنه بصمت
     static func keptGender(picked: String, current: String) -> String {
-        guard isFemale(picked) else { return picked }
-        return isFemale(current) ? "male" : current
+        isFemale(picked) ? "" : picked
+    }
+
+    /// اختير جنس؟ بعد تنبيه «أنثى» يبقى الحقل فارغاً، وزرّ الإضافة ينتظر اختيار المستخدم
+    static func genderChosen(_ gender: String) -> Bool {
+        !gender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// آخر حارس قبل الكتابة: لا تُكتب أنثى في شجرة العائلة من مربّعات الإضافة

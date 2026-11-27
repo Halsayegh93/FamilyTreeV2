@@ -326,6 +326,28 @@ nonisolated enum AdminMemberCardLogic {
 
     /// الصلة كما يقولها السيرفر: ابن البنت (`daughter_son_lineage`) ثم علامة «من خارج العائلة» (`is_outside_family`) ثم
     /// أب في الشجرة — nil = لا شيء معروف (الصفّ «غير مسجّل»)
+    /// «ابن بنت» / «بنت بنت» بجنس العضو (بند ١٢، المالك ٢٠٢٦-١١-٢٧)
+    static func daughterChildTitle(female: Bool, arabic: Bool = true) -> String {
+        arabic ? (female ? "بنت بنت" : "ابن بنت") : (female ? "Daughter's daughter" : "Daughter's son")
+    }
+
+    /// شارة ابن/بنت البنت في كرت العضو — للإدارة وحدها (العضو لا يرى شيئاً منها):
+    /// «صلاحيات محدودة» أولاً · ثم «أمّه/أمّها فلانة» متى رُبطت الأم · ثم «لم يستكمل/لم تستكمل التسجيل» لمن له صفّ
+    /// قُبل ولم يكتمل (`completed_at` فارغ) · وإلا العنوان وحده
+    static func daughterChildTag(female: Bool, limited: Bool, completed: Bool, hasRow: Bool, mother: String?,
+                                 arabic: Bool = true) -> String {
+        let title = daughterChildTitle(female: female, arabic: arabic)
+        if limited { return title + " · " + (arabic ? "صلاحيات محدودة" : "Limited access") }
+        if let mother, !mother.isEmpty {
+            return title + " · " + (arabic ? (female ? "أمّها \(mother)" : "أمّه \(mother)") : "mother \(mother)")
+        }
+        if hasRow && !completed {
+            return title + " · " + (arabic ? (female ? "لم تستكمل التسجيل" : "لم يستكمل التسجيل")
+                                           : "registration not completed")
+        }
+        return title
+    }
+
     static func lineage(isDaughterSon: Bool, outsideFlag: Bool, isFemale: Bool, hasFamilyFather: Bool) -> Lineage? {
         if isDaughterSon { return .daughterSon }
         if outsideFlag { return isFemale ? .outsideWife : .outsideHusband }

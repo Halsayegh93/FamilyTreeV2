@@ -26,13 +26,16 @@ check(M.decision(gender: " Female ", hasWomenPath: true), .redirectToWomenTree, 
 check(M.decision(gender: "FEMALE", hasWomenPath: false), .blockOnly, "female without women path → alert with cancel only")
 
 // ٢) الاختيار في المربّع: «أنثى» لا تبقى
-check(M.keptGender(picked: "female", current: "male"), "male", "pick female while male → stays male")
+check(M.keptGender(picked: "female", current: "male"), "", "pick female while male → empty, must choose again")
 check(M.keptGender(picked: "male", current: "male"), "male", "pick male → male")
-check(M.keptGender(picked: "female", current: "female"), "male", "stale female → back to male")
+check(M.keptGender(picked: "female", current: "female"), "", "stale female → empty, never silently male")
+check(M.keptGender(picked: "female", current: ""), "", "pick female from empty → stays empty")
 check(M.keptGender(picked: "male", current: "female"), "male", "pick male from stale female → male")
 
 // ٣) الحارس الأخير قبل الكتابة
 check(M.mayWriteToFamilyTree(gender: "male"), true, "male may be written")
+check(M.genderChosen(""), false, "empty after the alert → the add button waits for a choice")
+check(M.genderChosen("male"), true, "male chosen → may add")
 check(M.mayWriteToFamilyTree(gender: nil), true, "nil may be written (server writes male)")
 check(M.mayWriteToFamilyTree(gender: "female"), false, "female never written to the family tree")
 check(M.isFemale("female"), true, "isFemale female")

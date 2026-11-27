@@ -72,15 +72,29 @@ check(A.resetting(.daughterSon, matrix: m).rows[.daughterSon] == nil, true, "«�
 check(A.resetting(.daughterSon, matrix: m).json["daughter_son"] == nil, true, "وفي JSON")
 
 // ── ٥) الفئة (نفس قاعدة my_member_category على السيرفر) ──
-func cat(staff: Bool = false, active: Bool = true, limited: Bool = false, lineage: Bool = false, child: Bool = false,
-         outside: Bool = false, female: Bool = false) -> C? {
+func cat(staff: Bool = false, active: Bool = true, limited: Bool = false, lineage: Bool = false, completed: Bool = true,
+         review: Bool = false, child: Bool = false, outside: Bool = false, female: Bool = false) -> C? {
     A.category(.init(isStaff: staff, isActive: active, isLimited: limited, hasLineageRow: lineage,
+                     isCompleted: completed, isReviewAccount: review,
                      isDaughterChildNode: child, isOutsideNode: outside, isFemale: female))
 }
 check(cat(staff: true, limited: true), nil, "الإدارة خارج الجدول ولو لها صفّ نسب")
 check(cat(active: false), nil, "غير المفعّل خارج الجدول")
 check(cat(limited: true, lineage: true, female: true), .limited, "المحدود أولاً")
 check(cat(lineage: true), .daughterSon, "ابن بنت")
+// بند ١٣: «لم يستكمل التسجيل» — صفّ نسب بلا completed_at ولا limited_at (ومنه من أرسل اسم الوالدة وينتظر الإدارة)
+check(cat(lineage: true, completed: false), .incomplete, "ابن بنت لم يستكمل التسجيل")
+check(cat(lineage: true, completed: false, female: true), .incomplete, "بنت بنت لم تستكمل التسجيل")
+check(cat(limited: true, lineage: true, completed: false), .limited, "المحدود قبل «لم يستكمل»")
+check(cat(lineage: true, completed: false, review: true), .daughterSon, "حساب المراجعة يبقى في فئته اليوم")
+check(cat(completed: false, child: true), .daughterSon, "بلا صفّ نسب: ليس «لم يستكمل»")
+check(C.incomplete.rawValue, "incomplete", "مفتاح السيرفر")
+check(C.incomplete.titleAr, "لم يستكمل التسجيل", "عنوان الفئة")
+check(C.incomplete.whoAr, "أبناء وبنات البنات قبل استكمال التسجيل", "سطر الفئة")
+check(C.allCases.count, 7, "سبع فئات")
+check(S.allCases.allSatisfy { A.sees($0, category: .incomplete, matrix: empty, legacyLimited: nil)
+                               == A.sees($0, category: .daughterSon, matrix: empty, legacyLimited: nil) }, true,
+      "افتراض «لم يستكمل» = افتراض ابن البنت اليوم")
 check(cat(lineage: true, female: true), .daughterDaughter, "بنت بنت")
 check(cat(child: true, outside: true, female: true), .daughterDaughter, "بنت بنت من عقدتها قبل «من خارج العائلة»")
 check(cat(outside: true, female: true), .outsideSpouse, "زوجة من خارج العائلة")

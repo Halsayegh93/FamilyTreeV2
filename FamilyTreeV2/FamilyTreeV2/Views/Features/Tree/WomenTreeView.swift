@@ -331,6 +331,8 @@ struct WomanDetailSheet: View {
     @State private var confirmSelfRemoval = false
     /// طلبات تعديل البيانات في «الطلبات» (الشكل «أ»، قرار المالك ٢٠٢٦-١١-١٧) — مربّع الطلب المفتوح
     @State private var editRequest: WomanEditRequest? = nil
+    /// «إضافة صورة» لزوج البنت من خارج العائلة (بند ١٥): حسابه — يفتح مربّع اقتراح الصورة نفسه (`TreeEditRequestView`)
+    @State private var photoRequestFor: FamilyMember? = nil
     /// «الطلبات المرسلة» من «تابِعه» أو خانة «طلبك قيد المراجعة» (بطاقة «AB»، البندان ٥ و٧)
     @State private var showSentRequests = false
     /// «اتصال / واتساب» من صفّ «الهاتف» (الإدارة وهي نفسها) — نفس بطاقة الرجل
@@ -441,6 +443,21 @@ struct WomanDetailSheet: View {
     private var isMyNode: Bool {
         guard let me else { return false }
         return woman.id == me.id || WomenStore.womanByLinkedUser[me.id] == woman.id
+    }
+
+    /// حساب زوج البنت من خارج العائلة الذي تقترح له زوجته أو ابنه صورة (بند ١٥، المالك «خله عن طريق زوجته أو ابنه
+    /// المضاف مع طلب أو هو بنفسه») — nil لغيرهما، وللنساء، ولمن لا حساب له (الصورة تُطبَّق على `profiles` عند القبول)
+    private var outsideHusbandPhotoAccount: FamilyMember? {
+        guard let me else { return nil }
+        let myNode = WomenStore.womanByLinkedUser[me.id] ?? me.id
+        let mine = allWomen.first { $0.id == myNode }
+        let linked = WomenStore.linkedUserByWoman[woman.id] ?? (profileIds.contains(woman.id) ? woman.id : nil)
+        let target = MemberCardLogic.outsideHusbandPhotoTarget(
+            nodeIsMale: !woman.isFemale, nodeIsOutside: WomenStore.outsideFamilyIds.contains(woman.id),
+            linkedProfile: linked, viewer: me.id,
+            viewerIsWife: mine?.husbandId == woman.id,
+            viewerIsSon: mine?.fatherId == woman.id)
+        return target.flatMap { t in memberVM.allMembers.first { $0.id == t } }
     }
 
     /// عقدة أبي المستخدم — منها «إضافة أخت» (لا من الملف الشخصي — طلب المالك ٢٠٢٦-١٠-٢٤)
@@ -1513,9 +1530,12 @@ struct WomanDetailSheet: View {
     /// بلا «إضافة صورة». ما لا ينطبق على العقدة (زوج مسجّل، أم مسجّلة، الأخت لغير عقدة أبيه، وفاة مسجّلة) يُترك.
     /// الخانات من `MemberCardLogic.womenRequestIds` (البند ٤: بنت أقل من 13 بلا «أبناء» و«الزوج»)
     private var requestActions: [AdminAction] {
-        let ids = MemberCardLogic.womenRequestIds(isFemale: woman.isFemale, hasHusband: woman.husbandId != nil,
+        var ids = MemberCardLogic.womenRequestIds(isFemale: woman.isFemale, hasHusband: woman.husbandId != nil,
                                                   hasMother: mother != nil, isFatherNode: isMyFatherNode,
                                                   isDeceased: woman.isDeceased == true, age: womanAge)
+        // زوج البنت من خارج العائلة: «إضافة صورة» لزوجته أو ابنه وحدهما، قبل «طلب آخر»
+        let photoAccount = outsideHusbandPhotoAccount
+        if photoAccount != nil, let i = ids.firstIndex(of: "req.other") { ids.insert("req.addPhoto", at: i) }
         return ids.compactMap { id -> AdminAction? in
             switch id {
             case "child":
@@ -1533,6 +1553,11 @@ struct WomanDetailSheet: View {
             case "sister":
                 return AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
                                    icon: "figure.stand.dress") { startAdd(.sister) }
+            case "req.addPhoto":
+                guard let account = photoAccount else { return nil }
+                return AdminAction(id: id, title: L10n.t("إضافة صورة", "Add Photo"), icon: TreeEditAction.addPhoto.iconName) {
+                    handOff(from: { showAdminBox = false }) { photoRequestFor = account }
+                }
             default:
                 guard id.hasPrefix("req."), let kind = WomanEditRequest(rawValue: String(id.dropFirst(4))) else { return nil }
                 return AdminAction(id: id, title: kind.title, icon: kind.icon) {
@@ -1559,7 +1584,7 @@ struct WomanDetailSheet: View {
         case "req.deceased": return .record
         case "req.delete": return .delete
         case "req.other": return .other
-        case "req.editName", "req.editBirth": return .edit
+        case "req.editName", "req.editBirth", "req.addPhoto": return .edit
         default: return .add
         }
     }
@@ -1576,6 +1601,7 @@ struct WomanDetailSheet: View {
         case "req.editName": return L10n.t("اسم ", "Name of ") + who
         case "req.editBirth": return L10n.t("ميلاد ", "Birth of ") + who
         case "req.deceased": return L10n.t("وفاة ", "Death of ") + who
+        case "req.addPhoto": return L10n.t("صورة لـ", "Photo of ") + who
         case "req.other": return L10n.t("عن ", "About ") + who
         case "req.delete": return L10n.t("حذف ", "Delete ") + who
         default: return nil
@@ -1872,6 +1898,10 @@ struct WomanDetailSheet: View {
                                 isBusy: draft.busy,
                                 onSend: { sendEditRequest(kind, $0, $1) },
                                 onCancel: { editRequest = nil })
+        }
+        // اقتراح صورة زوج البنت من خارج العائلة — مسار «إضافة صورة» نفسه وموافقة الإدارة
+        .dsCenterBox(item: $photoRequestFor) { account in
+            TreeEditRequestView(member: account, action: .addPhoto)
         })
     }
 

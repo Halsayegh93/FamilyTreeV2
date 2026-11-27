@@ -123,13 +123,23 @@ nonisolated enum MemberCardLogic {
         return ids
     }
 
+    /// «إضافة صورة» لزوج البنت من خارج العائلة (بند ١٥، المالك ٢٠٢٦-١١-٢٧ «خله عن طريق زوجته أو ابنه المضاف مع طلب أو
+    /// هو بنفسه» — بلا زرّ للإدارة): الحساب الذي تُطبَّق عليه الصورة (`tree_edit add_photo` على `profiles.avatar_url`)، أو nil.
+    /// للذكر من خارج العائلة الذي له حساب، ولزوجته أو ابنه وحدهما — هو نفسه يضيفها من «حسابي»، والنساء بلا صور
+    static func outsideHusbandPhotoTarget(nodeIsMale: Bool, nodeIsOutside: Bool, linkedProfile: UUID?, viewer: UUID?,
+                                          viewerIsWife: Bool, viewerIsSon: Bool) -> UUID? {
+        guard nodeIsMale, nodeIsOutside, let linkedProfile, let viewer, viewer != linkedProfile,
+              viewerIsWife || viewerIsSon else { return nil }
+        return linkedProfile
+    }
+
     /// ما يُنفَّذ وحده عند القبول (`private.apply_women_request`) وما تنفّذه الإدارة بيدها:
     /// الابنة والأخت تلقائياً (ابن امرأة بلا زوج مسجّل يدوي)، الأم من زوجات الأب تلقائياً وأم جديدة يدوي،
     /// الزوج والزوجة و«طلب آخر» يدوي (البنود «لاحقاً» في المقترح)
     static func womenHonesty(_ id: String, isFemale: Bool, hasHusband: Bool, hasFatherWives: Bool) -> Honesty {
         switch id {
         case "child": return isFemale && !hasHusband ? .adminDoes : .afterApproval
-        case "sister", "req.editName", "req.editBirth", "req.deceased": return .afterApproval
+        case "sister", "req.editName", "req.editBirth", "req.deceased", "req.addPhoto": return .afterApproval
         case "addMother": return hasFatherWives ? .afterApproval : .adminDoes
         case "req.delete": return .deletesOwnerAdmin
         default: return .adminDoes

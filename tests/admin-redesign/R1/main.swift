@@ -35,10 +35,15 @@ func send(_ o: R.Origin, name: String = "سالم ناصر فهد", family: Stri
     R.canSubmit(origin: o, name: name, family: family, birthChosen: born, age: age, gender: gender)
 }
 check(send(.outside), true, "outside: all filled → send")
+check(send(.family), false, "family: three words is not a four-part name")
+check(send(.family, name: "سالم ناصر فهد علي"), true, "family: four words → send")
+check(send(.family, name: "سالم عبد الله فهد علي"), true, "family: «عبد الله» is one part")
+check(send(.family, name: "سالم عبد الله فهد"), false, "family: «عبد الله» counted once → three parts")
+check(send(.outside, name: "سالم عبد الله"), false, "outside: «عبد الله» counted once → two parts")
 check(send(.outside, name: "سالم ناصر"), false, "outside: three-part name required")
 check(send(.outside, family: ""), false, "outside: family required")
 check(send(.outside, family: " ا "), false, "outside: family needs two letters")
-check(send(.family, name: "سالم ناصر", family: ""), true, "family: two words enough, no family field")
+check(send(.family, name: "سالم ناصر", family: ""), false, "family: two words not enough")
 check(send(.family, name: "سالم"), false, "family: one word is not a name")
 check(send(.outside, gender: ""), false, "gender required")
 check(send(.outside, gender: "female"), true, "female too")
@@ -61,8 +66,9 @@ check(R.afterQuestion(motherInFamily: false), .limited, "«لا» → limited, n
 check(R.derivedFatherName(fullName: " سالم  ناصر فهد العتيبي "), "ناصر فهد العتيبي", "father = registered name after the first")
 check(R.derivedFatherName(fullName: "سالم العتيبي"), nil, "father needs two words")
 check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبدالله أحمد صالح", fatherName: "ناصر فهد"), true, "«نعم» + name → send")
-check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبدالله", fatherName: "ناصر فهد"), false, "mother name needs three words")
-check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبدالله أحمد", fatherName: nil), false, "no derived father → no send")
+check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبدالله أحمد", fatherName: "ناصر فهد"), false, "mother name needs four words")
+check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبد الله أحمد", fatherName: "ناصر فهد"), false, "mother: «عبد الله» is one part")
+check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبدالله أحمد صالح", fatherName: nil), false, "no derived father → no send")
 check(R.canSendCompletion(motherInFamily: false, motherName: "منيرة عبدالله أحمد", fatherName: "ناصر فهد"), false, "«لا» never sends a request")
 check(R.canSendCompletion(motherInFamily: nil, motherName: "منيرة عبدالله أحمد", fatherName: "ناصر فهد"), false, "unanswered → no send")
 check(R.isTypedLineage(details: #"{"v":4,"kind":"outside_typed"}"#), true, "outside_typed lineage request")
@@ -74,11 +80,11 @@ let joinDetails: [String?] = [nil, "طلب انضمام جديد" + R.familyMark
                               "y" + R.outsideMarker + "|matched_ids:b"]
 let origins = joinDetails.map(R.joinOrigin(details:))
 check(origins, [.family, .family, .outside, .family, .outside], "old requests without a marker count as family")
-let counts = R.originCounts(joins: origins, typedLineage: 2)
-check(counts, R.OriginCounts(family: 3, outside: 4), "counts: outside joins + completion requests")
+let counts = R.originCounts(joins: origins)
+check(counts, R.OriginCounts(family: 3, outside: 2), "counts: join rows only (completion requests show their own count on their row)")
 let items: [R.JoinOrigin?] = origins + [nil, nil]   // طلبان من نوع آخر
 check(items.filter { R.passes(.family, origin: $0) }.count, counts.family, "family chip rows = family count")
-check(items.filter { R.passes(.outside, origin: $0) }.count + 2, counts.outside, "outside chip rows + completion door = outside count")
+check(items.filter { R.passes(.outside, origin: $0) }.count, counts.outside, "outside chip number = outside join rows listed")
 check(items.filter { R.passes(.all, origin: $0) }.count, items.count, "«الكل» shows everything")
 
 // ٥ب) صفّ المقترحة: شرائح «الوالد» · «الجد» · «الميلاد» · «الزوج» بدل السطر الطويل
@@ -143,23 +149,26 @@ for path in sources {
 // ٧) وضوح الحقول (المالك ٢٠٢٦-١١-٢٧ «كتابة البيانات… واضحة ومفهومة») + صورة الذكر
 check(R.missingFields(origin: .outside, name: "", family: "", birthChosen: false, age: nil, gender: ""),
       [.name, .family, .birth, .gender], "outside: all missing, in field order")
-check(R.missingFields(origin: .family, name: "محمد عبدالله", family: "", birthChosen: true, age: 30, gender: "male"),
+check(R.missingFields(origin: .family, name: "محمد عبدالله علي أحمد", family: "", birthChosen: true, age: 30, gender: "male"),
       [], "family: complete → nothing missing")
-check(R.missingFields(origin: .family, name: "محمد عبدالله", family: "", birthChosen: true, age: 10, gender: "male"),
+check(R.missingFields(origin: .family, name: "محمد عبدالله علي أحمد", family: "", birthChosen: true, age: 10, gender: "male"),
       [.birth], "under 13 → birth still missing")
 check(R.nameError("", origin: .outside), nil, "empty name: no inline error (the missing line says it)")
 check(R.nameError("سالم ناصر", origin: .outside), R.Ar.outsideNameShort, "outside: two words → three-part error")
 check(R.nameError("سالم ناصر فهد", origin: .outside), nil, "outside: three words ok")
 check(R.nameError("سالم", origin: .family), R.Ar.familyNameShort, "family: one word → error")
+check(R.nameError("سالم ناصر فهد", origin: .family), R.Ar.familyNameShort, "family: three words → four-part error")
+check(R.nameError("سالم ناصر فهد علي", origin: .family), nil, "family: four words ok")
 check(R.familyError("ا"), R.Ar.familyShort, "family name: one letter → error")
 check(R.familyError(""), nil, "family name empty: no inline error")
 check(R.motherNameError("فاطمة أحمد"), R.Ar.motherNameShort, "mother: two words → error")
-check(R.motherNameError("فاطمة أحمد علي"), nil, "mother: three words ok")
+check(R.motherNameError("فاطمة أحمد علي"), R.Ar.motherNameShort, "mother: three words → error")
+check(R.motherNameError("فاطمة أحمد علي حسن"), nil, "mother: four words ok")
 check(R.Ar.missingLine(["الاسم الثلاثي", "الجنس"]), "لإرسال الطلب يُرجى استكمال: الاسم الثلاثي، الجنس", "missing line wording")
 for ex in [R.Ar.familyNameExample, R.Ar.outsideNameExample, R.Ar.motherNameExample, R.Ar.familyPlaceholder] {
     check(ex.hasPrefix("مثال: "), true, "placeholder is an example: \(ex)")
 }
-check(R.showsPhoto(gender: ""), true, "photo shown before gender is chosen")
+check(R.showsPhoto(gender: ""), false, "no photo before gender is chosen (gender first)")
 check(R.showsPhoto(gender: "male"), true, "photo shown for male")
 check(R.showsPhoto(gender: "female"), false, "no photo for female")
 check(R.photoToSend("img", gender: "female"), nil, "female: photo never sent")

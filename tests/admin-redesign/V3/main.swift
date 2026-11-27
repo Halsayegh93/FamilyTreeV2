@@ -493,5 +493,29 @@ check(C.knownValue("علي", known: false, placeholder: "—"), "—", "unknown 
 check(C.knownValue(nil, known: true, placeholder: "—"), nil, "known and empty → the row says «غير مسجّل» itself")
 check(C.knownValue("علي", known: true, placeholder: "—"), "علي", "known → the value")
 
+// بند ١٢ (المالك «نعم» ٢٠٢٦-١١-٢٧): شارة ابن/بنت البنت بجنسه وحالته — للإدارة وحدها
+check(C.daughterChildTitle(female: false), "ابن بنت", "male title")
+check(C.daughterChildTitle(female: true), "بنت بنت", "female title")
+check(C.daughterChildTag(female: false, limited: false, completed: false, hasRow: true, mother: nil),
+      "ابن بنت · لم يستكمل التسجيل", "approved, not completed, no mother → «لم يستكمل التسجيل»")
+check(C.daughterChildTag(female: true, limited: false, completed: false, hasRow: true, mother: nil),
+      "بنت بنت · لم تستكمل التسجيل", "female: «لم تستكمل التسجيل»")
+check(C.daughterChildTag(female: false, limited: false, completed: true, hasRow: true, mother: "سهيلة"),
+      "ابن بنت · أمّه سهيلة", "completed → «أمّه فلانة»")
+check(C.daughterChildTag(female: true, limited: false, completed: true, hasRow: true, mother: "سهيلة"),
+      "بنت بنت · أمّها سهيلة", "female → «أمّها فلانة»")
+check(C.daughterChildTag(female: false, limited: false, completed: false, hasRow: true, mother: "سهيلة"),
+      "ابن بنت · أمّه سهيلة", "mother linked (completed_at not yet read) → mother wins")
+check(C.daughterChildTag(female: true, limited: true, completed: false, hasRow: true, mother: nil),
+      "بنت بنت · صلاحيات محدودة", "female limited")
+check(C.daughterChildTag(female: false, limited: true, completed: false, hasRow: true, mother: "سهيلة"),
+      "ابن بنت · صلاحيات محدودة", "limited wins")
+check(C.daughterChildTag(female: false, limited: false, completed: true, hasRow: true, mother: nil),
+      "ابن بنت", "completed, mother not loaded → title only")
+check(C.daughterChildTag(female: false, limited: false, completed: false, hasRow: false, mother: nil),
+      "ابن بنت", "no lineage row (old flag) → title only")
+check(C.daughterChildTag(female: false, limited: false, completed: true, hasRow: true, mother: "سهيلة", arabic: false),
+      "Daughter's son · mother سهيلة", "English")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)
