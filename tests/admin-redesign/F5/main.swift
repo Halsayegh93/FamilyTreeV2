@@ -59,18 +59,19 @@ func listed(_ s: F, sees: Bool = true) -> Int { rows(s, sees: sees).reduce(0) { 
 
 // MARK: - الافتراضي: «رجال» شريحة عادية تُزال
 
-check(F().people, [.men], "the page opens on {رجال}")
-check(P.pageDefault, [.men], "page default = {رجال}")
+check(F().people, [.men, .women], "the page opens on {رجال، نساء} = «الإجمالي» (owner 2026-11-27)")
+check(P.pageDefault, [.men, .women], "page default = {رجال، نساء}")
 let set = P.filterSet(seesOthers: true, result: { count($0) }, branchTitle: { _ in "فرع جاسم" },
                       subTitle: { $0 }, branchPicker: { _, _ in "picker" })
-check(set.snapshot(F()).items.map(\.title), ["رجال"], "default shows as a normal removable chip «رجال»")
-check(set.snapshot(F()).items.map(\.count), ["4"], "the default chip carries its count")
-check(set.activeCount(F()), 1, "«تصفية» button counts the default pick")
+check(set.snapshot(F()).items.map(\.title), ["رجال", "نساء"], "defaults show as normal removable chips «رجال» «نساء»")
+check(set.snapshot(F()).items.map(\.count), ["4", "3"], "the default chips carry their counts")
+check(set.activeCount(F()), 2, "«تصفية» button counts the default picks")
 if let men = set.snapshot(F()).items.first {
     let after = set.applying(men.remove, to: F())
-    check(after.people, [], "✕ «رجال» → no pick")
-    check(P.effective(after.people, seesOthers: true), [.men, .women, .outside], "no pick = all three")
-    check(set.snapshot(after).result, 9, "all three: 4 men + 3 women + 2 living outside")
+    check(after.people, [.women], "✕ «رجال» → women only")
+    let none = F(people: [])
+    check(P.effective(none.people, seesOthers: true), [.men, .women, .outside], "no pick = all three")
+    check(set.snapshot(none).result, 9, "all three: 4 men + 3 women + 2 living outside")
 }
 check(set.groups(F()).first?.id, "people", "«مَن» is the first group")
 check(set.groups(F()).first?.title, "مَن", "«مَن» title")
@@ -156,13 +157,13 @@ check(P.sectionTitle(.outside), "خارج العائلة", "section title outsid
 
 // MARK: - سطر الوصف والمعدود
 
-check(P.caption(F(), seesOthers: true, branch: nil), "رجال", "caption: the default population")
+check(P.caption(F(), seesOthers: true, branch: nil), "رجال · نساء", "caption: the default populations")
 check(P.caption(F(people: []), seesOthers: true, branch: nil), "كل العائلة", "caption: all three → «كل العائلة»")
 check(P.caption(F(people: [.women, .men]), seesOthers: true, branch: nil), "رجال · نساء", "caption: the picked populations in order")
-check(P.caption(F(), seesOthers: true, branch: "فرع جاسم"), "رجال · فرع جاسم", "caption: population and branch")
+check(P.caption(F(), seesOthers: true, branch: "فرع جاسم"), "رجال · نساء · فرع جاسم", "caption: populations and branch")
 check(P.caption(F(people: []), seesOthers: true, branch: "فرع جاسم"), "فرع جاسم", "caption: branch alone")
 check(P.caption(F(), seesOthers: false, branch: nil), "كل العائلة", "caption (monitor): as before")
-check(P.noun(F(), seesOthers: true, 783), "رجل", "noun: men")
+check(P.noun(F(people: [.men]), seesOthers: true, 783), "رجل", "noun: men")
 check(P.noun(F(people: [.women]), seesOthers: true, 262), "امرأةً", "noun: women 11–99")
 check(P.noun(F(people: [.women]), seesOthers: true, 300), "امرأة", "noun: women hundreds")
 check(P.noun(F(people: [.women]), seesOthers: true, 5), "نساء", "noun: women 3–10")
@@ -223,8 +224,8 @@ check(S.destination(.outsideDeceased, viewer: oa), .women(AdminWomenLanding(stat
 
 check(AdminMembersLogic.opening(chip: "registered", sub: "all", womenOutside: true), AdminMembersLogic.Opening(people: [.outside]),
       "old womenOutside link → «العائلة» {خارج العائلة} (no page pushed)")
-check(F(AdminMembersLogic.opening(landing: AdminMembersLanding(account: .with))).people, [.men],
-      "landing without a population → page default {رجال}")
+check(F(AdminMembersLogic.opening(landing: AdminMembersLanding(account: .with))).people, [.men, .women],
+      "landing without a population → page default {رجال، نساء}")
 check(F(AdminMembersLogic.opening(landing: AdminMembersLanding(population: []))).people, [],
       "landing with an empty population → all three")
 check(AdminMembersLanding(population: [.women]).overridden(by: AdminMembersLanding(account: .with)),
@@ -232,14 +233,14 @@ check(AdminMembersLanding(population: [.women]).overridden(by: AdminMembersLandi
 check(AdminMembersLanding(population: [.women]).overridden(by: AdminMembersLanding(population: [.outside])).population,
       [.outside], "an explicit population wins")
 var linked = F(AdminMembersLogic.opening(chip: "registered", sub: "all", womenOutside: false))
-check(set.snapshot(linked).items.map(\.title), ["رجال", "لهم حساب", "الأحياء"], "old «مسجّلون» link: men + its two chips")
+check(set.snapshot(linked).items.map(\.title), ["رجال", "نساء", "لهم حساب", "الأحياء"], "old «مسجّلون» link: default + its two chips")
 linked = F(AdminMembersLogic.opening(chip: "all", sub: "all", womenOutside: false))
 check(linked, F(), "plain open = page default")
 
 // MARK: - التحميل: «—» لا صفر
 
 check(count(F(people: [.women]), ready: [.men]), nil, "women not loaded yet → «—»")
-check(count(F(), ready: [.men]), 4, "men count needs no women data")
+check(count(F(people: [.men]), ready: [.men]), 4, "men count needs no women data")
 check(count(F(accounts: [.with]), accountsReady: false), nil, "men by account wait for the account lists")
 check(count(F(people: [.women], accounts: [.with]), accountsReady: false), 1, "women by account need no men account lists")
 

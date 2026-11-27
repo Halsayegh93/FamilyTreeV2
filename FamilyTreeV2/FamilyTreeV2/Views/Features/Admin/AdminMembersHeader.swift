@@ -90,13 +90,16 @@ struct AdminMembersHeaderButtons: View {
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
             }
-            if reports != nil || womenPage != nil || womenTree != nil {
+            // «التقارير (PDF)» أيقونة ظاهرة لا داخل «⋯» (المالك ٢٠٢٦-١١-٢٧ «التقارير في العائلة خلها ايقونة مو داخل نقاط»)
+            if let reports {
+                Button(action: reports) {
+                    AdminMembersBandCircle(symbol: "doc.richtext")
+                }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("التقارير (PDF)", "Reports (PDF)"))
+            }
+            if womenPage != nil || womenTree != nil {
                 Menu {
-                    if let reports {
-                        Button(action: reports) {
-                            Label(L10n.t("التقارير (PDF)", "Reports (PDF)"), systemImage: "doc.richtext")
-                        }
-                    }
                     if let womenPage {
                         Button(action: womenPage) {
                             Label(AdminWomenPanel.title, systemImage: "person.2")
@@ -111,8 +114,6 @@ struct AdminMembersHeaderButtons: View {
                     AdminMembersBandCircle(symbol: "ellipsis")
                 }
                 .accessibilityLabel(L10n.t("المزيد", "More"))
-                .accessibilityHint(reports != nil ? L10n.t("التقارير وصفحة النساء", "Reports and the women's pages")
-                                                  : L10n.t("شجرة النساء", "The women's tree"))
             }
         }
     }

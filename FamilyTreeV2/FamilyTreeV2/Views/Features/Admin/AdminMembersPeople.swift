@@ -25,7 +25,8 @@ enum AdminPeopleLogic {
     typealias Tally = AdminMembersLogic.Tally
 
     /// ما تُفتح عليه الصفحة: الرجال (القائمة كما كانت) — شريحة «رجال» تُزال
-    static let pageDefault: Set<Population> = [.men]
+    // رجال + نساء = «الإجمالي» نفسه في لوحة الإدارة (المالك ٢٠٢٦-١١-٢٧ «الاجمالي يختلف في لوحة الادارة عن قسم العائلة»)
+    static let pageDefault: Set<Population> = [.men, .women]
 
     // MARK: الحالة
 
