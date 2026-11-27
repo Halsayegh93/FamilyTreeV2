@@ -85,9 +85,7 @@ enum AdminPeopleLogic {
     /// أبجدياً (أو بالأقرب) دائماً
     static func order(_ s: Filters, seesOthers: Bool, searching: Bool) -> AdminMembersLogic.Order {
         if searching { return .relevance }
-        let filtered = !s.accounts.isEmpty || !s.lives.isEmpty || s.branch != nil || s.sub != nil
-        let menOnTop = effective(s.people, seesOthers: seesOthers).first == .men
-        return filtered || !menOnTop ? .alphabetical : .branches
+        return .alphabetical   // بلا أقسام الفروع (المالك ٢٠٢٦-١١-٢٧)
     }
 
     // MARK: النصوص

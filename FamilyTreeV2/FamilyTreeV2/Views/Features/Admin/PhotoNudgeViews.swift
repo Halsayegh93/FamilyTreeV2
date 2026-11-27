@@ -263,8 +263,11 @@ enum AdminPhotoNudgeList {
     /// يدخلون القائمة وعددها ولا يمسّون أي رقم في العائلة
     static func rows(in index: AdminMembersIndex, viewer: PhotoNudgeLogic.Viewer, outside: Set<UUID> = []) -> [Int]? {
         guard index.built, index.accountsReady else { return nil }
+        // «حساب المراجعة» (أبل) لا يُنبَّه — مثل `photo_nudge_listed` على السيرفر (المالك ٢٠٢٦-١١-٢٧)
+        let review = AppConfigValues.shared.reviewAccountIds
         return index.entries.indices.filter { i in
             let e = index.entries[i]
+            guard !review.contains(e.id) else { return false }
             return PhotoNudgeLogic.isListed(.init(e.member, hasLogin: hasLogin(e, outside: outside)),
                                             viewerId: viewer.id, viewerIsOwner: viewer.isOwner)
         }

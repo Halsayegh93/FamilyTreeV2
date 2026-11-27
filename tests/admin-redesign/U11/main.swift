@@ -104,7 +104,7 @@ check(M.daysSince(now.addingTimeInterval(3_600), now: now, calendar: cal), 0, "a
 
 // MARK: - الترتيب في سطر الملخّص
 
-check(M.Order.make(filtered: false, searching: false), .branches, "no filter, no search → by branch")
+check(M.Order.make(filtered: false, searching: false), .alphabetical, "no filter, no search → A–Z (no branch sections, owner 2026-11-27)")
 check(M.Order.make(filtered: true, searching: false), .alphabetical, "filters → A–Z (mock 4 «أبجدياً»)")
 check(M.Order.make(filtered: true, searching: true), .relevance, "search → best match")
 check(M.Order.alphabetical.title, "أبجدياً", "order word")

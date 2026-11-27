@@ -1,11 +1,11 @@
 -- «مسجّلون بلا صورة»: أبناء البنات المسجّلون يُنبَّهون مثل غيرهم (بلاغ المالك ٢٠٢٦-١١-٢٧ — «حسين علي محمد الصاغة»).
--- NOT APPLIED — يطبّقه المدير بعد المراجعة. فوق 20261126200000_photo_requests_fixes (مطبَّق ٢٠٢٦-١١-٢٦).
+-- مطبَّق ٢٠٢٦-١١-٢٧ (بعد تجربة begin…rollback على الحي: حسين الصاغة داخل، حساب المراجعة خارج، ٥٧ في القاعدة). فوق 20261126200000_photo_requests_fixes (مطبَّق ٢٠٢٦-١١-٢٦).
 --
 -- كانت private.photo_nudge_listed تستبعد ابن البنت (daughter_son_lineage) لأن قائمة التطبيق تُبنى من app_usage_members،
 -- وتلك تستبعدهم عمداً (لا يُعدّون في أرقام العائلة). فكان ابن البنت المسجّل بلا صورة لا يظهر في «مسجّلون بلا صورة» ولا
 -- يصله «نبّههم كلهم». المالك يريده مثل غيره من الرجال المسجّلين.
 --
--- التغيير الوحيد: حذف شرط «ليس ابن بنت». كل شرط آخر كما هو حرفياً: ليس المتصل، حيّ، status = active، ليس pending، المالك
+-- التغييران: حذف شرط «ليس ابن بنت»، واستثناء «حساب المراجعة» (review_account_ids). كل شرط آخر كما هو حرفياً: ليس المتصل، حيّ، status = active، ليس pending، المالك
 -- للمالك فقط، ليس أنثى، بلا صورة (avatar_url وphoto_url)، له رقم هاتف، له حساب دخول أو جهاز.
 -- لا يمسّ: app_usage_members وأرقام العائلة (أبناء البنات خارجها كما هم)، request_photo_change (لم يستثنهم أصلاً)،
 -- photo_requests_remind_tick (لم يستثنهم أصلاً)، request_photo_add_all (تقرأ هذه الدالة).
@@ -35,6 +35,8 @@ as $function$
        and nullif(btrim(coalesce(p.avatar_url, '')), '') is null
        and nullif(btrim(coalesce(p.photo_url, '')), '') is null
        and nullif(btrim(coalesce(p.phone_number, '')), '') is not null
+       -- «حساب المراجعة» (أبل) لا يُنبَّه (المالك ٢٠٢٦-١١-٢٧ «استثني حساب المراجعة») — app_config.review_account_ids
+       and not (p.id = any(public.review_account_ids()))
        and (public.profile_has_login(p.id)
             or exists (select 1 from public.device_tokens t where t.member_id = p.id)));
 $function$;

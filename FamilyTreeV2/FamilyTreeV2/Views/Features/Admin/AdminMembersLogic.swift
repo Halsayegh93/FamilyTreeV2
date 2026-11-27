@@ -223,7 +223,9 @@ nonisolated enum AdminMembersLogic {
 
         static func make(filtered: Bool, searching: Bool) -> Order {
             if searching { return .relevance }
-            return filtered ? .alphabetical : .branches
+            // بلا أقسام الفروع (المالك ٢٠٢٦-١١-٢٧ «لا تظهر الافرع بالعائلة بالادارة») — أبجدياً دائماً بلا بحث
+            _ = filtered
+            return .alphabetical
         }
 
         var title: String {

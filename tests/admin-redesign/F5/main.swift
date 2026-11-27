@@ -171,8 +171,8 @@ check(P.noun(F(people: [.outside]), seesOthers: true, 2), "فردان", "noun: o
 
 // MARK: - الترتيب: الفروع للرجال بلا تصفية أخرى ولا بحث
 
-check(P.order(F(), seesOthers: true, searching: false), .branches, "default: men by branch")
-check(P.order(F(people: [.men, .women]), seesOthers: true, searching: false), .branches, "population picks don't break branches")
+check(P.order(F(), seesOthers: true, searching: false), .alphabetical, "default: men A–Z (no branch sections, owner 2026-11-27)")
+check(P.order(F(people: [.men, .women]), seesOthers: true, searching: false), .alphabetical, "population picks stay A–Z")
 check(P.order(F(lives: [.alive]), seesOthers: true, searching: false), .alphabetical, "another filter → A–Z")
 check(P.order(F(people: [.women]), seesOthers: true, searching: false), .alphabetical, "women alone → A–Z")
 check(P.order(F(), seesOthers: true, searching: true), .relevance, "search → best match")

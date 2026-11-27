@@ -131,7 +131,13 @@ async function setup(stage) {
   await db.exec(p1);
   await seed(db);
   if (stage === 'after' || stage === 'dsons') await db.exec(fix);
-  if (stage === 'dsons') await db.exec(dsons);
+  if (stage === 'dsons') {
+    // «حساب المراجعة» (الحي: app_config.review_account_ids) — بديل صغير في القاعدة المعزولة
+    await db.exec(`create table if not exists public.test_review_ids(id uuid);
+      create or replace function public.review_account_ids() returns uuid[] language sql stable as
+      $f$ select coalesce(array_agg(id), '{}'::uuid[]) from public.test_review_ids $f$;`);
+    await db.exec(dsons);
+  }
   return db;
 }
 
@@ -390,6 +396,11 @@ const sortIds = a => JSON.stringify([...a].sort());
   await db.exec(`update profiles set avatar_url = 'https://x/avatars/o.jpg' where id = '${P.O}'`);
   r = await as(db, P.A, `select private.photo_nudge_listed($1, $2, 'owner')`, [P.DS, P.A]);
   check('بعده: الدالة الداخلية لا تُنفَّذ من التطبيق', !r.ok, r.err ?? '');
+  // «حساب المراجعة» خارج القاعدة (المالك ٢٠٢٦-١١-٢٧)
+  check('حساب المراجعة قبل تعليمه: في القاعدة', await listed(db, P.DS) === true);
+  await db.exec(`insert into public.test_review_ids values ('${P.DS}')`);
+  check('حساب المراجعة: خارج القاعدة', await listed(db, P.DS) === false);
+  await db.exec(`delete from public.test_review_ids`);
   // الطلب الفردي والتذكير التلقائي لم يستثنيا ابن البنت أصلاً — لا تغيير
   const db2 = await setup('dsons');
   r = await ask(db2, P.A, P.DS, '');
