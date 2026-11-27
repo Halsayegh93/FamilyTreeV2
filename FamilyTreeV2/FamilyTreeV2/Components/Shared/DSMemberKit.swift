@@ -230,13 +230,15 @@ struct DSDetailsToggle: View {
     let isExpanded: Bool
     /// مستطيل صغير بجانب زرّ الدور (رأس تفاصيل العضو) — السهم فوق والاسم تحته
     var tile: Bool = false
+    /// لون التعبئة — nil = لون المعلومة؛ بطاقة العضو «AB» كحلي القسم (`DS.Color.actionNavy`)
+    var tint: Color? = nil
     let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var nudge: CGFloat = 0
     @State private var played = false
 
     var body: some View {
-        let ink = DSMemberKit.detailsTint
+        let ink = tint ?? DSMemberKit.detailsTint
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             action()

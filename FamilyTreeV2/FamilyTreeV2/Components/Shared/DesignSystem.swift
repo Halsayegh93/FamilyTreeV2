@@ -2945,3 +2945,77 @@ extension DS {
         static let secret = rgb(0x7B414A)
     }
 }
+
+// MARK: - بطاقة العضو «AB» (اختيار المالك ٢٠٢٦-١١-٢٧ «بين ا و ب»: أساس A الهادئ + لون B حيث يساعد القراءة)
+//
+// المصدر: reports/app-review/member-card-light/directions/AB.png و AB-dark.jpg (`dirs.css` قسم `.AB`).
+// خلفية المربّع كريمية خفيفة، وكل قسم لوح كريمي بإطار رفيع، وخطوط ذهبية رفيعة، وإطار ذهبي للصورة، وزخرفة تحت الاسم.
+// اللون في مكانين فقط: مربّع صغير بلون العائلة بجانب عنوان كل قسم، وخانات «طلب تعديل» الملوّنة (أفتح من B، أيقونة بيضاء).
+// يقرؤها `MemberCardAB.swift` وحده — في الشجرتين (`MemberDetailsView`، `WomanDetailSheet`) وشبكتي «طلب تعديل».
+extension DS {
+    enum MemberCard {
+        // الأرضيات (فاتح / داكن)
+        /// أرضية المربّع: كريمي خفيف جداً / كحلي الرأس الداكن
+        static let boxBackground = SwiftUI.Color.adaptive(light: "#FFFDF8", dark: "#1B2638")
+        /// لوح القسم الكريمي
+        static let panel = SwiftUI.Color.adaptive(light: "#F7F1E6", dark: "#222F44")
+        /// إطار اللوح الرفيع (الداكن = ذهبي ٢٢٪ فوق اللوح)
+        static let panelLine = SwiftUI.Color.adaptive(light: "#E6D9BF", dark: "#434649")
+        /// الخط الذهبي الخافت بعد عنوان القسم (الداكن = ذهبي ٤٥٪)
+        static let hair = SwiftUI.Color.adaptive(light: "#D9C9A6", dark: "#625A47")
+        /// صفّ داخل اللوح (معلومة، طلب) — أبيض / أرضية المربّع
+        static let inset = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1B2638")
+        static let insetLine = SwiftUI.Color.adaptive(light: "#EDE3CF", dark: "#2D3748")
+        /// «إغلاق» وزرّ الإلغاء على الأرضية الكريمية
+        static let soft = SwiftUI.Color.adaptive(light: "#F3EDE1", dark: "#2A3648")
+        /// النصّ الثانوي في البطاقة
+        static let muted = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#A9B4C2")
+        /// الذهبي للنصّ (رقم «طلبك عنه»، «تابِعه»، «عرض») — #725D31 على الفاتح و#C9AD6E على الداكن
+        static let goldText = SwiftUI.Color.adaptive(light: "#725D31", dark: "#C9AD6E")
+        /// الذهبي للخطوط والإطارات (= `DS.Color.accentLight`)
+        static let gold = DS.Color.accentLight
+
+        // المقاسات
+        static let panelRadius: CGFloat = 16
+        static let insetRadius: CGFloat = 12
+        /// مربّع اللون بجانب عنوان القسم
+        static let sectionSquare: CGFloat = 26
+        static let sectionSquareRadius: CGFloat = 8
+        /// رقم «طلبك عنه» في دائرة بإطار ذهبي
+        static let countDisc: CGFloat = 22
+        /// خط الرأس الذهبي تحت الرأس الكحلي
+        static let bandHairline: CGFloat = 2
+        /// حلقة الصورة: فراغ بلون الأرضية ثم خط ذهبي
+        static let avatarMat: CGFloat = 6
+        static let avatarRing: CGFloat = 1.5
+        /// الزخرفة تحت الاسم: عرضها ومعيّنها
+        static let ornamentWidth: CGFloat = 150
+        static let ornamentDiamond: CGFloat = 7
+        /// صور «العائلة» الصغيرة مطويّة
+        static let face: CGFloat = 38
+        /// خانة «طلب تعديل»: الارتفاع الأدنى، حلقة الأيقونة، الرسمة الباهتة
+        static let tileMinHeight: CGFloat = 124
+        static let tileRadius: CGFloat = 14
+        static let tileIconRing: CGFloat = 38
+        static let tileWatermark: CGFloat = 70
+        static let tileWatermarkOpacity: Double = 0.10
+        static let tileRingOpacity: Double = 0.75
+        /// حلقة أيقونة الخانة: كريمي المصمم ثابت (#F2EBDD)
+        static let tileRing = SwiftUI.Color(hex: "#F2EBDD")
+        static let tileDiscOpacity: Double = 0.14
+        static let tileSubtitleOpacity: Double = 0.82
+        /// سطر «طلبك قيد المراجعة» على الخانة، وسطر الحذف
+        static let tilePendingText = SwiftUI.Color(hex: "#FBE3A6")
+        static let tileWarningText = SwiftUI.Color(hex: "#FFE1DF")
+        static let tileHonestText = SwiftUI.Color(hex: "#F7F1E6")
+        /// شريط الملاحظة الذهبي تحت الشبكة: عرض الحدّ الذهبي
+        static let stripEdge: CGFloat = 3
+
+        // ألوان خانات «طلب تعديل» (ثابتة تحت نصّ أبيض في الوضعين): البداية ← النهاية
+        static let tileAdd = (SwiftUI.Color(hex: "#4A8469"), SwiftUI.Color(hex: "#3A715A"))
+        static let tileEdit = (SwiftUI.Color(hex: "#3F5B7B"), SwiftUI.Color(hex: "#324B68"))
+        static let tileRecord = (SwiftUI.Color(hex: "#76808B"), SwiftUI.Color(hex: "#646E79"))
+        static let tileOther = (SwiftUI.Color(hex: "#4A8290"), SwiftUI.Color(hex: "#3A6F7C"))
+        static let tileDelete = (SwiftUI.Color(hex: "#C25255"), SwiftUI.Color(hex: "#AD4144"))
+    }
+}

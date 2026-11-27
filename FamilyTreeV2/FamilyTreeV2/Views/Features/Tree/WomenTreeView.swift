@@ -328,6 +328,11 @@ struct WomanDetailSheet: View {
     @State private var confirmSelfRemoval = false
     /// طلبات تعديل البيانات في «الطلبات» (الشكل «أ»، قرار المالك ٢٠٢٦-١١-١٧) — مربّع الطلب المفتوح
     @State private var editRequest: WomanEditRequest? = nil
+    /// «الطلبات المرسلة» من «تابِعه» أو خانة «طلبك قيد المراجعة» (بطاقة «AB»، البندان ٥ و٧)
+    @State private var showSentRequests = false
+    /// «اتصال / واتساب» من صفّ «الهاتف» (الإدارة وهي نفسها) — نفس بطاقة الرجل
+    @State private var phoneActionsNumber: String? = nil
+    @Environment(\.openURL) private var openURL
 
     enum AddKind: Int, Identifiable {
         /// «ابن» — إجراء واحد وكل اسم داخله ذكر أو أنثى (طلب المالك ٢٠٢٦-١٠-٢٥ «خلها مسمى ابن وداخل المربع
@@ -490,11 +495,11 @@ struct WomanDetailSheet: View {
         return canEdit || isViewingSelf || husband?.id == me?.id
     }
 
-    /// الأم أو الزوجة/الزوج (حسب الخصوصية) — صف العلاقات في «العائلة»
-    private var hasRelations: Bool { mother != nil || !wives.isEmpty || showHusband }
+    /// الأب أو الأم أو الزوجة/الزوج (حسب الخصوصية) — صفّ العلاقات في «العائلة» (البند ٨: الأب داخل «العائلة»)
+    private var hasRelations: Bool { father != nil || mother != nil || !wives.isEmpty || showHusband }
     /// هل في التفاصيل ما يُعرض؟ — بلا شيء لا يظهر زر «عرض التفاصيل»
     private var hasDetails: Bool {
-        hasRelations || !children.isEmpty
+        hasRelations || !children.isEmpty || !infoRows.isEmpty || requestsMode != .none
     }
 
     var body: some View {
@@ -736,8 +741,27 @@ struct WomanDetailSheet: View {
             // شريط أزرار ثابت أسفل المربّع — مثل كل المربّعات: الإجراء كحلي يمين و«إغلاق» يسار
             panelFooter.readHeight($panelFooterH)
         }
-        .background(DS.Color.background)
+        // أرضية «AB» الكريمية الخفيفة (كحلي الرأس في الداكن)
+        .background(DS.MemberCard.boxBackground)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
+        .task { if !isViewingSelf { await adminRequestVM.fetchMyPendingRequests() } }
+        .dsTallBox(isPresented: $showSentRequests) {
+            MemberCardSentRequestsBox(onClose: { showSentRequests = false })
+        }
+        .dsAlert(L10n.t("التواصل", "Contact"),
+                 isPresented: Binding(get: { phoneActionsNumber != nil },
+                                      set: { if !$0 { phoneActionsNumber = nil } }),
+                 icon: "phone.fill") {
+            if let url = KuwaitPhone.telURL(phoneActionsNumber) {
+                Button(L10n.t("اتصال", "Call")) { openURL(url) }
+            }
+            if let url = KuwaitPhone.whatsappURL(phoneActionsNumber) {
+                Button(L10n.t("واتساب", "WhatsApp")) { openURL(url) }
+            }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { }
+        } message: {
+            Text(verbatim: "\u{2066}\(KuwaitPhone.display(phoneActionsNumber))\u{2069}")
+        }
     }
 
     /// رأس ملوّن مثل مربّعات الإضافة (فوق الصورة، بلا تداخل) — نفس رأس تفاصيل العضو
@@ -752,9 +776,11 @@ struct WomanDetailSheet: View {
                 onClose: close
             )
         }
+        // «AB»: خط ذهبي رفيع تحت الرأس الكحلي
+        .overlay(alignment: .bottom) { MemberCardBandHairline() }
         // علم دولة الرقم (غير الكويت) في زاوية الرأس — نفس تفاصيل العضو في شجرة العائلة، قبل زرّ × لا تحته
         .overlay(alignment: .trailing) {
-            DSPhoneCountryBadge(phone: visiblePhone)
+            DSPhoneCountryBadge(phone: shownPhone)
                 .padding(.leading, DS.Spacing.lg)
                 .padding(.trailing, DS.Theme.isCalm ? DS.Spacing.lg : DSFamilyKit.badgeInsetWithClose)
         }
@@ -765,9 +791,27 @@ struct WomanDetailSheet: View {
     /// رقم صاحب العقدة إن كان يحقّ للمشاهد رؤيته — من الشجرة العامة: الرجل بمعرّفه، والمرأة بحسابها المربوط
     /// (سجلّات شجرة النساء بلا أرقام)
     private var visiblePhone: String? {
-        let profile = memberVM.member(byId: woman.id)
+        linkedProfile?.dsVisiblePhone(viewerId: me?.id, viewerCanModerate: canModerate)
+    }
+
+    /// ملف الشجرة العامة لصاحب العقدة: الرجل بمعرّفه، والمرأة بحسابها المربوط
+    private var linkedProfile: FamilyMember? {
+        memberVM.member(byId: woman.id)
             ?? WomenStore.linkedUserByWoman[woman.id].flatMap { memberVM.member(byId: $0) }
-        return profile?.dsVisiblePhone(viewerId: me?.id, viewerCanModerate: canModerate)
+    }
+
+    /// البند ٨: صفّ الرقم بقاعدة `MemberCardLogic.phoneRow` — رقم المرأة لا يراه العضو أبداً (لا صفّ ولا «مخفي»)
+    private var phoneRow: MemberCardLogic.PhoneRow {
+        MemberCardLogic.phoneRow(hasPhone: visiblePhone != nil, isFemale: woman.isFemale,
+                                 isPhoneHidden: linkedProfile?.isPhoneHidden == true,
+                                 isDeceased: woman.isDeceased == true,
+                                 viewerIsSelf: isViewingSelf, viewerIsStaff: canModerate)
+    }
+
+    /// الرقم الظاهر للمشاهد فعلاً (للعلم في الرأس وصفّ «الهاتف»)
+    private var shownPhone: String? {
+        if case .shown = phoneRow { return visiblePhone }
+        return nil
     }
 
     /// الجزء الظاهر في المربّع المصغّر
@@ -805,7 +849,7 @@ struct WomanDetailSheet: View {
     /// «عرض التفاصيل» / «إخفاء التفاصيل» — الزرّ نفسه في الشجرتين (`DSDetailsToggle`، طلب المالك ٢٠٢٦-١٠-٢٤
     /// «شنو سويت عرض التفاصيل؟»): زرّ واضح بسهم يدور مع التوسيع
     private var detailsToggleButton: some View {
-        DSDetailsToggle(isExpanded: isExpanded, tile: true) { setExpanded(!isExpanded) }
+        DSDetailsToggle(isExpanded: isExpanded, tile: true, tint: DS.Color.actionNavy) { setExpanded(!isExpanded) }
     }
 
     /// التوسيع والتصغير بنابض ارتفاع المربّع نفسه — «تقليل الحركة»: مباشرة
@@ -818,31 +862,121 @@ struct WomanDetailSheet: View {
     /// أصلاً (العمر في الحبّة فقط). الإدارة صارت مربّعاً مستقلاً من الشريط السفلي.
     private var detailsBody: some View {
         let open = isExpanded
+        // البند ٨: «المعلومات» (الميلاد، الوفاة، الهاتف بقاعدته) ثم «العائلة» بالأب — مثل بطاقة الرجل
         return VStack(spacing: DS.Spacing.md) {
-            familySection
+            infoSection
                 .dsStaggerWhen(0, active: open)
 
-            pendingRequestsCard
+            familySection
                 .dsStaggerWhen(1, active: open)
+
+            pendingRequestsCard
+                .dsStaggerWhen(2, active: open)
         }
         .padding(.horizontal, DS.Spacing.lg)
     }
 
     // MARK: - «طلبات معلّقة» (طلب المالك ٢٠٢٦-١١-٢٦ «ارتباط واضح بالوارد»)
 
-    /// طلبات شجرة النساء عنها هي (`women.nodeId`) — نفس بطاقة تفاصيل العضو في شجرة العائلة: للإدارة ولصاحب الطلب،
-    /// وكل طلب يفتح في «الوارد» لمن يقرّر طلبات الشجرة (`canEdit` = `canModerateTree`)
+    /// البند ٧: «طلبك عنها» = طلباتك أنت على عقدتها مع «تابِعه» (العضو والمشرف)؛ القائمة كاملة لمن يقرّر طلبات الشجرة
+    /// (`canEdit` = `canModerateTree`) وكل طلب يفتح في «الوارد»
     @ViewBuilder
     private var pendingRequestsCard: some View {
-        let requests = adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.womenNodeId == woman.id }
-        if !requests.isEmpty, canModerate || requests.contains(where: { $0.requesterId == me?.id }) {
-            MemberPendingRequestsCard(
-                requests: requests,
-                onOpen: canEdit ? { request in
-                    MemberPendingRequestsLink.open(request) { dismiss() }
-                } : nil,
-                ink: DS.Color.actionNavy
-            )
+        let mode = requestsMode
+        MemberCardRequestsSection(
+            requests: mode == .all ? allRequestsOnNode : myRequestsOnNode,
+            mode: mode,
+            female: woman.isFemale,
+            onOpen: { request in
+                if mode == .all { MemberPendingRequestsLink.open(request) { dismiss() } } else { showSentRequests = true }
+            }
+        )
+    }
+
+    private var allRequestsOnNode: [AdminRequest] {
+        adminRequestVM.treeEditRequests.filter { $0.treeEditPayload?.womenNodeId == woman.id }
+    }
+
+    private var myRequestsOnNode: [AdminRequest] {
+        let ids = Set(myRequestRefs.map(\.id))
+        return adminRequestVM.myPendingRequests.filter { ids.contains($0.id) }
+    }
+
+    private var myRequestRefs: [MemberCardLogic.RequestRef] {
+        MemberCardLogic.mineInWomen(adminRequestVM.myPendingRequests.map(MemberDetailsView.ref),
+                                    nodeId: woman.id, viewer: me?.id)
+    }
+
+    private var requestsMode: MemberCardLogic.RequestsSection {
+        MemberCardLogic.requestsSection(canModerateTree: canEdit, allCount: allRequestsOnNode.count,
+                                        mineCount: myRequestsOnNode.count)
+    }
+
+    // MARK: «المعلومات» (البند ٨)
+
+    private struct InfoRow: Identifiable {
+        let id: String
+        let icon: String
+        let label: String
+        let value: String
+        var tint: Color = DS.Color.sea
+        var phone: String? = nil
+        var caption: String? = nil
+    }
+
+    /// الميلاد، الوفاة (السنة)، والهاتف بقاعدته — نفس صفوف بطاقة الرجل
+    private var infoRows: [InfoRow] {
+        var rows: [InfoRow] = []
+        let deceased = woman.isDeceased == true
+        if let birth = woman.birthDate, !birth.isEmpty {
+            let hidden = woman.isBirthDateHidden == true && !isViewingSelf && !canModerate
+            rows.append(InfoRow(id: "birth", icon: "calendar", label: L10n.t("الميلاد", "Birth"),
+                                value: hidden ? L10n.t("مخفي", "Hidden")
+                                    : (deceased ? (year(birth) ?? birth) : (DateHelper.displayDate(birth) ?? birth)),
+                                tint: hidden ? DS.Color.textTertiary : DS.Color.primary))
+        }
+        if deceased, let death = woman.deathDate, !death.isEmpty {
+            rows.append(InfoRow(id: "death", icon: "calendar.badge.minus", label: L10n.t("الوفاة", "Death"),
+                                value: year(death) ?? death, tint: DS.Color.textTertiary))
+        }
+        switch phoneRow {
+        case .shown(let hiddenCaption):
+            if let phone = visiblePhone {
+                rows.append(InfoRow(id: "phone", icon: "phone.fill", label: L10n.t("الهاتف", "Phone"),
+                                    value: KuwaitPhone.display(phone), phone: phone,
+                                    caption: hiddenCaption ? L10n.t("مخفي عن الأعضاء", "Hidden from members") : nil))
+            }
+        case .hiddenWord:
+            rows.append(InfoRow(id: "phone", icon: "phone.fill", label: L10n.t("الهاتف", "Phone"),
+                                value: L10n.t("مخفي", "Hidden"), tint: DS.Color.textTertiary))
+        case .none:
+            break
+        }
+        return rows
+    }
+
+    @ViewBuilder
+    private var infoSection: some View {
+        let rows = infoRows
+        if !rows.isEmpty {
+            MemberCardSection(title: L10n.t("المعلومات", "Info"), icon: "person.text.rectangle.fill",
+                              fill: DS.Color.seaFill) {
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(rows) { row in
+                        let body = MemberCardInfoRow(icon: row.icon, label: row.label, value: row.value, tint: row.tint,
+                                                     ltr: row.phone != nil, lockCaption: row.caption,
+                                                     tappable: row.phone != nil)
+                        if let phone = row.phone {
+                            Button { phoneActionsNumber = phone } label: { body }
+                                .buttonStyle(DSPressStyle())
+                                .accessibilityHint(L10n.t("اضغط للاتصال أو المراسلة عبر واتساب",
+                                                          "Tap to call or message on WhatsApp"))
+                        } else {
+                            body
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -852,10 +986,11 @@ struct WomanDetailSheet: View {
         VStack(spacing: DS.Spacing.md) {
             // (بلا توهّج مموّه خلف الصورة — نفس تفاصيل العضو)
             ZStack {
-                avatar(woman, size: 130)
+                avatar(woman, size: DS.Icon.memberHero)
                     // المتوفّى الذكر بالأبيض والأسود — والأنثى بلونها (نفس شجرة النساء)
                     .saturation(woman.isDeceased == true && !woman.isFemale ? 0 : 1)
-                    .overlay(Circle().stroke(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+                    // «AB»: فراغ بلون الأرضية ثم خط ذهبي رفيع وظلّ خفيف
+                    .memberCardAvatarFrame(side: DS.Icon.memberHero)
                     .scaleEffect(heroIn || reduceMotion ? 1 : 0.6)
                     .opacity(heroIn ? 1 : 0)
                     .accessibilityHidden(true)   // الصورة زخرفة — الاسم تحتها
@@ -884,6 +1019,9 @@ struct WomanDetailSheet: View {
                 .lineLimit(2)
                 .padding(.horizontal, DS.Spacing.lg)
                 .offset(y: heroIn || reduceMotion ? 0 : 10)
+                .opacity(heroIn ? 1 : 0)
+            // زخرفة «AB» تحت الاسم: خط ذهبي في وسطه معيّن
+            MemberCardOrnament()
                 .opacity(heroIn ? 1 : 0)
             // طلب حذف معلّق من المشاهد عليها (§11)
             if showsDeleteRequest && deletionPending {
@@ -931,36 +1069,22 @@ struct WomanDetailSheet: View {
         }
     }
 
-    /// حبّة العمر — تظهر جنب زر القرابة. للمتوفّاة: رمادي + رمز يوضّح الوفاة.
+    /// حبّة العمر — تظهر جنب زر القرابة. للمتوفّاة: رمادي + رمز يوضّح الوفاة. «5 سنوات» بعربي صحيح (البند ٩)
     @ViewBuilder
     private var agePill: some View {
         let isDeceased = woman.isDeceased == true
-        if let byStr = year(woman.birthDate), let byInt = Int(byStr) {
-            let end: Int? = isDeceased ? Int(year(woman.deathDate) ?? "") : Calendar.current.component(.year, from: Date())
-            if let end, end >= byInt, end - byInt < 130 {
-                let age = end - byInt
-                let color = isDeceased ? DS.Color.textSecondary : DS.Color.info
-                // حبّة ساكنة بمقاس شريحة العُدّة وشكلها (جنب شريحة «صلة القرابة»)
-                HStack(spacing: DS.Spacing.xsm) {
-                    Image(systemName: isDeceased ? "leaf.fill" : "timelapse")
-                        .dsGlyph(DS.Glyph.smCompact)
-                        .accessibilityHidden(true)   // زخرفة
-                    Text("\(age) " + L10n.t("سنة", "yrs"))
-                        .dsFont(.chip)
-                    if isDeceased {
-                        Text("· " + L10n.t(woman.isFemale ? "متوفّاة" : "متوفّى", "deceased"))
-                            .dsFont(.caption)
-                    }
-                }
-                .lineLimit(1)
-                .foregroundColor(color)
-                .padding(.horizontal, DSBox.chipPadding)
-                .frame(minHeight: DSBox.chipHeight)
-                .background(Capsule().fill(color.opacity(DS.Opacity.tintFill)))
-                .overlay(Capsule().strokeBorder(color.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
-                .accessibilityElement(children: .combine)   // الحبّة تُقرأ جملةً واحدة
-            }
+        if let age = womanAge {
+            MemberCardStaticChip(text: MemberCardLogic.yearsText(age),
+                                 icon: isDeceased ? "leaf.fill" : "timelapse",
+                                 tint: isDeceased ? DS.Color.textSecondary : DS.Color.info,
+                                 trailing: isDeceased ? "· " + L10n.t(woman.isFemale ? "متوفّاة" : "متوفّى", "deceased") : nil)
         }
+    }
+
+    /// العمر المسجّل (حبّة العمر، وقاعدة «بنت أقل من 13» في «طلب تعديل»)
+    private var womanAge: Int? {
+        MemberCardLogic.age(birth: woman.birthDate, death: woman.deathDate, deceased: woman.isDeceased == true,
+                            nowYear: Calendar.current.component(.year, from: Date()))
     }
 
     /// «مخفية عن الأعضاء» — من أخفاها (أبوها/زوجها) ومتى، وما أخفاه أهلها يُظهرونه هم
@@ -1017,11 +1141,16 @@ struct WomanDetailSheet: View {
         if hasRelations || !kids.isEmpty {
             // العائلة مطويّة ومغلقة بالبداية (طلب المالك ٢٠٢٦-١١-٠٦): الأم والزوجة بطاقتان أكبر، والأبناء
             // مرقّمون — الذكور ثم الإناث من الأكبر
-            // إطار «ب» (اختيار المالك ٢٠٢٦-١١-٠٧): حدّ أخضر + الملخّص تحت العنوان + صور الأقارب مطويّاً
-            DSFamilyBox(
+            // «AB»: لوح كريمي بمربّع أخضر العائلة — مطويّاً صور الأقارب بأدوارهم و«عرض ‹»
+            MemberCardFamilyBox(
                 summary: familySummary(children: kids.count),
-                people: stackPeople(children: kids),
-                isOpen: $familyOpen
+                relatives: stackPeople(children: kids),
+                isOpen: $familyOpen,
+                face: { m in
+                    avatar(m, size: DS.MemberCard.face)
+                        .saturation(m.isDeceased == true && !m.isFemale ? 0 : 1)
+                        .accessibilityHidden(true)
+                }
             ) {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     if hasRelations {
@@ -1035,22 +1164,24 @@ struct WomanDetailSheet: View {
         }
     }
 
-    /// صور رأس «العائلة» مطويّاً بالترتيب: الأم، الزوجة/الزوجات أو الزوج (بقاعدة خصوصيته)، ثم الأبناء
-    private func stackPeople(children kids: [FamilyMember]) -> [FamilyMember] {
-        var people: [FamilyMember] = []
-        if let mother { people.append(mother) }
+    /// صور «العائلة» مطويّاً بأدوارها: الأب، الأم، الزوجة/الزوجات أو الزوج (بقاعدة خصوصيته)، ثم الأبناء
+    private func stackPeople(children kids: [FamilyMember]) -> [MemberCardRelative] {
+        var people: [MemberCardRelative] = []
+        if let father { people.append(.init(member: father, role: L10n.t("الأب", "Father"))) }
+        if let mother { people.append(.init(member: mother, role: L10n.t("الأم", "Mother"))) }
         let w = wives
         if !w.isEmpty {
-            people += w
+            people += w.map { .init(member: $0, role: L10n.t("الزوجة", "Wife")) }
         } else if showHusband, let husband {
-            people.append(husband)
+            people.append(.init(member: husband, role: L10n.t("الزوج", "Husband")))
         }
-        return people + kids
+        return people + kids.map { .init(member: $0, role: shortName($0)) }
     }
 
     /// «الأم · الزوج · ٣ أبناء» — ملخّص بجانب العنوان والقسم مطويّ
     private func familySummary(children count: Int) -> String {
         var parts: [String] = []
+        if father != nil { parts.append(L10n.t("الأب", "Father")) }
         if mother != nil { parts.append(L10n.t("الأم", "Mother")) }
         let w = wives
         if !w.isEmpty {
@@ -1062,8 +1193,23 @@ struct WomanDetailSheet: View {
         return parts.joined(separator: " · ")
     }
 
-    /// الأم + الزوجة (أو الزوج) بطاقتان جنب بعض بصورة واسم وعمر — الضغط يفتح صاحبها
+    /// الأب والأم ثم الزوجة (أو الزوج) — بطاقات بصورة واسم وعمر، الضغط يفتح صاحبها (البند ٨: الأب داخل «العائلة»)
     private var relationsRow: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            if let father {
+                DSFamilyPersonCard(role: L10n.t("الأب", "Father"), icon: "person.fill",
+                                   tint: DS.Color.male, name: shortName(father),
+                                   detail: DSMemberAge.detail(father),
+                                   onTap: { onOpenMember?(father.id) }) {
+                    relationAvatar(father)
+                }
+            }
+            spouseAndMotherRow
+        }
+    }
+
+    /// الأم + الزوجة (أو الزوج) بطاقتان جنب بعض
+    private var spouseAndMotherRow: some View {
         let w = wives
         return HStack(alignment: .top, spacing: DS.Spacing.sm) {
             if let mother {
@@ -1362,43 +1508,57 @@ struct WomanDetailSheet: View {
     /// غيره — «طلب إضافة» للإدارة (عنوان المربّع وملاحظته تقولان إنها طلبات)، و«أخت» مباشرة على عقدة أبيه
     /// الترتيب (قرار المالك ٢٠٢٦-١١-١٧): أبناء · الزوج · أم · أخت · تعديل اسم · تعديل ميلاد · تسجيل وفاة · طلب آخر · حذف —
     /// بلا «إضافة صورة». ما لا ينطبق على العقدة (زوج مسجّل، أم مسجّلة، الأخت لغير عقدة أبيه، وفاة مسجّلة) يُترك.
+    /// الخانات من `MemberCardLogic.womenRequestIds` (البند ٤: بنت أقل من 13 بلا «أبناء» و«الزوج»)
     private var requestActions: [AdminAction] {
-        var list: [AdminAction] = [
-            AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
-                        icon: "figure.2.and.child.holdinghands") { startAdd(.child) }
-        ]
-        if !woman.isFemale {
-            list.append(AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"),
-                                    icon: "heart.fill") { openWifeFlow() })
-        } else if woman.husbandId == nil {
-            list.append(AdminAction(id: "husband", title: L10n.t("الزوج", "Husband"),
-                                    icon: "heart.fill") { openHusbandSource() })
-        }
-        if mother == nil {
-            // اختيار الأم من زوجات الأب (طلب المالك ٢٠٢٦-١١-١٧ «ليش مافي اختيار الام») — وإلا «إضافة أم جديدة»
-            list.append(AdminAction(id: "addMother", title: L10n.t("أم", "Mother"),
-                                    icon: "figure.2.arms.open") {
-                if fatherWives.isEmpty { openMotherFlow() } else { openMotherPicker() }
-            })
-        }
-        if isMyFatherNode {
-            list.append(AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
-                                    icon: "figure.stand.dress") { startAdd(.sister) })
-        }
-        var edits: [WomanEditRequest] = [.editName, .editBirth]
-        if woman.isDeceased != true { edits.append(.deceased) }
-        edits += [.other, .delete]
-        for kind in edits {
-            list.append(AdminAction(id: "req." + kind.rawValue, title: kind.title, icon: kind.icon) {
-                // بنته أو زوجته: «طلب حذف» بمسار «عائلتي» (`remove_self_woman_child`) كما كان زرّ الشريط
-                if kind == .delete && showsDeleteRequest {
-                    handOff(from: { showAdminBox = false }) { confirmSelfRemoval = true }
-                } else {
-                    editRequest = kind
+        let ids = MemberCardLogic.womenRequestIds(isFemale: woman.isFemale, hasHusband: woman.husbandId != nil,
+                                                  hasMother: mother != nil, isFatherNode: isMyFatherNode,
+                                                  isDeceased: woman.isDeceased == true, age: womanAge)
+        return ids.compactMap { id -> AdminAction? in
+            switch id {
+            case "child":
+                return AdminAction(id: "child", title: L10n.t("أبناء", "Children"),
+                                   icon: "figure.2.and.child.holdinghands") { startAdd(.child) }
+            case "wife":
+                return AdminAction(id: "wife", title: L10n.t("زوجة", "Wife"), icon: "heart.fill") { openWifeFlow() }
+            case "husband":
+                return AdminAction(id: "husband", title: L10n.t("الزوج", "Husband"), icon: "heart.fill") { openHusbandSource() }
+            case "addMother":
+                // اختيار الأم من زوجات الأب (طلب المالك ٢٠٢٦-١١-١٧ «ليش مافي اختيار الام») — وإلا «إضافة أم جديدة»
+                return AdminAction(id: "addMother", title: L10n.t("أم", "Mother"), icon: "figure.2.arms.open") {
+                    if fatherWives.isEmpty { openMotherFlow() } else { openMotherPicker() }
                 }
-            })
+            case "sister":
+                return AdminAction(id: "sister", title: L10n.t("أخت", "Sister"),
+                                   icon: "figure.stand.dress") { startAdd(.sister) }
+            default:
+                guard id.hasPrefix("req."), let kind = WomanEditRequest(rawValue: String(id.dropFirst(4))) else { return nil }
+                return AdminAction(id: id, title: kind.title, icon: kind.icon) {
+                    // بنته أو زوجته: «طلب حذف» بمسار «عائلتي» (`remove_self_woman_child`) كما كان زرّ الشريط
+                    if kind == .delete && showsDeleteRequest {
+                        handOff(from: { showAdminBox = false }) { confirmSelfRemoval = true }
+                    } else {
+                        editRequest = kind
+                    }
+                }
+            }
         }
-        return list
+    }
+
+    /// السطر الصادق تحت الخانة (البندان ٢ و٣)
+    private func requestHonesty(_ id: String) -> MemberCardLogic.Honesty {
+        MemberCardLogic.womenHonesty(id, isFemale: woman.isFemale, hasHusband: woman.husbandId != nil,
+                                     hasFatherWives: !fatherWives.isEmpty)
+    }
+
+    /// لون خانة «AB»: الإضافة أخضر، تعديل البيانات كحلي، الوفاة رمادي، «طلب آخر» بترولي، الحذف أحمر
+    private func requestPalette(_ id: String) -> MemberTilePalette {
+        switch id {
+        case "req.deceased": return .record
+        case "req.delete": return .delete
+        case "req.other": return .other
+        case "req.editName", "req.editBirth": return .edit
+        default: return .add
+        }
     }
 
     /// السطر الفرعي تحت كل دائرة (طلب المالك ٢٠٢٦-١١-١٧): لمن الطلب
@@ -1416,16 +1576,6 @@ struct WomanDetailSheet: View {
         case "req.other": return L10n.t("عن ", "About ") + who
         case "req.delete": return L10n.t("حذف ", "Delete ") + who
         default: return nil
-        }
-    }
-
-    /// لون الخانة الدائرية: الإضافة أخضر، تعديل البيانات كحلي، الوفاة رمادي، الحذف أحمر
-    private func requestTint(_ id: String) -> WomenRequestTint {
-        switch id {
-        case "req.deceased": return .death
-        case "req.delete": return .delete
-        case "req.editName", "req.editBirth", "req.other": return .edit
-        default: return .add
         }
     }
 
@@ -1661,16 +1811,31 @@ struct WomanDetailSheet: View {
                     // «طلب تعديل» بنفس مربّع شجرة العائلة (طلب المالك ٢٠٢٦-١١-١٧ «نوحد التصميم بنفس شكل السابق»):
                     // بطاقات `DSActionTile` اثنتان في السطر بلون النوع وسطرها الفرعي، و«طلب حذف» بعرض كامل آخراً
                     let tilesReq = actions   // «طلب حذف» خانة مثل البقية آخر الشبكة (طلب المالك ٢٠٢٦-١١-١٧)
-                    DSComposerSection(title: L10n.t("اختر نوع الطلب", "Choose Request Type"),
-                                      icon: "square.grid.2x2.fill", tint: DS.Color.primary, index: 0) {
-                        DSActionTileGrid {
+                    // «AB»: خانات ملوّنة بسطر صادق، وخانة عليها طلبك المعلّق «طلبك قيد المراجعة · افتحه» (البنود ٢–٥)
+                    let mine = myRequestRefs
+                    VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                        MemberCardGridTitle()
+                        MemberRequestGrid {
                             ForEach(Array(tilesReq.enumerated()), id: \.element.id) { i, action in
-                                DSActionTile(action.title, subtitle: requestSubtitle(action.id),
-                                             icon: action.icon, tint: requestTint(action.id).color,
-                                             action: action.run)
-                                    .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
-                                                y: DSMotion.rise, scale: DSMotion.riseScale)
+                                let pending = MemberCardLogic.pending(kind: MemberCardLogic.womenPendingKind(action.id),
+                                                                      in: mine) != nil
+                                let honesty = requestHonesty(action.id)
+                                MemberRequestTile(title: action.title, subtitle: requestSubtitle(action.id),
+                                                  icon: action.icon, palette: requestPalette(action.id),
+                                                  line: pending ? MemberCardLogic.pendingTileText : honesty.text,
+                                                  lineStyle: pending ? .pending : (honesty.isWarning ? .warning : .honest)) {
+                                    if pending {
+                                        handOff(from: { showAdminBox = false }) { showSentRequests = true }
+                                    } else {
+                                        action.run()
+                                    }
+                                }
+                                .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
+                                            y: DSMotion.rise, scale: DSMotion.riseScale)
                             }
+                        }
+                        if let note = MemberCardLogic.womenGridNote(isFemale: woman.isFemale, age: womanAge) {
+                            MemberCardStrip(text: note)
                         }
                     }
                     .disabled(draft.busy)
@@ -1689,6 +1854,8 @@ struct WomanDetailSheet: View {
                     .disabled(draft.busy)
                 }
             }
+            // «طلب تعديل» بأرضية «AB» الكريمية — الإدارة و«الأسرة» كما هما
+            .environment(\.dsComposerBackground, mode == .request ? DS.MemberCard.boxBackground : nil)
         )))
     }
 
@@ -2246,9 +2413,9 @@ struct WomanDetailSheet: View {
         .padding(.top, DSBox.footerTop)
         .padding(.bottom, DSBox.footerBottom)
         .background(
-            DS.Color.background
+            DS.MemberCard.boxBackground
                 .overlay(alignment: .top) {
-                    Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.cardStroke))
+                    Rectangle().fill(DS.MemberCard.panelLine)
                         .frame(height: DS.Card.strokeWidth)
                 }
         )
@@ -2916,10 +3083,10 @@ struct WomanDetailSheet: View {
             title = t.requested > 1 ? L10n.t("تم إرسال ", "Sent ") + DSRequestCount.text(t.requested)
                                     : L10n.t("تم إرسال الطلب", "Request sent")
             message = t.requested > 1
-                ? L10n.t("وصلت طلباتك للإدارة — كلٌّ يُراجَع وحده، ويصلك إشعار عند البتّ فيه.",
-                         "The administration got your requests — each is reviewed on its own; you'll be notified.")
-                : L10n.t("وصل طلبك للإدارة، ويصلك إشعار عند البتّ فيه.",
-                         "The administration got your request — you'll be notified of the decision.")
+                ? L10n.t("وصلت طلباتك للإدارة — كلٌّ يُراجَع وحده. تتابعها أو تسحبها من الإشعارات ← الطلبات المرسلة.",
+                         "The administration got your requests — each is reviewed on its own. Follow or withdraw them from Notifications → Sent requests.")
+                // البند ٦: بلا وعد بإشعار (لا يصل إن قرّر المراقب) — ماذا يحدث وأين تتابعه
+                : MemberCardLogic.sentMessage(manual: t.manual)
         } else if t.added == 0 && t.requested == 0 && t.awaitingApproval == 0 {
             title = t.pending > 1 ? L10n.t("أُضيف الأبناء", "Sons added") : L10n.t("أُضيف الابن", "Son added")
             message = t.pending > 1
@@ -3082,6 +3249,7 @@ struct WomanDetailSheet: View {
         let vm = adminRequestVM
         let tally = WomanAddTally()
         let source = womenSource(sourceTitle, icon: icon)
+        tally.manual = payload.women == nil
         runWrite(failTitle: L10n.t("تعذّر إرسال الطلب", "Couldn't send the request"), {
             try await Self.submit(payload, via: vm, source: source)
             tally.requested += 1
@@ -3360,6 +3528,8 @@ private final class WomanAddTally {
     var pending = 0
     /// أُرسل طلباً للإدارة
     var requested = 0
+    /// الطلب يدوي (بلا بيانات تنفيذ تلقائي) — رسالة الإرسال تقول «تنفّذه بيدها» (البند ٦)
+    var manual = false
     /// قريبة («عائلتي») أُرسلت للإدارة من السيرفر نفسه — تظهر بعد الموافقة
     var awaitingApproval = 0
 }

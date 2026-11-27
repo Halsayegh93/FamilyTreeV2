@@ -143,8 +143,8 @@ struct TreeEditRequestView: View {
                 Text(sentCount > 1
                      ? L10n.t("وصلت طلباتك (\(sentCount)) للإدارة — كلٌّ يُراجَع وحده، ويُضاف الابن عند قبول طلبه.",
                               "Your \(sentCount) requests reached the admins — each is reviewed on its own.")
-                     : L10n.t("تم إرسال طلبك للإدارة وسيتم مراجعته قريباً.",
-                              "Your request has been sent to admin for review."))
+                     // البند ٦: بلا وعد «قريباً» — ماذا يحدث وأين تتابعه
+                     : MemberCardLogic.sentMessage(manual: action == .other))
             }
             .dsAlert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
                 Button(L10n.t("حسناً", "OK")) {}

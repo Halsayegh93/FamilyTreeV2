@@ -373,6 +373,8 @@ struct DSComposer<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     /// قسم التبويب — كحلي المربّع (إطاره) يتبع لونه
     @Environment(\.dsSection) private var section
+    /// أرضية المربّع — nil = الأرضية الموحّدة؛ «طلب تعديل» في بطاقة العضو كريمية (`DS.MemberCard.boxBackground`)
+    @Environment(\.dsComposerBackground) private var composerBackground
 
     /// لون المربّع الفعلي: الكحلي (إطار المربّع) ← تعبئة القسم، وألوان المعاني كما هي
     private var boxTint: Color { tint.dsChromeFill(in: section) }
@@ -403,7 +405,7 @@ struct DSComposer<Content: View>: View {
 
             footer.readHeight($footerH)
         }
-        .background(DS.Color.background)
+        .background(composerBackground ?? DS.Color.background)
         // يُبلَّغ الارتفاع بعد قياس الرأس والشريط معاً — تحديثان في نفس الإطار كان
         // المربّع يلتقط أولهما (الناقص) فيُقصّ آخر المحتوى
         // المربّع الطويل من الأسفل لا يُسحب وفيه كلام غير محفوظ
@@ -505,7 +507,7 @@ struct DSComposer<Content: View>: View {
         .padding(.top, DSBox.footerTop)
         .padding(.bottom, DSBox.footerBottom)
         .background(
-            DS.Color.background
+            (composerBackground ?? DS.Color.background)
                 .overlay(alignment: .top) {
                     Rectangle().fill(DS.Color.textTertiary.opacity(DS.Opacity.border)).frame(height: DS.Border.width)
                 }
@@ -1939,4 +1941,18 @@ struct DSComposerAction: Identifiable {
     let action: () -> Void
 
     enum Style { case filled, outlined }
+}
+
+
+// MARK: - أرضية `DSComposer` (بطاقة العضو «AB»، ٢٠٢٦-١١-٢٧) — الافتراضي بلا تغيير
+
+private struct DSComposerBackgroundKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
+extension EnvironmentValues {
+    var dsComposerBackground: Color? {
+        get { self[DSComposerBackgroundKey.self] }
+        set { self[DSComposerBackgroundKey.self] = newValue }
+    }
 }
