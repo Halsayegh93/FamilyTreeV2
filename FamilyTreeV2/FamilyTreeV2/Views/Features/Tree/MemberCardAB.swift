@@ -21,16 +21,34 @@ struct MemberCardBandHairline: View {
     }
 }
 
-/// إطار الصورة: فراغ بلون الأرضية ثم خط ذهبي رفيع وظلّ خفيف
+/// إطار الصورة: فراغ بلون الأرضية ثم خط ذهبي رفيع وظلّ خفيف — الخط يرسم نفسه مرة عند الفتح من أعلى مع عقارب الساعة
+/// (A1، `DSMotion.ringDraw` بعد قفزة الصورة). «تقليل الحركة»: مرسوم كاملاً من البداية
 struct MemberCardAvatarFrame: ViewModifier {
     let side: CGFloat
+    @State private var drawn: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func body(content: Content) -> some View {
         let mat = DS.MemberCard.avatarMat
+        let ring = DS.MemberCard.avatarRing
         content
             .padding(mat)
             .background(Circle().fill(DS.MemberCard.boxBackground))
-            .overlay(Circle().strokeBorder(DS.MemberCard.gold, lineWidth: DS.MemberCard.avatarRing))
+            .overlay(
+                Circle()
+                    .inset(by: ring / 2)
+                    .trim(from: 0, to: drawn ?? DSMotionRules.drawStart(reduceMotion: reduceMotion))
+                    .stroke(DS.MemberCard.gold, style: StrokeStyle(lineWidth: ring, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .accessibilityHidden(true)
+            )
             .dsSubtleShadow()
+            .onAppear {
+                guard drawn == nil else { return }
+                guard !reduceMotion else { drawn = 1; return }
+                drawn = 0
+                withAnimation(DSMotion.ringDraw) { drawn = 1 }
+            }
     }
 }
 
@@ -38,11 +56,29 @@ extension View {
     func memberCardAvatarFrame(side: CGFloat) -> some View { modifier(MemberCardAvatarFrame(side: side)) }
 }
 
-/// الزخرفة تحت الاسم: خطّان ذهبيّان يتلاشيان وبينهما معيّن
+/// الزخرفة تحت الاسم: خطّان ذهبيّان يتلاشيان وبينهما معيّن — تمتدّ مرة من المعيّن إلى الطرفين عند الفتح (A1،
+/// قناع يتّسع من الوسط، فلا يتشوّه المعيّن ولا يهمّ اتجاه السطر). «تقليل الحركة»: كاملة من البداية
 struct MemberCardOrnament: View {
+    @State private var drawn: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
+        let width = DS.MemberCard.ornamentWidth
+        let seed = DS.MemberCard.ornamentDiamond * 2
+        let p = drawn ?? DSMotionRules.drawStart(reduceMotion: reduceMotion)
+        shape
+            .mask(Rectangle().frame(width: seed + (width - seed) * p))
+            .onAppear {
+                guard drawn == nil else { return }
+                guard !reduceMotion else { drawn = 1; return }
+                drawn = 0
+                withAnimation(DSMotion.ornamentDraw) { drawn = 1 }
+            }
+    }
+
+    private var shape: some View {
         let half = (DS.MemberCard.ornamentWidth - DS.MemberCard.ornamentDiamond * 3) / 2
-        HStack(spacing: DS.MemberCard.ornamentDiamond) {
+        return HStack(spacing: DS.MemberCard.ornamentDiamond) {
             line(fadingFrom: .leading).frame(width: half)
             Rectangle()
                 .fill(DS.MemberCard.gold)
@@ -466,10 +502,12 @@ struct MemberRequestTile: View {
                 }
                 .clipShape(shape)
             )
+            .overlay(MemberTilePressVeil(radius: DS.MemberCard.tileRadius))
             .dsSubtleShadow()
             .contentShape(shape)
         }
-        .buttonStyle(DSPressStyle())
+        // ضغطة المربّعات الموحّدة (A1): يصغر ٠٫٩٧ وتغمق طبقته قليلاً — «تقليل الحركة»: الطبقة وحدها
+        .buttonStyle(AdminTilePressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue([subtitle, line].compactMap { $0 }.joined(separator: "، "))
@@ -482,6 +520,21 @@ struct MemberRequestTile: View {
         case .pending: return DS.MemberCard.tilePendingText
         case .warning: return DS.MemberCard.tileWarningText
         }
+    }
+}
+
+/// طبقة الضغط فوق الخانة الملوّنة — تقرأ الضغط من داخل الزرّ (`AdminTilePressStyle` يضعه على محتواه)
+private struct MemberTilePressVeil: View {
+    let radius: CGFloat
+    @Environment(\.adminTilePressed) private var pressed
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(DS.Hub.tilePressVeil)
+            .opacity(pressed ? 1 : 0)
+            .animation(DS.Hub.tilePress, value: pressed)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

@@ -777,7 +777,8 @@ struct AdminDashboardView: View {
                     // زرّ يضع مساراً جديداً بقيمة فريدة (لا رابط بقيمة ثابتة — كان يُتجاهل إن بقيت القيمة نفسها في المسار)
                     Button { openFromToday(area, landing: model.landing) } label: {
                         AdminRowTile(area: area, state: model.state, health: model.health, retry: model.retry,
-                                     readOnly: area.isReadOnly(for: authVM))
+                                     readOnly: area.isReadOnly(for: authVM),
+                                     index: visibleAreas.firstIndex(of: area) ?? 0)
                     }
                     .buttonStyle(AdminTilePressStyle())
                 }

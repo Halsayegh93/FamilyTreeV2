@@ -3,18 +3,16 @@ import SwiftUI
 struct WaitingForApprovalView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
-    // Animation states
-    @State private var contentOpacity: CGFloat = 0
     @State private var showContactSheet = false
     /// «حذف حسابي» (متطلّب أبل) — تأكيد ثم `delete-account` ثم الخروج
     @State private var showDeleteConfirm = false
     @State private var showDeleteResult = false
-    /// «تقليل الحركة» (توصية أبل): بلا دوران ولا نبض ولا قفز متكرر
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // «قيد المراجعة» مربّع صغير في منتصف الشاشة (boxes.png، R1 ٢٠٢٦-١١-٢٧) — نفس صدفة التسجيل
     var body: some View {
-        SignupBoxShell(subtitle: L10n.t(SignupOriginRules.Ar.chooseTitle, "Registration")) {
+        // الخطوة الثالثة «المراجعة»: النقطة الذهبية الأخيرة، والمربّع يظهر بتكبير هادئ من الصدفة (A1) — كان الصفحة كلها تتلاشى
+        SignupBoxShell(subtitle: L10n.t(SignupOriginRules.Ar.chooseTitle, "Registration"),
+                       step: DSMotionRules.SignupStep.review.rawValue) {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 SignupBoxTitle(icon: "clock.fill", title: L10n.t(SignupOriginRules.Ar.waitingTitle, "Your request was received"))
                 DSStatusChip(text: L10n.t(SignupOriginRules.Ar.waitingChip, "Under review"), icon: "circle.fill",
@@ -28,8 +26,6 @@ struct WaitingForApprovalView: View {
                 actionButtons
             }
         }
-        .opacity(contentOpacity)
-        .onAppear { startAnimations() }
         // مربّع بمنتصف الشاشة بدل الورقة السفلية (طلب المالك) — العنوان و«إلغاء» داخل المربّع
         .dsCenterBox(isPresented: $showContactSheet) {
             MemberContactFormView()
@@ -137,13 +133,5 @@ struct WaitingForApprovalView: View {
         }
         .buttonStyle(DSPressStyle())
         .accessibilityLabel(title)
-    }
-
-    // MARK: - Animations
-    /// ظهور المربّع بتلاشٍ قصير (بلا نبض متكرر — قاعدة «لا repeatForever»)
-    private func startAnimations() {
-        withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.elastic.delay(0.1)) {
-            contentOpacity = 1.0
-        }
     }
 }

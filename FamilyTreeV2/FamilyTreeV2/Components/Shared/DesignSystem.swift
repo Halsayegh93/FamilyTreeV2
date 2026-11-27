@@ -2091,6 +2091,8 @@ extension DS.Icon {
     static let avatarLarge: CGFloat = 66
     /// دائرة اختيار صورة العضو داخل المربّع (فارغة بحلقة متقطّعة، أو الصورة المختارة)
     static let photoPicker: CGFloat = 96
+    /// دائرة الصورة الكبيرة أعلى مربّع بيانات التسجيل (الذكور فقط — طلب المالك ٢٠٢٦-١١-٢٧)
+    static let signupPhoto: CGFloat = 120
     /// شارة «+ / تعديل» على طرف دائرة الصورة
     static let photoBadge: CGFloat = 28
     /// نقطة «متصل الآن» على طرف صورة العضو (حلقتها النابضة ضعفها)

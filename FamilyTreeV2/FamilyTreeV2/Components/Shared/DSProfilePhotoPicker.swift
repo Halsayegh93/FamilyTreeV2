@@ -34,6 +34,8 @@ struct DSProfilePhotoPicker: View {
     var photoHidden: Bool? = nil
     /// حفظ ظهور الصورة (نفس نداء الإعدادات `updatePhotoHidden`) — يرجع true عند النجاح
     var onSavePhotoHidden: ((Bool) async -> Bool)? = nil
+    /// زرّ الحالة الفارغة («اختر صورة»، أو «إضافة صورة» في التسجيل)
+    var emptyActionTitle: String = L10n.t("اختر صورة", "Choose Photo")
 
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var isLoading = false
@@ -352,7 +354,7 @@ struct DSProfilePhotoPicker: View {
                 // الوضع العادي: دائرة + زر اختيار تحتها
                 emptyCirclePlaceholder
 
-                DSChipButton(L10n.t("اختر صورة", "Choose Photo"), icon: "arrow.triangle.2.circlepath.camera") {
+                DSChipButton(emptyActionTitle, icon: "arrow.triangle.2.circlepath.camera") {
                     showPicker = true
                 }
 

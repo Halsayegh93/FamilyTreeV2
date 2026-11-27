@@ -325,6 +325,8 @@ struct DSGenderPicker: View {
 
     /// زرّان «ذكر · أنثى» (شريط الاختيار) بدل الخلية بقائمة — مربّع «إضافة فرد» (قرار المالك ٢٠٢٦-١١-١١)
     var buttons: Bool = false
+    /// ✓ على المختار (زرّان فقط)
+    var check: Bool = false
 
     private var options: [DSChoiceOption<String>] {
         [DSChoiceOption(id: "male", title: L10n.t("ذكر", "Male"), icon: "figure.stand"),
@@ -334,7 +336,7 @@ struct DSGenderPicker: View {
     var body: some View {
         if buttons {
             DSChoiceTile(icon: "figure.stand", label: L10n.t("الجنس", "Gender") + (required ? " *" : ""),
-                         options: options, selection: $selection)
+                         options: options, selection: $selection, selectedCheck: check)
         } else {
             // خلية بيانات بقائمة (قرار المالك ٢٠٢٦-١١-١١) — الاختيار الفارغ «» يعرض «اختر»
             DSMenuTile(icon: "figure.stand", label: L10n.t("الجنس", "Gender") + (required ? " *" : ""),
@@ -625,6 +627,8 @@ struct DSChoiceTile<ID: Hashable>: View {
     let label: String
     let options: [DSChoiceOption<ID>]
     @Binding var selection: ID
+    /// المختار يحمل علامة ✓ بدل رمزه (التسجيل — «الاختيار واضح لا باللون وحده»)
+    var selectedCheck: Bool = false
     @Environment(\.dsInCenterBox) private var inBox
     @Environment(\.dsSection) private var section
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -642,7 +646,9 @@ struct DSChoiceTile<ID: Hashable>: View {
                     withAnimation(reduceMotion ? nil : DS.Anim.snappy) { selection = option.id }
                 } label: {
                     HStack(spacing: DS.Spacing.xs) {
-                        if let icon = option.icon {
+                        if selectedCheck && on {
+                            Image(systemName: "checkmark.circle.fill").dsGlyph(DS.Glyph.md).accessibilityHidden(true)
+                        } else if let icon = option.icon {
                             Image(systemName: icon).dsGlyph(DS.Glyph.md).accessibilityHidden(true)
                         }
                         Text(option.title)

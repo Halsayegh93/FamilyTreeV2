@@ -949,7 +949,7 @@ private struct AdminCensusBandBody: View {
     private var links: some View {
         let inApp = link(title: AdminCensusText.inAppTitle, value: figures.inApp,
                          tail: figures.total.map(AdminCensusText.inAppOfTotal), action: actions.inApp,
-                         ink: DS.Hub.bandInApp)
+                         ink: DS.Hub.bandInApp, counts: true)
         let outside = link(title: AdminCensusText.outsideTitle, value: figures.outsideLiving,
                            tail: figures.outsideLiving.map(AdminCensusText.livingNoun), action: actions.outside)
         return ViewThatFits(in: .horizontal) {
@@ -968,23 +968,31 @@ private struct AdminCensusBandBody: View {
     /// رابط: الاسم ذهبي ١٣، العدد أبيض ١٥ شبه عريض، ما بعده ذهبي، والسهم إن فتح — نصّ واحد يلتفّ كفقرة. الصفر باهت بلا
     /// سهم، و«—» قبل الوصول بلا ضغطة (T2)
     /// - ink: لون الاسم والعدد (nil = الاسم ذهبي والعدد أبيض؛ «في التطبيق» أخضر `DS.Hub.bandInApp`)
-    private func link(title: String, value: Int?, tail: String?, action: (() -> Void)?, ink: Color? = nil) -> some View {
+    /// - counts: الرقم يعدّ مرة من الصفر عند الظهور الأول (`DSCountText` — «في التطبيق» الأخضر، A1)؛ الألوان والسهم
+    ///   والذيل من القيمة الحقيقية، والرقم وحده من العدّ
+    private func link(title: String, value: Int?, tail: String?, action: (() -> Void)?, ink: Color? = nil,
+                      counts: Bool = false) -> some View {
         let opens = AdminCensusMath.opens(value: value, hasAction: action != nil)
         let dim = (value ?? 0) == 0
         let gold = dim ? DS.Hub.lineZero : DS.Color.headerSubtitle
-        var text = Text(title).font(DS.Font.role(.subtitle)).foregroundColor(dim ? gold : (ink ?? gold))
-            + Text(verbatim: " ")
-            + Text(verbatim: AdminCensusText.number(value)).font(DS.Font.role(.hubLineNumber))
-                .foregroundColor(dim ? DS.Hub.lineZero : (ink ?? DS.Color.headerTitle))
-        if let tail, value != nil {
-            text = text + Text(verbatim: " ") + Text(verbatim: tail).font(DS.Font.role(.subtitle)).foregroundColor(gold)
+        let make: (Int?) -> Text = { shown in
+            var text = Text(title).font(DS.Font.role(.subtitle)).foregroundColor(dim ? gold : (ink ?? gold))
+                + Text(verbatim: " ")
+                + Text(verbatim: AdminCensusText.number(shown)).font(DS.Font.role(.hubLineNumber))
+                    .foregroundColor(dim ? DS.Hub.lineZero : (ink ?? DS.Color.headerTitle))
+            if let tail, value != nil {
+                text = text + Text(verbatim: " ") + Text(verbatim: tail).font(DS.Font.role(.subtitle)).foregroundColor(gold)
+            }
+            if opens {
+                text = text + Text(verbatim: " ")
+                    + Text(Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right"))
+                        .font(DS.Font.role(.subtitle)).foregroundColor(DS.Color.accentLight)
+            }
+            return text
         }
-        if opens {
-            text = text + Text(verbatim: " ")
-                + Text(Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right"))
-                    .font(DS.Font.role(.subtitle)).foregroundColor(DS.Color.accentLight)
+        let face = Group {
+            if counts { DSCountText(value: value, compose: make) } else { make(value) }
         }
-        let face = text
             .monospacedDigit()
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

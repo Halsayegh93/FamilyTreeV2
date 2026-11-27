@@ -113,6 +113,24 @@ enum DSMotion {
     /// كبسولة «تراجع» بعد أمر يُتراجع عنه (إخفاء العضو من الشجرة في كرت العضو) — كم ثانية تبقى
     static let undoWindow: TimeInterval = 6
 
+    // ٥) تحديثات ٢٠٢٦-١١-٢٧ (الوحدة A1) — الأزمنة في `DSMotionRules.Timing` (تُفحص بلا محاكي)، والخروج أسرع من الدخول
+    /// مربّع التسجيل التالي ينزلق قليلاً من جهة الاتجاه (`DSMotionRules.stepOffsets`) — والسابق يخرج أسرع
+    static let stepIn = Animation.spring(response: DSMotionRules.Timing.stepIn, dampingFraction: 0.9)
+    static let stepOut = Animation.easeIn(duration: DSMotionRules.Timing.stepOut)
+    /// حقل ينكشف في المربّع نفسه («نعم» ← «اسم الوالدة الرباعي»)، ويختفي أسرع
+    static let reveal = Animation.spring(response: DSMotionRules.Timing.revealIn, dampingFraction: 0.88)
+    static let revealOut = Animation.easeIn(duration: DSMotionRules.Timing.revealOut)
+    /// قفزة المربّع المختار (من العائلة/من خارجها، نعم/لا): يكبر قليلاً ثم يستقرّ بنابض
+    static let selectPop = Animation.spring(response: 0.3, dampingFraction: 0.55)
+    /// الحلقة الذهبية حول صورة العضو والزخرفة تحت الاسم ترسمان نفسيهما مرة — تباطؤ هادئ
+    static let ringDraw = Animation.easeOut(duration: DSMotionRules.Timing.ringDraw).delay(DSMotionRules.Timing.ringDelay)
+    static let ornamentDraw = Animation.easeOut(duration: DSMotionRules.Timing.ornamentDraw)
+        .delay(DSMotionRules.Timing.ornamentDelay)
+    /// حبّة سطر التحية في «اليوم» تظهر بتلاشٍ بعد العنوان
+    static let pillIn = Animation.easeOut(duration: DSMotionRules.Timing.pillIn)
+    /// بانر صلة القرابة (من طريق الأب أو «عن طريق الأم») ينزل من أعلى — يُغلق بـ`DS.Anim.snappy` الأسرع
+    static let banner = Animation.easeInOut(duration: 0.3)
+
     /// تأخير عنصر في التسلسل
     static func staggerDelay(_ index: Int, base: Double) -> Double {
         base + Double(min(max(index, 0), maxSteps)) * step
@@ -153,6 +171,8 @@ struct DSEntrance: ViewModifier {
     var animation: Animation = DSMotion.section
     /// false = بلا حركة خاصة (العنصر يظهر مع حاويته)
     var active: Bool = true
+    /// مركز التكبير — `.top` للأقسام، `.center` للقفزات (مربّع التسجيل، خانات «طلب تعديل»)
+    var anchor: UnitPoint = .top
     @State private var shown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -161,7 +181,7 @@ struct DSEntrance: ViewModifier {
         return content
             .opacity(shown || !active ? 1 : 0)
             .offset(x: settled ? 0 : x, y: settled ? 0 : y)
-            .scaleEffect(settled ? 1 : scale, anchor: .top)
+            .scaleEffect(settled ? 1 : scale, anchor: anchor)
             .onAppear {
                 guard active, !shown else { return }
                 // «تقليل الحركة»: تلاشٍ قصير فقط
@@ -172,8 +192,9 @@ struct DSEntrance: ViewModifier {
 
 extension View {
     func dsEntrance(delay: Double, x: CGFloat = 0, y: CGFloat = 0, scale: CGFloat = 1,
-                    animation: Animation = DSMotion.section, active: Bool = true) -> some View {
-        modifier(DSEntrance(delay: delay, x: x, y: y, scale: scale, animation: animation, active: active))
+                    animation: Animation = DSMotion.section, active: Bool = true,
+                    anchor: UnitPoint = .top) -> some View {
+        modifier(DSEntrance(delay: delay, x: x, y: y, scale: scale, animation: animation, active: active, anchor: anchor))
     }
 }
 
@@ -196,6 +217,55 @@ struct DSIconPop: ViewModifier {
                 guard !shown else { return }
                 withAnimation(reduceMotion ? DSMotion.fade : DSMotion.iconPop.delay(delay)) { shown = true }
             }
+    }
+}
+
+/// قفزة الاختيار: حين يصير المربّع مختاراً يكبر قليلاً (`DSMotionRules.selectPopScale`) ثم يستقرّ بنابض — مرة لكل اختيار.
+/// «تقليل الحركة»: لا قفزة (التحديد يقوله الإطار).
+struct DSSelectPop: ViewModifier {
+    let selected: Bool
+    @State private var popped = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(popped ? DSMotionRules.selectPopScale : 1)
+            .onChange(of: selected) { on in
+                guard on, DSMotionRules.style(reduceMotion: reduceMotion) == .full else { return }
+                withAnimation(DSMotion.tap) { popped = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotionRules.Timing.popUp) {
+                    withAnimation(DSMotion.selectPop) { popped = false }
+                }
+            }
+    }
+}
+
+extension View {
+    func dsSelectPop(_ selected: Bool) -> some View { modifier(DSSelectPop(selected: selected)) }
+}
+
+extension AnyTransition {
+    /// الانتقال بين مربّعين متتاليين: انزلاق قصير باتجاه الخطوة (يحترم العربية) + تلاشٍ، والخروج أسرع.
+    /// «تقليل الحركة»: تلاشٍ فقط.
+    static func dsStep(forward: Bool, rtl: Bool, reduceMotion: Bool) -> AnyTransition {
+        let o = DSMotionRules.stepOffsets(forward: forward, rtl: rtl, reduceMotion: reduceMotion)
+        guard DSMotionRules.style(reduceMotion: reduceMotion) == .full else {
+            return AnyTransition.opacity.animation(DSMotion.fade)
+        }
+        return .asymmetric(
+            insertion: AnyTransition.offset(x: o.insert).combined(with: .opacity).animation(DSMotion.stepIn),
+            removal: AnyTransition.offset(x: o.remove).combined(with: .opacity).animation(DSMotion.stepOut))
+    }
+
+    /// حقل ينكشف داخل المربّع نفسه: ينزل قليلاً من تحت ما فوقه مع تلاشٍ، ويختفي بتلاشٍ أسرع.
+    /// «تقليل الحركة»: تلاشٍ فقط.
+    static func dsReveal(reduceMotion: Bool) -> AnyTransition {
+        guard DSMotionRules.style(reduceMotion: reduceMotion) == .full else {
+            return AnyTransition.opacity.animation(DSMotion.fade)
+        }
+        return .asymmetric(
+            insertion: AnyTransition.offset(y: -DSMotion.textShift).combined(with: .opacity).animation(DSMotion.reveal),
+            removal: AnyTransition.opacity.animation(DSMotion.revealOut))
     }
 }
 

@@ -27,6 +27,10 @@ enum SignupOriginRules {
         origin == .outside ? [.name, .family, .birth, .gender] : [.name, .birth, .gender]
     }
 
+    /// صورة التسجيل للذكور فقط: تظهر ما لم يُختر «أنثى» (وقبل اختيار الجنس)، وتُرسل للذكر وحده
+    static func showsPhoto(gender: String) -> Bool { gender.lowercased() != "female" }
+    static func photoToSend<T>(_ photo: T?, gender: String) -> T? { gender.lowercased() == "male" ? photo : nil }
+
     static func wordCount(_ s: String) -> Int { s.split(whereSeparator: \.isWhitespace).count }
 
     /// «من العائلة»: الاسم الرباعي (كلمتان على الأقل) · «من خارج العائلة»: الاسم الثلاثي (ثلاث كلمات، بلا العائلة)
@@ -60,6 +64,33 @@ enum SignupOriginRules {
         fields(origin).allSatisfy {
             fieldValid($0, origin: origin, name: name, family: family, birthChosen: birthChosen, age: age, gender: gender)
         }
+    }
+
+    // MARK: وضوح الحقول (طلب المالك ٢٠٢٦-١١-٢٧ «كتابة البيانات… واضحة ومفهومة»)
+
+    /// الحقول الناقصة أو غير الصحيحة بالترتيب — سطر «لإرسال الطلب يُرجى استكمال: …» يشرح لماذا الزرّ معطّل
+    static func missingFields(origin: Origin, name: String, family: String, birthChosen: Bool, age: Int?,
+                              gender: String) -> [Field] {
+        fields(origin).filter {
+            !fieldValid($0, origin: origin, name: name, family: family, birthChosen: birthChosen, age: age, gender: gender)
+        }
+    }
+
+    /// خطأ الاسم تحت الحقل — nil وهو فارغ (الفارغ يقوله سطر الاستكمال) أو صحيح
+    static func nameError(_ s: String, origin: Origin) -> String? {
+        guard !tidy(s).isEmpty, !nameValid(s, origin: origin) else { return nil }
+        return origin == .outside ? Ar.outsideNameShort : Ar.familyNameShort
+    }
+
+    static func familyError(_ s: String) -> String? {
+        guard !tidy(s).isEmpty, !familyValid(s) else { return nil }
+        return Ar.familyShort
+    }
+
+    static func motherNameError(_ s: String) -> String? {
+        let m = tidy(s)
+        guard !m.isEmpty, wordCount(m) < 3 else { return nil }
+        return Ar.motherNameShort
     }
 
     /// العائلة المحفوظة: «المحمدعلي» لمن هو من العائلة، والمكتوبة لغيره
@@ -237,6 +268,22 @@ enum SignupOriginRules {
         static let inboxNoSuggestions = "لم يُعثر على بنات بهذا الاسم. يُرجى التواصل مع صاحب الطلب أو رفض الطلب."
         static let inboxHusbandMatches = "زوجها يطابق اسم الوالد"
         static let fatherDerivedNote = "من الاسم المسجّل."
+        /// لحظة النجاح بعد «إرسال» (A1): علامة صح صغيرة واهتزاز نجاح قبل «قيد المراجعة»
+        static let sentMoment = "أُرسل الطلب"
+        /// صورة الذكر في مربّع البيانات (اختيارية؛ لا صور للنساء)
+        static let addPhoto = "إضافة صورة"
+        // أمثلة الحقول، والأخطاء تحتها، وسطر ما ينقص قبل الإرسال
+        static let familyNameExample = "مثال: محمد عبدالله علي أحمد"
+        static let outsideNameExample = "مثال: محمد حسن حسين"
+        static let motherNameExample = "مثال: فاطمة أحمد علي حسن"
+        static let motherNameHelp = "الاسم الأول واسم والدها وجدها وجد والدها، بدون اسم العائلة."
+        static let familyNameShort = "يُرجى كتابة الاسم الأول واسم الوالد على الأقل."
+        static let outsideNameShort = "يُرجى كتابة الاسم الثلاثي كاملاً: الاسم الأول واسم الوالد والجد."
+        static let familyShort = "يُرجى كتابة اسم العائلة بحرفين على الأقل."
+        static let motherNameShort = "يُرجى كتابة اسم الوالدة ثلاثياً على الأقل، بدون اسم العائلة."
+        static let missingPrefix = "لإرسال الطلب يُرجى استكمال: "
+        static func missingLine(_ labels: [String]) -> String { missingPrefix + labels.joined(separator: "، ") }
+        static let photoOptional = "اختيارية"
 
         static var all: [String] {
             [brand, chooseTitle, chooseBoxTitle, fromFamily, fromOutside,
@@ -249,7 +296,9 @@ enum SignupOriginRules {
              motherPlaceholder, motherHint, motherNotFound, fatherPlaceholder,
              cardOffer, cardOfferBody, cardRejected, cardRejectedBody, cardPendingTitle, cardPendingBody,
              inboxTag, approveOutside, approveOutsideNote, inboxAll, inboxFamilyJoins, inboxOutsideJoins, inboxCompleteDoor,
-             inboxTypedTitle, inboxPickMother, inboxNoSuggestions, inboxHusbandMatches, fatherDerivedNote]
+             inboxTypedTitle, inboxPickMother, inboxNoSuggestions, inboxHusbandMatches, fatherDerivedNote, sentMoment, addPhoto, photoOptional,
+             familyNameExample, outsideNameExample, motherNameExample, motherNameHelp, familyNameShort, outsideNameShort,
+             familyShort, motherNameShort, missingLine(["الجنس"])]
         }
     }
 }

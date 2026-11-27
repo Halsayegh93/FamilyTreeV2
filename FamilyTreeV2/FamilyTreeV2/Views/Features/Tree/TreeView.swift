@@ -747,6 +747,8 @@ struct TreeView: View {
                                         if kinshipViaMother {
                                             Text(KinshipCalculator.motherNote)
                                                 .dsFont(.caption)
+                                                // تنزل مع البانر، أو وحدها حين يتبدّل البانر الظاهر إلى «عن طريق الأم» (A1)
+                                                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
                                         }
                                     }
                                     Spacer()
@@ -863,7 +865,7 @@ struct TreeView: View {
                                                         offset: offset, baseOffset: baseOffset, fittedScale: fittedScale,
                                                         searchedMemberID: searchedMemberID, userInteracted: userInteracted)
                     }
-                    withAnimation(.easeInOut(duration: 0.3)) {
+                    withAnimation(DSMotion.banner) {
                         kinshipHighlightedIds = []
                         kinshipBanner = relationship
                         kinshipViaMother = true
@@ -872,7 +874,7 @@ struct TreeView: View {
                     startKinshipTimer()
                     return
                 }
-                kinshipViaMother = false
+                if kinshipViaMother { withAnimation(DSMotion.banner) { kinshipViaMother = false } }
 
                 // بناء مسار كامل من الجذر للعضو الممسوح
                 var fullPath = Set<UUID>()
@@ -914,7 +916,7 @@ struct TreeView: View {
                 }
 
                 // فتح كل الفروع بالمسار + هايلايت
-                withAnimation(.easeInOut(duration: 0.3)) {
+                withAnimation(DSMotion.banner) {
                     activePath = fullPath
                     kinshipHighlightedIds = fullPath
                     searchedMemberID = memberId

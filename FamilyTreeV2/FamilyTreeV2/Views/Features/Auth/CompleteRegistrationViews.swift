@@ -39,10 +39,13 @@ struct CompleteRegistrationPage: View {
 
     @EnvironmentObject private var authVM: AuthViewModel
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var sent: Bool
     @State private var inFamily: Bool?
     @State private var motherName = ""
+    /// خطأ الاسم يظهر بعد التوقّف عن الكتابة
+    @State private var motherSettled = true
     @State private var busy = false
     @State private var errorText: String?
 
@@ -64,13 +67,36 @@ struct CompleteRegistrationPage: View {
     var body: some View {
         SignupBoxShell(subtitle: L10n.t(T.completeTitle, "Complete registration")) {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                if sent { sentContent } else { questionContent }
+                // السؤال ← «قيد المراجعة» في المربّع نفسه: انزلاق قصير للأمام (A1)
+                ZStack(alignment: .top) {
+                    if sent {
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) { sentContent }
+                            .transition(stepTransition)
+                    } else {
+                        VStack(alignment: .leading, spacing: DS.Spacing.md) { questionContent }
+                            .transition(stepTransition)
+                    }
+                }
+                .onChange(of: motherName) { _ in settleMother() }
                 if let errorText {
                     Text(errorText).dsFont(.footnote).foregroundColor(DS.Color.error)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+    }
+
+    private func settleMother() {
+        let snapshot = motherName
+        motherSettled = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotionRules.Timing.settle) {
+            guard motherName == snapshot else { return }
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) { motherSettled = true }
+        }
+    }
+
+    private var stepTransition: AnyTransition {
+        .dsStep(forward: true, rtl: LanguageManager.shared.layoutDirection == .rightToLeft, reduceMotion: reduceMotion)
     }
 
     // MARK: السؤال (+ اسم الوالدة عند «نعم»)
@@ -92,7 +118,7 @@ struct CompleteRegistrationPage: View {
             ? AnyLayout(VStackLayout(spacing: DS.Spacing.sm)) : AnyLayout(HStackLayout(spacing: DS.Spacing.sm))
         layout {
             answerTile(L10n.t(T.yes, "Yes"), icon: "checkmark", tint: DS.Color.palmFill, selected: inFamily == true) {
-                withAnimation(DSMotion.fade) { inFamily = true }
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) { inFamily = true }
             }
             answerTile(L10n.t(T.no, "No"), icon: "xmark", tint: DS.Color.slateFill, selected: inFamily == false) {
                 markLimited()
@@ -100,9 +126,25 @@ struct CompleteRegistrationPage: View {
             .disabled(busy)
         }
         if inFamily == true {
+            // «نعم» تكشف الاسم والوالد والإرسال في المربّع نفسه — تنزل قليلاً مع تلاشٍ (A1)
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
             DSComposerField(icon: "person.fill", label: L10n.t(T.motherName, "Mother's four-part name"),
-                            placeholder: L10n.t(T.motherNamePlaceholder, "Her name, her father's, grandfather's and great-grandfather's"),
+                            placeholder: L10n.t(T.motherNameExample, "e.g. Fatima Ahmad Ali Hassan"),
                             text: $motherName, tint: DS.Color.female, limit: 120, required: true)
+            // خطأ تحت الحقل بعد انتهاء الكتابة، ثم سطر الشرح الدائم (الأجزاء، والمطابقة)
+            if motherSettled, let e = R.motherNameError(motherName) {
+                Label {
+                    Text(L10n.t(e, "Write at least three parts of her name, without the family name."))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "exclamationmark.circle.fill").dsGlyph(DS.Glyph.sm)
+                }
+                .dsFont(.footnote).foregroundColor(DS.Color.error)
+                .transition(.dsReveal(reduceMotion: reduceMotion))
+            }
+            Text(L10n.t(T.motherNameHelp, "Her first name, her father's, grandfather's and great-grandfather's — without the family name."))
+                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             Text(L10n.t(T.motherNameHint, "Without the family name. The admins match it to your mother's record."))
                 .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -115,8 +157,20 @@ struct CompleteRegistrationPage: View {
                     .dsFont(.footnote).foregroundColor(DS.Color.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // لماذا الزرّ معطّل
+            if !canSend, fatherName != nil {
+                Label {
+                    Text(L10n.t(T.missingLine([T.motherName]), "To send, complete: mother's four-part name"))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle").dsGlyph(DS.Glyph.sm)
+                }
+                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+            }
             DSButton(L10n.t(T.send, "Send to the admins"), icon: "paperplane.fill", isLoading: busy) { send() }
                 .disabled(!canSend || busy)
+            }
+            .transition(.dsReveal(reduceMotion: reduceMotion))
         }
         if let onLater {
             DSButton(L10n.t(T.later, "Later"), role: .cancel) { onLater() }
@@ -140,9 +194,13 @@ struct CompleteRegistrationPage: View {
             .background(shape.fill(selected ? DS.Color.cardBackgroundSoft : DS.Color.cardBackground))
             .overlay(shape.strokeBorder(selected ? DS.Color.accentLight : DS.Color.cardBorder,
                                         lineWidth: selected ? DS.Border.width * 2 : DS.Border.width))
+            .overlay(alignment: .topTrailing) { if selected { SignupCheckBadge() } }
+            .animation(DSMotion.tap, value: selected)
+            // قفزة الاختيار (A1) — «تقليل الحركة»: الإطار وحده
+            .dsSelectPop(selected)
             .contentShape(shape)
         }
-        .buttonStyle(DSScaleButtonStyle())
+        .buttonStyle(AdminTilePressStyle())
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -166,7 +224,9 @@ struct CompleteRegistrationPage: View {
         Task {
             do {
                 try await OutsideLineage.submit(motherName: motherName)
-                withAnimation(DSMotion.fade) { sent = true }
+                // لحظة النجاح ثم «قيد المراجعة» (A1)
+                DSMomentToast.show(L10n.t(T.sentMoment, "Request sent"), moment: .success, section: nil)
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.stepIn) { sent = true }
             } catch {
                 errorText = OutsideLineage.message(error)
             }

@@ -14,6 +14,8 @@ typealias SignupText = SignupOriginRules.Ar
 
 struct SignupBoxShell<Content: View>: View {
     var subtitle: String
+    /// نقاط الخطوات داخل المربّع (`DSMotionRules.SignupStep`) — nil = بلا نقاط («استكمال التسجيل»)
+    var step: Int? = nil
     var onSignOut: (() -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
@@ -31,12 +33,21 @@ struct SignupBoxShell<Content: View>: View {
                     VStack(spacing: 0) {
                         header
                         Spacer(minLength: DS.Spacing.xl)
-                        content()
+                        VStack(spacing: DS.Spacing.md) {
+                            // النقاط ثابتة في المربّع والمحتوى ينزلق تحتها (A1)
+                            if let step {
+                                SignupStepDots(count: DSMotionRules.signupStepCount, current: step)
+                            }
+                            content()
+                        }
                             .padding(DS.Spacing.lg)
                             .frame(maxWidth: DS.Landscape.alertMaxWidth)
                             .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                                 .fill(DS.Color.surface))
                             .dsCardShadow()
+                            // المربّع يظهر مرة بتكبير هادئ من ٠٫٩٤ مع تلاشٍ (نابض المربّعات) — «تقليل الحركة»: تلاشٍ
+                            .dsEntrance(delay: DSMotion.iconDelay, scale: DSMotion.panelScale,
+                                        animation: DSMotion.panel, anchor: .center)
                             .padding(.horizontal, DS.Spacing.lg)
                         Spacer(minLength: DS.Spacing.xl)
                     }
@@ -99,6 +110,7 @@ struct SignupBoxTitle: View {
 struct SignupStepDots: View {
     let count: Int
     let current: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: DS.Spacing.xs) {
@@ -108,9 +120,24 @@ struct SignupStepDots: View {
                     .frame(width: i == current ? DS.Spacing.lg : DS.Spacing.xsm, height: DS.Spacing.xsm)
             }
         }
+        // الكبسولة الذهبية تنتقل للخطوة التالية مع انزلاق المربّع — «تقليل الحركة»: تتبدّل مباشرة
+        .animation(reduceMotion ? nil : DSMotion.stepIn, value: current)
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("الخطوة \(current + 1) من \(count)", "Step \(current + 1) of \(count)"))
+    }
+}
+
+/// علامة المختار على ركن المربّع الكبير: ✓ ذهبية في قرص — الاختيار واضح لا باللون وحده
+struct SignupCheckBadge: View {
+    var body: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .dsGlyph(DS.Glyph.xl, weight: .semibold)
+            .foregroundColor(DS.Color.accentLight)
+            .background(Circle().fill(DS.Color.surface))
+            .padding(DS.Spacing.xs)
+            .transition(.scale(scale: DSMotionRules.tilePopScale).combined(with: .opacity))
+            .accessibilityHidden(true)
     }
 }
 
@@ -119,17 +146,38 @@ struct SignupStepDots: View {
 struct SignupOriginFlow: View {
     @EnvironmentObject var authVM: AuthViewModel
     @State private var origin: SignupOriginRules.Origin?
+    /// اتجاه آخر انتقال — يُضبط قبل التبديل فيخرج المربّع القديم في الجهة الصحيحة
+    @State private var forward = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private typealias Step = DSMotionRules.SignupStep
+
+    private func step(_ o: SignupOriginRules.Origin?) -> Step { o == nil ? .choose : .form }
 
     var body: some View {
-        SignupBoxShell(subtitle: L10n.t(SignupText.chooseTitle, "Registration"),
+        let transition = AnyTransition.dsStep(forward: forward,
+                                              rtl: LanguageManager.shared.layoutDirection == .rightToLeft,
+                                              reduceMotion: reduceMotion)
+        SignupBoxShell(subtitle: L10n.t(SignupText.chooseTitle, "Registration"), step: step(origin).rawValue,
                        onSignOut: { Task { await authVM.signOut() } }) {
-            if let origin {
-                AnyView(SignupFormBox(origin: origin) { withAnimation(DSMotion.fade) { self.origin = nil } })
-                    .transition(.opacity)
-            } else {
-                AnyView(SignupChooseBox { o in withAnimation(DSMotion.fade) { origin = o } })
-                    .transition(.opacity)
+            // فوق بعض أثناء الانتقال (لا يتكدّسان عمودياً)
+            ZStack(alignment: .top) {
+                if let origin {
+                    AnyView(SignupFormBox(origin: origin) { go(to: nil) })
+                        .transition(transition)
+                } else {
+                    AnyView(SignupChooseBox { o in go(to: o) })
+                        .transition(transition)
+                }
             }
+        }
+    }
+
+    /// إلى الأمام (الخيار ← البيانات) أو الرجوع: الاتجاه أولاً بلا حركة، ثم التبديل في الدورة التالية
+    private func go(to new: SignupOriginRules.Origin?) {
+        forward = DSMotionRules.isForward(from: step(origin).rawValue, to: step(new).rawValue)
+        DispatchQueue.main.async {
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.stepIn) { origin = new }
         }
     }
 }
@@ -138,7 +186,10 @@ struct SignupOriginFlow: View {
 
 struct SignupChooseBox: View {
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onChoose: (SignupOriginRules.Origin) -> Void
+    /// المربّع المختار: يقفز ويُطوَّق بالذهبي لحظةً ثم ينتقل (A1)
+    @State private var picked: SignupOriginRules.Origin?
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -149,20 +200,26 @@ struct SignupChooseBox: View {
             let layout = typeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: DS.Spacing.sm)) : AnyLayout(HStackLayout(spacing: DS.Spacing.sm))
             layout {
-                tile(L10n.t(SignupText.fromFamily, "From the family"), icon: "tree.fill", tint: DS.Color.primaryFill) {
-                    onChoose(.family)
-                }
-                tile(L10n.t(SignupText.fromOutside, "From outside the family"), icon: "link", tint: DS.Color.palmFill) {
-                    onChoose(.outside)
-                }
+                tile(L10n.t(SignupText.fromFamily, "From the family"), icon: "tree.fill", tint: DS.Color.primaryFill,
+                     origin: .family)
+                tile(L10n.t(SignupText.fromOutside, "From outside the family"), icon: "link", tint: DS.Color.palmFill,
+                     origin: .outside)
             }
         }
     }
 
     /// مربّع: قرص الرمز فوق والعنوان تحته — بلا نص فرعي (المالك)
-    private func tile(_ title: String, icon: String, tint: Color, action: @escaping () -> Void) -> some View {
+    private func tile(_ title: String, icon: String, tint: Color, origin: SignupOriginRules.Origin) -> some View {
         let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-        return Button(action: action) {
+        let selected = picked == origin
+        return Button {
+            // ضغطة واحدة: يُطوَّق ويقفز، ثم ينتقل بعد لحظة (فوراً مع «تقليل الحركة»)
+            guard picked == nil else { return }
+            picked = origin
+            DispatchQueue.main.asyncAfter(deadline: .now() + DSMotionRules.selectHold(reduceMotion: reduceMotion)) {
+                onChoose(origin)
+            }
+        } label: {
             VStack(spacing: DS.Spacing.sm) {
                 Image(systemName: icon)
                     .dsGlyph(DS.Glyph.xl, weight: .semibold)
@@ -176,12 +233,18 @@ struct SignupChooseBox: View {
             }
             .padding(DS.Spacing.sm)
             .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget * 3)
-            .background(shape.fill(DS.Color.cardBackground))
-            .overlay(shape.strokeBorder(DS.Color.cardBorder, lineWidth: DS.Border.width))
+            .background(shape.fill(selected ? DS.Color.cardBackgroundSoft : DS.Color.cardBackground))
+            .overlay(shape.strokeBorder(selected ? DS.Color.accentLight : DS.Color.cardBorder,
+                                        lineWidth: selected ? DS.Border.width * 2 : DS.Border.width))
+            .overlay(alignment: .topTrailing) { if selected { SignupCheckBadge() } }
+            .animation(DSMotion.tap, value: selected)
+            .dsSelectPop(selected)
             .contentShape(shape)
         }
-        .buttonStyle(DSScaleButtonStyle())
+        // ضغطة المربّعات الموحّدة (تصغير ٠٫٩٧ في ١٢٠ م.ث؛ «تقليل الحركة» بلا تصغير)
+        .buttonStyle(AdminTilePressStyle())
         .accessibilityLabel(title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -198,12 +261,21 @@ struct SignupFormBox: View {
     @State private var birthDateChosen = false
     /// مطلوب بلا اختيار مسبق (مثل التسجيل السابق)
     @State private var gender = ""
+    /// صورة الذكر (اختيارية) — تُسقط إن تحوّل الجنس إلى «أنثى»
+    @State private var photo: UIImage?
+    /// الخطأ تحت الحقل يظهر بعد أن يتوقّف العضو عن الكتابة (لا مع كل حرف)
+    @State private var nameSettled = true
+    @State private var familySettled = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private typealias R = SignupOriginRules
 
     private var age: Int? {
         guard birthDateChosen else { return nil }
         return Calendar(identifier: .gregorian).dateComponents([.year], from: birthDate, to: Date()).year
+    }
+    private var missing: [SignupOriginRules.Field] {
+        R.missingFields(origin: origin, name: fullName, family: familyName, birthChosen: birthDateChosen, age: age, gender: gender)
     }
     private var canSubmit: Bool {
         R.canSubmit(origin: origin, name: fullName, family: familyName, birthChosen: birthDateChosen, age: age, gender: gender)
@@ -215,8 +287,31 @@ struct SignupFormBox: View {
                            title: L10n.t(origin == .outside ? SignupText.fromOutside : SignupText.fromFamily,
                                          origin == .outside ? "From outside the family" : "From the family"),
                            tint: origin == .outside ? DS.Color.palmFill : DS.Color.primaryFill)
+            // صورة كبيرة للذكور فقط (المالك ٢٠٢٦-١١-٢٧) — تختفي مع «أنثى»: النساء بلا صور
+            if R.showsPhoto(gender: gender) {
+                DSProfilePhotoPicker(selectedImage: $photo, enableCrop: true, cropShape: .circle,
+                                     title: L10n.t("الصورة الشخصية", "Profile Photo"),
+                                     trailing: L10n.t(SignupText.photoOptional, "Optional"),
+                                     avatarSize: DS.Icon.signupPhoto,
+                                     emptyActionTitle: L10n.t(SignupText.addPhoto, "Add photo"))
+                    .transition(.dsReveal(reduceMotion: reduceMotion))
+            }
             ForEach(Array(R.fields(origin).enumerated()), id: \.offset) { _, field in
                 fieldView(field)
+            }
+            // لماذا الزرّ معطّل: ما ينقص بأسمائه (يختفي حين يكتمل)
+            if !missing.isEmpty {
+                let labels = SignupText.fieldLabels(origin)
+                let names = missing.compactMap { f in R.fields(origin).firstIndex(of: f).map { labels[$0] } }
+                Label {
+                    Text(L10n.t(SignupText.missingLine(names), "To send, complete: " + names.joined(separator: ", ")))
+                        .fixedSize(horizontal: false, vertical: true)
+                } icon: {
+                    Image(systemName: "info.circle").dsGlyph(DS.Glyph.sm)
+                }
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textSecondary)
+                .transition(.dsReveal(reduceMotion: reduceMotion))
             }
             HStack(spacing: DS.Spacing.sm) {
                 DSButton(L10n.t(SignupText.back, "Back"), role: .cancel) { onBack() }
@@ -226,6 +321,13 @@ struct SignupFormBox: View {
                     .disabled(!canSubmit || authVM.isLoading)
                     .layoutPriority(1)
             }
+        }
+        .animation(reduceMotion ? DSMotion.fade : DSMotion.reveal, value: missing.isEmpty)
+        .onChange(of: fullName) { _ in settle(.name) }
+        .onChange(of: familyName) { _ in settle(.family) }
+        .onChange(of: gender) { g in
+            guard !R.showsPhoto(gender: g) else { return }
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.revealOut) { photo = nil }
         }
         .dsAlert(L10n.t("تعذّر التسجيل", "Registration Failed"),
                  isPresented: Binding(get: { authVM.registrationError != nil },
@@ -244,17 +346,25 @@ struct SignupFormBox: View {
                 DSComposerField(icon: "person.fill",
                                 label: L10n.t(origin == .outside ? SignupText.outsideFullName : SignupText.familyFullName,
                                               origin == .outside ? "Three-part name" : "Full name (4 parts)"),
-                                placeholder: L10n.t(origin == .outside ? "محمد حسن حسين" : "محمد عبدالله علي أحمد",
-                                                    origin == .outside ? "First, father's and grandfather's name" : "Four-part name"),
+                                placeholder: L10n.t(origin == .outside ? SignupText.outsideNameExample : SignupText.familyNameExample,
+                                                    origin == .outside ? "e.g. Mohammad Hassan Hussain" : "e.g. Mohammad Abdullah Ali Ahmad"),
                                 text: $fullName, limit: 100, required: true)
+                if nameSettled, let e = R.nameError(fullName, origin: origin) {
+                    fieldError(e, english: origin == .outside ? "Write the full three-part name." : "Write at least your first and father's name.")
+                }
                 hint(L10n.t(origin == .outside ? SignupText.outsideNameHint : SignupText.familyNameHint,
                             origin == .outside ? "First, father's and grandfather's name, without the family name."
                                                : "Family Al-Mohammad Ali; the admins link you to your father after checking."))
             }
         case .family:
-            DSComposerField(icon: "person.2.fill", label: L10n.t(SignupText.familyName, "Family"),
-                            placeholder: L10n.t(SignupText.familyPlaceholder, "e.g. Al-Mousa"),
-                            text: $familyName, limit: 50, required: true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                DSComposerField(icon: "person.2.fill", label: L10n.t(SignupText.familyName, "Family"),
+                                placeholder: L10n.t(SignupText.familyPlaceholder, "e.g. Al-Mousa"),
+                                text: $familyName, limit: 50, required: true)
+                if familySettled, let e = R.familyError(familyName) {
+                    fieldError(e, english: "Write the family name (at least two letters).")
+                }
+            }
         case .birth:
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
                 DSDateFieldRow(icon: "calendar", title: L10n.t(SignupText.birthDate, "Birth date") + " *",
@@ -262,18 +372,50 @@ struct SignupFormBox: View {
                     dsPresentDatePicker(title: L10n.t(SignupText.birthDate, "Birth date"),
                                         initial: birthDate, allowClear: false) { picked in
                         guard let picked else { return }
-                        birthDate = picked
-                        birthDateChosen = true
+                        withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) {
+                            birthDate = picked
+                            birthDateChosen = true
+                        }
                     }
                 }
+                // الملاحظة تنكشف تحت التاريخ بهدوء (A1)
                 if let a = age, a < 13 {
                     hint(L10n.t(SignupText.under13, "Accounts can't be created for children under 13."), error: true)
+                        .transition(.dsReveal(reduceMotion: reduceMotion))
                 } else if let a = age, a < 18 {
                     hint(L10n.t(SignupText.guardian, "The account needs a guardian's approval before activation."))
+                        .transition(.dsReveal(reduceMotion: reduceMotion))
                 }
             }
         case .gender:
-            DSGenderPicker(selection: $gender, required: true, buttons: true)
+            DSGenderPicker(selection: $gender, required: true, buttons: true, check: true)
+        }
+    }
+
+    /// خطأ تحت الحقل: رمز + جملة رسمية حمراء (لا باللون وحده)، ينكشف بهدوء
+    private func fieldError(_ arabic: String, english: String) -> some View {
+        Label {
+            Text(L10n.t(arabic, english)).fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.circle.fill").dsGlyph(DS.Glyph.sm)
+        }
+        .dsFont(.footnote)
+        .foregroundColor(DS.Color.error)
+        .transition(.dsReveal(reduceMotion: reduceMotion))
+    }
+
+    private enum Settle { case name, family }
+
+    /// بعد الكتابة: يخفي الخطأ فوراً، ويعيد فحصه بعد مهلة قصيرة إن لم تتغيّر الكتابة (`DSMotionRules.Timing.settle`)
+    private func settle(_ field: Settle) {
+        let snapshot = field == .name ? fullName : familyName
+        if field == .name { nameSettled = false } else { familySettled = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotionRules.Timing.settle) {
+            let now = field == .name ? fullName : familyName
+            guard now == snapshot else { return }
+            withAnimation(reduceMotion ? DSMotion.fade : DSMotion.reveal) {
+                if field == .name { nameSettled = true } else { familySettled = true }
+            }
         }
     }
 
@@ -291,8 +433,14 @@ struct SignupFormBox: View {
         let outside = origin == .outside
         let g = gender
         let b = birthDate
+        let image = R.photoToSend(photo, gender: g)
         Task {
-            await authVM.registerNewUser(firstName: name, familyName: family, birthDate: b, gender: g, outsideFamily: outside)
+            await authVM.registerNewUser(firstName: name, familyName: family, birthDate: b, gender: g,
+                                         avatarImage: image, outsideFamily: outside)
+            // لحظة النجاح (علامة صح صغيرة + اهتزاز نجاح) فوق مربّع «قيد المراجعة» الداخل — لا تظهر مع خطأ
+            if authVM.registrationError == nil, authVM.status == .pendingApproval {
+                DSMomentToast.show(L10n.t(SignupText.sentMoment, "Request sent"), moment: .success, section: nil)
+            }
         }
     }
 }

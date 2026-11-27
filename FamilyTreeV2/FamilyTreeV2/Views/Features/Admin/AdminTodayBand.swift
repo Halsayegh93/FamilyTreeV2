@@ -51,6 +51,8 @@ private struct AdminTodayBandBody: View {
             if AdminTodayBandLogic.showsSmartPill(smartLine), let smartLine {
                 smartPill(smartLine)
                     .transition(.opacity)
+                    // تظهر بتلاشٍ بعد العنوان مرة عند الفتح (A1) — وحين تصل لاحقاً يكفيها `transition`
+                    .dsEntrance(delay: DSMotionRules.Timing.pillDelay, animation: DSMotion.pillIn)
             }
             if let census {
                 census

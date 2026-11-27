@@ -139,5 +139,32 @@ for path in sources {
     check(hits, [], "no forbidden words in \((path as NSString).lastPathComponent)")
 }
 
+
+// ٧) وضوح الحقول (المالك ٢٠٢٦-١١-٢٧ «كتابة البيانات… واضحة ومفهومة») + صورة الذكر
+check(R.missingFields(origin: .outside, name: "", family: "", birthChosen: false, age: nil, gender: ""),
+      [.name, .family, .birth, .gender], "outside: all missing, in field order")
+check(R.missingFields(origin: .family, name: "محمد عبدالله", family: "", birthChosen: true, age: 30, gender: "male"),
+      [], "family: complete → nothing missing")
+check(R.missingFields(origin: .family, name: "محمد عبدالله", family: "", birthChosen: true, age: 10, gender: "male"),
+      [.birth], "under 13 → birth still missing")
+check(R.nameError("", origin: .outside), nil, "empty name: no inline error (the missing line says it)")
+check(R.nameError("سالم ناصر", origin: .outside), R.Ar.outsideNameShort, "outside: two words → three-part error")
+check(R.nameError("سالم ناصر فهد", origin: .outside), nil, "outside: three words ok")
+check(R.nameError("سالم", origin: .family), R.Ar.familyNameShort, "family: one word → error")
+check(R.familyError("ا"), R.Ar.familyShort, "family name: one letter → error")
+check(R.familyError(""), nil, "family name empty: no inline error")
+check(R.motherNameError("فاطمة أحمد"), R.Ar.motherNameShort, "mother: two words → error")
+check(R.motherNameError("فاطمة أحمد علي"), nil, "mother: three words ok")
+check(R.Ar.missingLine(["الاسم الثلاثي", "الجنس"]), "لإرسال الطلب يُرجى استكمال: الاسم الثلاثي، الجنس", "missing line wording")
+for ex in [R.Ar.familyNameExample, R.Ar.outsideNameExample, R.Ar.motherNameExample, R.Ar.familyPlaceholder] {
+    check(ex.hasPrefix("مثال: "), true, "placeholder is an example: \(ex)")
+}
+check(R.showsPhoto(gender: ""), true, "photo shown before gender is chosen")
+check(R.showsPhoto(gender: "male"), true, "photo shown for male")
+check(R.showsPhoto(gender: "female"), false, "no photo for female")
+check(R.photoToSend("img", gender: "female"), nil, "female: photo never sent")
+check(R.photoToSend("img", gender: ""), nil, "no gender: photo not sent")
+check(R.photoToSend("img", gender: "male"), "img", "male: photo sent")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -264,6 +264,8 @@ struct DSCountUpText: ViewModifier, Animatable {
     var value: Double
     let known: Bool
     let percent: Bool
+    /// نصّ مركّب حول الرقم (الرقم داخل جملة: «في التطبيق 170 من 2,991 ‹») — nil = الرقم وحده
+    var compose: ((Int?) -> Text)? = nil
 
     var animatableData: Double {
         get { value }
@@ -271,7 +273,11 @@ struct DSCountUpText: ViewModifier, Animatable {
     }
 
     func body(content: Content) -> some View {
-        Text(verbatim: known ? DSGaugeText.value(Int(value.rounded()), percent: percent) : "—")
+        if let compose {
+            compose(known ? Int(value.rounded()) : nil)
+        } else {
+            Text(verbatim: known ? DSGaugeText.value(Int(value.rounded()), percent: percent) : "—")
+        }
     }
 }
 
@@ -308,13 +314,15 @@ enum DSGaugeMotion {
 struct DSCountText: View {
     let value: Int?
     var percent: Bool = false
+    /// الرقم داخل جملة — يبني النصّ كله من الرقم الذي يعدّ (`DSCountUpText.compose`)
+    var compose: ((Int?) -> Text)? = nil
     @State private var shown: Double = 0
     @State private var counted = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         EmptyView()
-            .modifier(DSCountUpText(value: shown, known: value != nil, percent: percent))
+            .modifier(DSCountUpText(value: shown, known: value != nil, percent: percent, compose: compose))
             .onAppear { if !counted, let value { first(value) } }
             .onChange(of: value) { change($0) }
     }

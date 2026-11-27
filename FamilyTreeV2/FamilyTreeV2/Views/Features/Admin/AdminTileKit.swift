@@ -547,6 +547,8 @@ struct AdminRowTile: View {
     var spokenTitle: String? = nil
     /// لون سطر الحال العادي: كريمي، وأبيض على الذهبي (`AdminArea.tileStateInk`)
     var stateInk: Color = DS.Hub.tileStateInk
+    /// ترتيب المربّع في شبكته — رمزه يقفز مرة بهذا الترتيب (`DSIconPop`، A1)
+    var index: Int = 0
     @Environment(\.adminTilePressed) private var pressed
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -564,9 +566,10 @@ struct AdminRowTile: View {
 
     /// مربّع قسم من `AdminArea`: لونه ورمزه المفرّغ واسمه المختصر، والاسم الكامل ووصفه للقارئ الصوتي
     init(area: AdminArea, state: AdminTileState? = nil, health: AdminStoreHealth? = nil,
-         retry: (() -> Void)? = nil, readOnly: Bool = false) {
+         retry: (() -> Void)? = nil, readOnly: Bool = false, index: Int = 0) {
         self.init(icon: area.tileIcon, fill: area.tileFill, title: area.tileTitle, state: state, health: health,
                   retry: retry, readOnly: readOnly, hint: area.subtitle)
+        self.index = index
         spokenTitle = area.title
         stateInk = area.tileStateInk
     }
@@ -579,6 +582,8 @@ struct AdminRowTile: View {
             Image(dsSymbol: icon)
                 .dsGlyph(DS.Glyph.xxl, weight: .regular)
                 .foregroundColor(DS.Hub.tileIconInk)
+                // قفزة الظهور تباعاً مثل مربّعات الأدوات — مرة (لا تعود مع الرجوع للتبويب)؛ «تقليل الحركة»: تلاشٍ
+                .modifier(DSIconPop(delay: DSMotion.staggerDelay(index, base: DSMotion.iconDelay)))
                 .accessibilityHidden(true)
             VStack(alignment: .center, spacing: AdminTileMetrics.captionGap) {
                 Text(title)

@@ -211,16 +211,17 @@ struct MemberDetailsView: View {
                                 .frame(maxWidth: .infinity)
 
                                 VStack(spacing: DS.Spacing.md) {
-                                    infoGrid
+                                    // أفقياً كل الألواح ظاهرة من الفتح — تدخل تباعاً بعد الرأس (A1)
+                                    infoGrid.dsStaggerIn(3)
 
-                                    familyStrip
+                                    familyStrip.dsStaggerIn(4)
 
-                                    bioCard
+                                    bioCard.dsStaggerIn(5)
 
-                                    pendingRequestsCard
+                                    pendingRequestsCard.dsStaggerIn(6)
 
                                     if !centered {
-                                        actionButtonsSection
+                                        actionButtonsSection.dsStaggerIn(7)
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.lg)
@@ -1003,7 +1004,8 @@ struct MemberDetailsView: View {
                             if pending { openSentRequests() } else { pick(action) }
                         }
                         .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
-                                    y: DSMotion.rise, scale: DSMotion.riseScale)
+                                    scale: DSMotionRules.tilePopScale, animation: DSMotion.iconPop,
+                                    anchor: .center)   // الخانات تقفز تباعاً (A1)
                     }
                 }
                 // لماذا لا «تعديل رقم» ولا «إضافة صورة» (البند ١)

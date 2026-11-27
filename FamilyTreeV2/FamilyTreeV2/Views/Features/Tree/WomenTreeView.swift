@@ -1831,7 +1831,8 @@ struct WomanDetailSheet: View {
                                     }
                                 }
                                 .dsEntrance(delay: DSMotion.staggerDelay(i, base: DSMotion.sectionsAfterHeader),
-                                            y: DSMotion.rise, scale: DSMotion.riseScale)
+                                    scale: DSMotionRules.tilePopScale, animation: DSMotion.iconPop,
+                                    anchor: .center)   // الخانات تقفز تباعاً (A1)
                             }
                         }
                         if let note = MemberCardLogic.womenGridNote(isFemale: woman.isFemale, age: womanAge) {
