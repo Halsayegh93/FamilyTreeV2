@@ -2623,6 +2623,8 @@ extension DS {
         static let actingPillGap: CGFloat = DS.Spacing.md
         /// شريحة الفلتر: تُرسم ٣٦ ولمسها ٤٤ (`DS.Icon.tapTarget`) — spec A.9
         static let filterChipHeight: CGFloat = 36
+        /// شريحة الفلتر المفعّل تحت شريط «العائلة» — أصغر (٣٠) وبلا ✓ (طلب المالك ٢٠٢٦-١١-٢٧)، لمسها يبقى ٤٤
+        static let activeFilterChipHeight: CGFloat = 30
         /// زرّ الاختيار في ورقة الفلاتر — spec A.13
         static let filterRadio: CGFloat = 22
         /// مربّعات الأقسام (`AdminRowTile`؛ غير `areaColumns` ٣ لمربّعات البحث والأدوات): عمودان بفراغ ١٠، حشوة ١٢ جانباً و١٠ فوق وتحت،

@@ -507,7 +507,7 @@ struct AdminActiveFilterChips<S: Equatable>: View {
             DSChipFlow {
                 ForEach(snapshot.items) { item in
                     Button { remove(item) } label: {
-                        DSAdminChipLabel(title: item.title, count: item.count, selected: true, removable: true)
+                        DSAdminChipLabel(title: item.title, count: item.count, selected: true, removable: true, compact: true)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(item.count.map {

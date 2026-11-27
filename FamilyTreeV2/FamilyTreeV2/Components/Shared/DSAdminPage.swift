@@ -274,6 +274,8 @@ struct DSAdminChipLabel: View {
     var icon: String? = nil
     var selected: Bool
     var removable: Bool = false
+    /// شريحة الفلتر المفعّل: أصغر وبلا ✓ (طلب المالك ٢٠٢٦-١١-٢٧) — الكحلي و✕ تكفيان علامةً
+    var compact: Bool = false
     @Environment(\.dsSection) private var section
     @Environment(\.colorScheme) private var scheme
 
@@ -282,9 +284,10 @@ struct DSAdminChipLabel: View {
         let fill = section?.fill ?? DS.Color.primaryFill
         // العدد ذهبي على الكحلي (spec A.9)؛ في الداكن التعبئة أفتح (#2B5F90) فالذهبي ٢٫٥:١ — الذهبي الفاتح ٤٫٥:١
         let countOnFill = scheme == .dark ? DS.Hub.rolePillInk : DS.Color.accentLight
-        let shape = RoundedRectangle(cornerRadius: DS.Hub.filterChipHeight / 2, style: .continuous)
-        return HStack(spacing: DS.Spacing.xsm) {
-            if selected {
+        let height = compact ? DS.Hub.activeFilterChipHeight : DS.Hub.filterChipHeight
+        let shape = RoundedRectangle(cornerRadius: height / 2, style: .continuous)
+        return HStack(spacing: compact ? DS.Spacing.xs : DS.Spacing.xsm) {
+            if selected && !compact {
                 Image(systemName: "checkmark")
                     .dsGlyph(DS.Glyph.sm, weight: .semibold)
                     .accessibilityHidden(true)
@@ -312,13 +315,13 @@ struct DSAdminChipLabel: View {
             }
         }
         .foregroundColor(selected ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.xs)
-        .frame(minHeight: DS.Hub.filterChipHeight)
+        .padding(.horizontal, compact ? DS.Spacing.sm : DS.Spacing.md)
+        .padding(.vertical, compact ? DS.Spacing.xxs : DS.Spacing.xs)
+        .frame(minHeight: height)
         .background(shape.fill(selected ? fill : DS.Color.surface))
         .overlay(shape.strokeBorder(selected ? fill : DS.Hub.frameStroke, lineWidth: DS.Border.width))
         // مساحة ضغط ٤٤ تدخل في التخطيط: السطران الملتفّان يبعدان ٨ مرسومة و٠ بين مساحتي اللمس
-        .padding(.vertical, (DS.Icon.tapTarget - DS.Hub.filterChipHeight) / 2)
+        .padding(.vertical, (DS.Icon.tapTarget - height) / 2)
         .contentShape(Rectangle())
     }
 }
