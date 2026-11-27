@@ -287,7 +287,9 @@ struct AdminMergeBox: View {
     // MARK: الإجراءات
 
     private func go(_ next: Step) {
-        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { step = next }
+        // بلا حركة بين الخطوتين (كباقي المربّعات متعددة الخطوات): الخطوتان معاً أثناء الحركة كانتا تُبقيان ارتفاع
+        // الأطول، فيبقى فراغ أبيض تحت «أيّهما يبقى؟» بعد «رجوع» من التأكيد
+        step = next
     }
 
     /// بعد «أيّهما يبقى؟»: واحد يُحذف = التأكيد مباشرة، وأكثر = «أيّهم يُحذف؟»
@@ -491,7 +493,9 @@ struct AdminDeleteDuplicateBox: View {
     }
 
     private func go(_ next: Step) {
-        withAnimation(reduceMotion ? nil : DS.Anim.snappy) { step = next }
+        // بلا حركة بين الخطوتين (كباقي المربّعات متعددة الخطوات): الخطوتان معاً أثناء الحركة كانتا تُبقيان ارتفاع
+        // الأطول، فيبقى فراغ أبيض تحت «أيّهما يبقى؟» بعد «رجوع» من التأكيد
+        step = next
     }
 
     private func back() {
