@@ -342,11 +342,6 @@ struct AdminMembersPage: View {
 
     // MARK: الرأس
 
-    private static func openWomenTree() {
-        TreeTabContainer.openWomenOnAppear = true
-        NotificationCenter.default.post(name: .openWomenTree, object: nil)
-    }
-
     /// ما تحت العنوان في الكحلي: الحقل و«تصفية». الحقل مرساة زرّ البحث في السطر المطويّ، ومنه يُقاس الطيّ
     private func bandAccessory(_ model: AdminMembersListModel) -> some View {
         AdminMembersFilterBar(query: $query, focusToken: searchFocus, activeCount: model.snapshot.items.count) {
@@ -364,9 +359,10 @@ struct AdminMembersPage: View {
             register: canRegister ? { Self.registerPage } : nil,
             // التقارير بالفلاتر والفرع والبحث الحاليين — رجال القائمة نفسها
             reports: admin ? { open(.reports(exportScope(model))) } : nil,
-            // صفحة «نساء العائلة» كما هي (المالك والمدير)، وشجرة النساء لكل من يرى «العائلة»
-            womenPage: admin ? { open(.women(AdminWomenLanding())) } : nil,
-            womenTree: { Self.openWomenTree() })
+            // «نساء العائلة» و«شجرة النساء» خارج «⋯» (المالك ٢٠٢٦-١١-٢٧ «ابي اشيل منه شجرة النساء و نساء العائلة») —
+            // النساء من «تصفية ← مَن ← نساء»، وشجرة النساء من تبويب «الشجرة»
+            womenPage: nil,
+            womenTree: nil)
     }
 
     private static var registerPage: AnyView {
