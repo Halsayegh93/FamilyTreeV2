@@ -3,6 +3,9 @@ import SwiftUI
 // MARK: - «الحساب» و«إجراءات الإدارة» في ورقة العضو (V2-3، وفصل F4 — طلب المالك ٢٠٢٦-١١-٢٦: «اهم شي نفصل الأمور
 // الادارية عن الاعضاء»)
 //
+// (V3: «الحساب» صار المجموعة الثالثة في «العضو» — `AdminMemberAccountGroup` في `AdminMemberCardGroups.swift` — وبقي هنا
+// نصوصه وشروطه `AdminMemberAccountSection`، والأجهزة للاطلاع `AdminMemberDevicesFacts`؛ و«إجراءات الإدارة» بشريط عنوان كحلي
+// أوله «طلبات عنه» ثم «رقم الهاتف».)
 // ١) `AdminMemberAccountSection` — «الحساب» (بترولي) حقائق فقط: الهاتف (يُعدَّل بمربّعه لمن يعدّل — تعديل بيانات) ·
 //    «تسجيل في التطبيق» حبّة الحال («مسجّل ✓» / «غير مسجّل» / «موقوف») · آخر دخول (وتحته استخدامه) · الأجهزة بعددها
 //    (لمن يراها ولا يسجّل خروجها: تنفتح أسماؤها تحته للاطلاع). لا زرّ أمر هنا.
@@ -13,63 +16,9 @@ import SwiftUI
 //    (`canDeleteMembers`). على ورقتك لا تُرسم البطاقة أصلاً (يبقى سطر القفل).
 // الصلاحيات والنداءات كما هي: كل فعل يمرّ بالورقة (`ask` = التأكيد، `openBox` = المربّعات، `openBans` = الصفحة).
 
-struct AdminMemberAccountSection: View {
-    let member: FamilyMember
-    let facts: AdminMemberSheetFacts
-    let canEdit: Bool
-    let devices: [NotificationViewModel.LinkedDevice]?
-    let devicesFailed: Bool
-    @Binding var devicesOpen: Bool
-    /// الأجهزة لمن له حساب دخول، وللمالك (`canViewSystemSettings`)
-    let showsDevices: Bool
-    /// يسجّل خروجها؟ — حينها قائمتها في «إجراءات الإدارة» والعدد وحده هنا
-    let canSignOutDevices: Bool
-    /// لا يُسجَّل في التطبيق: حاجته («يحتاج رقم هاتف أولاً») — nil بلا سطر
-    let registerNote: String?
-    let openBox: (AdminMemberBox) -> Void
-    let retryDevices: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var phone: String { (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    var body: some View {
-        AdminMemberSheetSection(title: L10n.t("الحساب", "Account"), bar: DS.Color.sea) {
-            phoneRow
-            AdminMemberRow(icon: "iphone", tint: DS.Color.sea, title: L10n.t("تسجيل في التطبيق", "Registered in the app"),
-                           subtitle: registerNote) {
-                AdminStatePill(title: Self.registerWord(facts.status), tone: Self.registerTone(facts.status),
-                               icon: facts.status == .registered ? "checkmark" : nil)
-            }
-            AdminMemberRow(icon: "clock.fill", tint: DS.Color.sea, title: L10n.t("آخر دخول", "Last sign-in"),
-                           subtitle: facts.usageLine, value: facts.lastSeenText)
-            // الأجهزة لمن له حساب دخول (من بلا حساب لا جهاز له)
-            if showsDevices {
-                devicesRow
-                if !canSignOutDevices, devicesOpen, let devices, !devicesFailed {
-                    ForEach(devices) { device in
-                        AdminMemberDeviceRow(device: device, canSignOut: false, busy: false, signOut: {})
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: الصفوف
-
-    /// الرقم كما وصل من السيرفر (مخفياً لمن لا يراه) — يُعدَّل بمربّع الرقم لمن يعدّل
-    @ViewBuilder
-    private var phoneRow: some View {
-        let row = AdminMemberRow(icon: "phone.fill", tint: DS.Color.sea, title: L10n.t("الهاتف", "Phone"),
-                                 value: phone.isEmpty ? L10n.t("بلا رقم هاتف", "No phone") : KuwaitPhone.display(phone),
-                                 valueIsNumber: !phone.isEmpty, showsChevron: canEdit)
-        if canEdit {
-            AdminMemberTapRow(hint: phone.isEmpty ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"),
-                              action: { openBox(.phone(member)) }) { row }
-        } else {
-            row
-        }
-    }
-
+/// نصوص «الحساب» وشروطه — تقرؤها مجموعة «الحساب» (`AdminMemberAccountGroup`) و«إجراءات الإدارة» (V3: صارت المجموعة
+/// الثالثة في «العضو»، حقائق فقط، والرقم بأوامره في «إجراءات الإدارة»)
+enum AdminMemberAccountSection {
     static func registerWord(_ status: AdminMemberStatus?) -> String {
         switch status {
         case .registered: return L10n.t("مسجّل", "Registered")
@@ -97,50 +46,62 @@ struct AdminMemberAccountSection: View {
             && (liveStatus ?? member.status) != .active && facts.status != .registered
     }
 
-    /// «يحتاج رقم هاتف أولاً» تحت «تسجيل في التطبيق» لغير المسجّل بلا رقم
+    /// «يحتاج رقم هاتف أولاً» تحت «التطبيق» لغير المسجّل بلا رقم
     @MainActor
     static func registerNote(member: FamilyMember, facts: AdminMemberSheetFacts) -> String? {
         let phone = (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard facts.status == .treeOnly, phone.isEmpty else { return nil }
         return L10n.t("يحتاج رقم هاتف أولاً", "Needs a phone number first")
     }
+}
 
-    /// «الأجهزة · 2» — التحميل «—»، والفشل «تعذّر التحميل» يعيد الجلب. لمن لا يسجّل خروجها: «⌄» يفتح أسماءها للاطلاع
-    @ViewBuilder
-    private var devicesRow: some View {
+/// «الأجهزة · 2» في «الحساب» لمن يراها ولا يسجّل خروجها — «⌄» يفتح أسماءها للاطلاع؛ التحميل «—»، والفشل «تعذّر التحميل»
+/// يعيد الجلب (كما كانت في «الحساب» قبل V3)
+struct AdminMemberDevicesFacts: View {
+    let devices: [NotificationViewModel.LinkedDevice]?
+    let failed: Bool
+    @Binding var open: Bool
+    let retry: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
         let title = L10n.t("الأجهزة", "Devices")
-        if let devices {
-            if devicesFailed {
-                AdminMemberTapRow(hint: AdminStoreHealthText.retry, action: retryDevices) {
-                    AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title) {
-                        AdminStatePill(title: AdminStoreHealthText.failed, tone: .unknown, icon: "arrow.clockwise")
+        VStack(spacing: 0) {
+            if let devices {
+                if failed {
+                    AdminMemberTapRow(hint: AdminStoreHealthText.retry, action: retry) {
+                        AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title) {
+                            AdminStatePill(title: AdminStoreHealthText.failed, tone: .unknown, icon: "arrow.clockwise")
+                        }
+                    }
+                } else if devices.isEmpty {
+                    AdminMemberRow(icon: "iphone.slash", tint: DS.Color.sea, title: title,
+                                   subtitle: L10n.t("لا تصله الإشعارات", "Gets no notifications"),
+                                   value: L10n.t("لا أجهزة", "None"))
+                } else {
+                    AdminMemberTapRow(hint: open ? L10n.t("يطوي الأجهزة", "Hides the devices")
+                                                 : L10n.t("يعرض الأجهزة", "Shows the devices"),
+                                      action: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { open.toggle() } }) {
+                        AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title,
+                                       value: "\(devices.count)", valueIsNumber: true) {
+                            Image(systemName: "chevron.down")
+                                .dsGlyph(DS.Glyph.sm)
+                                .foregroundColor(DS.Color.textTertiary)
+                                .rotationEffect(.degrees(open ? 180 : 0))
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .accessibilityValue(open ? L10n.t("ظاهرة", "Shown") : L10n.t("مطويّة", "Collapsed"))
+                    if open {
+                        ForEach(devices) { device in
+                            AdminMemberDeviceRow(device: device, canSignOut: false, busy: false, signOut: {})
+                        }
                     }
                 }
-            } else if devices.isEmpty {
-                AdminMemberRow(icon: "iphone.slash", tint: DS.Color.sea, title: title,
-                               subtitle: L10n.t("لا تصله الإشعارات", "Gets no notifications"),
-                               value: L10n.t("لا أجهزة", "None"))
-            } else if canSignOutDevices {
-                AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title,
-                               value: "\(devices.count)", valueIsNumber: true)
             } else {
-                AdminMemberTapRow(hint: devicesOpen ? L10n.t("يطوي الأجهزة", "Hides the devices")
-                                                    : L10n.t("يعرض الأجهزة", "Shows the devices"),
-                                  action: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { devicesOpen.toggle() } }) {
-                    AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title,
-                                   value: "\(devices.count)", valueIsNumber: true) {
-                        Image(systemName: "chevron.down")
-                            .dsGlyph(DS.Glyph.sm)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .rotationEffect(.degrees(devicesOpen ? 180 : 0))
-                            .accessibilityHidden(true)
-                    }
-                }
-                .accessibilityValue(devicesOpen ? L10n.t("ظاهرة", "Shown") : L10n.t("مطويّة", "Collapsed"))
+                AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title, value: AdminStoreHealthText.placeholder)
+                    .accessibilityValue(AdminStoreHealthText.loading)
             }
-        } else {
-            AdminMemberRow(icon: "iphone.gen3", tint: DS.Color.sea, title: title, value: AdminStoreHealthText.placeholder)
-                .accessibilityValue(AdminStoreHealthText.loading)
         }
     }
 }
@@ -201,25 +162,48 @@ struct AdminMemberAdminSection: View {
     let openBox: (AdminMemberBox) -> Void
     let openBans: (String) -> Void
     @Binding var photoWorking: Bool
+    /// V3: شريط «طلبات عنه» أول البطاقة (nil = لمن لا يقرّر طلبات الشجرة)
+    var requests: AnyView? = nil
 
     private var frozen: Bool { facts.status == .frozen }
+    private var phone: String { (member.phoneNumber ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
 
+    /// V3 (`v3-b.png`): بطاقة منفصلة بشريط عنوان كحلي (درع ذهبي + «إجراءات الإدارة»)، أولها «طلبات عنه» ثم الأوامر
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminMemberSectionTitle(title: Self.title, bar: DS.Color.primary)
-            AdminRowsCardBody {
-                ForEach(card.items, id: \.self) { item in
-                    row(item)
-                }
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: DS.Spacing.sm) {
+                Image(systemName: "checkmark.shield")
+                    .dsGlyph(DS.Glyph.md, weight: .semibold)
+                    .foregroundColor(DS.Color.accentLight)
+                    .accessibilityHidden(true)
+                Text(Self.title)
+                    .dsFont(DS.Hub.familyBranchTitle)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, DS.Hub.cardPadding)
+            .padding(.vertical, DS.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DS.Hub.cardPadding)
-            .background(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous).fill(DS.Color.cardBackground))
-            .overlay(RoundedRectangle(cornerRadius: DS.Hub.cardRadius, style: .continuous)
-                .strokeBorder(DS.Hub.memberAdminStroke, lineWidth: DS.Border.widthBold))
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(Self.title))
+            .background(DS.Hub.band)
+            if let requests { requests }
+            if !card.items.isEmpty {
+                AdminRowsCardBody {
+                    ForEach(card.items, id: \.self) { item in
+                        row(item)
+                    }
+                }
+                .padding(.horizontal, DS.Hub.cardPadding)
+                .padding(.vertical, DS.Spacing.xs)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(shape.fill(DS.Color.cardBackground))
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(DS.Hub.memberAdminStroke, lineWidth: DS.Border.widthBold))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(Self.title))
     }
 
     static var title: String { L10n.t("إجراءات الإدارة", "Admin actions") }
@@ -227,6 +211,24 @@ struct AdminMemberAdminSection: View {
     @ViewBuilder
     private func row(_ item: AdminMemberSheetLogic.AdminItem) -> some View {
         switch item {
+        case .phone:
+            // «رقم الهاتف» (نُقل من «العضو»): تعديله بمربّع الرقم، و«امسح» لمن لا حساب دخول له
+            HStack(spacing: DS.Spacing.sm) {
+                AdminMemberTapRow(hint: phone.isEmpty ? L10n.t("إضافة", "Add") : L10n.t("تعديل", "Edit"),
+                                  action: { openBox(.phone(member)) }) {
+                    AdminMemberRow(icon: "phone.fill", tint: DS.Color.sea, title: L10n.t("رقم الهاتف", "Phone number"),
+                                   subtitle: phone.isEmpty ? L10n.t("إضافة رقم", "Add a number")
+                                                           : L10n.t("تعديل الرقم أو مسحه", "Edit or clear the number"),
+                                   showsChevron: true,
+                                   busy: busy == AdminMemberConfirm.unlinkPhone.id || busy == AdminMemberConfirm.clearPhone.id)
+                }
+                if !phone.isEmpty && facts.account == nil {
+                    AdminPillButton(title: L10n.t("امسح", "Clear"), style: .reject) { ask(.unlinkPhone) }
+                        .fixedSize()
+                        .accessibilityLabel(L10n.t("مسح رقم الهاتف", "Clear the phone number"))
+                        .accessibilityHint(L10n.t("يسأل أولاً", "Asks first"))
+                }
+            }
         case .photo:
             AdminMemberPhotoActions(member: member, hasLogin: facts.account != nil, noDevices: noDevices,
                                     askChange: { openBox(.photoRequest(member)) }, working: $photoWorking)

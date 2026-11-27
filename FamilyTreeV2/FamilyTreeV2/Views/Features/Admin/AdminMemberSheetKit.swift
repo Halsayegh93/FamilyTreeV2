@@ -2,6 +2,7 @@ import SwiftUI
 
 // MARK: - قطع ورقة العضو «أ3 ملف موجز وأفعال» (الوحدة V2-3، اختيار المالك ٢٠٢٦-١١-٢٦)
 //
+// V3 «ب»: الشارات تحت الاسم (`AdminMemberBandTag`)، والأزرار بلا إطار (رمز ذهبي ٢٢ واسمه تحته، لمس ٤٤).
 // الرأس الكحلي المختصر: «إغلاق» ذهبي ثابت فوق، ثم الصورة ٥٦ والاسم كاملاً (يلتفّ بلا قصّ) و«الحالة · الفرع» ذهبياً،
 // ثم حتى أربعة أزرار زجاجية بأسمائها تحتها («الملف الكامل» · «في الشجرة» · «اتصال» · «واتساب» — الأخيران للرقم الظاهر
 // فقط، يُحذفان لا يُعتّمان)، ومن أحجام إمكانية الوصول شبكة ٢×٢ بالرمز والاسم في سطر.
@@ -109,6 +110,8 @@ struct AdminMemberSheetHeader: View {
     let member: FamilyMember
     let facts: AdminMemberSheetFacts
     let branch: String?
+    /// V3: شارة الصلة على الرأس — «ابن بنت» / «من خارج العائلة» (nil لمن من العائلة)
+    var lineageTag: String? = nil
     let actions: [AdminMemberHeaderAction]
     let perform: (AdminMemberHeaderAction) -> Void
 
@@ -116,17 +119,18 @@ struct AdminMemberSheetHeader: View {
         member.displayFullName.isEmpty ? L10n.t("بلا اسم", "No name") : member.displayFullName
     }
 
-    /// «عضو مسجّل · فرع حسن · المالك» — الحالة الرسمية، الفرع، ودور الإدارة لأعضائها
+    private var role: String? {
+        switch member.role {
+        case .owner: return L10n.t("المالك", "Owner")
+        case .admin, .monitor, .supervisor: return member.roleName
+        default: return nil
+        }
+    }
+
+    /// للقارئ الصوتي: «عضو مسجّل · فرع حسن · ابن بنت · المالك»
     private var line: String {
         let status = facts.status?.title ?? L10n.t("جارٍ التحقق…", "Checking…")
-        let role: String? = {
-            switch member.role {
-            case .owner: return L10n.t("المالك", "Owner")
-            case .admin, .monitor, .supervisor: return member.roleName
-            default: return nil
-            }
-        }()
-        return [status, branch, role].compactMap { $0 }.joined(separator: " · ")
+        return [status, branch, lineageTag, role].compactMap { $0 }.joined(separator: " · ")
     }
 
     var body: some View {
@@ -139,13 +143,18 @@ struct AdminMemberSheetHeader: View {
                         .foregroundColor(DS.Color.textOnPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
-                    Text(verbatim: line)
-                        .dsFont(.subtitle)
-                        .foregroundColor(DS.Color.accentLight)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .redacted(reason: facts.status == nil ? .placeholder : [])
+                    // V3: شارات الحال — الحالة الرسمية (✓ للمسجّل)، الفرع، الصلة، الدور
+                    DSChipFlow(spacing: DS.Spacing.xs, lineSpacing: DS.Spacing.xs) {
+                        AdminMemberBandTag(text: facts.status?.title ?? L10n.t("جارٍ التحقق…", "Checking…"),
+                                           icon: facts.status == .registered ? "checkmark" : nil)
+                            .redacted(reason: facts.status == nil ? .placeholder : [])
+                        if let branch { AdminMemberBandTag(text: branch) }
+                        if let lineageTag { AdminMemberBandTag(text: lineageTag, highlighted: true) }
+                        if let role { AdminMemberBandTag(text: role) }
+                    }
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: "\(name)، \(line)"))
                 Spacer(minLength: 0)
             }
             if !actions.isEmpty {
@@ -238,45 +247,63 @@ struct AdminMemberHeaderActions: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// V3 (طلب المالك): بلا إطار — رمز ذهبي صغير (٢٢) واسمه تحته، ومساحة لمس ٤٤ غير مرئية
     private func column(_ action: AdminMemberHeaderAction) -> some View {
-        VStack(spacing: DS.Hub.memberActionGap) {
+        VStack(spacing: DS.Spacing.xs) {
             Image(dsSymbol: action.symbol)
                 .dsGlyph(DS.Glyph.xxl, weight: .regular)
-                .foregroundColor(DS.Color.textOnPrimary)
-                .frame(width: DS.Hub.memberActionWidth, height: DS.Hub.memberActionHeight)
-                .background(glassShape(DS.Hub.memberActionRadius))
+                .foregroundColor(DS.Color.accentLight)
             Text(action.title)
                 .dsFont(.caption)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
     }
 
+    /// من أحجام إمكانية الوصول: الرمز واسمه في سطر، بلا إطار، ولمس ٤٤
     private func tile(_ action: AdminMemberHeaderAction) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             Image(dsSymbol: action.symbol)
                 .dsGlyph(DS.Glyph.lg, weight: .medium)
+                .foregroundColor(DS.Color.accentLight)
             Text(action.title)
                 .dsFont(.button)
+                .foregroundColor(DS.Color.textOnPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
-        .foregroundColor(DS.Color.textOnPrimary)
-        .padding(.horizontal, DS.Spacing.md)
-        .padding(.vertical, DS.Spacing.sm)
-        .frame(maxWidth: .infinity, minHeight: DS.Hub.memberActionTileHeight)
-        .background(glassShape(DS.Hub.memberActionTileRadius))
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
         .contentShape(Rectangle())
     }
+}
 
-    private func glassShape(_ radius: CGFloat) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return shape.fill(DS.Hub.glass)
-            .overlay(shape.strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
+/// شارة على الكحلي: كبسولة زجاجية بنصّ أبيض (والصلة «ابن بنت»/«من خارج العائلة» بذهبي خافت)
+struct AdminMemberBandTag: View {
+    let text: String
+    var icon: String? = nil
+    var highlighted: Bool = false
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.xxs) {
+            if let icon {
+                Image(systemName: icon)
+                    .dsGlyph(DS.Glyph.xs, weight: .bold)
+                    .foregroundColor(DS.Color.accentLight)
+            }
+            Text(verbatim: text)
+                .dsFont(.caption)
+                .foregroundColor(highlighted ? DS.Color.accentLight : DS.Color.textOnPrimary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .padding(.vertical, DS.Spacing.xxs)
+        .background(Capsule().fill(highlighted ? DS.Hub.rolePillFill : DS.Hub.glass))
+        .overlay(Capsule().strokeBorder(DS.Hub.glassLine, lineWidth: DS.Border.width))
     }
 }
 

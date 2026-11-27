@@ -15,39 +15,7 @@ import SwiftUI
 //    صورة الآن ← يُحدَّث العضو و«أضاف صورته — حدّثنا البيانات» (V11). الورقة تضعه بـ`.id(member.id)` فتبدأ حالته من
 //    جديد مع كل عضو (V29)، و`working` يعطّل «السابق/التالي» أثناء الإرسال (V27).
 
-struct AdminMemberPhotoRow: View {
-    let member: FamilyMember
-    let canEdit: Bool
-    /// إضافة الصورة أو تبديلها (`EditMemberPhotoSheet`)
-    let openPhoto: () -> Void
-
-    private var hasPhoto: Bool { PhotoNudgeLogic.hasPhoto(avatar: member.avatarUrl, photo: member.photoURL) }
-
-    /// المصغّرة: الأفاتار وإلا الصورة — لا صور للإناث في التطبيق
-    private var thumbnail: String? {
-        guard hasPhoto, !member.isFemale else { return nil }
-        return [member.avatarUrl, member.photoURL]
-            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty }
-    }
-
-    private var valueText: String {
-        if hasPhoto { return L10n.t("موجودة", "Added") }
-        return member.avatarUnavailable == true ? L10n.t("لا توجد صورة لهذا العضو", "No photo exists") : L10n.t("بلا صورة", "No photo")
-    }
-
-    var body: some View {
-        let row = AdminMemberRow(icon: "photo.fill", tint: DS.Color.sadu, title: L10n.t("الصورة", "Photo"),
-                                 value: valueText, thumbnail: thumbnail)
-        if canEdit {
-            AdminMemberTapRow(hint: hasPhoto ? L10n.t("تغيير", "Change") : L10n.t("إضافة", "Add"), action: openPhoto) {
-                row.chevron(true)
-            }
-        } else {
-            row
-        }
-    }
-}
+// (V3: صفّ «الصورة» في «البيانات» يرسمه `AdminMemberDataGroup` — باب واحد للإضافة أو التبديل؛ هنا أوامرها فقط.)
 
 struct AdminMemberPhotoActions: View {
     let member: FamilyMember

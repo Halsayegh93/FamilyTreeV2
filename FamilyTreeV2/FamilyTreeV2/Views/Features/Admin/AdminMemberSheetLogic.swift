@@ -180,6 +180,8 @@ nonisolated enum AdminMemberSheetLogic {
 
     /// أوامر الإدارة بترتيب بطاقتها، والحذف آخرها
     enum AdminItem: String, CaseIterable, Equatable {
+        /// V3: «رقم الهاتف» (تعديل الرقم أو مسحه) — نُقل من «العضو» إلى هنا، أول البطاقة
+        case phone
         /// «نبّهه يضيف صورة» / السطر المعلّق بـ«ذكّره الحين» و«إلغاء التنبيه» / «طلب تغيير الصورة»
         case photo
         /// «تسجيل في التطبيق»
@@ -199,11 +201,13 @@ nonisolated enum AdminMemberSheetLogic {
     }
 
     /// بطاقة «إجراءات الإدارة» تحت معلومات العضو — nil = لا بطاقة: على ورقتك (يبقى سطر القفل)، أو لا أمر لك هنا.
-    /// للمتوفى: طلب الصورة المفتوح (لإلغائه) والحذف فقط
+    /// للمتوفى: طلب الصورة المفتوح (لإلغائه) والحذف فقط. V3: `phone` = صفّ «رقم الهاتف» أولاً (للحيّ)، و`requests` =
+    /// شريط «طلبات عنه» يرسم البطاقة ولو بلا أمر
     static func adminCard(isSelf: Bool, living: Bool, photo: Bool, register: Bool, devices: Bool,
-                          commands: AccountCommands) -> AdminCard? {
+                          commands: AccountCommands, phone: Bool = false, requests: Bool = false) -> AdminCard? {
         guard !isSelf else { return nil }
         var items: [AdminItem] = []
+        if living && phone { items.append(.phone) }
         if photo { items.append(.photo) }
         if living {
             if register { items.append(.register) }
@@ -212,7 +216,7 @@ nonisolated enum AdminMemberSheetLogic {
             if commands.ban { items.append(.ban) }
         }
         if commands.delete { items.append(.delete) }
-        return items.isEmpty ? nil : AdminCard(items: items)
+        return items.isEmpty && !requests ? nil : AdminCard(items: items)
     }
 
     /// للحيّ فقط، ولمن يملك أمراً من أوامر الورقة (يعدّل أو يوقف أو يمنع أو يحذف) — غيره لا يحتاج شرحاً
