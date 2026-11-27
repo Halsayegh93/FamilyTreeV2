@@ -271,9 +271,11 @@ struct WomanDetailSheet: View {
     var onChanged: (() async -> Void)? = nil
     /// يفتح تفاصيل عضو آخر (مثلاً بروفايل الزوجة بعد ربطها من العائلة).
     var onOpenMember: ((UUID) -> Void)? = nil
-    /// يفتح «أبناء» على ابنة واحدة (الاسم مملوء) فور الظهور — من تنبيه «شجرة العائلة للرجال فقط»
-    /// (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧). nil = التفاصيل كما هي
-    var startsDaughterAdd: String? = nil
+    /// يفتح «أبناء» على ابنة لكل اسم (الاسم مملوء) فور الظهور — من تنبيه «شجرة العائلة للرجال فقط» أو الانتقال التلقائي
+    /// لاسم بنت (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧). nil = التفاصيل كما هي
+    var startsDaughterAdd: [String]? = nil
+    /// الانتقال التلقائي من مربّع ابن: سطر «انتقلنا لشجرة النساء…» أعلى «أبناء» و«هو ولد؟ ارجع»
+    var autoMove: WomenTreeAutoMove? = nil
     @State private var startedDaughterAdd = false
     @Environment(\.dismiss) private var dismiss
     /// الشجرة العامة (لمعرفة من منها) ونقل الجنس وإضافة الابن من «عائلتي»
@@ -505,16 +507,38 @@ struct WomanDetailSheet: View {
 
     /// مربّع الإجراءات ثم «أبناء» بابنة واحدة — نفس مسار «إضافة بنت» بآلية الدور (مباشر · عائلتي · طلب)
     private func openDaughterAddIfAsked() {
-        guard let name = startsDaughterAdd, !startedDaughterAdd, mode != .viewOnly else { return }
+        guard let names = startsDaughterAdd, !startedDaughterAdd, mode != .viewOnly else { return }
         startedDaughterAdd = true
         DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
             showAdminBox = true
             DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
                 startAdd(.child)
-                var daughter = DSAddEntry(gender: "female")
-                daughter.name = name
-                draft.addEntries = [daughter]
+                let daughters = (names.isEmpty ? [""] : names).map { name -> DSAddEntry in
+                    var daughter = DSAddEntry(gender: "female")
+                    daughter.name = name
+                    return daughter
+                }
+                draft.addEntries = daughters
             }
+        }
+    }
+
+    /// «هو ولد؟ ارجع»: يغلق المربّعات وشجرة النساء بلا كتابة — ومربّع الابن تحتها كما هو
+    private func backToSon() {
+        autoMove?.onBack()
+        draft.closeBoxes()
+        showAdminBox = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.panelOutDuration) { dismiss() }
+    }
+
+    /// سطر الانتقال التلقائي أعلى «أبناء» — لماذا نحن هنا، والرجوع
+    private func autoMoveBanner(_ move: WomenTreeAutoMove) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSNoteCard(move.notice, icon: "figure.stand.dress", tint: DS.Color.female)
+            DSChipButton(move.backTitle, icon: "arrow.uturn.backward", tint: chromeInk, size: .small) {
+                backToSon()
+            }
+            .accessibilityHint(L10n.t("يرجع لمربّع الابن كما هو", "Returns to the son form as it was"))
         }
     }
 
@@ -2310,6 +2334,10 @@ struct WomanDetailSheet: View {
             onSubmit: { performAdd(kind) },
             onCancel: { draft.addKind = nil }
         ) {
+            // انتقال تلقائي من مربّع ابن باسم بنت — السطر أعلى المربّع و«هو ولد؟ ارجع»
+            if kind == .child, let autoMove {
+                autoMoveBanner(autoMove).dsStaggerIn(0)
+            }
             addContext(kind).dsStaggerIn(0)
 
             // الأخوات الموجودات — حتى لا تُضاف أخت مكرّرة

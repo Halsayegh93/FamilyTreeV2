@@ -19,6 +19,9 @@ struct TreeEditRequestView: View {
     /// مع `.add`: ابن أو أكثر، لكل ابن «متوفّى» — طلب لكل ابن (طلب المالك ٢٠٢٦-١٠-٢٥)
     @State private var sons: [DSAddEntry] = [DSAddEntry()]
     @State private var isSendingSons = false
+    /// «إرسال» → فحص الأسماء: اسم بنت ينتقل تلقائياً لـ«أبناء» في شجرة النساء (`FamilyTreeMenOnly.namesToMove`،
+    /// طلب المالك ٢٠٢٦-١١-٢٧)، و«هو ولد؟ ارجع» يرجع لهذا المربّع كما هو
+    @State private var nameCheck: FamilyTreeNameCheck? = nil
     /// كم طلباً أُرسل — لرسالة النجاح
     @State private var sentCount = 0
     @State private var primaryText: String = ""
@@ -151,6 +154,9 @@ struct TreeEditRequestView: View {
                     "Failed to send request. Please try again."
                 ))
             }
+            // اسم بنت في «طلب إضافة ابن» → «أبناء» في شجرة النساء تحت الأب نفسه بالاسم
+            .familyTreeMenOnly(isPresented: .constant(false), father: member, typedName: "",
+                               nameCheck: $nameCheck, onSon: sendSons, onMoved: movedToWomenTree)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear { prefillFromMember() }
     }
@@ -321,7 +327,9 @@ struct TreeEditRequestView: View {
 
         switch action {
         case .add:
-            submitSons(namedSons, notes: cleanNotes)
+            // اسم بنت → شجرة النساء تلقائياً؛ غيره يُرسل هنا (`sendSons`)
+            guard !isSendingSons else { return }
+            nameCheck = FamilyTreeNameCheck(names: namedSons.map(\.trimmedName))
             return
 
         case .editName:
@@ -440,6 +448,18 @@ struct TreeEditRequestView: View {
     /// «ابن» أو أكثر — طلب لكل ابن بمسار الطلبات نفسه (`newMemberName`: يُضاف تلقائياً عند قبول طلبه). القبول لا يكتب
     /// الوفاة، فالمتوفّى يُكتب في ملاحظة طلبه بوضوح لتسجّل الإدارة وفاته بعد القبول. ما يُرسل يخرج من المربّع —
     /// إن تعذّر طلب بقي هو وما بعده ولا يتكرّر ما أُرسل
+    /// بعد فحص الأسماء — الإرسال كما كان
+    private func sendSons() {
+        submitSons(namedSons, notes: notes.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// أُغلقت شجرة النساء بعد انتقال تلقائي: البنات خرجن من هذا المربّع، والأبناء الباقون ينتظرون «إرسال»
+    private func movedToWomenTree(_ moved: [String]) {
+        let keys = FamilyTreeMenOnly.sonKeys(moved)
+        sons.removeAll { keys.contains(FamilyTreeMenOnly.normalizedFirstName($0.trimmedName)) }
+        if namedSons.isEmpty { dismiss() }
+    }
+
     private func submitSons(_ list: [DSAddEntry], notes: String) {
         guard !list.isEmpty, !isSendingSons else { return }
         isSendingSons = true

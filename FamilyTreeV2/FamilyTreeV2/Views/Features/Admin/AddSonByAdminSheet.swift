@@ -34,6 +34,8 @@ struct AddSonByAdminSheet: View {
     @State private var showCompoundNameCheck = false
     /// «أنثى» في الإضافة — شجرة العائلة للرجال فقط (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧)
     @State private var showMenOnly = false
+    /// «إضافة» → فحص الاسم: اسم بنت ينتقل تلقائياً لشجرة النساء (`FamilyTreeMenOnly.namesToMove`)
+    @State private var nameCheck: FamilyTreeNameCheck? = nil
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
 
@@ -167,7 +169,9 @@ struct AddSonByAdminSheet: View {
             Text(AddChildChecks.compoundNameWarning(firstName) ?? "")
         }
         // الإضافة فقط: «إضافة بنت في شجرة النساء» تحت الأب نفسه، وبعد إغلاقها يُغلق هذا المربّع
-        .familyTreeMenOnly(isPresented: $showMenOnly, father: parent, typedName: firstName) { dismiss() }
+        // واسم بنت عند «إضافة» ينتقل تلقائياً هناك («هو ولد؟ ارجع» يرجع لهذا المربّع كما هو)
+        .familyTreeMenOnly(isPresented: $showMenOnly, father: parent, typedName: firstName,
+                           nameCheck: $nameCheck, onSon: continueAsSon) { dismiss() }
         .onAppear {
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -245,7 +249,14 @@ struct AddSonByAdminSheet: View {
         if AddChildChecks.isMoreThanFirstName(firstName) {
             saveErrorText = AddChildChecks.firstNameOnlyMessage
             showSaveError = true
-        } else if AddChildChecks.compoundNameWarning(firstName) != nil {
+        } else {
+            // اسم بنت → شجرة النساء تلقائياً؛ غيره يكمل هنا (`continueAsSon`)
+            nameCheck = FamilyTreeNameCheck(names: [firstName])
+        }
+    }
+
+    private func continueAsSon() {
+        if AddChildChecks.compoundNameWarning(firstName) != nil {
             showCompoundNameCheck = true
         } else {
             saveAction()

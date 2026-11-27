@@ -102,6 +102,8 @@ struct AddChildSheet: View {
     @State private var showLocalWarnings = false
     /// «أنثى» اختيرت — شجرة العائلة للرجال فقط (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧)
     @State private var showMenOnly = false
+    /// «إضافة» → فحص الاسم: اسم بنت ينتقل تلقائياً لشجرة النساء (`FamilyTreeMenOnly.namesToMove`)
+    @State private var nameCheck: FamilyTreeNameCheck? = nil
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
@@ -141,7 +143,9 @@ struct AddChildSheet: View {
             Text(localWarnings.joined(separator: "\n\n"))
         }
         // «إضافة بنت في شجرة النساء» تحت الأب نفسه — وبعد إغلاقها يُغلق هذا المربّع (الطلب انتقل هناك)
-        .familyTreeMenOnly(isPresented: $showMenOnly, father: member, typedName: firstName) { dismiss() }
+        // واسم بنت عند «إضافة» ينتقل تلقائياً هناك («هو ولد؟ ارجع» يرجع لهذا المربّع كما هو)
+        .familyTreeMenOnly(isPresented: $showMenOnly, father: member, typedName: firstName,
+                           nameCheck: $nameCheck, onSon: continueAsSon) { dismiss() }
         .onAppear {
             if !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -268,6 +272,12 @@ struct AddChildSheet: View {
             showErrorAlert = true
             return
         }
+        // اسم بنت → شجرة النساء تلقائياً؛ غيره يكمل هنا (`continueAsSon`)
+        nameCheck = FamilyTreeNameCheck(names: [firstName])
+    }
+
+    private func continueAsSon() {
+        guard !isSubmitting else { return }
         let warnings = currentWarnings
         if warnings.isEmpty {
             performSave()
