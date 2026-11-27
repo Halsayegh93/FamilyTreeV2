@@ -12,6 +12,8 @@ struct WomenTreeView: View {
     // تبدأ من الكاش (إن وُجد) — انتقال فوري بلا شاشة تحميل في المرات التالية.
     @State private var allMembers: [FamilyMember] = WomenStore.cache
     @State private var isLoading = WomenStore.cache.isEmpty
+    /// فشل الجلب ولا كاش — حالة خطأ بزرّ «إعادة المحاولة» لا «لا توجد بيانات» (مراجعة ٢٠٢٦-١١-٢٧ #9)
+    @State private var loadFailed = false
     @EnvironmentObject private var memberVM: MemberViewModel
     /// عدد الرأس = «الإجمالي» في «إحصائيات العائلة» بالدالة نفسها (`AdminFamilyCensus`) — طلب المالك ٢٠٢٦-١١-١١
     /// «عدد شجرة النساء مو نفس الإجمالي» (كان عدد صفوف الجدول كلها مع المرايا وخارج العائلة)
@@ -73,7 +75,21 @@ struct WomenTreeView: View {
                         FamilyTreeTabBar(selection: treeTab)
                             .padding(.top, DS.Spacing.sm)
                     }
-                    DSEmptyView(L10n.t("لا توجد بيانات للنساء بعد", "No women data yet"), section: .tree)
+                    Group {
+                        if loadFailed {
+                            DSEmptyView(L10n.t("تعذّر تحميل شجرة النساء", "Couldn't load the women's tree"),
+                                        message: L10n.t("تحقّق من الاتصال ثم أعد المحاولة.", "Check your connection and try again."),
+                                        section: .tree,
+                                        actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise") {
+                                Task {
+                                    isLoading = true
+                                    await load()
+                                }
+                            }
+                        } else {
+                            DSEmptyView(L10n.t("لا توجد بيانات للنساء بعد", "No women data yet"), section: .tree)
+                        }
+                    }
                         // الحالة الفارغة تدخل بتلاشٍ وصعود خفيف — «تقليل الحركة»: تلاشٍ فقط
                         .dsStaggerIn(0)
                         .frame(maxHeight: .infinity)
@@ -87,7 +103,9 @@ struct WomenTreeView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("النساء", "Women"),
-                            subtitle: "\(headcount ?? allMembers.count) " + L10n.t("فرد", "members"),
+                            // صيغة شجرة العائلة «2,990 فرداً» (مراجعة ٢٠٢٦-١١-٢٧ #11) — الرقم كما هو (= «الإجمالي»، طلب المالك ٢٠٢٦-١١-١١)
+                            subtitle: L10n.t(TreeHeaderCount.arabic(headcount ?? allMembers.count),
+                                             TreeHeaderCount.english(headcount ?? allMembers.count)),
                             icon: AppSection.tree.symbol,
                             section: .tree,
                             subtitleChip: true
@@ -206,8 +224,12 @@ struct WomenTreeView: View {
         do {
             let rows = try await WomenStore.fetch()
             allMembers = visible(rows)
+            loadFailed = false
             isLoading = false
         } catch {
+            // الكاش يبقى ظاهراً إن وُجد؛ بلا كاش ← حالة الخطأ بزرّ الإعادة
+            Log.warning("[Women] الجلب فشل: \(error.localizedDescription)")
+            loadFailed = allMembers.isEmpty
             isLoading = false
         }
     }
@@ -222,31 +244,12 @@ struct WomenTreeView: View {
         }
     }
 
-    /// عقدة المستخدم في شجرة النساء — تلقائيًا لكل مستخدم حسب هويّته:
-    /// ١) عقدة بنفس معرّفه (mirror للذكور) · ٢) عقدة مرتبطة بحسابه · ٣) مطابقة بالاسم.
+    /// عقدة المستخدم في شجرة النساء — بالمعرّفات وحدها (مراجعة ٢٠٢٦-١١-٢٧ #4؛ كانت مطابقة بأول ٣ كلمات من الاسم
+    /// توصل لعقدة غيره): عقدته بمعرّف ملفه (الرجل: عقدته المرآة) ثم المربوطة بحسابه. `WomenMyNode` (مفحوص: W1)
     private func resolveMyWomanId() -> UUID? {
-        guard let me = authVM.currentUser else { return nil }
-        // ١) الأدقّ: عقدة تحمل نفس معرّف المستخدم (الذكور مُمثّلون بنفس المعرّف)
-        if allMembers.contains(where: { $0.id == me.id }) { return me.id }
-        // ٢) عقدة مرتبطة بالحساب (للإناث المربوطات)
-        if let linked = WomenStore.womanByLinkedUser[me.id] { return linked }
-        // حساب المرأة موقعها عقدتها المربوطة وحدها — لا تخمين بالاسم (تربطها الإدارة)
-        if me.isWomanAccount || LineageGateStore.shared.status?.flagged == true { return nil }
-        // ٣) مطابقة بالاسم (احتياطي أخير)
-        let target = normalizeName(me.fullName)
-        guard !target.isEmpty else { return nil }
-        // مطابقة تامّة، وإلا تطابق أول ٣ كلمات (الاسم + الأب + الجد).
-        if let exact = allMembers.first(where: { normalizeName($0.fullName) == target }) { return exact.id }
-        let key = firstWords(target, 3)
-        guard !key.isEmpty else { return nil }
-        return allMembers.first(where: { firstWords(normalizeName($0.fullName), 3) == key })?.id
-    }
-    private func normalizeName(_ s: String) -> String {
-        s.trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespaces).filter { !$0.isEmpty }.joined(separator: " ")
-    }
-    private func firstWords(_ s: String, _ n: Int) -> String {
-        s.split(separator: " ").prefix(n).joined(separator: " ")
+        let ids = Set(allMembers.map(\.id))
+        return WomenMyNode.resolve(userId: authVM.currentUser?.id, hasNode: { ids.contains($0) },
+                                   womanByLinkedUser: WomenStore.womanByLinkedUser)
     }
 }
 
@@ -1195,7 +1198,8 @@ struct WomanDetailSheet: View {
         if !w.isEmpty {
             people += w.map { .init(member: $0, role: L10n.t("الزوجة", "Wife")) }
         } else if showHusband, let husband {
-            people.append(.init(member: husband, role: L10n.t("الزوج", "Husband")))
+            // اسمه تحت صورته لا كلمة «الزوج» (مراجعة ٢٠٢٦-١١-٢٧ «الزوج بجانب البنت» ٥)
+            people.append(.init(member: husband, role: shortName(husband)))
         }
         return people + kids.map { .init(member: $0, role: shortName($0)) }
     }
@@ -3465,9 +3469,17 @@ struct WomanDetailSheet: View {
 
     // MARK: - الصور
 
+    /// قاعدة الشجرة نفسها (مراجعة ٢٠٢٦-١١-٢٧ #7): الأنثى بلا صورة أبداً، والذكر صورته أو صورة حسابه المربوط (ابن البنت)
+    private func photoURL(_ m: FamilyMember) -> String? {
+        let linked: String? = m.isFemale ? nil : WomenStore.linkedUserByWoman[m.id]
+            .flatMap { memberVM.member(byId: $0) }
+            .flatMap { $0.isFemale ? nil : $0.avatarUrl }
+        return WomenTreePhoto.url(isFemale: m.isFemale, own: m.avatarUrl ?? m.photoURL, linked: linked)
+    }
+
     private func avatar(_ m: FamilyMember, size: CGFloat) -> some View {
         Group {
-            if let url = m.avatarUrl ?? m.photoURL, let u = URL(string: url) {
+            if let url = photoURL(m), let u = URL(string: url) {
                 CachedAsyncImage(url: u) { img in
                     img.resizable().scaledToFill()
                 } placeholder: {
