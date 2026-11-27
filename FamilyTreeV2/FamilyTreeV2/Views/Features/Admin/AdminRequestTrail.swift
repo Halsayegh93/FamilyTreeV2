@@ -71,7 +71,7 @@ final class AdminHandledStore: ObservableObject {
     /// بداية النافذة (آخر ٣٠ يوماً)
     private var since: String {
         let date = Calendar.current.date(byAdding: .day, value: -Self.windowDays, to: Date()) ?? Date()
-        return ISO8601DateFormatter().string(from: date)
+        return DateParsing.isoString(date)
     }
 
     func reload() async {

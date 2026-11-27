@@ -13,9 +13,8 @@ enum CrashReporter {
 
     /// تسجيل خطأ
     static func log(_ error: Error, context: String = "") {
-        let formatter = ISO8601DateFormatter()
         let entry = CrashLog(
-            date: formatter.string(from: Date()),
+            date: DateParsing.isoString(Date()),
             error: "\(error) — \(error.localizedDescription)",
             context: context
         )

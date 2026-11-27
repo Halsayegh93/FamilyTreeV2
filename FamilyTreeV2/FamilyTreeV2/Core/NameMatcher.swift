@@ -238,13 +238,8 @@ extension NameMatcher {
     /// تاريخ الميلاد للمقارنة: «yyyy-MM-dd» أو السنة وحدها
     static func linkBirth(_ raw: String?) -> Date? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), raw.count >= 4 else { return nil }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
-        if raw.count >= 10, let d = f.date(from: String(raw.prefix(10))) { return d }
-        f.dateFormat = "yyyy"
-        return f.date(from: String(raw.prefix(4)))
+        if raw.count >= 10, let d = DateParsing.dayUTC.date(from: String(raw.prefix(10))) { return d }
+        return DateParsing.yearUTC.date(from: String(raw.prefix(4)))
     }
 
     struct LinkSuggestion {

@@ -93,11 +93,9 @@ class MemberViewModel: ObservableObject {
     /// يُرجع حقول التتبع الإداري (updated_by + updated_at) إذا كان المدير يعدل بيانات عضو آخر
     private func adminAuditFields(for memberId: UUID) -> [String: AnyEncodable] {
         guard canModerate, let adminId = currentUser?.id, adminId != memberId else { return [:] }
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime]
         return [
             "updated_by": AnyEncodable(adminId.uuidString),
-            "updated_at": AnyEncodable(isoFormatter.string(from: Date()))
+            "updated_at": AnyEncodable(DateParsing.isoString(Date()))
         ]
     }
 
@@ -1178,10 +1176,8 @@ class MemberViewModel: ObservableObject {
 
         // تتبع المدير الذي أضاف العضو (إذا كان المدير يضيف)
         if canModerate, let adminId = currentUser?.id {
-            let isoFormatter = ISO8601DateFormatter()
-            isoFormatter.formatOptions = [.withInternetDateTime]
             newChild["updated_by"] = AnyEncodable(adminId.uuidString)
-            newChild["updated_at"] = AnyEncodable(isoFormatter.string(from: Date()))
+            newChild["updated_at"] = AnyEncodable(DateParsing.isoString(Date()))
         }
 
         do {

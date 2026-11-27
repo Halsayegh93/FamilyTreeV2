@@ -255,7 +255,7 @@ final class CategoryStore: ObservableObject {
                                 name_en: category.nameEn.trimmingCharacters(in: .whitespacesAndNewlines),
                                 icon_key: category.iconKey, color_key: category.colorKey,
                                 sort_order: category.sortOrder, is_active: category.isActive,
-                                updated_at: ISO8601DateFormatter().string(from: Date())))
+                                updated_at: DateParsing.isoString(Date())))
                 .eq("id", value: category.id.uuidString)
                 .execute()
             if refetch { await fetch() }

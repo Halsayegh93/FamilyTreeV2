@@ -78,10 +78,6 @@ struct AppUsageMember: Decodable, Identifiable {
 
     static func parse(_ raw: String?) -> Date? {
         guard let raw else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: raw) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: raw)
+        return DateParsing.iso(raw)
     }
 }

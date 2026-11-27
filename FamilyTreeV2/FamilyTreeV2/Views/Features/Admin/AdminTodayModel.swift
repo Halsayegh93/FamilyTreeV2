@@ -342,7 +342,7 @@ enum AdminTodayFetch {
         nonisolated struct Params: Encodable { let p_from: String; let p_to: String }
         let to = Date()
         guard let from = Calendar.current.date(byAdding: .day, value: -7, to: to) else { return nil }
-        let iso = ISO8601DateFormatter()
+        let iso = DateParsing.isoPlain
         do {
             let report: ApprovalsReport = try await SupabaseConfig.client
                 .rpc("approvals_report", params: Params(p_from: iso.string(from: from), p_to: iso.string(from: to)))

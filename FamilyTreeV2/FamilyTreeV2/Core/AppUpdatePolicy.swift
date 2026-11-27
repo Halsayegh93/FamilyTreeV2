@@ -71,18 +71,12 @@ nonisolated enum AppUpdateDates {
 
     static func parse(_ raw: String?) -> Date? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: raw) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: raw)
+        return DateParsing.iso(raw)
     }
 
     /// للسيرفر: وقت عالمي بلا كسور
     static func iso(_ date: Date) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f.string(from: date)
+        DateParsing.isoString(date)
     }
 
     /// «الخميس 20 نوفمبر»

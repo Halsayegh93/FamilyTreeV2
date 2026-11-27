@@ -142,7 +142,7 @@ final class FamilyArchiveViewModel: ObservableObject {
             // 3) إدراج صف في الجدول
             let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let trimmedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let nowIso = ISO8601DateFormatter().string(from: Date())
+            let nowIso = DateParsing.isoString(Date())
             var payload: [String: AnyEncodable] = [
                 "id":              AnyEncodable(itemId.uuidString),
                 "title":           AnyEncodable(trimmedTitle),
@@ -271,7 +271,7 @@ final class FamilyArchiveViewModel: ObservableObject {
             items[idx].approvedAt = Date()
         }
 
-        let nowIso = ISO8601DateFormatter().string(from: Date())
+        let nowIso = DateParsing.isoString(Date())
         let payload: [String: AnyEncodable] = [
             "approval_status": AnyEncodable(status.rawValue),
             "approved_by":     AnyEncodable(approverId.uuidString),

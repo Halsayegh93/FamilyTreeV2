@@ -178,11 +178,7 @@ final class AdminDeviceReachStore: ObservableObject {
 
     nonisolated static func date(_ iso: String?) -> Date? {
         guard let iso else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: iso) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: iso)
+        return DateParsing.iso(iso)
     }
 }
 

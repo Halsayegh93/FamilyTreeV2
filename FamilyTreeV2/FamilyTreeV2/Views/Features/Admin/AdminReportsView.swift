@@ -1037,12 +1037,8 @@ struct AdminReportsView: View {
 
     private func parsedBirthDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        if let date = formatter.date(from: raw) { return date }
-        let iso = ISO8601DateFormatter()
-        return iso.date(from: raw)
+        if let date = DateParsing.dayLocal.date(from: raw) { return date }
+        return DateParsing.isoPlain.date(from: raw)
     }
 
     private func generatePDF() async {

@@ -348,15 +348,9 @@ struct NewsCommentsSheet: View {
         return f
     }()
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     private func relativeTimeFromISO(_ dateString: String) -> String {
         Self.relativeFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        let date = Self.isoFormatter.date(from: dateString) ?? Date()
+        let date = DateParsing.isoRequiringFraction(dateString) ?? Date()
         return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }

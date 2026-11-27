@@ -276,6 +276,12 @@ enum AdminErrorsText {
         return f
     }()
 
+    /// العنوان العربي + سطر بسيط (`AdminErrorTitles.swift`) — بالعربية فقط؛ بالإنجليزية يبقى عنوان Sentry كما هو
+    static func arabic(_ issue: AdminErrorIssue) -> AdminErrorArabic? {
+        guard L10n.isArabic else { return nil }
+        return AdminErrorArabic.describe(issue.title, platform: issue.platform.rawValue)
+    }
+
     /// «الملف · الدالة» أو صفحة الموقع — معزولاً بترتيبه داخل السطر العربي
     static func place(_ issue: AdminErrorIssue) -> String? {
         if let p = issue.place { return SmsAttemptsText.isolatedLTR(p) }
@@ -451,11 +457,7 @@ private struct AdminErrorRow: View {
             HStack(alignment: .top, spacing: DS.Spacing.md) {
                 AdminIconSquare(symbol: issue.platform.symbol, tint: issue.platform.fill, filled: true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(verbatim: issue.title)
-                        .dsFont(.hubRow)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(3)
+                    AdminErrorTitleBlock(issue: issue, titleRole: .hubRow, titleLines: 3, originalLines: 2)
                     if let place = AdminErrorsText.place(issue) {
                         Text(verbatim: place)
                             .dsFont(.footnote)
@@ -488,6 +490,40 @@ private struct AdminErrorRow: View {
         }
         if issue.testOnly {
             DSStatusChip(text: L10n.t("نسخة تجربة", "Test build"), icon: "hammer.fill", tint: DS.Color.slate, size: .mini)
+        }
+    }
+}
+
+/// العنوان بالعربي · سطر بسيط · عنوان Sentry الأصلي صغيراً للمرجع (بالإنجليزية: الأصلي وحده)
+private struct AdminErrorTitleBlock: View {
+    let issue: AdminErrorIssue
+    let titleRole: DS.TextRole
+    let titleLines: Int?
+    let originalLines: Int?
+
+    var body: some View {
+        let ar = AdminErrorsText.arabic(issue)
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+            Text(verbatim: ar?.title ?? issue.title)
+                .dsFont(titleRole)
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(titleLines)
+                .fixedSize(horizontal: false, vertical: true)
+            if let ar {
+                Text(verbatim: ar.line)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if ar.showsOriginal {
+                    Text(verbatim: SmsAttemptsText.isolatedLTR(issue.title))
+                        .dsFont(.caption)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(originalLines)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
     }
 }
@@ -557,10 +593,7 @@ private struct AdminErrorDetailContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            Text(verbatim: issue.title)
-                .dsFont(.headline)
-                .foregroundColor(DS.Color.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
+            AdminErrorTitleBlock(issue: issue, titleRole: .headline, titleLines: nil, originalLines: nil)
                 .textSelection(.enabled)
 
             AdminRowsCardBody {

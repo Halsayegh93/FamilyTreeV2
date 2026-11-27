@@ -246,13 +246,6 @@ enum WifeCandidateRules {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
-    private static let stampFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let stampFormatterPlain = ISO8601DateFormatter()
-
     /// «yyyy-MM-dd»، أو السنة وحدها (آخر يومها — الأصغر عمراً، فلا تظهر من قد تكون دون ١٨)
     private static func birthDay(_ raw: String?) -> Date? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
@@ -264,7 +257,7 @@ enum WifeCandidateRules {
     /// وقت السيرفر (timestamptz بأجزاء الثانية أو بدونها، أو اليوم وحده)
     private static func timestamp(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return stampFormatter.date(from: raw) ?? stampFormatterPlain.date(from: raw)
+        return DateParsing.iso(raw)
             ?? (raw.count >= 10 ? dayFormatter.date(from: String(raw.prefix(10))) : nil)
     }
 }

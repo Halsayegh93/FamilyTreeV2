@@ -564,7 +564,7 @@ final class AdminInsightsApprovalsStore: ObservableObject {
         nonisolated struct Params: Encodable { let p_from: String; let p_to: String }
         let now = Date()
         let from = Calendar.current.date(byAdding: .day, value: -Self.days, to: now) ?? now
-        let iso = ISO8601DateFormatter()
+        let iso = DateParsing.isoPlain
         do {
             let result: ApprovalsReport = try await SupabaseConfig.client
                 .rpc("approvals_report", params: Params(p_from: iso.string(from: from), p_to: iso.string(from: now)))

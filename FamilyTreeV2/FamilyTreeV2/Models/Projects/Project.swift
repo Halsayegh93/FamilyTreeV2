@@ -110,19 +110,13 @@ nonisolated struct Project: Identifiable, Codable, Sendable {
 
     /// وقت التثبيت كنص ISO بكسور الثواني (يطابق ما يعيده السيرفر فيصحّ الترتيب بعد التحديث التفاؤلي).
     static func pinTimestampNow(at date: Date = Date()) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f.string(from: date)
+        DateParsing.isoFractionalString(date)
     }
 
     /// يقرأ نص التثبيت سواء جاء بكسور ثوانٍ أو بدونها.
     private static func pinDate(_ s: String?) -> Date {
         guard let s else { return .distantPast }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: s) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: s) ?? .distantPast
+        return DateParsing.iso(s) ?? .distantPast
     }
 
     /// Whether this project has any social media links

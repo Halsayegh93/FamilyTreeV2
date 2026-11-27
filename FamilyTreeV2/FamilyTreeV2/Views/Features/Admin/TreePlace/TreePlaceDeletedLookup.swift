@@ -68,7 +68,7 @@ nonisolated struct MemberDeletePlace: Decodable, Sendable, Identifiable, Equatab
     var deletedDate: Date? {
         guard let raw = deletedAt else { return nil }
         if let d = DateHelper.parse(raw) { return d }
-        return ISO8601DateFormatter().date(from: raw)
+        return DateParsing.isoPlain.date(from: raw)
     }
 
     /// حذف مباشر من الإدارة (بلا طلب) — صفّ «المنجزة»
@@ -129,7 +129,7 @@ enum TreePlaceDeletedLookup {
         nonisolated struct Params: Encodable { let p_since: String; let p_limit: Int }
         let rows: [MemberDeletePlace] = try await SupabaseConfig.client
             .rpc("member_delete_places",
-                 params: Params(p_since: ISO8601DateFormatter().string(from: since), p_limit: limit))
+                 params: Params(p_since: DateParsing.isoString(since), p_limit: limit))
             .execute()
             .value
         rows.forEach(remember)

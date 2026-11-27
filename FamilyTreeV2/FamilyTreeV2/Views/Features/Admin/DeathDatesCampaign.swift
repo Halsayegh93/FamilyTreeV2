@@ -180,8 +180,7 @@ final class DeathDatesCampaignStore: ObservableObject {
             let updated_at: String?
         }
         guard let since = Self.calendar.date(byAdding: .day, value: -Self.recentDays, to: Date()) else { return }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime]
+        let iso = DateParsing.isoPlain
         do {
             let rows: [Row] = try await SupabaseConfig.client
                 .from("profiles")

@@ -1234,7 +1234,7 @@ class NotificationViewModel: ObservableObject {
         self.isLoading = true
         defer { self.isLoading = false }
 
-        let iso = ISO8601DateFormatter().string(from: scheduledFor)
+        let iso = DateParsing.isoString(scheduledFor)
         var payload: [String: AnyEncodable] = [
             "title":         AnyEncodable(title),
             "body":          AnyEncodable(body),
@@ -1296,16 +1296,9 @@ class NotificationViewModel: ObservableObject {
             case scheduledFor = "scheduled_for"
         }
 
-        private static let isoFrac: ISO8601DateFormatter = {
-            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
-        }()
-        private static let isoPlain: ISO8601DateFormatter = {
-            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
-        }()
-
         /// وقت الإرسال المجدول كـ Date (يحاول صيغتين: مع/بدون أجزاء الثانية).
         var scheduledDate: Date? {
-            Self.isoFrac.date(from: scheduledFor) ?? Self.isoPlain.date(from: scheduledFor)
+            DateParsing.iso(scheduledFor)
         }
 
         /// nil/فارغ = إشعار عام للجميع.
@@ -1373,7 +1366,7 @@ class NotificationViewModel: ObservableObject {
         let payload: [String: AnyEncodable] = [
             "title":             AnyEncodable(title),
             "body":              AnyEncodable(body),
-            "scheduled_for":     AnyEncodable(ISO8601DateFormatter().string(from: scheduledFor)),
+            "scheduled_for":     AnyEncodable(DateParsing.isoString(scheduledFor)),
             "target_member_ids": AnyEncodable(targetMemberIds?.map(\.uuidString))
         ]
         do {

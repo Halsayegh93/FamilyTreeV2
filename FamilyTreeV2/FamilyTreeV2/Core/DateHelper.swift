@@ -26,7 +26,7 @@ enum DateHelper {
     /// ISO8601 → Date
     static func parse(_ string: String?) -> Date? {
         guard let string, !string.isEmpty else { return nil }
-        return iso8601.date(from: string) ?? displayFormatter.date(from: string)
+        return DateParsing.isoRequiringFraction(string) ?? displayFormatter.date(from: string)
     }
 
     /// Date → "yyyy-MM-dd"
@@ -69,8 +69,6 @@ enum DateHelper {
     private static let clockAr = clockFormatter("ar@numbers=latn")
     private static let clockEn = clockFormatter("en_US")
 
-    private static let iso8601Plain = ISO8601DateFormatter()
-
     /// أيام السيرفر بلا وقت: «yyyy-MM-dd» أو «yyyy/MM/dd» (وخانة واحدة مقبولة)
     private static let dayParsers: [DateFormatter] = ["yyyy-MM-dd", "yyyy/MM/dd", "yyyy-M-d", "yyyy/M/d"].map {
         let f = DateFormatter()
@@ -91,7 +89,7 @@ enum DateHelper {
     /// فارغ → nil · غير مفهوم → النص كما هو (لا يضيع شيء من العرض).
     static func displayDate(_ raw: String?) -> String? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
-        if raw.count > 10, let d = iso8601.date(from: raw) ?? iso8601Plain.date(from: raw) {
+        if raw.count > 10, let d = DateParsing.iso(raw) {
             return displayDate(d)
         }
         let day = String(raw.prefix(10))
@@ -108,7 +106,7 @@ enum DateHelper {
     /// نص ISO8601 → «25/03/1993 · 9:10 م» · غير مفهوم → النص كما هو
     static func displayDateTime(_ raw: String?) -> String? {
         guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
-        guard let d = iso8601.date(from: raw) ?? iso8601Plain.date(from: raw) else { return displayDate(raw) }
+        guard let d = DateParsing.iso(raw) else { return displayDate(raw) }
         return displayDateTime(d)
     }
 

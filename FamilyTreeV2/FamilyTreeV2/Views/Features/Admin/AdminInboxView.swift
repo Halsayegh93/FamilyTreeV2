@@ -1149,21 +1149,10 @@ private struct MessageDetailSheet: View {
 // MARK: - Helpers
 
 enum ContactParser {
-    private static let isoFull: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// تحويل ISO string لـ Date (يدعم بكسر ثواني أو بدونها).
     static func date(_ str: String?) -> Date? {
         guard let s = str, !s.isEmpty else { return nil }
-        return isoFull.date(from: s) ?? isoBasic.date(from: s)
+        return DateParsing.iso(s)
     }
 
     /// التصنيف: من new_value مباشرة، fallback لتحليل details.

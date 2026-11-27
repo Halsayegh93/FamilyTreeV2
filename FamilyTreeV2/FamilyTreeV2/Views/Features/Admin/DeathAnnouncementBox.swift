@@ -30,11 +30,7 @@ enum DeathRecency {
     static func isRecent(_ deathDate: String?, within: Int = days) -> Bool {
         guard let raw = deathDate?.trimmingCharacters(in: .whitespacesAndNewlines),
               raw.count >= 10 else { return false }
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        guard let date = f.date(from: String(raw.prefix(10))) else { return false }
+        guard let date = DateParsing.dayLocal.date(from: String(raw.prefix(10))) else { return false }
         let today = Calendar.current.startOfDay(for: Date())
         guard let earliest = Calendar.current.date(byAdding: .day, value: -within, to: today) else { return false }
         return date >= earliest && date <= Date()
@@ -48,11 +44,7 @@ enum DeathRecency {
 
     static func string(from date: Date?) -> String? {
         guard let date else { return nil }
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        return DateParsing.dayLocal.string(from: date)
     }
 }
 

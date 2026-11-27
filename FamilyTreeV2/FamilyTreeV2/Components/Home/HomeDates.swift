@@ -2,16 +2,6 @@ import Foundation
 
 /// أدوات تواريخ الرئيسية — تحليل ISO، النص النسبي، وحدود «آخر N يوم»
 enum HomeDates {
-    private static let isoFrac: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .full
@@ -20,7 +10,7 @@ enum HomeDates {
 
     static func parse(_ iso: String?) -> Date? {
         guard let s = iso, !s.isEmpty else { return nil }
-        return isoFrac.date(from: s) ?? isoPlain.date(from: s)
+        return DateParsing.iso(s)
     }
 
     static func relativeString(_ date: Date) -> String {

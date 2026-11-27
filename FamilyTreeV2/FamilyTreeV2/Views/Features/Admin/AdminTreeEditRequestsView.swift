@@ -625,28 +625,14 @@ struct AdminTreeEditRequestsView: View {
         }
     }
 
-    /// تاريخ الطلب من نصّ ISO — بمحلّلين ثابتين (البطاقات والأرقام تُرسم كثيراً)
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
+    /// تاريخ الطلب من نصّ ISO — بالمحلّل المشترك السريع (الصفوف والأرقام تُرسم كثيراً)
     private static func requestDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return isoWithFraction.date(from: raw) ?? isoPlain.date(from: raw)
+        return DateParsing.iso(raw)
     }
 
     private func formatDate(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
+        if let date = DateParsing.iso(iso) {
             return DateHelper.displayDateTime(date)
         }
         return iso

@@ -2012,11 +2012,7 @@ struct AdminAllRequestsView: View {
 
     private func parseISODate(_ s: String?) -> Date {
         guard let s else { return .distantPast }
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter()
-        iso2.formatOptions = [.withInternetDateTime]
-        return iso.date(from: s) ?? iso2.date(from: s) ?? .distantPast
+        return DateParsing.iso(s) ?? .distantPast
     }
 
     private func allItemDate(_ item: AllItem) -> Date {
@@ -2392,11 +2388,7 @@ struct AdminAllRequestsView: View {
 
     // MARK: - تنسيق تاريخ التسجيل مع الوقت
     private func formatRegistrationDate(_ isoString: String) -> String {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let iso2 = ISO8601DateFormatter()
-        iso2.formatOptions = [.withInternetDateTime]
-        guard let date = iso.date(from: isoString) ?? iso2.date(from: isoString) else {
+        guard let date = DateParsing.iso(isoString) else {
             return String(isoString.prefix(16)).replacingOccurrences(of: "T", with: " ")
         }
         return DateHelper.displayDateTime(date)
@@ -2592,22 +2584,10 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// تاريخ الطلب من نصّ ISO — بمحلّلين ثابتين (الصفوف والأرقام تُرسم كثيراً)
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
+    /// تاريخ الطلب من نصّ ISO — بالمحلّل المشترك السريع (الصفوف والأرقام تُرسم كثيراً)
     private static func requestDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return isoWithFraction.date(from: raw) ?? isoPlain.date(from: raw)
+        return DateParsing.iso(raw)
     }
 
     // MARK: - Request Detail Box

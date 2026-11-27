@@ -806,20 +806,14 @@ struct AdminMemberSheetFacts {
     static func dateText(_ date: Date) -> String { DateHelper.displayDate(date) }
 
     static func dateText(iso: String) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: iso) { return dateText(d) }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: iso).map(dateText) ?? iso
+        if let d = DateParsing.isoFractional.date(from: iso) { return dateText(d) }
+        return DateParsing.isoPlain.date(from: iso).map(dateText) ?? iso
     }
 
     /// «yyyy-MM-dd» ← «03/03/1990»
     static func dayText(_ raw: String?) -> String? {
         guard let raw, !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        guard let d = f.date(from: String(raw.prefix(10))) else { return String(raw.prefix(10)) }
+        guard let d = DateParsing.dayLocal.date(from: String(raw.prefix(10))) else { return String(raw.prefix(10)) }
         return dateText(d)
     }
 }

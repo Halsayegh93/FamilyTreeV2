@@ -17,7 +17,7 @@ enum JoinCardPreview {
 private enum JoinPreviewData {
     static func person(_ name: String, birth: String? = nil, female: Bool = false, pending: Bool = false,
                        phone: String? = nil, platform: String? = nil, minutesAgo: Double? = nil) -> FamilyMember {
-        let created = minutesAgo.map { ISO8601DateFormatter().string(from: Date().addingTimeInterval(-$0 * 60)) }
+        let created = minutesAgo.map { DateParsing.isoString(Date().addingTimeInterval(-$0 * 60)) }
         return FamilyMember(firstName: String(name.split(separator: " ").first ?? ""), fullName: name,
                             familyName: "الصايغ", phoneNumber: phone, birthDate: birth,
                             role: pending ? .pending : .member, status: pending ? .pending : .active,

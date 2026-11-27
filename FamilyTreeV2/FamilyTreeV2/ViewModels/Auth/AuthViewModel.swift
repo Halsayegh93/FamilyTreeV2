@@ -262,19 +262,9 @@ class AuthViewModel: ObservableObject {
     private func parseServerDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
 
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: raw) { return date }
+        if let date = DateParsing.iso(raw) { return date }
 
-        let withoutFraction = ISO8601DateFormatter()
-        withoutFraction.formatOptions = [.withInternetDateTime]
-        if let date = withoutFraction.date(from: raw) { return date }
-
-        let fallback = DateFormatter()
-        fallback.locale = Locale(identifier: "en_US_POSIX")
-        fallback.timeZone = TimeZone(secondsFromGMT: 0)
-        fallback.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return fallback.date(from: raw)
+        return DateParsing.sqlDateTimeUTC.date(from: raw)
     }
 
     private func resolveAuthAccess(for profile: FamilyMember) -> AuthStatus {

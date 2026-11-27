@@ -1603,9 +1603,7 @@ struct AdminMemberDetailSheet: View {
                 ))
             }
             if deceasedJustMarked {
-                let auditFormatter = ISO8601DateFormatter()
-                auditFormatter.formatOptions = [.withFullDate]
-                let dateStr = capturedDeathDate.map { auditFormatter.string(from: $0) }
+                let dateStr = capturedDeathDate.map { DateParsing.isoFullDate.string(from: $0) }
                 await adminRequestVM.logAdminDirectEdit(payload: TreeEditPayload.make(
                     action: .deceased,
                     targetMemberId: capturedMemberId.uuidString,

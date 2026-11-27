@@ -43,11 +43,7 @@ struct PhotoChangeRequest: Decodable, Identifiable, Equatable {
 
     private static func date(_ raw: String?) -> Date? {
         guard let raw else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: raw) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: raw)
+        return DateParsing.iso(raw)
     }
 
     var requestedAt: Date? { Self.date(requestedAtRaw) }
@@ -338,7 +334,7 @@ final class PhotoChangeRequestStore: ObservableObject {
 
     /// تجربة دور: طلب مفتوح محلي بإشعار «الآن» — تُرى حالات الصفّ بلا كتابة
     private func fakeSent(memberId: UUID, reason: String, hide: Bool) {
-        let now = ISO8601DateFormatter().string(from: Date())
+        let now = DateParsing.isoString(Date())
         let old = openByMember[memberId]
         setOpen(PhotoChangeRequest(
             id: old?.id ?? UUID(), memberId: memberId, reason: reason, hidePhoto: hide || (old?.hidePhoto ?? false),
@@ -428,7 +424,7 @@ final class PhotoChangeRequestStore: ObservableObject {
         return PhotoChangeRequest(id: UUID(), memberId: userId,
                                   reason: PhotoChangeReason.unclear.title,
                                   hidePhoto: true,
-                                  requestedAtRaw: ISO8601DateFormatter().string(from: Date()))
+                                  requestedAtRaw: DateParsing.isoString(Date()))
     }
     #endif
 }

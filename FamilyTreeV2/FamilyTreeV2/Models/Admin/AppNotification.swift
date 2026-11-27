@@ -89,14 +89,8 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         )
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     var createdDate: Date {
-        Self.isoFormatter.date(from: createdAt) ?? Date()
+        DateParsing.isoRequiringFraction(createdAt) ?? Date()
     }
 }
 

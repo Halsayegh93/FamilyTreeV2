@@ -529,20 +529,9 @@ struct NotifFlow: Layout {
 // MARK: - نصوص وتواريخ
 
 enum NotifBoxText {
-    private static let iso: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     static func date(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return iso.date(from: raw) ?? isoPlain.date(from: raw)
+        return DateParsing.iso(raw)
     }
 
     /// «31/10/2026 · 9:10 م» — الصيغة الموحّدة (`DateHelper.displayDateTime`)
