@@ -739,7 +739,9 @@ struct AdminAllRequestsView: View {
                                count: counts.family),
                 DSFilterOption(id: .outside, title: L10n.t(SignupOriginRules.Ar.inboxOutsideJoins, "Join requests from outside the family"),
                                count: counts.outside)
-            ], selection: $joinFilter, style: .admin))
+            ], selection: $joinFilter, style: .admin)
+                // الشرائح تصعد مرة حين تظهر (يصل عددها بعد التحميل) — «تقليل الحركة»: تلاشٍ
+                .dsEntrance(delay: DSMotion.sectionsOnPage, y: DSMotion.rise, scale: DSMotion.riseScale))
             .adminPageRow(top: DS.Spacing.sm, bottom: 0)
             if joinFilter == .outside && typedLineageCount > 0 {
                 AnyView(AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
@@ -748,7 +750,9 @@ struct AdminAllRequestsView: View {
                                       subtitle: DSNumber.grouped(typedLineageCount)) {
                         open(.policy(nil))
                     }
-                })
+                }
+                // «من خارج العائلة» تكشف باب «استكمال التسجيل» بنزول قصير (الشرائح تختار داخل حركتها)
+                .transition(.dsReveal(reduceMotion: reduceMotion)))
                 .adminPageRow(top: DS.Spacing.sm, bottom: 0)
             }
         }

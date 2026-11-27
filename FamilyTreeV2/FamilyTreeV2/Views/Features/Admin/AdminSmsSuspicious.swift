@@ -208,8 +208,10 @@ struct SmsSuspiciousSection: View {
             AdminSectionLabel(title: L10n.t("أرقام مريبة", "Suspicious numbers"),
                               trailing: SmsAttemptsText.period(days))
             VStack(spacing: DS.Hub.cardGap) {
-                ForEach(items) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+                    // البطاقات المريبة تصعد تباعاً مرة — «تقليل الحركة»: تلاشٍ
                     AnyView(SmsSuspiciousCard(item: item, days: days, actions: actions))
+                        .dsStaggerIn(i)
                 }
             }
         }

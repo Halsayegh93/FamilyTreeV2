@@ -36,7 +36,7 @@ struct MemberAccessCategoriesCard: View {
         let legacy = store.legacyLimited
         AdminSectionCard(spacing: 0) {
             AdminRowsCardBody {
-                ForEach(MemberCategory.allCases, id: \.self) { c in
+                ForEach(Array(MemberCategory.allCases.enumerated()), id: \.element) { i, c in
                     AdminTapWrap(tap: .page { AnyView(MemberAccessCategoryPage(category: c)) }, feel: .row, label: AnyView(
                         AdminListRow(icon: c.symbol, tint: c.tint, title: c.title,
                                      subtitle: L10n.t(MemberAccess.summaryAr(category: c, matrix: matrix, legacyLimited: legacy),
@@ -46,6 +46,8 @@ struct MemberAccessCategoriesCard: View {
                                            tone: custom ? .warn : .off).fixedSize()
                         }
                     ))
+                    // صفوف الفئات تصعد تباعاً مرة عند الظهور — «تقليل الحركة»: تلاشٍ
+                    .dsStaggerIn(i)
                 }
             }
         }
@@ -64,6 +66,7 @@ struct MemberAccessCategoryPage: View {
     @State private var saving = false
     @State private var errorText: String?
     @State private var confirmReset = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var canEdit: Bool { authVM.isOwner }
     private var matrix: MemberAccess.Matrix { pending ?? store.matrix }
@@ -72,7 +75,7 @@ struct MemberAccessCategoryPage: View {
         AdminPage(header: AdminPageHeader(title: category.title, subtitle: category.who, readOnly: !canEdit),
                   content: AnyView(content))
             .dsAlert(L10n.t("إعادة الافتراضي؟", "Reset to default?"), isPresented: $confirmReset, icon: "arrow.counterclockwise") {
-                Button(L10n.t("إعادة", "Reset"), role: .destructive) { save(MemberAccess.resetting(category, matrix: matrix)) }
+                Button(L10n.t("إعادة", "Reset"), role: .destructive) { save(MemberAccess.resetting(category, matrix: matrix), isReset: true) }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
                 Text(category == .limited
@@ -100,7 +103,11 @@ struct MemberAccessCategoryPage: View {
                     ForEach(MemberScreen.screens, id: \.self) { s in
                         screenRow(s, legacy: legacy)
                         if expanded.contains(s) {
-                            ForEach(s.children, id: \.self) { child in childRow(child, parent: s, legacy: legacy) }
+                            // ما بداخل الشاشة ينزل قليلاً مع تلاشٍ، ويختفي أسرع — «تقليل الحركة»: تلاشٍ
+                            ForEach(s.children, id: \.self) { child in
+                                childRow(child, parent: s, legacy: legacy)
+                                    .transition(.dsReveal(reduceMotion: reduceMotion))
+                            }
                         }
                     }
                 }
@@ -139,7 +146,7 @@ struct MemberAccessCategoryPage: View {
         return HStack(spacing: DS.Spacing.md) {
             Button {
                 guard !kids.isEmpty else { return }
-                withAnimation(DSMotion.expand) {
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.expand) {
                     if isOpen { expanded.remove(s) } else { expanded.insert(s) }
                 }
             } label: {
@@ -205,6 +212,8 @@ struct MemberAccessCategoryPage: View {
         .padding(.leading, DS.Hub.iconSquare + DS.Spacing.md)
         .padding(.vertical, DS.Spacing.xs)
         .frame(minHeight: DS.Hub.rowMinHeight)
+        // إطفاء الأم يُبهت أبناءها بتلاشٍ لا قفزة
+        .animation(reduceMotion ? DSMotion.fade : DSMotion.enable, value: parentOn)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(parent.title)، \(s.title)")
     }
@@ -233,7 +242,7 @@ struct MemberAccessCategoryPage: View {
         return .object(root)
     }
 
-    private func save(_ next: MemberAccess.Matrix) {
+    private func save(_ next: MemberAccess.Matrix, isReset: Bool = false) {
         guard canEdit else { return }
         pending = next
         if DebugAdminProbe.dryRun("set_app_config member_category_access") { return }
@@ -246,6 +255,8 @@ struct MemberAccessCategoryPage: View {
                     .execute()
                 await AppConfigValues.shared.refresh(force: true)
                 pending = nil
+                // لحظة النجاح بعد «إعادة الافتراضي» (لا تأكيد بعدها) — المفاتيح وحدها تكفي نفسها
+                if isReset { DSMomentToast.show(L10n.t("تمت إعادة الافتراضي", "Reset to default"), moment: .success) }
             } catch {
                 if ErrorHelper.isCancellation(error) { return }
                 pending = nil

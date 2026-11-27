@@ -143,6 +143,8 @@ struct CompletionAskCard: View {
                     .fill(DS.Color.warning.opacity(DS.Opacity.tintFillSoft)))
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .strokeBorder(DS.Color.warning.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+                // تصعد مرة حين يصل طلب الإدارة — مثل أقسام مربّع التسجيل؛ «تقليل الحركة»: تلاشٍ
+                .dsEntrance(delay: DSMotion.sectionsAfterHeader, y: DSMotion.rise, scale: DSMotion.riseScale)
             }
         }
         .task { await store.refresh() }

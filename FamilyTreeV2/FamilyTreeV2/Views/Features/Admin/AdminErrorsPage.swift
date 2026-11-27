@@ -389,7 +389,8 @@ private struct AdminErrorsPlatformTile: View {
         Button(action: tap) {
             VStack(spacing: DS.Spacing.xs) {
                 AdminIconSquare(symbol: platform.symbol, tint: platform.fill, filled: true)
-                Text(verbatim: "\(count)")
+                // يعدّ مرة عند الظهور — «تقليل الحركة»: ثابت
+                DSCountText(value: count)
                     .dsFont(.statValue)
                     .monospacedDigit()
                     .foregroundColor(count > 0 ? DS.Color.textPrimary : DS.Color.textTertiary)
@@ -432,9 +433,13 @@ private struct AdminErrorsList_: View {
                             icon: "checkmark.seal.fill", style: .inline)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { issue in
-                        AdminErrorRow(issue: issue)
-                        if issue.id != rows.last?.id { AdminRowDivider() }
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, issue in
+                        // الصفوف تصعد تباعاً مرة (والتصفية بالمنصة تُدخل صفوفها بالترتيب) — «تقليل الحركة»: تلاشٍ
+                        VStack(spacing: 0) {
+                            AdminErrorRow(issue: issue)
+                            if issue.id != rows.last?.id { AdminRowDivider() }
+                        }
+                        .dsStaggerIn(i)
                     }
                 }
             }

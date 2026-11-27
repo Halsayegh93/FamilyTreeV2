@@ -432,8 +432,12 @@ struct AdminJoinBox: View {
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, s in
-                    if i > 0 { Divider() }
-                    suggestionRow(s, selected: picked == s.id) { picked = picked == s.id ? nil : s.id }
+                    // المقترحات تصعد تباعاً مرة عند ظهور الخطوة — «تقليل الحركة»: تلاشٍ
+                    VStack(spacing: 0) {
+                        if i > 0 { Divider() }
+                        suggestionRow(s, selected: picked == s.id) { picked = picked == s.id ? nil : s.id }
+                    }
+                    .dsStaggerIn(i)
                 }
             }
             .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.surface))
@@ -479,6 +483,8 @@ struct AdminJoinBox: View {
             // المختار: علامة ✓ وإطار — لا باللون وحده
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                 .strokeBorder(selected ? DS.Color.primary : Color.clear, lineWidth: DS.Border.widthBold))
+            // الاختيار: ✓ والإطار يتبدّلان بتباطؤ سريع لا قفزة
+            .animation(reduceMotion ? DSMotion.fade : DSMotion.tap, value: selected)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -521,11 +527,15 @@ struct AdminJoinBox: View {
         } else {
             VStack(spacing: 0) {
                 ForEach(Array(built.enumerated()), id: \.element.id) { i, c in
-                    if i > 0 { Divider() }
-                    suggestionRow(Suggestion(c, among: built, expect: fatherExpect, women: false),
-                                  selected: fatherPick?.id == c.id) {
-                        fatherPick = fatherPick?.id == c.id ? nil : list.first { $0.id == c.id }
+                    // المقترحات تصعد تباعاً مرة (نتيجة البحث الجديدة فقط تدخل) — «تقليل الحركة»: تلاشٍ
+                    VStack(spacing: 0) {
+                        if i > 0 { Divider() }
+                        suggestionRow(Suggestion(c, among: built, expect: fatherExpect, women: false),
+                                      selected: fatherPick?.id == c.id) {
+                            fatherPick = fatherPick?.id == c.id ? nil : list.first { $0.id == c.id }
+                        }
                     }
+                    .dsStaggerIn(i)
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)

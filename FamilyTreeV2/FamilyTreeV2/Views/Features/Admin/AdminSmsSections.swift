@@ -26,9 +26,13 @@ struct SmsRecentCard: View {
                         .foregroundColor(DS.Color.textTertiary)
                         .frame(minHeight: DS.Hub.rowMinHeight)
                 } else {
-                    ForEach(rows) { send in
-                        SmsSendRow(send: send, actions: actions)
-                        if send.id != rows.last?.id { AdminRowDivider() }
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { i, send in
+                        // الصفوف تصعد تباعاً مرة، و«الكل» يُدخل الباقي بالترتيب نفسه — «تقليل الحركة»: تلاشٍ
+                        VStack(spacing: 0) {
+                            SmsSendRow(send: send, actions: actions)
+                            if send.id != rows.last?.id { AdminRowDivider() }
+                        }
+                        .dsStaggerIn(i)
                     }
                 }
                 Text(L10n.t("السجل التفصيلي يبقى \(SmsText.days(overview.retentionDays))، والأرقام اليومية تبقى. الرقم لا يُحفظ — يظهر آخر 4 خانات من بصمته.",

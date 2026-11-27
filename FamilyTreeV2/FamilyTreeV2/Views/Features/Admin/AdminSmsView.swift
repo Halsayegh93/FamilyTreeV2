@@ -479,7 +479,8 @@ private struct SmsTotalsColumn: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            Text(verbatim: AdminNumberText.grouped(totals.sends))
+            // العدد يعدّ مرة عند الظهور (`DSCountText`) — «تقليل الحركة»: ثابت
+            DSCountText(value: totals.sends) { n in Text(verbatim: n.map(AdminNumberText.grouped) ?? "—") }
                 .dsFont(.hubPulse)
                 .monospacedDigit()
                 .foregroundColor(DS.Color.textPrimary)

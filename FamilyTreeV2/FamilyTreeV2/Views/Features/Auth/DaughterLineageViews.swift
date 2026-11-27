@@ -103,10 +103,13 @@ struct DaughterLineageCard: View {
                            title: L10n.t(SignupOriginRules.Ar.cardPendingTitle, "Your lineage is under review"),
                            icon: "checkmark.shield.fill", tint: DS.Color.info)
                     .padding(.horizontal, DS.Spacing.xl)
+                    // تصعد البطاقة مرة حين تصل حالتها — مثل أقسام مربّع التسجيل؛ «تقليل الحركة»: تلاشٍ
+                    .dsEntrance(delay: DSMotion.sectionsAfterHeader, y: DSMotion.rise, scale: DSMotion.riseScale)
             case .offer, .rejected:
                 Button { showPage = true } label: { offerContent }
                     .buttonStyle(DSPressStyle())
                     .padding(.horizontal, DS.Spacing.xl)
+                    .dsEntrance(delay: DSMotion.sectionsAfterHeader, y: DSMotion.rise, scale: DSMotion.riseScale)
                     .accessibilityHint(L10n.t("يفتح اختيار الوالدة واسم الوالد", "Opens choosing your mother and father"))
             }
         }
@@ -162,6 +165,7 @@ struct DaughterLineagePage: View {
     @State private var busy = false
     @State private var sent = false
     @State private var errorText: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var option: DaughterDaughterRules.FatherOption? {
         mother.map { DaughterDaughterRules.fatherOption(husbandId: $0.husbandId, husbandName: $0.husbandName,
@@ -181,7 +185,15 @@ struct DaughterLineagePage: View {
                             section: .tree, nav: .none)
             ScrollView {
                 VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    if sent { sentContent } else { pickContent }
+                    // الاختيار ← «وصل طلبك» في الصفحة نفسها: انزلاق قصير للأمام مثل مربّعات التسجيل
+                    ZStack(alignment: .top) {
+                        if sent {
+                            sentContent.transition(stepTransition)
+                        } else {
+                            VStack(alignment: .leading, spacing: DS.Spacing.md) { pickContent }
+                                .transition(stepTransition)
+                        }
+                    }
                     if let errorText {
                         DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
                     }
@@ -206,9 +218,11 @@ struct DaughterLineagePage: View {
         }
         DSBoxSectionTitle(title: L10n.t("الوالدة", "Your mother"), icon: "person.fill", tint: DS.Color.female)
         if let m = mother {
-            motherRow(m, selected: true) { mother = nil; useRegistered = true }
+            motherRow(m, selected: true) { withAnimation(revealAnimation) { mother = nil; useRegistered = true } }
                 .dsRowBox()
-            fatherSection(m)
+            // اختيار الوالدة يكشف قسم الوالد في المكان نفسه
+            VStack(alignment: .leading, spacing: DS.Spacing.md) { fatherSection(m) }
+                .transition(.dsReveal(reduceMotion: reduceMotion))
         } else {
             DSSearchField(text: $search, placeholder: L10n.t(SignupOriginRules.Ar.motherPlaceholder, "Your mother's, her father's and grandfather's names"))
             if !queryLongEnough {
@@ -223,13 +237,19 @@ struct DaughterLineagePage: View {
                             style: .compact)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(results) { d in
-                        motherRow(d, selected: false) {
-                            mother = d
-                            useRegistered = true
-                            search = ""
+                    ForEach(Array(results.enumerated()), id: \.element.id) { i, d in
+                        // النتائج تصعد تباعاً مرة — «تقليل الحركة»: تلاشٍ
+                        VStack(spacing: 0) {
+                            motherRow(d, selected: false) {
+                                withAnimation(revealAnimation) {
+                                    mother = d
+                                    useRegistered = true
+                                }
+                                search = ""
+                            }
+                            if d.id != results.last?.id { Divider() }
                         }
-                        if d.id != results.last?.id { Divider() }
+                        .dsStaggerIn(i)
                     }
                 }
                 .dsCard(padding: DS.Spacing.sm)
@@ -247,15 +267,16 @@ struct DaughterLineagePage: View {
         case .registered(_, let name)?:
             VStack(spacing: 0) {
                 choiceRow(title: name, subtitle: L10n.t("زوج الوالدة المسجّل", "\(m.firstName)'s recorded husband"),
-                          selected: useRegistered) { useRegistered = true }
+                          selected: useRegistered) { withAnimation(revealAnimation) { useRegistered = true } }
                 Divider()
                 choiceRow(title: L10n.t("الوالد شخص آخر", "My father is someone else"),
                           subtitle: L10n.t("يُرجى كتابة اسمه كاملاً", "Type his full name"),
-                          selected: !useRegistered) { useRegistered = false }
+                          selected: !useRegistered) { withAnimation(revealAnimation) { useRegistered = false } }
             }
             .dsCard(padding: DS.Spacing.sm)
             if !useRegistered {
                 fatherFields
+                    .transition(.dsReveal(reduceMotion: reduceMotion))
                 if let other = DaughterDaughterRules.conflictName(option: option, useRegistered: false, typedName: fatherFull) {
                     DSNoteCard(L10n.t("الاسم يختلف عن زوج الوالدة المسجّل «\(other)»، وستراجعه الإدارة.",
                                       "This differs from your mother's recorded husband «\(other)» — the admins will check it with you."),
@@ -390,7 +411,9 @@ struct DaughterLineagePage: View {
         Task {
             do {
                 try await DaughterDaughters.submit(motherId: m.id, fatherId: fid, fatherFullName: fatherFull, deceased: deceased)
-                sent = true
+                // لحظة النجاح ثم «وصل طلبك» — نفس مربّعات التسجيل
+                DSMomentToast.show(L10n.t(SignupOriginRules.Ar.sentMoment, "Request sent"), moment: .success, section: nil)
+                withAnimation(reduceMotion ? DSMotion.fade : DSMotion.stepIn) { sent = true }
             } catch {
                 errorText = DaughterDaughters.message(error)
             }
@@ -399,4 +422,10 @@ struct DaughterLineagePage: View {
     }
 
     private func shortName(_ name: String) -> String { MotherPickRules.shortName(name) }
+
+    private var revealAnimation: Animation { reduceMotion ? DSMotion.fade : DSMotion.reveal }
+
+    private var stepTransition: AnyTransition {
+        .dsStep(forward: true, rtl: LanguageManager.shared.layoutDirection == .rightToLeft, reduceMotion: reduceMotion)
+    }
 }

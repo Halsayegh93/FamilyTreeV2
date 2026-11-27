@@ -257,7 +257,8 @@ private struct SmsAttemptsStat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            Text(verbatim: "\(value)")
+            // يعدّ مرة عند الظهور، ثم يتبدّل بلا حركة إلا لتغيّر واضح (تغيير الفترة) — «تقليل الحركة»: ثابت
+            DSCountText(value: value)
                 .dsFont(.statValue)
                 .monospacedDigit()
                 .foregroundColor(warns ? DS.Color.warning.dsReadableGlyph : DS.Color.textPrimary)
@@ -316,9 +317,13 @@ private struct SmsAttemptsRows: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(items) { item in
-                SmsAttemptRow(item: item, days: days, backTitle: backTitle)
-                if item.id != items.last?.id { AdminRowDivider() }
+            ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+                // الصفوف تصعد تباعاً مرة (أول ثمانية بترتيبها، والباقي معها) — «تقليل الحركة»: تلاشٍ
+                VStack(spacing: 0) {
+                    SmsAttemptRow(item: item, days: days, backTitle: backTitle)
+                    if item.id != items.last?.id { AdminRowDivider() }
+                }
+                .dsStaggerIn(i)
             }
         }
     }
