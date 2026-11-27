@@ -134,7 +134,12 @@ nonisolated enum AdminMemberSheetLogic {
 
     /// العضو «غيرك»: لا المالك ولا أنت — وحده يقبل الإيقاف ومنع الرقم والحذف
     static func isOther(memberId: UUID, viewerId: UUID?, memberIsOwner: Bool) -> Bool {
-        !memberIsOwner && memberId != viewerId
+        isOther(isSelf: memberId == viewerId, memberIsOwner: memberIsOwner)
+    }
+
+    /// V3 م-ج١: «ورقتك» تشمل عقدة شجرة النساء المربوطة بحسابك (`AdminMemberCardLogic.isSelf`)
+    static func isOther(isSelf: Bool, memberIsOwner: Bool) -> Bool {
+        !memberIsOwner && !isSelf
     }
 
     /// أوامر «الحساب» الثلاثة الخطرة: الصلاحية × «غيرك» (والمنع برقم صالح للملء فقط)
@@ -224,8 +229,14 @@ nonisolated enum AdminMemberSheetLogic {
     /// للحيّ فقط، ولمن يملك أمراً من أوامر الورقة (يعدّل أو يوقف أو يمنع أو يحذف) — غيره لا يحتاج شرحاً
     static func lockNote(memberId: UUID, viewerId: UUID?, memberIsOwner: Bool, isDeceased: Bool,
                          viewerCanAct: Bool) -> LockNote? {
+        lockNote(isSelf: memberId == viewerId, memberIsOwner: memberIsOwner, isDeceased: isDeceased,
+                 viewerCanAct: viewerCanAct)
+    }
+
+    /// V3 م-ج١: بـ«ورقتك» المحسوبة (الملف أو عقدة شجرة النساء المربوطة بحسابك)
+    static func lockNote(isSelf: Bool, memberIsOwner: Bool, isDeceased: Bool, viewerCanAct: Bool) -> LockNote? {
         guard viewerCanAct, !isDeceased else { return nil }
-        if memberId == viewerId { return memberIsOwner ? .selfOwner : .selfAccount }
+        if isSelf { return memberIsOwner ? .selfOwner : .selfAccount }
         return memberIsOwner ? .ownerAccount : nil
     }
 }

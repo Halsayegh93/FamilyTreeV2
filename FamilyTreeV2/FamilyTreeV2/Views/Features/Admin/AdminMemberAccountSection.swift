@@ -260,8 +260,11 @@ struct AdminMemberAdminSection: View {
                 AdminMemberRow(icon: frozen ? "play.fill" : "pause.fill", tint: DS.Color.slate,
                                title: frozen ? L10n.t("رفع الإيقاف", "Lift the suspension")
                                              : L10n.t("إيقاف الحساب", "Suspend account"),
+                               // ت-ج٥: «بدون حساب» في الرأس — الإيقاف يُطبَّق حين يسجّل
                                subtitle: frozen ? L10n.t("الحساب موقوف الآن", "The account is suspended")
-                                                : L10n.t("يسأل قبل الإيقاف، والسبب اختياري", "Asks first; the reason is optional"),
+                                                : AdminMemberCardLogic.suspendNote(hasAccount: facts.status != .treeOnly,
+                                                                                   female: member.isFemale, arabic: L10n.isArabic)
+                                                  ?? L10n.t("يسأل قبل الإيقاف، والسبب اختياري", "Asks first; the reason is optional"),
                                showsChevron: true,
                                busy: busy == AdminMemberConfirm.suspend.id || busy == AdminMemberConfirm.unsuspend.id)
             }

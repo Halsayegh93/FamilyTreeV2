@@ -12,7 +12,7 @@ import SwiftUI
 //     (`updateChildrenOrder` للأبناء، `WomenStore.reorder` للبنات — كلٌّ بجدوله)، «فك الربط» للابن بلا أبناء بتأكيد صادق
 //     (`updateMemberFather(…, nil)` — يخرج من شجرة العائلة ويصير اسمه الكامل اسمه الأول)، ومن له أبناء معطّل («الأب ←
 //     تغيير» في ورقته)، و«إضافة ابن / بنت» (`AddSonByAdminSheet` ← `add_family_child`) و«ربط من الشجرة»
-//     (`updateMemberFather`). فشل السيرفر يظهر برسالته (`errorMessage`). فكّ ربط البنت لا نداء له ← «يحتاج تحديث السيرفر».
+//     (`updateMemberFather`). فشل السيرفر يظهر برسالته (`errorMessage`). فكّ ربط البنت لا نداء له ← «فك ربط البنت غير متاح بعد.»
 // (و) «الأم»: منتقي بنات العائلة (`DSWifeFlowBox(relation: .mother)`) ← `WomenStore.setMotherId` (ومعه زوجاً لأبيه إن
 //     لم يكن لها زوج) — نفس مسار شجرة النساء للإدارة.
 // (د) «صلته بالعائلة» (كانت «تصحيح النسب» — تسمية المالك): أربعة خيارات بشرح قصير؛ الحفظ بما له نداء فقط
@@ -229,8 +229,9 @@ struct AdminMemberSpousesBox: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { husbandTarget = nil }
         } message: {
-            Text(L10n.t("«\(husbandTarget?.shortFullName ?? "")» زوجاً لـ«\(displayName)» في شجرة النساء، وتُعلَّم «متزوجة». يُسجَّل التغيير، وتقدر تفكّ الربط من هنا.",
-                        "«\(husbandTarget?.shortFullName ?? "")» becomes «\(displayName)»'s husband in the women's tree and she's marked married. Logged; you can unlink it here."))
+            // ت-ج١: يبدأ بفعل — نصّ من متغيّرين
+            Text(verbatim: AdminMemberCardLogic.husbandLinkMessage(husband: husbandTarget?.shortFullName ?? "",
+                                                                   wife: displayName, arabic: L10n.isArabic))
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -242,7 +243,7 @@ struct AdminMemberSpousesBox: View {
         let outsideReady = !female || (count == 0 && WomenStore.outsideFamilySupported && DaughterSons.isEnabled)
         return DSComposer(
             title: female ? L10n.t("الزوج", "Husband") : L10n.t("الزوجات", "Wives"),
-            subtitle: [displayName, family.spousesSummary(female: female)].compactMap { $0 }.joined(separator: " · "),
+            subtitle: AdminMemberCardLogic.boxSubtitle([displayName, family.spousesSummary(female: female)]),
             icon: "heart",
             tint: DS.Color.actionNavy,
             actionTitle: orderChanged ? L10n.t("حفظ الترتيب", "Save order") : L10n.t("تم", "Done"),
@@ -344,7 +345,9 @@ struct AdminMemberSpousesBox: View {
                                   uniquingKeysWith: { a, _ in a })
         let sons = Set(store.people.filter { !$0.isFemale && ($0.motherId == node || $0.motherId == member.id) }.map(\.id)
                        + memberVM.allMembers.filter { $0.motherId == node || $0.motherId == member.id }.map(\.id))
-        let blocked = AdminMemberCardLogic.husbandBlocked(fatherId: f.father?.id ?? member.fatherId, sonIds: Array(sons),
+        // ت-ج٢: ومن جهة أمّها — أبو أمّها (أمّها من بنات العائلة) وآباؤه وأخوالها
+        let blocked = AdminMemberCardLogic.husbandBlocked(fatherId: f.father?.id ?? member.fatherId,
+                                                          motherFatherId: f.mother?.fatherId, sonIds: Array(sons),
                                                           fatherOf: fatherOf)
         let minAge = WifeCandidateRules.minimumAge
         let men = memberVM.allMembers.filter {
@@ -481,6 +484,9 @@ struct AdminMemberGenderMoveBox: View {
     @State private var failure: String?
     /// نُقل لكن لم تُربط الأم — المربّع يبقى بسطره و«تم»
     @State private var motherFailed = false
+    /// م-ج٢: جواب السيرفر `profile_has_login` — nil حتى يصل (أو إن فشل)
+    @State private var serverLogin: Bool?
+    @State private var checkingLogin = true
 
     private var toFemale: Bool { !member.isFemale }
     private var target: String { toFemale ? "female" : "male" }
@@ -489,16 +495,15 @@ struct AdminMemberGenderMoveBox: View {
         AdminMemberCardFamily.make(member, isProfile: isProfile, memberVM: memberVM, store: store)
     }
 
-    /// ح١: له حساب في التطبيق؟ (nil = مخزن الحسابات لم يُحمَّل بعد) — السيرفر لا يمنع، والنقل إلى أنثى يحذف ملفه
+    /// ح١: له حساب في التطبيق؟ (nil = لا يُعرف بعد) — السيرفر لا يمنع، والنقل إلى أنثى يحذف ملفه.
+    /// م-ج٢: الحكم جواب `profile_has_login` للملف؛ عقدة شجرة النساء بلا ملف حسابها رابطها (`linked_user_id`) وحده
     private var account: Bool? {
         let node = family.nodeId
         return AdminMemberCardLogic.appAccount(
+            serverLogin: isProfile ? serverLogin : false,
             role: member.role.rawValue, isViewer: member.id == authVM.currentUser?.id, frozen: member.status == .frozen,
-            looksRegistered: member.looksRegistered,
             linkedLogin: node.flatMap { WomenStore.linkedUserByWoman[$0] } != nil,
-            inAccountsStore: accounts.info(member.id) != nil,
-            // عقدة شجرة النساء بلا ملف: حسابها رابطها (`linked_user_id`)، لا مخزن الحسابات
-            storeLoaded: isProfile ? accounts.loaded : true)
+            inAccountsStore: accounts.info(member.id) != nil)
     }
 
     /// ما يمنع النقل محلياً — nil = لا مانع
@@ -507,7 +512,7 @@ struct AdminMemberGenderMoveBox: View {
         let node = f.nodeId.flatMap(store.node)
         let fatherId = node?.fatherId ?? member.fatherId
         return AdminMemberCardLogic.genderMoveBlock(
-            toFemale: toFemale, account: account, hasFather: member.fatherId != nil,
+            toFemale: toFemale, account: account, checking: checkingLogin, hasFather: member.fatherId != nil,
             sons: f.sons.count, daughters: f.daughters.count, wives: toFemale ? f.spouses.count : 0,
             hasHusband: !toFemale && !f.spouses.isEmpty,
             fatherInFamily: fatherId.flatMap { memberVM.member(byId: $0) } != nil)
@@ -524,6 +529,8 @@ struct AdminMemberGenderMoveBox: View {
         case .unverified:
             return L10n.t("تعذّر التحقق من حساب العضو في التطبيق — أغلق المربّع وحاول بعد قليل.",
                           "Couldn't check the member's app account — close and try again shortly.")
+        case .checking:
+            return L10n.t("يتحقق من حساب العضو في التطبيق…", "Checking the member's app account…")
         case .noFather:
             return L10n.t("لا أب له في الشجرة — اربطه بأبيه أولاً، فالبنت تُنقل تحت أبيها.",
                           "No father in the tree — link him first; a daughter moves under her father.")
@@ -555,7 +562,12 @@ struct AdminMemberGenderMoveBox: View {
         Group {
             if motherFailed { AnyView(movedWithoutMother) } else { AnyView(confirmStep) }
         }
-        .task { if !accounts.loaded { await accounts.refresh() } }
+        .task {
+            guard isProfile else { checkingLogin = false; return }
+            checkingLogin = true
+            serverLogin = await memberVM.profileHasLogin(member.id)
+            checkingLogin = false
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
@@ -588,8 +600,10 @@ struct AdminMemberGenderMoveBox: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
             if let blocker {
-                DSNoteCard(blocker, icon: block == .account || block == .unverified ? "person.crop.circle.badge.exclamationmark" : "link",
-                           tint: DS.Color.error)
+                // السؤال جارٍ: سطر محايد لا خطأ
+                DSNoteCard(blocker, icon: block == .checking ? "hourglass"
+                                    : block == .account || block == .unverified ? "person.crop.circle.badge.exclamationmark" : "link",
+                           tint: block == .checking ? DS.Color.textTertiary : DS.Color.error)
             }
             if let failure {
                 DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
@@ -700,7 +714,7 @@ struct AdminMemberChildrenBox: View {
     private var listStep: some View {
         DSComposer(
             title: L10n.t("الأبناء والبنات", "Sons and daughters"),
-            subtitle: [member.shortFullName, family.childrenSummary].compactMap { $0 }.joined(separator: " · "),
+            subtitle: AdminMemberCardLogic.boxSubtitle([member.shortFullName, family.childrenSummary]),
             icon: "person.2",
             tint: DS.Color.actionNavy,
             actionTitle: orderChanged ? L10n.t("حفظ الترتيب", "Save order") : L10n.t("تم", "Done"),
@@ -730,9 +744,12 @@ struct AdminMemberChildrenBox: View {
                                        note: son && kids > 0 ? L10n.t("له أبناء", "Has children") : nil,
                                        tag: AdminMemberTag(text: son ? L10n.t("ابن", "Son") : L10n.t("بنت", "Daughter"),
                                                            tone: son ? .neutral : .daughterSon),
-                                       unlinkEnabled: son && AdminMemberCardLogic.sonUnlinkAllowed(childCount: kids),
-                                       disabledHint: son ? L10n.t("له أبناء — غيّر أباه من ورقته", "Has children — change his father from his card")
-                                                         : L10n.t("يحتاج تحديث السيرفر", "Needs a server update"),
+                                       // ت-ج٣: البنات تُعدّ من شجرة النساء — قبل تحميلها لا يُفتح الزرّ
+                                       unlinkEnabled: son && AdminMemberCardLogic.sonUnlinkAllowed(childCount: kids,
+                                                                                                    countsLoaded: store.loaded),
+                                       disabledHint: son ? (store.loaded ? L10n.t("له أبناء — غيّر أباه من ورقته", "Has children — change his father from his card")
+                                                                         : L10n.t("جارٍ التحميل…", "Loading…"))
+                                                         : AdminMemberCardLogic.daughterUnlinkNote(arabic: L10n.isArabic),
                                        busy: working == child.id) { unlinkTarget = child }
                 }
                 Text(L10n.t("اسحب للترتيب. الأبناء والبنات يُحفظ ترتيب كلٍّ منهم في شجرته.",
@@ -746,8 +763,12 @@ struct AdminMemberChildrenBox: View {
                                icon: "info.circle", tint: DS.Color.info)
                 }
                 if !family.daughters.isEmpty {
-                    AdminMemberNeedsServerNote(text: L10n.t("«فك الربط» للبنت (لا نداء يفرّغ أبا البنت في شجرة النساء).",
-                                                            "«Unlink» for a daughter (no call clears her father in the women's tree)."))
+                    // ت-ج٨: جملة بسيطة بلا مصطلحات
+                    Text(AdminMemberCardLogic.daughterUnlinkNote(arabic: L10n.isArabic))
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if let failure {
@@ -787,8 +808,8 @@ struct AdminMemberChildrenBox: View {
     }
 
     private func unlink(_ son: FamilyMember) {
-        // ح٣: لا يُفكّ من له أبناء (الزرّ معطّل — وهذا حارس ثانٍ)
-        guard AdminMemberCardLogic.sonUnlinkAllowed(childCount: grandchildren(son)) else { return }
+        // ح٣: لا يُفكّ من له أبناء (الزرّ معطّل — وهذا حارس ثانٍ)، ولا قبل تحميل شجرة النساء (ت-ج٣)
+        guard AdminMemberCardLogic.sonUnlinkAllowed(childCount: grandchildren(son), countsLoaded: store.loaded) else { return }
         working = son.id
         write("updateMemberFather \(son.id) → nil") {
             try Self.saved(await memberVM.updateMemberFather(memberId: son.id, fatherId: nil), memberVM)

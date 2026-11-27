@@ -2604,16 +2604,32 @@ class MemberViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    // MARK: - له حساب دخول؟ (نقد V3 م-ج٢)
+
+    /// `profile_has_login` على السيرفر (مسموح للمسجّلين — `20261024120000_descendant_edit_guard`): يقرأ `auth.users` نفسه،
+    /// فلا يعدّ الحساب المحذوف (منصة التسجيل تبقى بعد الحذف) ولا يفوته من لا رقم له أو المتوفى أو ابن البنت.
+    /// nil = تعذّر السؤال (لا اتصال أو خطأ) — المربّع يقول «تعذّر التحقق» ولا يسمح بالنقل
+    func profileHasLogin(_ id: UUID) async -> Bool? {
+        do {
+            let has: Bool = try await supabase
+                .rpc("profile_has_login", params: ["p_id": id.uuidString])
+                .execute()
+                .value
+            return has
+        } catch {
+            Log.warning("[Members] تعذّر فحص حساب الدخول: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     // MARK: - Update Member Father
     
     /// false = لم يُحفظ (السبب في `errorMessage`، ورسالة السيرفر العربية إن وُجدت — حارس روابط العائلة…). كان الخطأ يُبتلع
     /// فيظهر رفض السيرفر في كرت العضو نجاحاً (نقد V3 ح٣)
+    /// بلا اتصال: `requireOnline()` يعرض تنبيهه العام وحده — لا `errorMessage` (كانت الرسالة تظهر مرتين، نقد V3 ت-ج٦)
     @discardableResult
     func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async -> Bool {
-        guard NetworkMonitor.shared.requireOnline() else {
-            errorMessage = L10n.t("لا يوجد اتصال بالإنترنت.", "No internet connection.")
-            return false
-        }
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         self.isLoading = true
         // التقط الأب القديم قبل التحديث (نستخدم اسمه لا UUID للعرض)
         let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }

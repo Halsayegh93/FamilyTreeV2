@@ -21,6 +21,8 @@ struct LinkFatherSheet: View {
     @State private var isSaving = false
     @State private var selectedFather: FamilyMember?
     @State private var cache = ResultsCache()
+    /// نقد V3 م-ج٤: رفض السيرفر (حارس روابط العائلة…) سطر داخل المربّع، والمربّع يبقى مفتوحاً
+    @State private var failure: String?
 
     /// نتائج البحث محفوظة لكل (نص بحث + نسخة الأعضاء): المربّع يعيد بناء محتواه كلما
     /// تغيّر ارتفاعه، وفرز آلاف الأعضاء مع كل مرة يثقّل الفتح والتمرير
@@ -72,6 +74,9 @@ struct LinkFatherSheet: View {
             onCancel: { dismiss() }
         ) {
             StationMemberCard(member: member).dsStaggerIn(0)
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+            }
             fatherSection
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -149,14 +154,22 @@ struct LinkFatherSheet: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
+    /// نقد V3 م-ج٤: يغلق بعد النجاح فقط — الفشل برسالة السيرفر (`errorMessage`) داخل المربّع، ثم تُمسح
     private func save() {
-        guard let father = selectedFather else { return }
+        guard let father = selectedFather, !isSaving else { return }
         if DebugAdminProbe.dryRun("updateMemberFather \(member.id) → \(father.id)") { dismiss(); return }
         isSaving = true
-        Task {
-            await memberVM.updateMemberFather(memberId: member.id, fatherId: father.id)
+        failure = nil
+        memberVM.errorMessage = nil
+        Task { @MainActor in
+            let ok = await memberVM.updateMemberFather(memberId: member.id, fatherId: father.id)
             isSaving = false
-            dismiss()
+            if ok {
+                dismiss()
+            } else {
+                failure = memberVM.errorMessage ?? L10n.t("تعذّر الحفظ. حاول مرة أخرى.", "Couldn't save. Try again.")
+                memberVM.errorMessage = nil
+            }
         }
     }
 }
@@ -371,14 +384,16 @@ struct EditGenderSheet: View {
     @State private var isSaving = false
     /// نقد V3 ح١: «أنثى» نقلٌ بين الشجرتين (`move_child_gender` يحذف ملفه) — لا يُنقل من له حساب
     @ObservedObject private var accounts = AdminAccountsStore.shared
+    /// م-ج٢: جواب السيرفر `profile_has_login` — nil حتى يصل (أو إن فشل)
+    @State private var serverLogin: Bool?
+    @State private var checkingLogin = true
 
-    /// له حساب في التطبيق؟ nil = مخزن الحسابات لم يُحمَّل بعد
+    /// له حساب في التطبيق؟ nil = لا يُعرف بعد (السؤال جارٍ أو فشل)
     private var account: Bool? {
-        AdminMemberCardLogic.appAccount(role: member.role.rawValue,
+        AdminMemberCardLogic.appAccount(serverLogin: serverLogin, role: member.role.rawValue,
                                         isViewer: member.id == memberVM.authVM?.currentUser?.id,
-                                        frozen: member.status == .frozen, looksRegistered: member.looksRegistered,
-                                        linkedLogin: false, inAccountsStore: accounts.info(member.id) != nil,
-                                        storeLoaded: accounts.loaded)
+                                        frozen: member.status == .frozen, linkedLogin: false,
+                                        inAccountsStore: accounts.info(member.id) != nil)
     }
 
     /// ما يمنع «أنثى» — nil = لا مانع (و«ذكر» يكتب العمود فقط)
@@ -389,8 +404,10 @@ struct EditGenderSheet: View {
             return L10n.t("له حساب في التطبيق — لا يُنقل إلى شجرة النساء: النقل يحذف ملفه ويبقى حسابه بلا ملف.",
                           "Has an app account — can't move to the women's tree: the move deletes the profile and orphans the account.")
         case nil:
-            return L10n.t("تعذّر التحقق من حسابه في التطبيق — حاول بعد قليل.",
-                          "Couldn't check the app account — try again shortly.")
+            return checkingLogin
+                ? L10n.t("يتحقق من حسابه في التطبيق…", "Checking the app account…")
+                : L10n.t("تعذّر التحقق من حسابه في التطبيق — حاول بعد قليل.",
+                         "Couldn't check the app account — try again shortly.")
         case false?:
             return nil
         }
@@ -418,7 +435,9 @@ struct EditGenderSheet: View {
 
             // الأنثى مكانها شجرة النساء — كان الحفظ يكتب العمود فقط فتبقى في شجرة الرجال
             if let femaleBlock {
-                DSNoteCard(femaleBlock, icon: "person.crop.circle.badge.exclamationmark", tint: DS.Color.error)
+                // السؤال جارٍ: سطر محايد لا خطأ
+                DSNoteCard(femaleBlock, icon: account == nil && checkingLogin ? "hourglass" : "person.crop.circle.badge.exclamationmark",
+                           tint: account == nil && checkingLogin ? DS.Color.textTertiary : DS.Color.error)
                     .dsStaggerIn(2)
             } else if gender == "female" {
                 DSNoteCard(L10n.t("ستُنقل إلى شجرة النساء تحت أبيها، بدون الرقم والصورة.",
@@ -430,7 +449,11 @@ struct EditGenderSheet: View {
                 DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
-        .task { if !accounts.loaded { await accounts.refresh() } }
+        .task {
+            checkingLogin = true
+            serverLogin = await memberVM.profileHasLogin(member.id)
+            checkingLogin = false
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 

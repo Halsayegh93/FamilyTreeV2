@@ -6,6 +6,7 @@
 //
 // ما يُفحص (build-card-v3.md «Done when»): قواعد فتح المجموعات وطيّها · ربط الطلب بشارة الصفّ · قاعدة «مرحلة الموافقة» ·
 // كلمة «غير مسجّل» · ظهور أزرار الرأس. ومعها: من الطلبات «عنه»، عدّ الأبناء والزوجات، رقاقة الطلبات، «الصلة بالعائلة».
+// نقد «المنتقد» الثاني (آخر الملف): ورقتك بعقدة شجرة النساء · «له حساب» بجواب السيرفر · رقاقات «غير مسجّل» · ت-ج١…ت-ج٨.
 import Foundation
 
 var failures = 0
@@ -275,24 +276,7 @@ check(AdminMemberSheetLogic.missingChips(gaps: [.noBirth, .noGender], problems: 
       [Mi.noBirth, .noGender, .orphan], "someone else → every chip (unchanged)")
 
 // MARK: ح١ نقل الجنس: من له حساب لا يُنقل (السيرفر لا يمنعه — النقل إلى أنثى يحذف ملفه)
-check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: true, storeLoaded: true), true, "in the accounts store → has an account")
-check(C.appAccount(role: "monitor", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: false), true, "admin role → has an account (store not needed)")
-check(C.appAccount(role: "pending", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: true), true, "pending join → signed up, has a login")
-check(C.appAccount(role: "member", isViewer: true, frozen: false, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: true), true, "yourself → has an account")
-check(C.appAccount(role: "member", isViewer: false, frozen: true, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: true), true, "suspended account → has an account")
-check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: true, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: true), true, "accepted the terms / registration platform → login")
-check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: true,
-                   inAccountsStore: false, storeLoaded: true), true, "women's-tree node linked to a login → account")
-check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: false), nil, "accounts store not loaded → unknown")
-check(C.appAccount(role: "member", isViewer: false, frozen: false, looksRegistered: false, linkedLogin: false,
-                   inAccountsStore: false, storeLoaded: true), false, "tree-only member → no account")
+// «له حساب» — القاعدة الجديدة بجواب السيرفر في قسم م-ج٢ آخر الملف
 typealias GB = AdminMemberCardLogic.GenderMoveBlock
 check(C.genderMoveBlock(toFemale: true, account: true, hasFather: true, sons: 0, daughters: 0, wives: 0,
                         hasHusband: false, fatherInFamily: true), GB.account, "young registered man, no kids → blocked")
@@ -353,6 +337,105 @@ check(C.resolved(oldId, moved: [oldId: newId]), newId, "moved → the card shows
 check(C.resolved(oldId, moved: [oldId: newId, newId: newer]), newer, "moved twice → the latest record")
 check(C.resolved(X0, moved: [oldId: newId]), X0, "not moved → unchanged")
 check(C.resolved(oldId, moved: [oldId: newId, newId: oldId]), newId, "a loop never hangs (stops before revisiting)")
+
+// MARK: نقد «المنتقد» الثاني — م-ج١ ورقتك: الملف نفسه، أو عقدة شجرة النساء المربوطة بحسابك
+let herNode = UUID(uuidString: "00000000-0000-0000-0000-0000000000c1")!
+check(C.isSelf(memberId: me, linkedUserId: nil, viewerId: me), true, "your profile → your card")
+check(C.isSelf(memberId: herNode, linkedUserId: me, viewerId: me), true,
+      "women-tree node linked to your account (opened from «نساء العائلة») → your card")
+check(C.isSelf(memberId: herNode, linkedUserId: other, viewerId: me), false, "node linked to someone else → not yours")
+check(C.isSelf(memberId: herNode, linkedUserId: nil, viewerId: me), false, "unlinked node → not yours")
+check(C.isSelf(memberId: me, linkedUserId: nil, viewerId: nil), false, "viewer not known yet → not yours")
+check(C.familyAdmin(canEdit: true, memberId: herNode, linkedUserId: me, viewerId: me), false,
+      "staff woman on her own women-tree node → family commands locked")
+check(C.familyAdmin(canEdit: true, memberId: herNode, linkedUserId: other, viewerId: me), true,
+      "someone else's women-tree node → family commands")
+// سطر القفل و«غيرك» يتبعان القاعدة نفسها
+check(S.lockNote(isSelf: true, memberIsOwner: false, isDeceased: false, viewerCanAct: true), S.LockNote.selfAccount,
+      "own women-tree node → «هذا حسابك» lock line")
+check(S.lockNote(isSelf: true, memberIsOwner: true, isDeceased: false, viewerCanAct: true), S.LockNote.selfOwner,
+      "owner on own card → «وأنت المالك»")
+check(S.lockNote(isSelf: false, memberIsOwner: false, isDeceased: false, viewerCanAct: true), nil, "someone else → no line")
+check(S.isOther(isSelf: true, memberIsOwner: false), false, "own card is never «غيرك»")
+check(S.isOther(isSelf: false, memberIsOwner: false), true, "another member → «غيرك»")
+
+// MARK: م-ج٢ «له حساب»: جواب السيرفر (`profile_has_login`) هو الحكم، والإشارات اليقينية تكفي قبله
+check(C.appAccount(serverLogin: false, role: "member", isViewer: false, frozen: false, linkedLogin: false,
+                   inAccountsStore: false), false,
+      "deleted account (registration platform kept) → server says no login → no account")
+check(C.appAccount(serverLogin: true, role: "member", isViewer: false, frozen: false, linkedLogin: false,
+                   inAccountsStore: false), true,
+      "login without phone / deceased / daughter's son (not in the usage list) → server says login → account")
+check(C.appAccount(serverLogin: nil, role: "member", isViewer: false, frozen: false, linkedLogin: false,
+                   inAccountsStore: false), nil, "server answer not here yet (or failed) → unknown")
+check(C.appAccount(serverLogin: nil, role: "monitor", isViewer: false, frozen: false, linkedLogin: false,
+                   inAccountsStore: false), true, "admin role → account without waiting")
+check(C.appAccount(serverLogin: nil, role: "pending", isViewer: false, frozen: false, linkedLogin: false,
+                   inAccountsStore: false), true, "pending join → signed up")
+check(C.appAccount(serverLogin: nil, role: "member", isViewer: true, frozen: false, linkedLogin: false,
+                   inAccountsStore: false), true, "yourself → account")
+check(C.appAccount(serverLogin: false, role: "member", isViewer: false, frozen: true, linkedLogin: false,
+                   inAccountsStore: false), true, "suspended → kept as account (safe side)")
+check(C.appAccount(serverLogin: nil, role: "member", isViewer: false, frozen: false, linkedLogin: true,
+                   inAccountsStore: false), true, "women-tree node linked to a login → account")
+check(C.appAccount(serverLogin: nil, role: "member", isViewer: false, frozen: false, linkedLogin: false,
+                   inAccountsStore: true), true, "in the usage list → account")
+check(C.genderMoveBlock(toFemale: true, account: nil, checking: true, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: true), GB.checking, "server check running → «يتحقق…», not an error")
+check(C.genderMoveBlock(toFemale: true, account: nil, checking: false, hasFather: true, sons: 0, daughters: 0, wives: 0,
+                        hasHusband: false, fatherInFamily: true), GB.unverified, "server check failed → «تعذّر التحقق»")
+
+// MARK: م-ج٣ كلمة واحدة لحقيقة واحدة: الرقاقة تقول ما يقوله الصفّ («غير مسجّل»)
+check(C.chipTitle(.noBirth), "تاريخ الميلاد غير مسجّل", "birth chip = row word")
+check(C.chipTitle(.noGender), "الجنس غير مسجّل", "gender chip = row word")
+check(C.chipTitle(.orphan), "الأب غير مسجّل", "no-father chip = «الأب» row word")
+check(C.chipTitle(.noName), "الاسم غير مسجّل", "no-name chip = «الاسم» row word")
+check(C.chipTitle(.noPhoto), "الصورة غير مسجّلة", "photo is feminine")
+check(C.chipTitle(.deathIncomplete), "تاريخ الوفاة غير مكتمل", "death chip = the death row's own line")
+check(C.chipTitle(.noBirth, arabic: false), "Birth date not recorded", "English")
+check(C.chipVerb(.noBirth), "أضف", "birth chip keeps «أضف ‹»")
+check(C.chipVerb(.noGender), "حدّد", "gender chip keeps «حدّد ‹»")
+check(C.chipVerb(.orphan), "اربط", "father chip keeps «اربط ‹»")
+
+// MARK: ت-ج١ تأكيد ربط الزوج بفعل
+check(C.husbandLinkMessage(husband: "سالم", wife: "منى"),
+      "يصير «سالم» زوجاً لـ«منى» في شجرة النساء، وتُعلَّم «متزوجة». يُسجَّل التغيير، وتقدر تفكّ الربط من هنا.",
+      "husband confirm starts with a verb")
+
+// MARK: ت-ج٢ المحارم من جهة الأم: جدّها لأمّها وأجداده وأخوالها
+let MG = UUID(uuidString: "00000000-0000-0000-0000-0000000000d0")! // أبو جدّها لأمّها
+let MF = UUID(uuidString: "00000000-0000-0000-0000-0000000000d1")! // جدّها لأمّها
+let MU = UUID(uuidString: "00000000-0000-0000-0000-0000000000d2")! // خالها
+let MC = UUID(uuidString: "00000000-0000-0000-0000-0000000000d3")! // ابن خالها
+let MGU = UUID(uuidString: "00000000-0000-0000-0000-0000000000d4")! // خال أمّها
+let withMother = fatherOf.merging([MF: MG, MU: MF, MC: MU, MGU: MG]) { a, _ in a }
+let blockedBoth = C.husbandBlocked(fatherId: F0, motherFatherId: MF, sonIds: [S0], fatherOf: withMother)
+check(blockedBoth.isSuperset(of: [MF, MG, MU, MGU]), true, "mother's father, his fathers, her maternal uncles → blocked")
+check(blockedBoth.contains(MC), false, "her maternal cousin may be her husband")
+check(blockedBoth.isSuperset(of: blocked), true, "the father's side stays blocked")
+
+// MARK: ت-ج٣ «فك الربط» للابن ينتظر عدّ البنات من شجرة النساء
+check(C.sonUnlinkAllowed(childCount: 0, countsLoaded: false), false, "women's tree not loaded → can't know → disabled")
+check(C.sonUnlinkAllowed(childCount: 0, countsLoaded: true), true, "loaded, no children → unlink")
+
+// MARK: ت-ج٤ رأس المربّع: الفاصل لا يبدأ سطراً
+check(C.boxSubtitle(["عبدالله أحمد", "ابنان و3 بنات"]), "عبدالله أحمد\u{00A0}· ابنان و3 بنات",
+      "no-break space before «·» keeps it on the name's line")
+check(C.boxSubtitle(["عبدالله أحمد", nil]), "عبدالله أحمد", "nothing after the name → no separator")
+
+// MARK: ت-ج٥ «إيقاف الحساب» لمن لا حساب له
+check(C.suspendNote(hasAccount: false, female: false), "لا حساب له الآن — يُطبَّق إن سجّل", "no account (man)")
+check(C.suspendNote(hasAccount: false, female: true), "لا حساب لها الآن — يُطبَّق إن سجّلت", "no account (woman)")
+check(C.suspendNote(hasAccount: true, female: false), nil, "has an account → the usual line")
+
+// MARK: ت-ج٧ «التالي» لا يعيد جلب مخازن «الوارد» كل مرة — مرة كل ٢٠ ثانية في الكرت
+let t0 = Date(timeIntervalSince1970: 1_000_000)
+check(C.requestsRefreshDue(last: nil, now: t0), true, "first open → fetch")
+check(C.requestsRefreshDue(last: t0, now: t0.addingTimeInterval(5)), false, "«التالي» after 5 s → no refetch")
+check(C.requestsRefreshDue(last: t0, now: t0.addingTimeInterval(C.requestsRefreshInterval)), true, "after 20 s → fetch")
+
+// MARK: ت-ج٨ بلا لغة تقنية
+check(C.daughterUnlinkNote(), "فك ربط البنت غير متاح بعد.", "plain words, no «السيرفر»")
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

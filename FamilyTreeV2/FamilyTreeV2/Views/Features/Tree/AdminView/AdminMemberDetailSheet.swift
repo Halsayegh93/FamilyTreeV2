@@ -24,6 +24,9 @@ struct AdminMemberDetailSheet: View {
     let deathOnly: Bool
     /// حالة الوفاة التي فُتح عليها المربّع («إلغاء» بلا تعديل لا يسأل — مثل مربّع الوفاة في شجرة النساء)
     private let startDeceased: Bool
+    /// نقد V3 م-ج١: سجلّك أنت من كرت العضو — «النسب» للاطلاع (الأب نصّاً، الأبناء بلا ترتيب ولا إضافة ولا تعديل)،
+    /// كما أوامر العائلة مقفولة في الكرت على ورقتك. غير الكرت (الشجرة، حسابي…) كما كان
+    let lineageLocked: Bool
 
     // MARK: - States
     @State private var selectedPhoneCountry: KuwaitPhone.Country
@@ -143,10 +146,11 @@ struct AdminMemberDetailSheet: View {
 
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
-    init(member: FamilyMember, showsAccount: Bool = true, deathOnly: Bool = false) {
+    init(member: FamilyMember, showsAccount: Bool = true, deathOnly: Bool = false, lineageLocked: Bool = false) {
         self.member = member
         self.showsAccount = showsAccount
         self.deathOnly = deathOnly
+        self.lineageLocked = lineageLocked
         self.startDeceased = deathOnly || (member.isDeceased ?? false)
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
         self._accountStatus = State(initialValue: member.status)
@@ -626,27 +630,25 @@ struct AdminMemberDetailSheet: View {
                     Text(L10n.t("الأب في الشجرة", "Father in Tree"))
                         .dsFont(.sectionTitle)
                         .foregroundColor(DS.Color.fieldValue)
-                    Button { showFatherPicker = true } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
-                                Text(father.displayFullName)
-                                    .dsFieldFont(.rowTitle)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .dsNameLines()
-                            } else {
-                                Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
-                                    .dsFieldFont(.fieldValue)
-                                    .foregroundColor(DS.Color.textSecondary)
+                    if lineageLocked {
+                        // م-ج١: على سجلّك — الأب نصّاً بلا منتقٍ
+                        fatherLabel
+                            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+                            .dsRowBox()
+                    } else {
+                        Button { showFatherPicker = true } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                fatherLabel
+                                Spacer(minLength: 0)
+                                DSChevron()
                             }
-                            Spacer(minLength: 0)
-                            DSChevron()
+                            .frame(minHeight: DS.Icon.tapTarget)
+                            // صندوق صفوف المربّعات الموحّد
+                            .dsRowBox()
+                            .contentShape(Rectangle())
                         }
-                        .frame(minHeight: DS.Icon.tapTarget)
-                        // صندوق صفوف المربّعات الموحّد
-                        .dsRowBox()
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if selectedFatherId != member.fatherId, descendantCount > 0 {
@@ -666,7 +668,7 @@ struct AdminMemberDetailSheet: View {
                     .dsFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldValue)
                 Spacer()
-                if localChildren.count > 1 {
+                if localChildren.count > 1 && !lineageLocked {
                     // «ترتيب» / «تم» — الشريحة الموحّدة (مساحة ضغط ٤٤ فيها)
                     DSChipButton(isSortingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"),
                                  icon: isSortingChildren ? "checkmark" : "arrow.up.arrow.down",
@@ -685,13 +687,38 @@ struct AdminMemberDetailSheet: View {
                     childRow(child: child, index: index)
                 }
 
-                // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة، والإجراء الرئيسي «حفظ» أسفل المربّع
-                DSButton(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
-                                               : L10n.t("إضافة ابن آخر", "Add Another Child"),
-                         icon: "plus.circle.fill", role: .cancel) {
-                    showAddSonSheet = true
+                if lineageLocked {
+                    // م-ج١: سطر القفل نفسه في الكرت — لماذا لا أزرار هنا
+                    Text(L10n.t("هذا سجلّك: الأب والأبناء يغيّرهم غيرك من الإدارة.",
+                                "This is your record: another admin changes your father and children."))
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة، والإجراء الرئيسي «حفظ» أسفل المربّع
+                    DSButton(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
+                                                   : L10n.t("إضافة ابن آخر", "Add Another Child"),
+                             icon: "plus.circle.fill", role: .cancel) {
+                        showAddSonSheet = true
+                    }
                 }
             }
+        }
+    }
+
+    /// اسم الأب المختار أو «رأس شجرة (غير مرتبط)»
+    @ViewBuilder
+    private var fatherLabel: some View {
+        if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
+            Text(father.displayFullName)
+                .dsFieldFont(.rowTitle)
+                .foregroundColor(DS.Color.textPrimary)
+                .dsNameLines()
+        } else {
+            Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
+                .dsFieldFont(.fieldValue)
+                .foregroundColor(DS.Color.textSecondary)
         }
     }
 
@@ -770,7 +797,7 @@ struct AdminMemberDetailSheet: View {
                         .accessibilityLabel(L10n.t("حذف \(child.firstName)", "Delete \(child.firstName)"))
                     }
                 }
-            } else {
+            } else if !lineageLocked {
                 DSChevron()
             }
         }
@@ -778,10 +805,11 @@ struct AdminMemberDetailSheet: View {
         // صندوق صفوف المربّعات الموحّد
         .dsRowBox()
         .contentShape(Rectangle())
-        .onTapGesture { if !isSortingChildren { childToEdit = child } }
+        // م-ج١: على سجلّك الأبناء للاطلاع — لا تعديل ولا حذف من هنا
+        .onTapGesture { if !isSortingChildren && !lineageLocked { childToEdit = child } }
         // القارئ الصوتي: خارج الترتيب الصف كله زر «تعديل»؛ في الترتيب تبقى أزراره منفصلة
         .accessibilityElement(children: isSortingChildren ? .contain : .combine)
-        .accessibilityAddTraits(isSortingChildren ? [] : .isButton)
+        .accessibilityAddTraits(isSortingChildren || lineageLocked ? [] : .isButton)
     }
 
     /// قرص أسهم الترتيب وزرّ الحذف (قرص الصفّ)، وفرقه عن مساحة الضغط ٤٤
@@ -1507,7 +1535,8 @@ struct AdminMemberDetailSheet: View {
             if fatherChanged {
                 Log.info("[AdminEdit] 🌳 تعديل الأب: \(capturedFatherId?.uuidString ?? "بدون")")
                 await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId, silent: true)
-                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)") }
+                // ت-ج٦: يُسجَّل ثم يُمسح — لا يقرؤه فشل لاحق غير مرتبط
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)"); memberVM.errorMessage = nil }
             }
             // الجنس نُقل على السيرفر قبل هذا الحفظ (`moveChildGender`) — لا يُكتب العمود مرة ثانية
             if genderChanged && !genderAlreadyMoved {
@@ -1547,7 +1576,7 @@ struct AdminMemberDetailSheet: View {
                     updatedChildren[i].sortOrder = i
                 }
                 await memberVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
-                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الترتيب: \(err)") }
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الترتيب: \(err)"); memberVM.errorMessage = nil }
             }
             Log.info("[AdminEdit] ✅ انتهى حفظ تعديلات: \(auditMemberName)")
 

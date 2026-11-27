@@ -47,17 +47,10 @@ extension AdminMemberSheetLogic.Missing {
     var gap: AdminMemberGap? { AdminMemberGap(rawValue: rawValue) }
     var problem: AdminMemberProblem? { AdminMemberProblem(rawValue: rawValue) }
 
-    var title: String {
-        if let gap { return AdminMemberFix.title(gap) }
-        if let problem { return AdminMemberFix.title(problem) }
-        return ""
-    }
+    /// م-ج٣: كلمة الصفّ نفسها («تاريخ الميلاد غير مسجّل») — والفعل بعدها («أضف ‹»)
+    var title: String { AdminMemberCardLogic.chipTitle(self, arabic: L10n.isArabic) }
 
-    var verb: String {
-        if let gap { return AdminMemberFix.verb(gap) }
-        if let problem { return AdminMemberFix.verb(problem) }
-        return ""
-    }
+    var verb: String { AdminMemberCardLogic.chipVerb(self, arabic: L10n.isArabic) }
 }
 
 // MARK: - «إغلاق» — ثابت فوق المحتوى على الكحلي

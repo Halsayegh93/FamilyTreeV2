@@ -17,6 +17,9 @@ import Foundation
 //   ٦) نقد «المنتقد» على v3: قفل أوامر العائلة على ورقتك (ح٢)، موانع نقل الجنس ومنها الحساب (ح١)، «فك الربط» للابن (ح٣)،
 //      الأنواع التي يقرّرها الشريط (`boxDecidableTypes`)، التأنيث («غير مسجّلة»، «عنها»)، منتقي الزوج بلا محارمها (م٥)،
 //      والمعرّف الجديد بعد النقل (م٦).
+//   ٧) نقده الثاني: «ورقتك» تشمل عقدة شجرة النساء المربوطة بحسابك (م-ج١)، «له حساب» بجواب `profile_has_login` (م-ج٢)،
+//      رقاقات الناقص بكلمة الصفّ «غير مسجّل» (م-ج٣)، ومحارم جهة الأم، و«فك الربط» بعد تحميل شجرة النساء، ورأس المربّع،
+//      وسطر الإيقاف لمن لا حساب له، ومهلة مخازن «الوارد» في الكرت (ت-ج١…ت-ج٨).
 
 nonisolated enum AdminMemberCardLogic {
 
@@ -370,21 +373,31 @@ nonisolated enum AdminMemberCardLogic {
 
     // MARK: ح٢ ورقتك — أوامر العائلة والإدارة مقفولة
 
+    /// م-ج١: ورقتك؟ — ملفك (`profiles.id`)، أو عقدة شجرة النساء المربوطة بحسابك (`women_members.linked_user_id` — «نساء
+    /// العائلة» تفتح الكرت بمعرّف العقدة لا بمعرّف الملف). مشاهد غير معروف بعد = ليست ورقتك
+    static func isSelf(memberId: UUID, linkedUserId: UUID?, viewerId: UUID?) -> Bool {
+        guard let viewerId else { return false }
+        return memberId == viewerId || linkedUserId == viewerId
+    }
+
     /// أوامر العائلة (الجنس، الزوجات/الزوج، الأبناء، الظهور، الصلة، الأب) لمن يعدّل، ولا على ورقتك أنت —
     /// «البيانات» (الميلاد، الصورة، السيرة) تبقى كما في التصميم
-    static func familyAdmin(canEdit: Bool, memberId: UUID, viewerId: UUID?) -> Bool {
-        canEdit && memberId != viewerId
+    static func familyAdmin(canEdit: Bool, memberId: UUID, linkedUserId: UUID? = nil, viewerId: UUID?) -> Bool {
+        canEdit && !isSelf(memberId: memberId, linkedUserId: linkedUserId, viewerId: viewerId)
     }
 
     // MARK: ح١ نقل الجنس — من له حساب لا يُنقل
 
-    /// له حساب في التطبيق؟ true يقيناً · false لا · nil لا يُعرف بعد (مخزن الحسابات لم يُحمَّل). دور إداري أو «طلب انضمام»
-    /// (سجّل بنفسه) أو أنت أو موقوف أو قبل الشروط أو عقدة شجرة نساء مربوطة بحساب أو في مخزن الحسابات = له حساب
-    static func appAccount(role: String, isViewer: Bool, frozen: Bool, looksRegistered: Bool, linkedLogin: Bool,
-                           inAccountsStore: Bool, storeLoaded: Bool) -> Bool? {
+    /// له حساب في التطبيق؟ true يقيناً · false لا · nil لا يُعرف بعد. م-ج٢: الحكم جواب السيرفر `profile_has_login`
+    /// (`serverLogin` — يقرأ `auth.users` نفسه: لا يعدّ الحساب المحذوف، ولا يفوته من لا رقم له أو المتوفى أو ابن البنت).
+    /// قبل وصوله تكفي الإشارات اليقينية: دور إداري أو «طلب انضمام» أو أنت أو موقوف أو عقدة مربوطة بحساب أو في قائمة
+    /// الاستخدام. «قبل الشروط/منصة التسجيل» لا تُحسب: الحذف يُبقي منصة التسجيل
+    static func appAccount(serverLogin: Bool?, role: String, isViewer: Bool, frozen: Bool, linkedLogin: Bool,
+                           inAccountsStore: Bool) -> Bool? {
+        if serverLogin == true { return true }
         let staff: Set<String> = ["owner", "admin", "monitor", "supervisor", "pending"]
-        if staff.contains(role) || isViewer || frozen || looksRegistered || linkedLogin || inAccountsStore { return true }
-        return storeLoaded ? false : nil
+        if staff.contains(role) || isViewer || frozen || linkedLogin || inAccountsStore { return true }
+        return serverLogin
     }
 
     /// ما يمنع «انقله» (السيرفر لا يمنع حذف من له حساب — `move_child_gender` إلى أنثى يحذف ملفه)
@@ -393,6 +406,8 @@ nonisolated enum AdminMemberCardLogic {
         case account
         /// مخزن الحسابات لم يُحمَّل — «تعذّر التحقق»
         case unverified
+        /// م-ج٢: جواب السيرفر (`profile_has_login`) في الطريق — «يتحقق…»، لا خطأ
+        case checking
         /// إلى أنثى بلا أب في الشجرة — البنت تُنقل تحت أبيها
         case noFather
         /// إلى أنثى وله أبناء/بنات/زوجات مربوطون — يرفضه السيرفر (`family_links_protected`)
@@ -403,9 +418,10 @@ nonisolated enum AdminMemberCardLogic {
         case fatherOutside
     }
 
-    static func genderMoveBlock(toFemale: Bool, account: Bool?, hasFather: Bool, sons: Int, daughters: Int, wives: Int,
-                                hasHusband: Bool, fatherInFamily: Bool) -> GenderMoveBlock? {
-        guard let account else { return .unverified }
+    /// `checking` = نداء `profile_has_login` جارٍ: «يتحقق…» بدل «تعذّر التحقق» حتى يصل الرد أو يفشل
+    static func genderMoveBlock(toFemale: Bool, account: Bool?, checking: Bool = false, hasFather: Bool, sons: Int,
+                                daughters: Int, wives: Int, hasHusband: Bool, fatherInFamily: Bool) -> GenderMoveBlock? {
+        guard let account else { return checking ? .checking : .unverified }
         if account { return .account }
         if toFemale {
             guard hasFather else { return .noFather }
@@ -429,13 +445,21 @@ nonisolated enum AdminMemberCardLogic {
 
     /// الابن بلا أبناء فقط: فكّ أبيه يُخرجه من شجرة العائلة (`full_name` = اسمه الأول) — ومن له أبناء يخرج فرعه كله معه،
     /// فيُعطَّل ويُوجَّه إلى «الأب ← تغيير» في ورقته
-    static func sonUnlinkAllowed(childCount: Int) -> Bool { childCount == 0 }
+    /// ت-ج٣: `countsLoaded` = شجرة النساء محمّلة — قبلها عدد البنات صفر ظاهرياً، فلا يُفتح الزرّ لابن له بنات فقط
+    static func sonUnlinkAllowed(childCount: Int, countsLoaded: Bool = true) -> Bool { countsLoaded && childCount == 0 }
+
+    /// ت-ج٨: فكّ ربط البنت لا نداء له — بلا لغة تقنية
+    static func daughterUnlinkNote(arabic: Bool = true) -> String {
+        arabic ? "فك ربط البنت غير متاح بعد." : "Unlinking a daughter isn't available yet."
+    }
 
     // MARK: م٥ «ربط زوج من العائلة» — لا محارمها
 
     /// رجال لا يُعرضون زوجاً لها: أبوها وأجدادها، وأبناء كلٍّ منهم (أعمامها وإخوتها)، وذكور ذرّية أبيها (أبناء إخوتها…)،
-    /// وأبناؤها وذكور ذرّيتهم. `fatherOf` = أب كل رجل في شجرة العائلة
-    static func husbandBlocked(fatherId: UUID?, sonIds: [UUID], fatherOf: [UUID: UUID]) -> Set<UUID> {
+    /// وأبناؤها وذكور ذرّيتهم. ت-ج٢: ومن جهة الأم (`motherFatherId` = أبو أمّها حين تكون أمّها من بنات العائلة): جدّها لأمّها
+    /// وآباؤه، وأبناء كلٍّ منهم (أخوالها وأخوال أمّها) — لا ذرّيتهم (ابن خالها يصلح). `fatherOf` = أب كل رجل في شجرة العائلة
+    static func husbandBlocked(fatherId: UUID?, motherFatherId: UUID? = nil, sonIds: [UUID],
+                               fatherOf: [UUID: UUID]) -> Set<UUID> {
         var sonsOf: [UUID: [UUID]] = [:]
         for (son, father) in fatherOf { sonsOf[father, default: []].append(son) }
         func descendants(_ roots: [UUID]) -> Set<UUID> {
@@ -457,8 +481,83 @@ nonisolated enum AdminMemberCardLogic {
             for ancestor in chain.dropFirst() { blocked.formUnion(sonsOf[ancestor] ?? []) }
             blocked.formUnion(descendants([fatherId]))
         }
+        if let motherFatherId {
+            var up: UUID? = motherFatherId
+            var seen = Set<UUID>()
+            while let a = up, seen.insert(a).inserted {
+                blocked.insert(a)
+                blocked.formUnion(sonsOf[a] ?? [])
+                up = fatherOf[a]
+            }
+        }
         blocked.formUnion(descendants(sonIds))
         return blocked
+    }
+
+    /// ت-ج١: تأكيد ربط الزوج يبدأ بفعل
+    static func husbandLinkMessage(husband: String, wife: String, arabic: Bool = true) -> String {
+        arabic
+            ? "يصير «\(husband)» زوجاً لـ«\(wife)» في شجرة النساء، وتُعلَّم «متزوجة». يُسجَّل التغيير، وتقدر تفكّ الربط من هنا."
+            : "«\(husband)» becomes «\(wife)»'s husband in the women's tree and she's marked married. Logged; you can unlink it here."
+    }
+
+    // MARK: م-ج٣ رقاقات الناقص بكلمة الصفّ نفسها
+
+    /// عنوان رقاقة «أكمل الناقص» تحت الرأس — ما يقوله صفّه («الميلاد: غير مسجّل» ← «تاريخ الميلاد غير مسجّل»). للكرت وحده:
+    /// شرائح صفحة الأعضاء (`AdminMemberGap.title/tag`) كما هي
+    static func chipTitle(_ item: AdminMemberSheetLogic.Missing, arabic: Bool = true) -> String {
+        switch item {
+        case .noBirth:         return arabic ? "تاريخ الميلاد \(notRecorded())" : "Birth date not recorded"
+        case .noGender:        return arabic ? "الجنس \(notRecorded())" : "Gender not recorded"
+        case .noPhoto:         return arabic ? "الصورة \(notRecorded(feminine: true))" : "Photo not recorded"
+        // صفّ «الوفاة» يقولها بسطره نفسه
+        case .deathIncomplete: return arabic ? "تاريخ الوفاة غير مكتمل" : "Death date incomplete"
+        case .orphan:          return arabic ? "الأب \(notRecorded())" : "Father not recorded"
+        case .noName:          return arabic ? "الاسم \(notRecorded())" : "Name not recorded"
+        case .brokenParent:    return arabic ? "ارتباط الأب غير صالح" : "Invalid father link"
+        case .hidden:          return arabic ? "مخفي من الشجرة" : "Hidden from the tree"
+        case .dupPhone:        return arabic ? "رقم الهاتف مكرر عند عضو آخر" : "Phone used by another member"
+        }
+    }
+
+    /// فعل الرقاقة القصير بعد العنوان («أضف ‹»)
+    static func chipVerb(_ item: AdminMemberSheetLogic.Missing, arabic: Bool = true) -> String {
+        switch item {
+        case .noBirth, .noPhoto: return arabic ? "أضف" : "Add"
+        case .noGender:          return arabic ? "حدّد" : "Set"
+        case .deathIncomplete:   return arabic ? "أكمل" : "Complete"
+        case .orphan:            return arabic ? "اربط" : "Link"
+        case .noName:            return arabic ? "عدّل" : "Edit"
+        case .brokenParent:      return arabic ? "صحّح" : "Fix"
+        case .hidden:            return arabic ? "أظهر" : "Show"
+        case .dupPhone:          return arabic ? "امسح" : "Clear"
+        }
+    }
+
+    // MARK: ت-ج٤ رأس المربّع
+
+    /// «الاسم · العدد» — مسافة لا تنكسر قبل «·»: حين يلتفّ الرأس لا يبدأ السطر الثاني بالفاصل
+    static func boxSubtitle(_ parts: [String?]) -> String {
+        parts.compactMap { $0?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }.joined(separator: "\u{00A0}· ")
+    }
+
+    // MARK: ت-ج٥ «إيقاف الحساب» لمن لا حساب له
+
+    /// سطر تحت «إيقاف الحساب» لمن لا حساب له — nil = السطر المعتاد
+    static func suspendNote(hasAccount: Bool, female: Bool, arabic: Bool = true) -> String? {
+        guard !hasAccount else { return nil }
+        if !arabic { return "No account yet — applies if they sign up" }
+        return female ? "لا حساب لها الآن — يُطبَّق إن سجّلت" : "لا حساب له الآن — يُطبَّق إن سجّل"
+    }
+
+    // MARK: ت-ج٧ مخازن «الوارد» في الكرت
+
+    /// «التالي» يعيد بناء الكرت لكل عضو، والمخازن تتجاوز مهلتها ما دامت فارغة (الوضع المعتاد) — الكرت يجلبها مرة كل ٢٠ ثانية
+    static let requestsRefreshInterval: TimeInterval = 20
+
+    static func requestsRefreshDue(last: Date?, now: Date, interval: TimeInterval = requestsRefreshInterval) -> Bool {
+        guard let last else { return true }
+        return now.timeIntervalSince(last) >= interval
     }
 
     /// يظهر مرشّحاً زوجاً؟ رجل حيّ بالغ (العمر المجهول لا يُحكم عليه) له اسم، وليس «طلب انضمام»

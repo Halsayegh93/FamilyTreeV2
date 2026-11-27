@@ -7,7 +7,7 @@ import Supabase
 //   «إغلاق» ذهبي ثابت (٤٤) ← الرأس الكحلي: الصورة، الاسم كاملاً يلتفّ، شارات الحال (عضو مسجّل ✓ · فرع · «ابن بنت»/«من خارج
 //   العائلة» · الدور)، وأزرار بلا إطار — رمز ذهبي ٢٢ واسمه تحته ومساحة لمس ٤٤: «الملف الكامل» · «في الشجرة» (لمن يصل إليه
 //   الرأس الأول، لا فوق مربّع) · «اتصال» · «واتساب» (للرقم الظاهر لك فقط)؛ ٢×٢ مع الخط الكبير
-//   ← الرقاقات: الناقص («تاريخ الميلاد ناقص · أضف ‹») ورقاقة الطلبات («طلبان عنه ‹» — قفز فقط)
+//   ← الرقاقات: الناقص بكلمة صفّه («تاريخ الميلاد غير مسجّل · أضف ‹») ورقاقة الطلبات («طلبان عنه ‹» — قفز فقط)
 //   ← «العضو» ثلاث مجموعات تنطوي (`AdminMemberCardGroups.swift`): «البيانات» · «العائلة» (`AdminMemberCardFamily.swift`) ·
 //   «الحساب» (حقائق) — مفتوحة أول مرة، تتذكّر اختيار كل مشاهد، وما فيه طلب أو «تحت التعديل» لا ينطوي
 //   ← «إجراءات الإدارة» بطاقة منفصلة بشريط عنوان كحلي (لا تُرسم على ورقتك): «طلبات عنه · N» (`AdminMemberCardRequests.swift`
@@ -79,6 +79,8 @@ struct AdminMemberSheet: View {
     @State private var scrollTarget: String?
     /// م٦: «تغيير الجنس» يُنشئ سجلاً جديداً في الشجرة الأخرى — الكرت يتبع المعرّف الجديد (القديم ← الجديد)
     @State private var movedIds: [UUID: UUID] = [:]
+    /// ت-ج٧: آخر جلب لمخازن «الوارد» من هذا الكرت — «التالي» لا يعيده قبل `requestsRefreshInterval`
+    @State private var requestsFetchedAt: Date?
 
     init(ids: [UUID], start: Int, inBox: Bool = false) {
         self.ids = ids
@@ -113,14 +115,19 @@ struct AdminMemberSheet: View {
 
     /// ح٢: أوامر العائلة (الجنس، الزوجات/الزوج، الأبناء، الظهور، الصلة، الأب) لا تعمل على ورقتك — «البيانات» كما هي
     private func familyAdmin(_ m: FamilyMember) -> Bool {
-        AdminMemberCardLogic.familyAdmin(canEdit: canEdit, memberId: m.id, viewerId: authVM.currentUser?.id)
+        AdminMemberCardLogic.familyAdmin(canEdit: canEdit, memberId: m.id, linkedUserId: WomenStore.linkedUserByWoman[m.id],
+                                         viewerId: authVM.currentUser?.id)
     }
 
-    private func isSelf(_ m: FamilyMember) -> Bool { m.id == authVM.currentUser?.id }
+    /// م-ج١: ورقتك = ملفك، أو عقدتك في شجرة النساء («نساء العائلة» تفتح الكرت بمعرّف العقدة المربوطة بحسابك)
+    private func isSelf(_ m: FamilyMember) -> Bool {
+        AdminMemberCardLogic.isSelf(memberId: m.id, linkedUserId: WomenStore.linkedUserByWoman[m.id],
+                                    viewerId: authVM.currentUser?.id)
+    }
 
     /// لا المالك ولا أنت — وحده يقبل الإيقاف ومنع الرقم والحذف
     private func isOther(_ m: FamilyMember) -> Bool {
-        AdminMemberSheetLogic.isOther(memberId: m.id, viewerId: authVM.currentUser?.id, memberIsOwner: m.role == .owner)
+        AdminMemberSheetLogic.isOther(isSelf: isSelf(m), memberIsOwner: m.role == .owner)
     }
 
     var body: some View {
@@ -241,13 +248,12 @@ struct AdminMemberSheet: View {
         let banPrefill = AdminMemberSheetLogic.banPrefill(phone, normalize: { _ in normalized })
         let commands = AdminMemberSheetLogic.accountCommands(isOther: other, canFreeze: canFreeze, canBan: canBan,
                                                              banPrefill: banPrefill, canDelete: canDelete)
-        let lock = AdminMemberSheetLogic.lockNote(memberId: m.id, viewerId: authVM.currentUser?.id,
-                                                  memberIsOwner: m.role == .owner, isDeceased: !living,
+        let lock = AdminMemberSheetLogic.lockNote(isSelf: isSelf(m), memberIsOwner: m.role == .owner, isDeceased: !living,
                                                   viewerCanAct: canEdit || canFreeze || canBan || canDelete)
         let showsDevices = authVM.canViewSystemSettings && facts.status != .treeOnly && isProfile
         let hasLogin = facts.account != nil
         let card = AdminMemberSheetLogic.adminCard(
-            isSelf: m.id == authVM.currentUser?.id, living: living,
+            isSelf: isSelf(m), living: living,
             photo: isProfile && AdminMemberPhotoActions.state(member: m, hasLogin: hasLogin, viewer: .init(authVM: authVM)) != .hidden,
             register: isProfile && AdminMemberAccountSection.canRegister(member: m, facts: facts, canEdit: canEdit,
                                                                          isOther: other, liveStatus: liveStatus),
@@ -532,7 +538,11 @@ struct AdminMemberSheet: View {
         await family.refresh()
         if let id = currentId { await family.refreshLineage(id) }
         await daughterSons.refresh()
-        if seesRequests { await refreshRequests() }
+        // ت-ج٧: مرة كل ٢٠ ثانية من هذا الكرت — المخازن الفارغة (المعتاد) تتجاوز مهلتها، فكان «التالي» يجلبها كلها كل مرة
+        if seesRequests, AdminMemberCardLogic.requestsRefreshDue(last: requestsFetchedAt, now: Date()) {
+            requestsFetchedAt = Date()
+            await refreshRequests()
+        }
         guard let m = member else { return }
         // «طلب تغيير الصورة» المعلّق (السيرفر القديم: لا شيء) — وللمتوفى أيضاً: طلبه المفتوح يُلغى من هنا (V24)
         if authVM.canEditMembers { await PhotoChangeRequestStore.shared.refresh(memberId: m.id) }
@@ -771,46 +781,9 @@ struct AdminMemberSheetFacts {
 
 // MARK: - «أكمل الناقص»
 
-/// عنوان كل نقص/مشكلة وفعل إصلاحه القصير — رقاقات «أكمل الناقص» تحت الرأس («تاريخ الوفاة غير مكتمل · أكمل»)
+/// ما إصلاحه تأكيد لا مربّع. عنوان الرقاقة وفعلها في `AdminMemberCardLogic.chipTitle/chipVerb` (م-ج٣: كلمة الصفّ نفسها)
 @MainActor
 enum AdminMemberFix {
-    static func title(_ gap: AdminMemberGap) -> String {
-        switch gap {
-        case .noBirth:         return L10n.t("تاريخ الميلاد ناقص", "Birth date missing")
-        case .noGender:        return L10n.t("الجنس غير محدّد", "Gender not set")
-        case .noPhoto:         return L10n.t("الصورة ناقصة", "Photo missing")
-        case .deathIncomplete: return L10n.t("تاريخ الوفاة غير مكتمل", "Death date incomplete")
-        }
-    }
-
-    static func verb(_ gap: AdminMemberGap) -> String {
-        switch gap {
-        case .noBirth, .noPhoto: return L10n.t("أضف", "Add")
-        case .noGender:          return L10n.t("حدّد", "Set")
-        case .deathIncomplete:   return L10n.t("أكمل", "Complete")
-        }
-    }
-
-    static func title(_ problem: AdminMemberProblem) -> String {
-        switch problem {
-        case .orphan:       return L10n.t("لا أب في الشجرة", "No father in the tree")
-        case .noName:       return L10n.t("الاسم ناقص", "Name missing")
-        case .brokenParent: return L10n.t("ارتباط الأب غير صالح", "Invalid father link")
-        case .hidden:       return L10n.t("مخفي من الشجرة", "Hidden from the tree")
-        case .dupPhone:     return L10n.t("رقم الهاتف مكرر عند عضو آخر", "Phone used by another member")
-        }
-    }
-
-    static func verb(_ problem: AdminMemberProblem) -> String {
-        switch problem {
-        case .orphan:       return L10n.t("اربط", "Link")
-        case .noName:       return L10n.t("عدّل", "Edit")
-        case .brokenParent: return L10n.t("صحّح", "Fix")
-        case .hidden:       return L10n.t("أظهر", "Show")
-        case .dupPhone:     return L10n.t("امسح", "Clear")
-        }
-    }
-
     /// المشكلة التي إصلاحها كتابة بتأكيد (لا مربّع)
     static func confirm(_ problem: AdminMemberProblem) -> AdminMemberConfirm? {
         switch problem {
@@ -1224,7 +1197,11 @@ private struct AdminMemberSheetBoxes: ViewModifier {
     private func tallView(_ target: AdminMemberTallBox) -> AnyView {
         switch target {
         case .father(let m): return AnyView(LinkFatherSheet(member: m, memberVM: memberVM))
-        case .editAll(let m): return AnyView(AdminMemberDetailSheet(member: m, showsAccount: false))
+        // م-ج١: على ورقتك الأب والأبناء للاطلاع في المحرّر الكامل أيضاً (الأوامر نفسها مقفولة في الكرت)
+        case .editAll(let m):
+            let own = AdminMemberCardLogic.isSelf(memberId: m.id, linkedUserId: WomenStore.linkedUserByWoman[m.id],
+                                                  viewerId: authVM.currentUser?.id)
+            return AnyView(AdminMemberDetailSheet(member: m, showsAccount: false, lineageLocked: own))
         }
     }
 
