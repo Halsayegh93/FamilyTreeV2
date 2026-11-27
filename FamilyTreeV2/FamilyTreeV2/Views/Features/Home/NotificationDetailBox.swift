@@ -55,11 +55,10 @@ struct NotificationDetailBox: View {
                 guard let rid = requestId else { return }
                 request = await adminRequestVM.fetchRequest(id: rid)
             }
-            .fullScreenCover(item: $openMember) { m in
-                MemberDetailsView(member: m, centered: true)
-                    .background(ClearPresentationBackground())
+            // بطاقة العضو «أ»: ورقة طويلة من الأسفل (اعتمدها المالك ٢٠٢٦-١١-٢٧، كانت مربّعاً بالمنتصف)
+            .dsTallBox(item: $openMember) { m in
+                MemberDetailsView(member: m)
             }
-            .transaction { t in if openMember != nil { t.disablesAnimations = true } }
             .dsAlert(L10n.t("رفض الطلب؟", "Reject this request?"), isPresented: $confirmReject, icon: "xmark.circle.fill") {
                 // رفض البلاغ لا يحمل سبباً (rejectNewsReport) — لا حقل يُكتب فيه ثم يضيع
                 if request?.requestType != RequestType.newsReport.rawValue {

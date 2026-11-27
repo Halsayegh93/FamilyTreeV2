@@ -1284,13 +1284,9 @@ struct NotificationsCenterView: View {
             detailMemberCardBody(member: member)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .fullScreenCover(item: $selectedMember) { m in
-            MemberDetailsView(member: m, centered: true)
-                .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
-            if selectedMember != nil { t.disablesAnimations = true }
+        // بطاقة العضو «أ»: ورقة طويلة من الأسفل (اعتمدها المالك ٢٠٢٦-١١-٢٧، كانت مربّعاً بالمنتصف)
+        .dsTallBox(item: $selectedMember) { m in
+            MemberDetailsView(member: m)
         }
     }
 

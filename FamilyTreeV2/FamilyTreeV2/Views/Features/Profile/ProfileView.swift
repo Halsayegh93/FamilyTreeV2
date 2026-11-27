@@ -337,11 +337,10 @@ struct ProfileView: View {
                 EditChildSheet(member: child)
             }
             // حساب امرأة: الأب/الزوج/الابن من شجرة الرجال — نفس تفاصيل العضو
-            .fullScreenCover(item: $relativeDetails) { m in
-                MemberDetailsView(member: m, centered: true)
-                    .background(ClearPresentationBackground())
+            // بطاقة العضو «أ»: ورقة طويلة من الأسفل (اعتمدها المالك ٢٠٢٦-١١-٢٧، كانت مربّعاً بالمنتصف)
+            .dsTallBox(item: $relativeDetails) { m in
+                MemberDetailsView(member: m)
             }
-            .transaction { t in if relativeDetails != nil { t.disablesAnimations = true } }
             // تعديل فرد من «عائلتي» — مربّع بمنتصف الشاشة بتصميم مربّعات الإضافة (طلب المالك)
             .dsCenterBox(item: $editingFamilyMember) { entry in
                 WomanMemberEditSheet(memberVM: memberVM, entry: entry,

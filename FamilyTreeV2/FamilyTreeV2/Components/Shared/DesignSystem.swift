@@ -2715,6 +2715,8 @@ extension DS {
         // «فرع حسن» — `familyBranchBar`/`familyBranchTitle`)، وزرّ الحذف الأحمر بإطار
         /// صورة العضو في الرأس
         static let memberAvatar: CGFloat = 56
+        /// بطاقة العضو في الشجرة «أ» (٢٠٢٦-١١-٢٧): الصورة الكبيرة فوق الاسم في وسط الرأس
+        static let treeCardAvatar: CGFloat = 88
         /// زرّ الرأس: مربّع زجاجي (العرض × الارتفاع) وزاويته، والفراغ بين الأعمدة وبين المربّع واسمه
         static let memberActionWidth: CGFloat = 56
         static let memberActionHeight: CGFloat = 52

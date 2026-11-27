@@ -146,11 +146,10 @@ struct AdminRequestFactRows: View {
             .buttonStyle(DSPressStyle())
             .disabled(requester == nil)
         }
-        .fullScreenCover(item: $openMember) { m in
-            MemberDetailsView(member: m, centered: true)
-                .background(ClearPresentationBackground())
+        // بطاقة العضو «أ»: ورقة طويلة من الأسفل (اعتمدها المالك ٢٠٢٦-١١-٢٧، كانت مربّعاً بالمنتصف)
+        .dsTallBox(item: $openMember) { m in
+            MemberDetailsView(member: m)
         }
-        .transaction { t in if openMember != nil { t.disablesAnimations = true } }
     }
 
     private func valueText(_ text: String) -> some View {
