@@ -326,7 +326,8 @@ struct SignupFormBox: View {
                                      avatarSize: DS.Icon.signupPhoto,
                                      emptyActionTitle: L10n.t(SignupText.addPhoto, "Add photo"))
                     .completionAskHighlight(asksPhoto)
-                    .transition(.dsReveal(reduceMotion: reduceMotion))
+                    // تقفز الصورة للظهور عند «ذكر» (طلب المالك ٢٠٢٦-١١-٢٧) — «تقليل الحركة»: تلاشٍ
+                    .transition(.dsPhotoPop(reduceMotion: reduceMotion))
             }
             ForEach(Array(R.fields(origin).enumerated()), id: \.offset) { _, field in
                 fieldView(field)

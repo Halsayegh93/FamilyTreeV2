@@ -122,6 +122,9 @@ enum DSMotion {
     static let revealOut = Animation.easeIn(duration: DSMotionRules.Timing.revealOut)
     /// قفزة المربّع المختار (من العائلة/من خارجها، نعم/لا): يكبر قليلاً ثم يستقرّ بنابض
     static let selectPop = Animation.spring(response: 0.3, dampingFraction: 0.55)
+    /// صورة التسجيل الكبيرة تقفز للظهور بعد «ذكر» (طلب المالك ٢٠٢٦-١١-٢٧): تكبر من ٠٫٦ بنابض مرن ثم تستقرّ
+    static let photoPop = Animation.spring(response: 0.42, dampingFraction: 0.62)
+    static let photoPopScale: CGFloat = 0.6
     /// الحلقة الذهبية حول صورة العضو والزخرفة تحت الاسم ترسمان نفسيهما مرة — تباطؤ هادئ
     static let ringDraw = Animation.easeOut(duration: DSMotionRules.Timing.ringDraw).delay(DSMotionRules.Timing.ringDelay)
     static let ornamentDraw = Animation.easeOut(duration: DSMotionRules.Timing.ornamentDraw)
@@ -255,6 +258,17 @@ extension AnyTransition {
         return .asymmetric(
             insertion: AnyTransition.offset(x: o.insert).combined(with: .opacity).animation(DSMotion.stepIn),
             removal: AnyTransition.offset(x: o.remove).combined(with: .opacity).animation(DSMotion.stepOut))
+    }
+
+    /// الصورة الكبيرة في التسجيل بعد «ذكر»: تقفز من ٠٫٦ بنابض مرن مع تلاشٍ، وتختفي بتصغير وتلاشٍ أسرع.
+    /// «تقليل الحركة»: تلاشٍ فقط.
+    static func dsPhotoPop(reduceMotion: Bool) -> AnyTransition {
+        guard DSMotionRules.style(reduceMotion: reduceMotion) == .full else {
+            return AnyTransition.opacity.animation(DSMotion.fade)
+        }
+        return .asymmetric(
+            insertion: AnyTransition.scale(scale: DSMotion.photoPopScale).combined(with: .opacity).animation(DSMotion.photoPop),
+            removal: AnyTransition.scale(scale: 0.9).combined(with: .opacity).animation(DSMotion.revealOut))
     }
 
     /// حقل ينكشف داخل المربّع نفسه: ينزل قليلاً من تحت ما فوقه مع تلاشٍ، ويختفي بتلاشٍ أسرع.
