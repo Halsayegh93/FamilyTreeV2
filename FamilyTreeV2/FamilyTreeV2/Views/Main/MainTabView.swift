@@ -4,6 +4,11 @@ import UserNotifications
 struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    /// «صلاحيات محدودة» (R1): تبويب الديوانيات مخفي إن كان مقفولاً عليه
+    @ObservedObject private var lineageGate = LineageGateStore.shared
+    private var diwaniyasTabShown: Bool {
+        (appSettingsVM.settings.diwaniyasEnabled ?? true) && !lineageGate.hides(.diwaniyas)
+    }
     @ObservedObject private var langManager = LanguageManager.shared
     /// آخر تبويب يُحفظ مع حالة النافذة: إن سكّر النظام التطبيق بالخلفية (امتلاء الذاكرة) يرجع لنفس التبويب
     /// بدل الرئيسية (طلب المالك ٢٠٢٦-١٠-٣١). الإغلاق اليدوي بالسحب يمسحها فيبدأ من الرئيسية كالعادة.
@@ -85,7 +90,7 @@ struct MainTabView: View {
                     Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
                 }
 
-                if appSettingsVM.settings.diwaniyasEnabled ?? true {
+                if diwaniyasTabShown {
                     Tab(value: 2) {
                         AnyView(DiwaniyasView(selectedTab: crossfadingTab))
                             .dsSection(.diwaniyas)
@@ -129,7 +134,7 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
-            if appSettingsVM.settings.diwaniyasEnabled ?? true {
+            if diwaniyasTabShown {
                 AnyView(DiwaniyasView(selectedTab: crossfadingTab))
                     .dsSection(.diwaniyas)
                     .tabItem {
@@ -221,7 +226,7 @@ struct MainTabView: View {
         .onAppear {
             // تبويب محفوظ لم يعد متاحاً (الإدارة بلا صلاحية، الديوانيات مطفأة) → الرئيسية
             if (selectedTab == 4 && !authVM.canModerate)
-                || (selectedTab == 2 && !(appSettingsVM.settings.diwaniyasEnabled ?? true))
+                || (selectedTab == 2 && !diwaniyasTabShown)
                 || !(0...4).contains(selectedTab) {
                 selectedTab = 0
             }

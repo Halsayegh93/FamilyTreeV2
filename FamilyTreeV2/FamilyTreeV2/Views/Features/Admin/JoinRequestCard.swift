@@ -121,6 +121,8 @@ struct JoinRequestCard: View {
     let onOpenMatches: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// «من خارج العائلة» (R1)
+    @ObservedObject private var outsideJoins = OutsideJoinStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
@@ -148,6 +150,9 @@ struct JoinRequestCard: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 NotifFlow(spacing: DS.Spacing.xs) {
+                    if outsideJoins.contains(info.member.id) {
+                        OutsideJoinTag(member: info.member)
+                    }
                     if info.member.isFemale {
                         DSStatusChip(text: L10n.t("أنثى · شجرة النساء", "Female · women's tree"),
                                      icon: "figure.stand.dress", tint: DS.Color.female, size: .mini)

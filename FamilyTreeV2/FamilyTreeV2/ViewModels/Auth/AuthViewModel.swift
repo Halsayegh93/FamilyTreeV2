@@ -1650,7 +1650,9 @@ class AuthViewModel: ObservableObject {
     // MARK: - Registration
     
     /// - fatherId/fatherName: للأنثى (دخول النساء ٢٠٢٦-١٠-٢٤) الأب الذي اختارته — يُحمل في طلب الانضمام لا في ملفها
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, fatherName: String? = nil, avatarImage: UIImage? = nil) async {
+    /// `outsideFamily` (R1، ٢٠٢٦-١١-٢٧): التسجيل «من خارج العائلة» — العائلة نص حرّ في `family_name`، وطلب الانضمام بعلامة
+    /// `SignupOriginRules.outsideMarker` تراها الإدارة في «الوارد» (بلا مطابقات بالاسم من شجرة الرجال)
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, fatherName: String? = nil, avatarImage: UIImage? = nil, outsideFamily: Bool = false) async {
         self.isLoading = true
         self.registrationError = nil
         guard let user = try? await supabase.auth.session.user else {
@@ -1710,7 +1712,7 @@ class AuthViewModel: ObservableObject {
         
         // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه — وقبلها ملف شجرة يحمل
         // رقمه ولم يتبنّه السيرفر: مطابقة تربطها الإدارة («ربط بالشجرة»)، لا نقل على الجهاز (ب-٦)
-        let nameMatchedIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
+        let nameMatchedIds = outsideFamily ? [] : await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
         let phoneMatchedIds = await phoneMatchedProfileIds(normalizedPhone, excluding: user.id).map(\.uuidString)
         let matchedMemberIds = phoneMatchedIds + nameMatchedIds.filter { !phoneMatchedIds.contains($0) }
 
@@ -1804,10 +1806,15 @@ class AuthViewModel: ObservableObject {
                 if !cleanFather.isEmpty { fatherInfo += "|father_name:\(cleanFather)" }
             }
             let matchInfo: String
-            if matchedMemberIds.isEmpty {
-                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة" + fatherInfo
+            if outsideFamily {
+                // العلامة قبل matched_ids — قارئها يأخذ كل ما بعدها (`fetchMatchedMemberIds`)
+                matchInfo = "طلب انضمام — من خارج العائلة" + SignupOriginRules.outsideMarker
+                    + (matchedMemberIds.isEmpty ? "" : "|matched_ids:\(matchedMemberIds.joined(separator: ","))")
+            } else if matchedMemberIds.isEmpty {
+                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة" + fatherInfo + SignupOriginRules.familyMarker
             } else {
-                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة" + fatherInfo
+                // «من العائلة» (R1): العلامة قبل matched_ids — قارئها يأخذ كل ما بعدها
+                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة" + fatherInfo + SignupOriginRules.familyMarker
                     + "|matched_ids:\(matchedMemberIds.joined(separator: ","))"
             }
             

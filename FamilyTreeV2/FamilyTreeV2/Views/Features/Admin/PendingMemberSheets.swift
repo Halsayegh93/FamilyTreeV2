@@ -105,7 +105,12 @@ struct LinkToExistingMemberSheet: View {
                 candidatesSection
             }
         }
-        .task { daughterSonsReady = await DaughterSons.isAvailable() }
+        .task {
+            daughterSonsReady = await DaughterSons.isAvailable()
+            // طلب «من خارج العائلة» (R1): خيار «ابن بنت» مختار مسبقاً
+            await OutsideJoinStore.shared.refresh()
+            if daughterSonsReady && OutsideJoinStore.shared.contains(pendingMember.id) { asDaughterSon = true }
+        }
         .dsAlert(DaughterSons.text("option_title", "ابن بنت من خارج العائلة", "A daughter's son from outside the family"),
                  isPresented: $showDaughterSonConfirm) {
             Button(L10n.t("موافقة", "Approve")) { approveAsDaughterSon() }
@@ -572,6 +577,7 @@ struct LinkWomanAccountSheet: View {
 
     private func load() async {
         guard !loaded else { return }
+        await OutsideJoinStore.shared.refresh()
         let info = await adminRequestVM.fetchWomanJoinRequest(for: pendingMember.id)
         let fetched = (try? await WomenStore.fetch()) ?? WomenStore.cache
         requestInfo = info
@@ -690,6 +696,13 @@ struct LinkWomanAccountSheet: View {
             onSubmit: { showConfirm = true },
             onCancel: { dismiss() }
         ) {
+            // «من خارج العائلة» (R1): قبول الانضمام ثم «استكمال التسجيل» من التطبيق — بدل الربط تحت أب
+            if OutsideJoinStore.shared.contains(pendingMember.id) {
+                OutsideJoinApproveSection(member: pendingMember) {
+                    onLinked?()
+                    dismiss()
+                }
+            }
             fatherSection
             if loaded {
                 daughtersSection

@@ -6,6 +6,8 @@ struct HomeNewsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    /// «صلاحيات محدودة» (R1): مداخل الأقسام المقفولة مخفية تماماً
+    @ObservedObject private var lineageGate = LineageGateStore.shared
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @Environment(\.colorScheme) private var colorScheme
@@ -484,7 +486,7 @@ struct HomeNewsView: View {
                 cascade: 1,
                 action: { selectedTab = 1 }
             )
-            if appSettingsVM.settings.diwaniyasEnabled ?? true {
+            if (appSettingsVM.settings.diwaniyasEnabled ?? true) && !lineageGate.hides(.diwaniyas) {
                 unifiedTile(
                     title: L10n.t("الديوانيات", "Diwaniyas"),
                     icon: AppSection.diwaniyas.symbol,   // «مجلس» الموحّد
@@ -503,15 +505,17 @@ struct HomeNewsView: View {
     // MARK: - Quick Access — الأقسام التي لا تبويب لها
     /// المكتبة / المشاريع / التواصل — المشاريع تختفي إن عُطّلت من الإعدادات.
     private func quickAccessGrid(tileHeight: CGFloat) -> some View {
-        let projectsOn = appSettingsVM.settings.projectsEnabled ?? true
+        let projectsOn = (appSettingsVM.settings.projectsEnabled ?? true) && !lineageGate.hides(.projects)
+        let libraryOn = !lineageGate.hides(.library)
 
         return LazyVGrid(
             columns: Array(
                 repeating: GridItem(.flexible(), spacing: tileSpacing),
-                count: projectsOn ? 3 : 2
+                count: 1 + (projectsOn ? 1 : 0) + (libraryOn ? 1 : 0)
             ),
             spacing: tileSpacing
         ) {
+            if libraryOn {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "books.vertical.fill",
@@ -523,6 +527,7 @@ struct HomeNewsView: View {
                 isNew: newDots.hasNew(.library),
                 action: { activeSubPage = .archive }
             )
+            }
             if projectsOn {
                 unifiedTile(
                     title: L10n.t("مشاريع العائلة", "Family Projects"),

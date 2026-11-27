@@ -26,7 +26,8 @@ struct RootView: View {
                 AnyView(SplashScreenView())
 
             case .authenticatedNoProfile:
-                AnyView(RegistrationView())
+                // «التسجيل»: «من العائلة» (RegistrationView كما هو) أو «من خارج العائلة» (R1)
+                AnyView(SignupOriginFlow())
 
             case .pendingApproval:
                 AnyView(WaitingForApprovalView())

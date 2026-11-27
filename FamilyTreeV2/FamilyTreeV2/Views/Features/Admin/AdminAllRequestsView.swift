@@ -278,6 +278,10 @@ struct AdminAllRequestsView: View {
     @State private var doorOpen = false
     @State private var showsPostReview = false
     @ObservedObject private var postReview = PostReviewStore.shared
+    /// طلبات الانضمام «من خارج العائلة» (R1) — شارة الصفّ
+    @ObservedObject private var outsideJoins = OutsideJoinStore.shared
+    /// «طلبات انضمام من العائلة / من خارج العائلة» (المالك ٢٠٢٦-١١-٢٧) — شرائح بأعدادها فوق الطلبات
+    @State private var joinFilter: SignupOriginRules.JoinFilter = .all
 
     // Join request states
     @State private var memberToLink: FamilyMember? = nil
@@ -341,6 +345,7 @@ struct AdminAllRequestsView: View {
             }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .task { await start() }
+            .task { await OutsideJoinStore.shared.refresh() }
     }
 
     private func pageChrome(_ list: AnyView, _ model: InboxModel) -> some View {
@@ -699,7 +704,11 @@ struct AdminAllRequestsView: View {
         let entries = sortedAllItems.map(entry)
         let searched = searchedEntries(entries)
         let current = filters
-        let visible = searched.filter { L.matches($0.fact, current, workflowOn: workflowOn) }
+        let joinFilter = self.joinFilter
+        let visible = searched.filter {
+            L.matches($0.fact, current, workflowOn: workflowOn)
+                && SignupOriginRules.passes(joinFilter, origin: joinOrigin($0.item))
+        }
         let phase = L.phase(storeHealth, relevant: relevantStores)
         let ready = phase != .loading && phase != .failed
         return InboxModel(entries: entries,
@@ -709,6 +718,44 @@ struct AdminAllRequestsView: View {
                           filterSet: filterSet(facts: searched.map(\.fact), ready: ready, workflowOn: workflowOn),
                           header: L.headerCounts(entries.map(\.fact), workflowOn: workflowOn),
                           phase: phase)
+    }
+
+    /// مصدر طلب الانضمام (nil لغير الانضمام)
+    private func joinOrigin(_ item: AllItem) -> SignupOriginRules.JoinOrigin? {
+        guard case .join(let m) = item else { return nil }
+        return outsideJoins.contains(m.id) ? .outside : .family
+    }
+
+    /// طلبات «استكمال التسجيل» (الوالدة من العائلة) — تُعدّ مع «من خارج العائلة»، وبيتها صفحة الطلبات الأخرى
+    private var typedLineageCount: Int {
+        adminRequestVM.lineageRequests.filter { SignupOriginRules.isTypedLineage(details: $0.details) }.count
+    }
+
+    /// شرائح المصدر بأعدادها — تظهر حين يوجد طلب انضمام أو «استكمال التسجيل»
+    @ViewBuilder
+    private func joinOriginChips(_ m: InboxModel) -> some View {
+        let counts = SignupOriginRules.originCounts(joins: m.entries.compactMap { joinOrigin($0.item) },
+                                                    typedLineage: typedLineageCount)
+        if counts.family + counts.outside > 0 && !isSelectMode {
+            AnyView(DSFilterChips(options: [
+                DSFilterOption(id: SignupOriginRules.JoinFilter.all, title: L10n.t(SignupOriginRules.Ar.inboxAll, "All")),
+                DSFilterOption(id: .family, title: L10n.t(SignupOriginRules.Ar.inboxFamilyJoins, "Join requests from the family"),
+                               count: counts.family),
+                DSFilterOption(id: .outside, title: L10n.t(SignupOriginRules.Ar.inboxOutsideJoins, "Join requests from outside the family"),
+                               count: counts.outside)
+            ], selection: $joinFilter, style: .admin))
+            .adminPageRow(top: DS.Spacing.sm, bottom: 0)
+            if joinFilter == .outside && typedLineageCount > 0 {
+                AnyView(AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
+                    AdminInboxDoorRow(icon: "arrow.triangle.branch", tint: DS.Color.female,
+                                      title: L10n.t(SignupOriginRules.Ar.inboxCompleteDoor, "Registration completion requests"),
+                                      subtitle: DSNumber.grouped(typedLineageCount)) {
+                        open(.policy(nil))
+                    }
+                })
+                .adminPageRow(top: DS.Spacing.sm, bottom: 0)
+            }
+        }
     }
 
     private func entry(_ item: AllItem) -> Entry {
@@ -1359,6 +1406,7 @@ struct AdminAllRequestsView: View {
                                          openFilters: { showsFilters = true }))
                     .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
             }
+            AnyView(joinOriginChips(m))
             AnyView(notices(m))
             if let n = approveAllChildrenCount {
                 AnyView(DSButton(AdminInboxText.approveAllChildren(n), icon: "checkmark.circle", role: .cancel) {
@@ -1768,6 +1816,9 @@ struct AdminAllRequestsView: View {
         switch item {
         case .join(let m):
             let base = L10n.t("طلب انضمام", "Join request")
+            if outsideJoins.contains(m.id) {
+                return base + " · " + L10n.t(SignupOriginRules.Ar.inboxTag, "From outside the family")
+            }
             if m.isFemale { return base + L10n.t(" · أنثى · تُربط بشجرة النساء", " · Female · goes in the women's tree") }
             return base + (joinTiers(for: m).suggested != nil
                            ? L10n.t(" · له تطابق في الشجرة", " · matches the tree")

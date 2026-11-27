@@ -4,29 +4,19 @@ struct RegistrationView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
     @State private var fullName: String = ""
-    @State private var familyName: String = ""
+    /// «من العائلة» (R1، المالك ٢٠٢٦-١١-٢٧): العائلة «المحمدعلي» ضمناً — لا اختيار للعائلة ولا للوالد؛
+    /// الإدارة تربطه بعد التحقق من اسم والده في الشجرة («ربط بالشجرة» / «ربط بشجرة النساء»)
+    private let familyName = SignupOriginRules.familyName
     /// مسافة علوية إضافية — تستخدمها المعاينة حتى لا يغطّي شريطها المحتوى
     var topInset: CGFloat = 0
-
-    @StateObject private var familyNamesVM = FamilyNamesViewModel()
-    /// انتهى أول جلب لقائمة العوائل؟ — تلميح «القائمة فارغة» لا يومض قبل الجلب
-    @State private var familiesFetched = false
-    /// إدخال يدوي لاسم العائلة — يُستخدم إن تعذّر جلب القائمة أو لم تكن مدرجة
-    @State private var showManualFamily = false
-    @State private var manualFamilyText = ""
+    /// الرجوع إلى «التسجيل» (الخياران «من العائلة / من خارج العائلة»، R1) — nil = بلا رجوع كما كان
+    var onBack: (() -> Void)? = nil
 
     @State private var birthDate: Date = Calendar.current.date(byAdding: .year, value: -20, to: Date()) ?? Date()
     /// اختار تاريخه فعلاً؟ — وإلا لا يُحفظ تاريخ «قبل ٢٠ سنة» الافتراضي كأنه تاريخ ميلاده (حدث ٢٠٢٦-١٠-٠٥)
     @State private var birthDateChosen = false
     /// الجنس مطلوب بلا اختيار مسبق (الدفعة ١٢ — كان «ذكر» ثابتاً فيُسجَّل كل منضم ذكراً): «male» أو «female»
     @State private var selectedGender: String = ""
-    /// دخول النساء (٢٠٢٦-١٠-٢٤): الأنثى تختار أباها من شجرة الرجال — يُحمل في طلب الانضمام لا في ملفها
-    /// (مكانها شجرة النساء تحت أبيها، تربطها الإدارة)
-    @State private var selectedFather: FamilyMember? = nil
-    @State private var showFatherPicker = false
-    @State private var fatherSearch = ""
-    @State private var fatherResults: [FamilyMember] = []
-    @State private var fatherSearching = false
     @State private var selectedImage: UIImage? = nil
     /// الصورة اختيارية للجميع (قرار المالك ٢٠٢٦-١٠-٢٨، المراجعة الثانية) — لا تمنع الإرسال أبداً
     private var photoMissing: Bool { false }
@@ -68,12 +58,8 @@ struct RegistrationView: View {
                                               index: 0) {
                                 // كل حقل خلف AnyView — مكدس iOS 16 (انظر RootView)
                                 AnyView(nameFieldSection)
-                                AnyView(familyNameSection)
                                 AnyView(birthDateSection)
                                 AnyView(genderSection)
-                                if selectedGender == "female" {
-                                    AnyView(fatherSection)
-                                }
                             }
                         }
                         .padding(.horizontal, DS.Spacing.lg)
@@ -102,22 +88,6 @@ struct RegistrationView: View {
         } message: {
             Text(authVM.registrationError ?? "")
         }
-        .dsAlert(L10n.t("اسم العائلة", "Family name"), isPresented: $showManualFamily) {
-            TextField(L10n.t("مثال: الصايغ", "e.g. Al-Sayegh"), text: $manualFamilyText)
-                .dsAlertField()
-            Button(L10n.t("حفظ", "Save")) {
-                let t = manualFamilyText.trimmingCharacters(in: .whitespaces)
-                if !t.isEmpty { familyName = t }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        }
-        .dsCenterBox(isPresented: $showFatherPicker) {
-            fatherPickerBox
-        }
-        .task {
-            await familyNamesVM.fetch()
-            familiesFetched = true
-        }
         .onAppear {
             Log.info("[REGISTRATION] RegistrationView ظهرت — البروفايل غير موجود. phone=\(Log.masked(authVM.phoneNumber))")
             // «تقليل الحركة»: الصورة تظهر بتلاشٍ فقط بلا تكبير
@@ -135,11 +105,11 @@ struct RegistrationView: View {
 
     // MARK: - Top Bar — الرأس الملوّن الموحّد للصفحات الفرعية (كان نسخة يدوية بشريط سدو قديم)
     private var topBar: some View {
-        DSSubPageHeader(title: L10n.t("إكمال البيانات", "Complete Profile"),
-                        subtitle: L10n.t("خطوة واحدة وتنضم لشجرة العائلة",
-                                         "One step to join the family tree"),
+        DSSubPageHeader(title: L10n.t(SignupOriginRules.Ar.chooseTitle, "Registration"),
+                        subtitle: L10n.t(SignupOriginRules.Ar.fromFamily, "From the family"),
                         icon: "person.badge.plus",
-                        nav: .none) {
+                        nav: onBack == nil ? .none : .back,
+                        onBack: onBack) {
             // تسجيل الخروج — بزرّ الرأس الموحّد في موضع الإغلاق
             DSHeaderButton(symbol: "rectangle.portrait.and.arrow.right",
                            label: L10n.t("تسجيل الخروج", "Sign out")) {
@@ -180,7 +150,7 @@ struct RegistrationView: View {
             // حقل المربّعات الموحّد (كان `DSTextField` القديم)
             DSComposerField(
                 icon: "person.fill",
-                label: L10n.t("الاسم الرباعي", "Full Name (4 parts)") + " " + L10n.t("(باللغة العربية)", "(in Arabic)"),
+                label: L10n.t(SignupOriginRules.Ar.familyFullName, "Full Name (4 parts)") + " " + L10n.t("(باللغة العربية)", "(in Arabic)"),
                 placeholder: L10n.t("محمد عبدالله علي أحمد", "Mohammad Abdullah Ali Ahmad"),
                 text: $fullName,
                 tint: DS.Color.primary,
@@ -192,115 +162,14 @@ struct RegistrationView: View {
                 }
             }
 
+            // العائلة «المحمدعلي» ضمناً، والربط بالوالد تتحقق منه الإدارة
+            Text(L10n.t(SignupOriginRules.Ar.familyNameHint, "Family: Al-Mohammad Ali. The admins link you to your father after checking his name in the tree."))
+                .dsFont(.footnote)
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
             if hasAttemptedSubmit && fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 validationError(L10n.t("الاسم مطلوب", "Name is required"))
-            }
-        }
-    }
-
-    // MARK: - Family Name
-    /// اختيار العائلة — بنفس هيئة حقل «الاسم الرباعي» حرفياً (أيقونة + عنوان
-    /// + قيمة) فتبدو كل الحقول قطعة واحدة.
-    private var familyNameSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Menu {
-                ForEach(familyNamesVM.activeNames, id: \.self) { option in
-                    Button {
-                        familyName = option
-                    } label: {
-                        if familyName == option {
-                            Label(option, systemImage: "checkmark")
-                        } else {
-                            Text(option)
-                        }
-                    }
-                }
-                // القائمة لا تُترك فارغة: إعادة محاولة + كتابة يدوية
-                if familyNamesVM.activeNames.isEmpty {
-                    Button {
-                        Task { await familyNamesVM.fetch(force: true) }
-                    } label: {
-                        Label(L10n.t("إعادة تحميل القائمة", "Reload list"),
-                              systemImage: "arrow.clockwise")
-                    }
-                }
-                Divider()
-                Button {
-                    manualFamilyText = familyName
-                    showManualFamily = true
-                } label: {
-                    Label(L10n.t("كتابة اسم العائلة يدوياً", "Type family name"),
-                          systemImage: "pencil")
-                }
-            } label: {
-                // نفس صفّ حقول المربّعات: قرص مجسّم + عنوان + قيمة
-                HStack(spacing: DS.Spacing.sm) {
-                    DSFieldIcon(name: "person.2.fill", tint: DS.Color.accent)
-
-                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                        HStack(spacing: DS.Spacing.xxs) {
-                            Text(L10n.t("العائلة", "Family"))
-                                .foregroundColor(DS.Color.fieldLabel)
-                            Text("*").foregroundColor(DS.Color.error)
-                        }
-                        .dsFieldFont(.label)
-
-                        Text(familyName.isEmpty
-                             ? L10n.t("اختر عائلتك", "Choose your family")
-                             : familyName)
-                            .dsFieldFont(.fieldValue)
-                            .foregroundColor(familyName.isEmpty
-                                             ? DS.Color.textTertiary
-                                             : DS.Color.textPrimary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    if familyNamesVM.isLoading {
-                        ProgressView().scaleEffect(0.7)   // دوّارة صغيرة داخل الحقل
-                    } else {
-                        Image(systemName: "chevron.up.chevron.down")
-                            .dsGlyph(DS.Glyph.sm, weight: .semibold)
-                            .foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-                .frame(minHeight: DSBox.fieldMinHeight)
-                .dsRowBox()
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if hasAttemptedSubmit && familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                validationError(L10n.t("اختيار العائلة مطلوب", "Choosing a family is required"))
-            }
-
-            // ملاحظة الربط — الاسم الأخير هو العائلة المختارة (كانت تحت الجنس المخفي — مكانها تحت العائلة)
-            Text(familyName.isEmpty
-                 ? L10n.t("العائلة التي تختارها تُضاف تلقائياً كاسم أخير",
-                          "The family you choose is added automatically as your last name")
-                 : L10n.t("اسمك الأخير سيكون: \(familyName)",
-                          "Your last name will be: \(familyName)"))
-            .dsFont(.footnote)
-            .foregroundColor(DS.Color.textTertiary)
-            .fixedSize(horizontal: false, vertical: true)
-
-            // فقط إن جاءت القائمة فارغة فعلاً (بعد انتهاء الجلب بلا خطأ)
-            if familiesFetched
-                && familyNamesVM.errorMessage == nil
-                && !familyNamesVM.isLoading
-                && familyNamesVM.activeNames.isEmpty {
-                Text(L10n.t("القائمة فارغة — تظهر العوائل بعد تسجيل الدخول",
-                            "Empty list — families load after sign-in"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let err = familyNamesVM.errorMessage {
-                Text(L10n.t("تعذّر جلب قائمة العوائل: \(err)",
-                            "Could not load families: \(err)"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.error)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -343,83 +212,9 @@ struct RegistrationView: View {
                 validationError(L10n.t("اختيار الجنس مطلوب", "Choosing a gender is required"))
             }
         }
-        // الأب لغير الأنثى لا يُحمل
+        // الأنثى بلا صورة — تُمسح المختارة قبل التبديل
         .onChange(of: selectedGender) { g in
-            if g != "female" { selectedFather = nil }
-            // الأنثى بلا صورة — تُمسح المختارة قبل التبديل
             if g == "female" { selectedImage = nil }
-        }
-    }
-
-    // MARK: - Father (الأنثى) — صفّ يفتح منتقي الأعضاء الموحّد ببحث السيرفر
-    private var fatherSection: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-            Button {
-                if fatherSearch.isEmpty { fatherSearch = suggestedFatherQuery }
-                showFatherPicker = true
-            } label: {
-                DSRow(icon: "figure.and.child.holdinghands", tint: DS.Color.palm,
-                      title: L10n.t("الأب", "Father"),
-                      subtitle: selectedFather?.displayFullName ?? L10n.t("اختاري أباك من الشجرة", "Pick your father from the tree")) {
-                    DSStateIcon("magnifyingglass", tint: DS.Color.primary, size: DS.Icon.row)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(L10n.t("يفتح البحث عن الأب", "Opens the father search"))
-
-            Text(L10n.t("تُربطين بشجرة النساء تحت أبيك — يسهّل على الإدارة قبول طلبك",
-                        "You'll be placed in the women's tree under your father — it helps the admins approve you"))
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    /// اسم الأب المقترح للبحث: الاسم المكتوب بلا الاسم الأول
-    private var suggestedFatherQuery: String {
-        let parts = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
-        return parts.count > 1 ? parts.dropFirst().joined(separator: " ") : ""
-    }
-
-    private var fatherPickerBox: some View {
-        DSMemberPickerBox(
-            title: L10n.t("اختيار الأب", "Choose father"),
-            subtitle: L10n.t("من شجرة العائلة", "From the family tree"),
-            icon: "figure.and.child.holdinghands",
-            candidates: fatherResults,
-            search: $fatherSearch,
-            isLoading: fatherSearching,
-            requiresSpecificQuery: true,
-            searchLabel: L10n.t("اسم الأب", "Father's name"),
-            searchPlaceholder: L10n.t("اسم الأب الثلاثي", "Father's three-part name"),
-            hintTitle: L10n.t("اكتبي اسم أبيك الثلاثي", "Type your father's three-part name"),
-            hintMessage: L10n.t("بدون اسم العائلة", "Without the family name"),
-            noMatchTitle: L10n.t("لم نجد هذا الاسم", "Name not found"),
-            emptyMessage: L10n.t("جرّبي الاسم بدون اسم العائلة، أو اتركيه — وإذا أمك من بنات العائلة تختارينها بعد الإرسال",
-                                 "Try without the family name, or skip it — if your mother is a family daughter you can pick her after sending"),
-            selectedId: selectedFather?.id,
-            onPick: { m in
-                selectedFather = m
-                showFatherPicker = false
-            },
-            onCancel: { showFatherPicker = false }
-        )
-        // بحث السيرفر بعد توقّف الكتابة قليلاً
-        .task(id: fatherSearch) {
-            let q = fatherSearch.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard q.split(whereSeparator: \.isWhitespace).count >= 2 else {
-                fatherResults = []
-                fatherSearching = false
-                return
-            }
-            fatherSearching = true
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled else { return }
-            let found = await authVM.searchFatherCandidates(q)
-            guard !Task.isCancelled else { return }
-            fatherResults = found
-            fatherSearching = false
         }
     }
 
@@ -467,8 +262,6 @@ struct RegistrationView: View {
                             familyName: trimmedFamily,
                             birthDate: birthDate,
                             gender: selectedGender,
-                            fatherId: selectedGender == "female" ? selectedFather?.id : nil,
-                            fatherName: selectedGender == "female" ? selectedFather?.fullName : nil,
                             avatarImage: selectedGender == "female" ? nil : selectedImage
                         )
                     }

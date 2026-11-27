@@ -31,12 +31,15 @@ final class AdminMemberCardFamilyStore: ObservableObject {
         let approvedBy: UUID?
         let approvedAt: String?
         let womenNodeId: UUID?
+        /// «صلاحيات محدودة» (الأم ليست من العائلة، 20261127160000) — للإدارة وحدها؛ قبل الترحيل غائب
+        let limitedAt: String?
 
         enum CodingKeys: String, CodingKey {
             case profileId = "profile_id"
             case approvedBy = "approved_by"
             case approvedAt = "approved_at"
             case womenNodeId = "women_node_id"
+            case limitedAt = "limited_at"
         }
     }
 
@@ -59,7 +62,8 @@ final class AdminMemberCardFamilyStore: ObservableObject {
     func refreshLineage(_ memberId: UUID) async {
         do {
             let rows: [LineageRow] = try await SupabaseConfig.client.from("daughter_son_lineage")
-                .select("profile_id, approved_by, approved_at, women_node_id")
+                // «*» لا قائمة أعمدة: `limited_at` يصل بعد ترحيل 20261127160000 ولا يكسر القراءة قبله
+                .select("*")
                 .eq("profile_id", value: memberId.uuidString)
                 .limit(1)
                 .execute().value
@@ -218,6 +222,10 @@ struct AdminMemberCardFamily {
         case .family:
             return [Self.title(.family), branch].compactMap { $0 }.joined(separator: " · ")
         case .daughterSon:
+            // «صلاحيات محدودة» — الإدارة وحدها ترى الحالة (المالك: لا يُعرض للعضو شيء)
+            if lineageRow?.limitedAt != nil {
+                return Self.title(.daughterSon) + " · " + L10n.t(SignupOriginRules.Ar.limitedTag, "Limited access")
+            }
             if let mom = Self.firstName(mother) {
                 return Self.title(.daughterSon) + " · " + L10n.t("أمّه \(mom)", "mother \(mom)")
             }

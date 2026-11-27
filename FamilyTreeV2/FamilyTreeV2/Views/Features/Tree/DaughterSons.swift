@@ -56,8 +56,13 @@ enum DaughterSons {
     }
 
     /// القائمة من السيرفر (مصفوفة نصوص)، وإلا الافتراضي — مصفوفة فارغة = لا قفل
-    @MainActor static var lockedSections: Set<LockedSection> {
-        guard let arr = config.values["daughter_sons_locked_sections"] as? [Any] else { return Set(LockedSection.defaults) }
+    @MainActor static var lockedSections: Set<LockedSection> { sections("daughter_sons_locked_sections") }
+
+    /// «صلاحيات محدودة» الدائمة (الوالدة من خارج العائلة): `outside_member_locked_sections` — المالك يحدّدها لاحقاً
+    @MainActor static var limitedLockedSections: Set<LockedSection> { sections("outside_member_locked_sections") }
+
+    @MainActor private static func sections(_ key: String) -> Set<LockedSection> {
+        guard let arr = config.values[key] as? [Any] else { return Set(LockedSection.defaults) }
         return Set(arr.compactMap { ($0 as? String).flatMap(LockedSection.init(rawValue:)) })
     }
 
@@ -72,7 +77,7 @@ enum DaughterSons {
     @MainActor static var motherHint: String {
         let n = motherMinParts
         return text("mother_hint",
-                    n == 3 ? "اكتب اسم أمك الثلاثي" : "اكتب اسم أمك: \(n) أسماء متتالية على الأقل",
+                    n == 3 ? "يُرجى كتابة اسم الوالدة الثلاثي" : "يُرجى كتابة اسم الوالدة: \(n) أسماء متتالية على الأقل",
                     n == 3 ? "Type your mother's three-part name" : "Type at least \(n) consecutive parts of your mother's name")
     }
 
@@ -184,9 +189,11 @@ enum DaughterSons {
         let completed: Bool
         let wasRejected: Bool
         let rejectedReason: String?
+        /// «صلاحيات محدودة» دائمة — الوالدة من خارج العائلة (20261127160000؛ قبله غائب = false)
+        var limited: Bool? = nil
 
         enum CodingKeys: String, CodingKey {
-            case flagged, needs, pending, completed
+            case flagged, needs, pending, completed, limited
             case wasRejected = "was_rejected"
             case rejectedReason = "rejected_reason"
         }
@@ -261,13 +268,15 @@ enum DaughterSons {
         }
     }
 
-    static func decide(requestId: UUID, approve: Bool, reason: String?) async throws {
+    /// `motherId`: الوالدة التي اختارها المراجع لطلب «استكمال التسجيل» (`outside_typed`، 20261127160000) — يُرسل فقط إن وُجد
+    static func decide(requestId: UUID, approve: Bool, reason: String?, motherId: UUID? = nil) async throws {
         let r = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let params: [String: AnyEncodable] = [
+        var params: [String: AnyEncodable] = [
             "p_request_id": AnyEncodable(requestId.uuidString),
             "p_decision": AnyEncodable(approve ? "approve" : "reject"),
             "p_reason": AnyEncodable((r?.isEmpty == false) ? r : nil)
         ]
+        if let motherId { params["p_mother_id"] = AnyEncodable(motherId.uuidString) }
         _ = try await SupabaseConfig.client.rpc("decide_lineage_request", params: params).execute()
     }
 
@@ -290,16 +299,16 @@ enum DaughterSons {
         case "has_father": return L10n.t("الحساب مربوط بشجرة الرجال — استعمل «ربط بالشجرة».", "The account is in the men's tree — use «Link to tree».")
         case "already_linked": return L10n.t("الحساب مربوط بشجرة النساء من قبل.", "The account is already in the women's tree.")
         case "already_handled", "request_not_found": return L10n.t("عولج هذا الطلب من قبل — لم يُطبَّق شيء.", "This request was already handled — nothing was applied.")
-        case "already_pending": return L10n.t("طلبك عند الإدارة — انتظر ردّها.", "Your request is with the admins — please wait.")
-        case "not_needed": return L10n.t("حسابك مكتمل.", "Your account is already complete.")
-        case "resubmit_limit": return L10n.t("وصلت حد المحاولات — تواصل مع الإدارة.", "You've reached the limit — contact the admins.")
-        case "bad_mother": return L10n.t("اختر أمّك من بنات العائلة.", "Choose your mother from the family's daughters.")
+        case "already_pending": return L10n.t("الطلب لدى الإدارة، ويُرجى انتظار الرد.", "Your request is with the admins — please wait.")
+        case "not_needed": return L10n.t("التسجيل مكتمل.", "Your account is already complete.")
+        case "resubmit_limit": return L10n.t("تم بلوغ الحد الأقصى للمحاولات، ويُرجى التواصل مع الإدارة.", "You've reached the limit — contact the admins.")
+        case "bad_mother": return L10n.t("يُرجى اختيار الوالدة من بنات العائلة.", "Choose your mother from the family's daughters.")
         case "bad_father", "mother_changed": return L10n.t("زوج الأم تغيّر — حدّث الصفحة واختر من جديد.", "The mother's husband changed — refresh and choose again.")
         case "father_in_family": return L10n.t("الأب من العائلة — يُربط من «ربط بالشجرة».", "The father is from the family — use «Link to tree».")
-        case "mother_has_husband": return L10n.t("لها زوج مسجّل — اختره.", "She has a recorded husband — choose him.")
+        case "mother_has_husband": return L10n.t("للوالدة زوج مسجّل، لذا يُرجى اختياره أو التواصل مع الإدارة.", "She has a recorded husband — choose him or contact the admins.")
         case "has_husband": return L10n.t("لها زوج مسجّل.", "She already has a husband.")
         case "name_required": return L10n.t("اكتب الاسم كاملاً.", "Type the full name.")
-        case "mother_father_not_found": return L10n.t("اختر أبوها من شجرة العائلة.", "Choose her father from the family tree.")
+        case "mother_father_not_found": return L10n.t("يُرجى اختيار والدها من شجرة العائلة.", "Choose her father from the family tree.")
         case "name_too_long": return L10n.t("الاسم طويل.", "The name is too long.")
         case "requester_gone": return L10n.t("صاحب الطلب لم يعد له حساب.", "The requester no longer has an account.")
         case "mother_has_other_husband":
@@ -362,7 +371,8 @@ final class LineageGateStore: ObservableObject {
     }
     func markSent() {
         if let s = status {
-            status = .init(flagged: s.flagged, needs: false, pending: true, completed: false, wasRejected: false, rejectedReason: nil)
+            status = .init(flagged: s.flagged, needs: false, pending: true, completed: false, wasRejected: false, rejectedReason: nil,
+                           limited: s.limited)
         }
         pageRequested = false
     }
@@ -370,15 +380,32 @@ final class LineageGateStore: ObservableObject {
     /// الحساب المقيّد: مُعلَّم كابن بنت ولم يكتمل (يحتاج أو قيد المراجعة) — حتى توافق الإدارة
     var isRestricted: Bool { status?.flagged == true && status?.completed == false }
     var isPending: Bool { isRestricted && status?.pending == true }
+    /// «صلاحيات محدودة» دائمة (أجاب «لا» على «هل الأم من العائلة؟») — بلا «استكمال التسجيل»، ولا يُعرض له شيء عنها
+    var isLimited: Bool { isRestricted && status?.limited == true }
+
+    /// القسم مخفي تماماً (لا يظهر مدخله) — «صلاحيات محدودة» فقط (المالك: «تكون الأشياء مخفية» بلا رسالة)
+    func hides(_ section: DaughterSons.LockedSection) -> Bool {
+        isLimited && DaughterSons.limitedLockedSections.contains(section)
+    }
+
+    /// «لا» على «هل الأم من العائلة؟» ← الحالة محلياً حتى يصل التحديث
+    func markLimited() {
+        if let s = status {
+            status = .init(flagged: s.flagged, needs: false, pending: false, completed: false, wasRejected: false,
+                           rejectedReason: nil, limited: true)
+        }
+        pageRequested = false
+    }
 
     /// القسم مقفول على هذا الحساب (القائمة من السيرفر)
     func isLocked(_ section: DaughterSons.LockedSection) -> Bool {
-        isRestricted && DaughterSons.lockedSections.contains(section)
+        guard isRestricted else { return false }
+        return (isLimited ? DaughterSons.limitedLockedSections : DaughterSons.lockedSections).contains(section)
     }
 
     /// يفتح صفحة «أكمل حسابك» (أو حالة «قيد المراجعة»)
     func openPage() {
-        guard isRestricted else { return }
+        guard isRestricted, !isLimited else { return }
         pageRequested = true
     }
 }
@@ -418,9 +445,14 @@ private struct LineageGateModifier: ViewModifier {
                 Task { await store.refresh() }
             }
             .fullScreenCover(isPresented: Binding(get: { showGate }, set: { if !$0 { debugShow = false; store.postponed = true; store.pageRequested = false } })) {
-                LineagePage(status: store.status, onSent: { store.markSent() },
+                CompleteRegistrationPage(status: store.status, onSent: { store.markSent() },
                             onLater: (DaughterSons.allowsLater || store.status?.needs != true)
-                                ? { debugShow = false; store.postponed = true; store.pageRequested = false } : nil)
+                                ? { debugShow = false; store.postponed = true; store.pageRequested = false } : nil,
+                            onLimited: {
+                                debugShow = false
+                                store.markLimited()
+                                Task { await store.refresh() }
+                            })
                     .interactiveDismissDisabled()
             }
     }
@@ -466,21 +498,23 @@ struct LineageLockedView: View {
 
     var body: some View {
         let pending = store.isPending
-        return DSEmptyView(
-            pending ? DaughterSons.text("locked_pending_title", "حسابك قيد المراجعة", "Your account is under review")
-                    : DaughterSons.text("locked_title", "يرجى إكمال الحساب لعرض هذا القسم", "Complete your account to see this section"),
+        // «صلاحيات محدودة»: لا رسالة ولا زرّ — المدخل نفسه مخفي (`hides`)، وهذا احتياط لمسار وصل إليه
+        if store.isLimited { return AnyView(Color.clear) }
+        return AnyView(DSEmptyView(
+            pending ? DaughterSons.text("locked_pending_title", SignupOriginRules.Ar.pendingTitle, "Your account is under review")
+                    : DaughterSons.text("locked_title", SignupOriginRules.Ar.lockedTitle, "Complete your registration to see this section"),
             message: pending
                 ? DaughterSons.text("locked_pending_body", "يُفتح هذا القسم فور موافقة الإدارة على البيانات.",
                                     "This section opens as soon as the admins approve your details.")
-                : DaughterSons.text("locked_body", "اختر أمك واكتب اسم أبوك، وبعد موافقة الإدارة يفتح لك.",
+                : DaughterSons.text("locked_body", SignupOriginRules.Ar.lockedBody,
                                     "Pick your mother and add your father's name; it opens once the admins approve."),
             section: section,
             icon: pending ? "hourglass" : "lock.fill",
-            actionTitle: pending ? nil : DaughterSons.text("locked_button", "أكمل حسابك", "Complete your account"),
+            actionTitle: pending ? nil : DaughterSons.text("locked_button", SignupOriginRules.Ar.completeTitle, "Complete registration"),
             actionIcon: pending ? nil : "person.crop.circle.badge.checkmark",
             style: style,
             action: pending ? nil : { if let onOpen { onOpen() } else { store.openPage() } }
-        )
+        ))
     }
 }
 
@@ -490,584 +524,42 @@ struct LineageHomeCard: View {
 
     var body: some View {
         if store.isRestricted, let s = store.status {
-            Button { store.openPage() } label: {
-                content(s).contentShape(Rectangle())
+            // «صلاحيات محدودة»: لا يُعرض له شيء عنها (المالك)
+            if !store.isLimited {
+                Button { store.openPage() } label: {
+                    content(s).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.t("يفتح «استكمال التسجيل»", "Opens «Complete registration»"))
             }
-            .buttonStyle(.plain)
-            .accessibilityHint(L10n.t("يفتح «أكمل حسابك»", "Opens «Complete your account»"))
         }
     }
 
     @ViewBuilder
     private func content(_ s: DaughterSons.Status) -> some View {
         if s.pending {
-            DSNoteCard(DaughterSons.text("home_pending_body", "يصلك إشعار فور موافقة الإدارة",
+            DSNoteCard(DaughterSons.text("home_pending_body", SignupOriginRules.Ar.sentBody,
                                          "We'll let you know as soon as the admins approve"),
-                       title: DaughterSons.text("home_pending_title", "حسابك قيد المراجعة", "Your account is under review"),
+                       title: DaughterSons.text("home_pending_title", SignupOriginRules.Ar.pendingTitle, "Your registration is under review"),
                        icon: "hourglass", tint: DS.Color.info)
         } else if s.wasRejected {
             DSNoteCard(s.rejectedReason.map { L10n.t("السبب: ", "Reason: ") + $0 }
-                       ?? DaughterSons.text("home_rejected_body", "لم تُعتمد البيانات السابقة، يرجى تعديلها وإرسالها.",
+                       ?? DaughterSons.text("home_rejected_body", "لم تُعتمد البيانات السابقة، ويُرجى تعديلها وإرسالها.",
                                             "Your previous details weren't confirmed — edit and send them."),
-                       title: DaughterSons.text("home_rejected_title", "راجع بياناتك وأرسلها من جديد",
+                       title: DaughterSons.text("home_rejected_title", SignupOriginRules.Ar.rejectedTitle,
                                                 "Review your details and send them again"),
                        icon: "arrow.uturn.backward.circle.fill", tint: DS.Color.warning)
         } else {
-            DSNoteCard(DaughterSons.text("home_body", "يرجى اختيار الأم وكتابة اسم الأب لإكمال الحساب وفتح جميع الأقسام.",
+            DSNoteCard(DaughterSons.text("home_body", SignupOriginRules.Ar.homeBody,
                                          "Pick your mother and add your father's name to complete your account and unlock everything."),
-                       title: DaughterSons.text("home_title", "أكمل حسابك", "Complete your account"),
+                       title: DaughterSons.text("home_title", SignupOriginRules.Ar.completeTitle, "Complete registration"),
                        icon: "person.crop.circle.badge.exclamationmark", tint: DS.Color.accent)
         }
     }
 }
 
-// MARK: - صفحة «أكمل حسابك» (كانت «نسبك»)
-
-struct LineagePage: View {
-    let status: DaughterSons.Status?
-    var onSent: () -> Void
-    /// nil = لا «لاحقاً» (الإعداد مطفأ)
-    var onLater: (() -> Void)?
-
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var memberVM: MemberViewModel
-
-    private enum Step { case intro, pick, sent }
-    @State private var step: Step
-    @State private var search = ""
-    /// نتائج البحث — لا قائمة قبل الاسم الثلاثي (`DaughterSons.motherMinParts`، طلب المالك ٢٠٢٦-١١-٠٧ للخصوصية)
-    @State private var results: [DaughterSons.MotherCandidate] = []
-    @State private var searching = false
-    @State private var mother: DaughterSons.MotherCandidate?
-    /// nil = لم يختر · `.registered` زوجها المسجّل (وإلا «اسم الأب الكامل» سطراً واحداً)
-    @State private var fatherChoice: FatherChoice?
-    /// «اسم أبوك الكامل» سطراً واحداً (طلب المالك ٢٠٢٦-١١-٠٧ — كل شي في صفحة واحدة)
-    @State private var fatherFull = ""
-    /// «ما لقيت أمي؟» (موافقة المالك ٢٠٢٦-١١-٠٧): اسمها + أبوها من شجرة الرجال + حية/متوفاة
-    @State private var newMotherMode = false
-    @State private var newMotherName = ""
-    @State private var newMotherFather: DaughterSons.ManCandidate?
-    @State private var newMotherDeceased = false
-    @State private var menSearch = ""
-    @State private var menResults: [DaughterSons.ManCandidate] = []
-    @State private var menSearching = false
-    @State private var deceased = false
-    @State private var busy = false
-    @State private var errorText: String?
-
-    private enum FatherChoice: Equatable { case registered(UUID) }
-
-    init(status: DaughterSons.Status?, onSent: @escaping () -> Void, onLater: (() -> Void)?) {
-        self.status = status
-        self.onSent = onSent
-        self.onLater = onLater
-        // أُرسل وينتظر الإدارة ← «حسابك قيد المراجعة» مباشرة؛ وإلا البحث عن الأم مباشرة بلا مقدّمة
-        // (عينة «٢ و٣» اعتمدها المالك ٢٠٢٦-١١-٢٥: شاشة وحدة بدل ثلاث)
-        _step = State(initialValue: status?.pending == true ? .sent : .pick)
-    }
-
-    /// كتب الاسم الثلاثي (أو ما يطلبه السيرفر) — قبله لا قائمة
-    private var queryLongEnough: Bool { NameSearch.words(search).count >= DaughterSons.motherMinParts }
-    /// زوجها من العائلة (ملف في شجرة الرجال) — مكان ابنه «ربط بالشجرة»
-    private var husbandInFamily: Bool { mother?.husbandInFamily ?? false }
-    /// اسم الأب من اسمه المسجّل (بلا اسمه الأول) — يكمّل الناقص ويعدّله (طلب المالك ٢٠٢٦-١١-٠٨ «يكمل الى ناقص»)
-    private func prefillFather() {
-        guard fatherFull.isEmpty, let me = authVM.currentUser else { return }
-        let full = me.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let units = PersonName.units(full.isEmpty ? me.firstName : full)
-        guard units.count > 1 else { return }
-        fatherFull = units.dropFirst().joined(separator: " ")
-    }
-
-    private var fatherWords: Int { fatherFull.split(whereSeparator: \.isWhitespace).count }
-    private var typedComplete: Bool { fatherWords >= DaughterSons.fatherMinWords }
-    private var newMotherReady: Bool {
-        !newMotherName.trimmingCharacters(in: .whitespaces).isEmpty && newMotherFather != nil
-    }
-    private var canSend: Bool {
-        if newMotherMode { return newMotherReady && typedComplete }
-        guard let m = mother else { return false }
-        if m.husbandId != nil {
-            if case .registered = fatherChoice { return !husbandInFamily }
-            return false
-        }
-        return typedComplete
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollView {
-                VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                    switch step {
-                    case .intro: introContent
-                    case .pick: pickContent
-                    case .sent: sentContent
-                    }
-                    if let errorText {
-                        DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
-                    }
-                }
-                .padding(DS.Spacing.lg)
-            }
-            footer
-        }
-        .background(DS.Color.background.ignoresSafeArea())
-        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
-        // البحث بعد توقّف الكتابة لحظة — `task(id:)` يلغي السابق
-        .onAppear(perform: prefillFather)
-        .task(id: search) { await runSearch() }
-        .task(id: menSearch) { await runMenSearch() }
-    }
-
-    // MARK: الرأس والشريط
-
-    @ViewBuilder
-    private var header: some View {
-        switch step {
-        case .intro, .sent:
-            DSSubPageHeader(title: L10n.t("أهلاً \(authVM.currentUser?.firstName ?? "")", "Welcome \(authVM.currentUser?.firstName ?? "")"),
-                            subtitle: DaughterSons.text("intro_subtitle", "تمت الموافقة على طلبك", "Your request was approved"),
-                            section: .tree, nav: .none)
-        case .pick:
-            DSSubPageHeader(title: DaughterSons.text("page_title", "أكمل حسابك", "Complete your account"),
-                            subtitle: DaughterSons.text("page_subtitle", "أمك وأبوك", "Your mother and father"),
-                            section: .tree, nav: .none)
-        }
-    }
-
-    private var footer: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            switch step {
-            case .intro:
-                DSButton(L10n.t("ابدأ", "Start"), icon: "arrow.backward", size: .large) { step = .pick }
-                if let onLater {
-                    DSButton(L10n.t("لاحقاً", "Later"), role: .cancel, size: .regular) { onLater() }
-                }
-            case .pick:
-                DSButton(DaughterSons.text("send_button", "إرسال للإدارة", "Send to the admins"), icon: "paperplane.fill",
-                         size: .large, isLoading: busy) { send() }
-                    .disabled(!canSend || busy)
-                if let onLater {
-                    DSButton(L10n.t("لاحقاً", "Later"), role: .cancel, size: .regular) { onLater() }
-                }
-            case .sent:
-                DSButton(L10n.t("تم", "Done"), icon: "checkmark", size: .large) { onSent() }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.md)
-        .background(DS.Color.background)
-    }
-
-    // MARK: ١) المقدّمة
-
-    private var introContent: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            VStack(spacing: DS.Spacing.sm) {
-                DSStateIcon("checkmark", tint: DS.Color.success, size: DS.Icon.state)
-                Text(DaughterSons.text("intro_title", "أكمل حسابك", "Complete your account"))
-                    .dsFont(.title)
-                    .foregroundColor(DS.Color.textPrimary)
-                Text(DaughterSons.text("intro_body",
-                                       "يرجى اختيار الأم من بنات العائلة وكتابة اسم الأب، لإكمال الحساب والإضافة إلى الشجرة في الموضع الصحيح.",
-                                       "Pick your mother from the family's daughters and add your father's name to complete your account and be placed correctly in the tree."))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity)
-            infoRow(icon: "heart", tint: DS.Color.female,
-                    title: DaughterSons.text("mother_title", "اسم الأم", "Mother's name"),
-                    subtitle: L10n.t("من بنات عائلة المحمدعلي", "A daughter of the Al-Mohammad Ali family"))
-            Divider()
-            infoRow(icon: "person.2", tint: DS.Color.male,
-                    title: DaughterSons.text("father_title", "اسم الأب", "Father's name"),
-                    subtitle: L10n.t("زوج أمك · من خارج العائلة", "Your mother's husband · from outside the family"))
-            if status?.wasRejected == true {
-                DSNoteCard(status?.rejectedReason.map { L10n.t("السبب: ", "Reason: ") + $0 }
-                           ?? L10n.t("راجع اختيارك وأرسله من جديد.", "Review your choice and send it again."),
-                           title: DaughterSons.text("rejected_title", "راجع بياناتك وأرسلها من جديد", "Review your details and send them again"),
-                           icon: "arrow.uturn.backward.circle.fill", tint: DS.Color.warning)
-            }
-        }
-        .dsCard(padding: DS.Spacing.md)
-    }
-
-    private func infoRow(icon: String, tint: Color, title: String, subtitle: String) -> some View {
-        HStack(spacing: DS.Spacing.sm) {
-            DSFieldIcon(name: icon, tint: tint)
-            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                Text(title).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                Text(subtitle).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
-            }
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: ٢) الأم ثم الأب
-
-    private var pickContent: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            if status?.wasRejected == true {
-                DSNoteCard(status?.rejectedReason.map { L10n.t("السبب: ", "Reason: ") + $0 }
-                           ?? L10n.t("راجع اختيارك وأرسله من جديد.", "Review your choice and send it again."),
-                           title: DaughterSons.text("rejected_title", "راجع بياناتك وأرسلها من جديد", "Review your details and send them again"),
-                           icon: "arrow.uturn.backward.circle.fill", tint: DS.Color.warning)
-            }
-            DSBoxSectionTitle(title: DaughterSons.text("mother_title", "اسم الأم", "Mother's name"), icon: "person.fill", tint: DS.Color.female)
-            if let m = mother {
-                motherRow(m, selected: true) {
-                    mother = nil; fatherChoice = nil
-                }
-                .dsRowBox()
-            } else if newMotherMode {
-                newMotherContent
-            } else {
-                DSSearchField(text: $search, placeholder: DaughterSons.text("mother_placeholder", "اسم أمك واسم أبوها",
-                                                                             "Your mother's name and her father's"))
-                // لا تصفّح لبنات العائلة قبل الاسم الثلاثي — بلا ملاحظة تحت الحقل (طلب المالك ٢٠٢٦-١١-٠٨)
-                if !queryLongEnough {
-                    EmptyView()
-                } else if searching && results.isEmpty {
-                    DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
-                } else if results.isEmpty {
-                    if DaughterSons.newMotherAvailable {
-                        notFoundContent
-                    } else {
-                        DSEmptyView(L10n.t("لم يُعثر على الاسم", "No match"),
-                                    message: L10n.t("تأكد من اسمها واسم أبيها وجدها، أو تواصل مع الإدارة.",
-                                                    "Check her, her father's and grandfather's names, or contact the admins."),
-                                    style: .compact)
-                    }
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(results) { d in
-                            motherRow(d, selected: false) {
-                                mother = d
-                                // زوجها المسجّل من خارج العائلة هو الأب — يُختار تلقائياً بلا ضغطة
-                                fatherChoice = (d.husbandId != nil && !d.husbandInFamily) ? d.husbandId.map { .registered($0) } : nil
-                                search = ""
-                            }
-                            if d.id != results.last?.id { Divider() }
-                        }
-                    }
-                    .dsCard(padding: DS.Spacing.sm)
-                }
-            }
-
-            if newMotherMode && newMotherReady {
-                DSBoxSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
-                fatherFields(motherName: newMotherName)
-                DSNoteCard(DaughterSons.text("pending_note",
-                                             "يُرسل الاختيار إلى الإدارة للتأكيد، ثم تتم الإضافة في شجرة النساء تحت الأم.",
-                                             "Your choice goes to the admins to confirm; then you're added in the women's tree under your mother."),
-                           icon: "checkmark.shield.fill", tint: DS.Color.info)
-            }
-
-            if let m = mother {
-                DSBoxSectionTitle(title: DaughterSons.text("father_title", "اسم الأب", "Father's name"), icon: "person.2.fill", tint: DS.Color.male)
-                if let hid = m.husbandId {
-                    VStack(spacing: 0) {
-                        choiceRow(icon: "person.2.fill", title: m.husbandName ?? "",
-                                  subtitle: husbandInFamily
-                                    ? L10n.t("من العائلة — تواصل مع الإدارة لربطك بالشجرة", "From the family — ask the admins to link you")
-                                    : L10n.t("زوج \(m.firstName) · من خارج العائلة — اختير تلقائياً", "Husband of \(m.firstName) · outside the family — picked for you"),
-                                  selected: fatherChoice == .registered(hid)) {
-                            fatherChoice = .registered(hid)
-                        }
-                        .disabled(husbandInFamily)
-                    }
-                    .dsCard(padding: DS.Spacing.sm)
-                } else {
-                    fatherFields(motherName: m.fullName)
-                }
-                DSNoteCard(DaughterSons.text("pending_note",
-                                             "يُرسل الاختيار إلى الإدارة للتأكيد، ثم تتم الإضافة في شجرة النساء تحت الأم.",
-                                             "Your choice goes to the admins to confirm; then you're added in the women's tree under your mother."),
-                           icon: "checkmark.shield.fill", tint: DS.Color.info)
-            }
-        }
-    }
-
-    private func motherRow(_ m: DaughterSons.MotherCandidate, selected: Bool,
-                           action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSMemberAvatar(name: m.firstName, avatarUrl: nil, size: DS.Icon.row, roleColor: DS.Color.female)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(verbatim: m.fullName).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    if let f = m.fatherName, !f.isEmpty {
-                        Text(L10n.t("بنت \(f)", "Daughter of \(f)"))
-                            .dsFont(.caption).foregroundColor(DS.Color.textTertiary)
-                            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 0)
-                Image(systemName: selected ? "xmark.circle.fill" : "chevron.backward")
-                    .dsGlyph(DS.Glyph.md)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(selected ? L10n.t("إلغاء الاختيار", "Clear selection") : L10n.t("اختيار", "Choose"))
-    }
-
-    private func choiceRow(icon: String, title: String, subtitle: String, selected: Bool,
-                           action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: icon, tint: DS.Color.male)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary).lineLimit(2)
-                    Text(subtitle).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                    .dsGlyph(DS.Glyph.lg)
-                    .foregroundColor(selected ? DS.Color.primary : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    // MARK: ٢أ) ما لقيناها — «هي بنت مين؟» من باقي الاسم المكتوب (عينة «٢ و٣»)
-
-    /// الكلمة الأولى = اسمها، والباقي = اسم أبوها يُبحث عنه تلقائياً (كان يكتبه مرة ثانية في نموذج مستقل)
-    private var typedParts: [String] { search.split(whereSeparator: \.isWhitespace).map(String.init) }
-    private var typedMotherFirstName: String { typedParts.first ?? "" }
-    private var typedFatherQuery: String { typedParts.dropFirst().joined(separator: " ") }
-
-    private var notFoundContent: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            Text(L10n.t("ما لقينا \(typedMotherFirstName) بين بنات العائلة. هي بنت مين؟",
-                        "We couldn't find \(typedMotherFirstName) among the family's daughters. Whose daughter is she?"))
-                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            // باقي المكتوب أقل من حد البحث — يزيد اسم جدها في نفس المكان (الحقل مملوء بما كتبه)
-            if NameSearch.words(menSearch).count < DaughterSons.motherMinParts {
-                DSSearchField(text: $menSearch, placeholder: L10n.t("اسم أبوها وجدها", "Her father's and grandfather's names"))
-                Text(L10n.t("زد اسم جدها", "Add her grandfather's name"))
-                    .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
-            } else if menSearching && menResults.isEmpty {
-                DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
-            } else if menResults.isEmpty {
-                DSEmptyView(L10n.t("لم يُعثر على أبوها", "Her father wasn't found"),
-                            message: L10n.t("زد اسماً من أسماء أجدادها، أو تواصل مع الإدارة.",
-                                            "Add one more of her grandfathers' names, or contact the admins."),
-                            style: .compact)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(menResults) { f in
-                        Button {
-                            // ضغطة وحدة: اسمها (الكلمة الأولى) + أبوها ← «أم جديدة» جاهزة
-                            newMotherName = typedMotherFirstName
-                            newMotherFather = f
-                            newMotherMode = true
-                            fatherChoice = nil
-                            search = ""
-                        } label: {
-                            HStack(spacing: DS.Spacing.sm) {
-                                DSFieldIcon(name: "person.fill", tint: DS.Color.female)
-                                Text(verbatim: L10n.t("\(typedMotherFirstName) بنت \(f.fullName)؟", "\(typedMotherFirstName), daughter of \(f.fullName)?"))
-                                    .dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 0)
-                                Text(L10n.t("نعم", "Yes")).dsFont(.chip).foregroundColor(DS.Color.primary)
-                            }
-                            .frame(minHeight: DS.Icon.tapTarget)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        if f.id != menResults.last?.id { Divider() }
-                    }
-                }
-                .dsCard(padding: DS.Spacing.sm)
-            }
-        }
-        // باقي الاسم المكتوب يبحث عن أبوها بنفسه — بلا حقل ثانٍ
-        .task(id: typedFatherQuery) {
-            guard menSearch != typedFatherQuery else { return }
-            menSearch = typedFatherQuery
-        }
-    }
-
-    // MARK: ٢ب) «ما لقيت أمي؟»
-
-    private var newMotherContent: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSComposerField(icon: "person.fill",
-                            label: DaughterSons.text("new_mother_name_title", "اسم الأم", "Mother's name"),
-                            placeholder: L10n.t("مثلاً: منيرة", "e.g. Munira"),
-                            text: $newMotherName, limit: 120, required: true)
-            DSBoxSectionTitle(title: DaughterSons.text("new_mother_father_title", "أبوها", "Her father") + " *",
-                           icon: "person.fill", tint: DS.Color.male)
-            if let f = newMotherFather {
-                manRow(f, selected: true) { newMotherFather = nil }
-                    .dsRowBox()
-            } else {
-                DSSearchField(text: $menSearch, placeholder: L10n.t("اسم أبوها الثلاثي", "Her father's name (three parts)"))
-                if NameSearch.words(menSearch).count < DaughterSons.motherMinParts {
-                    Text(L10n.t("اكتب اسم أبوها الثلاثي كما في شجرة العائلة", "Type her father's three-part name as in the family tree"))
-                        .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if menSearching && menResults.isEmpty {
-                    DSPageLoader(L10n.t("جارٍ البحث", "Searching"), fillsSpace: false)
-                } else if menResults.isEmpty {
-                    DSEmptyView(L10n.t("لم يُعثر على الاسم", "No match"),
-                                message: L10n.t("تأكد من الاسم، أو تواصل مع الإدارة.", "Check the name, or contact the admins."),
-                                style: .compact)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(menResults) { f in
-                            manRow(f, selected: false) { newMotherFather = f; menSearch = "" }
-                            if f.id != menResults.last?.id { Divider() }
-                        }
-                    }
-                    .dsCard(padding: DS.Spacing.sm)
-                }
-            }
-            DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
-                DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
-                DSChoiceOption(id: true, title: L10n.t("متوفاة", "Deceased"), icon: "leaf.fill")
-            ], selection: $newMotherDeceased)
-            DSNoteCard(L10n.t("تضيفها الإدارة بنتاً لأبيها عند الموافقة.", "The admins add her as her father's daughter on approval."),
-                       title: L10n.t("أم جديدة", "New mother"), icon: "person.badge.plus", tint: DS.Color.info)
-            Button {
-                newMotherMode = false
-                newMotherName = ""; newMotherFather = nil; menSearch = ""; newMotherDeceased = false
-            } label: {
-                Text(L10n.t("العودة إلى البحث عن الأم", "Back to searching for my mother"))
-                    .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
-                    .frame(minHeight: DS.Icon.tapTarget)
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func manRow(_ f: DaughterSons.ManCandidate, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: "person.fill", tint: DS.Color.male)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(verbatim: f.fullName).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                    if f.isDeceased {
-                        Text(L10n.t("متوفى", "Deceased")).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
-                    }
-                }
-                Spacer(minLength: 0)
-                Image(systemName: selected ? "xmark.circle.fill" : "chevron.backward")
-                    .dsGlyph(DS.Glyph.md)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: DS.Icon.tapTarget)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(selected ? L10n.t("إلغاء الاختيار", "Clear selection") : L10n.t("اختيار", "Choose"))
-    }
-
-    // MARK: ٣) اسم الأب — سطر واحد + حي/متوفى في الصفحة نفسها (طلب المالك ٢٠٢٦-١١-٠٧)
-
-    private func fatherFields(motherName: String) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSComposerField(icon: "person.fill",
-                            label: DaughterSons.text("father_name_title", "اسم الأب الكامل", "Father's full name"),
-                            placeholder: DaughterSons.text("father_placeholder", "اكتب الاسم الثلاثي", "Type the three-part name"),
-                            text: $fatherFull, limit: 120, required: true)
-            if !fatherFull.trimmingCharacters(in: .whitespaces).isEmpty && !typedComplete {
-                Text(L10n.t("اكتب \(DaughterSons.fatherMinWords) أسماء على الأقل", "Type at least \(DaughterSons.fatherMinWords) names"))
-                    .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
-            }
-            DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
-                DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
-                DSChoiceOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
-            ], selection: $deceased)
-            DSNoteCard(L10n.t("يظهر في شجرة النساء فقط: \(shortName(motherName)) ← زوجها ← أنت",
-                              "Shown in the women's tree only: \(shortName(motherName)) → her husband → you"),
-                       icon: "arrow.triangle.branch", tint: DS.Color.accent)
-        }
-    }
-
-    // MARK: ٤) أُرسل
-
-    private var sentContent: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            DSStateIcon("paperplane.fill", tint: DS.Color.success, size: DS.Icon.state)
-            Text(DaughterSons.text("pending_title", "حسابك قيد المراجعة", "Your account is under review"))
-                .dsFont(.title).foregroundColor(DS.Color.textPrimary)
-            Text(DaughterSons.text("sent_body", "يصلك إشعار فور موافقة الإدارة، وتتم الإضافة إلى الشجرة ويكتمل الحساب.",
-                                   "We'll let you know as soon as the admins approve; then you're added to the tree and your account is complete."))
-                .dsFont(.footnote).foregroundColor(DS.Color.textSecondary).multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .dsCard(padding: DS.Spacing.lg)
-    }
-
-    // MARK: البيانات
-
-    private func runSearch() async {
-        guard queryLongEnough, mother == nil else { results = []; searching = false; return }
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        if Task.isCancelled { return }
-        searching = true
-        let found = await DaughterSons.searchMothers(search, isFamilyMember: { memberVM.member(byId: $0) != nil })
-        if Task.isCancelled { return }
-        results = found
-        searching = false
-    }
-
-    private func runMenSearch() async {
-        guard NameSearch.words(menSearch).count >= DaughterSons.motherMinParts, newMotherFather == nil else {
-            menResults = []; menSearching = false; return
-        }
-        try? await Task.sleep(nanoseconds: 300_000_000)
-        if Task.isCancelled { return }
-        menSearching = true
-        let found = await DaughterSons.searchMen(menSearch)
-        if Task.isCancelled { return }
-        menResults = found
-        menSearching = false
-    }
-
-    private func send() {
-        guard canSend, !busy else { return }
-        busy = true
-        errorText = nil
-        let fid: UUID? = { if !newMotherMode, case .registered(let id)? = fatherChoice { return id } else { return nil } }()
-        let newMom = newMotherMode ? newMotherFather.map {
-            DaughterSons.NewMother(name: newMotherName, fatherId: $0.id, deceased: newMotherDeceased)
-        } : nil
-        let motherId = newMotherMode ? nil : mother?.id
-        Task {
-            do {
-                try await DaughterSons.submit(motherId: motherId, newMother: newMom, fatherId: fid,
-                                              fatherFullName: fatherFull, deceased: deceased)
-                step = .sent
-            } catch {
-                errorText = DaughterSons.message(error)
-            }
-            busy = false
-        }
-    }
-
-    private func shortName(_ name: String) -> String {
-        name.split(separator: " ").prefix(3).joined(separator: " ")
-    }
-}
+// MARK: - صفحة «استكمال التسجيل» (كانت «أكمل حسابك» بالبحث عن الأم) — `CompleteRegistrationPage`
+// (Views/Features/Auth/CompleteRegistrationViews.swift، R1 ٢٠٢٦-١١-٢٧): «هل الأم من العائلة؟» ثم اسمها، بلا بحث.
 
 // MARK: - «الوارد»: بطاقة طلب النسب
 
@@ -1437,12 +929,12 @@ struct LineageFullDetailsBox: View {
 
 extension AdminRequestViewModel {
     /// قبول/رفض طلب النسب — true = نجح وأُزيل الصف
-    func decideLineage(_ request: AdminRequest, approve: Bool, reason: String?) async -> Bool {
+    func decideLineage(_ request: AdminRequest, approve: Bool, reason: String?, motherId: UUID? = nil) async -> Bool {
         guard canHandleRelativeAdd, NetworkMonitor.shared.requireOnline() else { return false }
         isLoading = true
         defer { isLoading = false }
         do {
-            try await DaughterSons.decide(requestId: request.id, approve: approve, reason: reason)
+            try await DaughterSons.decide(requestId: request.id, approve: approve, reason: reason, motherId: motherId)
             lineageRequests.removeAll { $0.id == request.id }
             if approve {
                 _ = try? await WomenStore.fetch()
@@ -1469,6 +961,15 @@ struct AdminLineageRequestCard: View {
     @State private var showFull = false
 
     var body: some View {
+        // «استكمال التسجيل» (R1): اسم الوالدة مكتوباً — المراجع يختارها من المقترحات، أو «الوالدة من خارج العائلة»
+        if SignupOriginRules.isTypedLineage(details: request.details) {
+            AnyView(OutsideLineageRequestCard(request: request, adminRequestVM: adminRequestVM))
+        } else {
+            AnyView(legacyBody)
+        }
+    }
+
+    private var legacyBody: some View {
         let d = LineageRequestDetails.parse(request.details)
         let isNewFather = (d?.fatherId ?? "").isEmpty
         let kind = DaughterDaughterRules.kind(ofDetails: request.details)

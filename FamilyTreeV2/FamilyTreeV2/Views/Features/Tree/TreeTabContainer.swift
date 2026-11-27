@@ -20,12 +20,13 @@ struct TreeTabContainer: View {
     static var openWomenOnAppear = false
 
     /// «شجرة النساء» ظاهرة؟ — مفتاح في «الإدارة ← إعدادات التطبيق ← الميزات» (طلب المالك ٢٠٢٦-١٠-٠٧)
-    private var womenTreeEnabled: Bool { appSettingsVM.settings.womenTreeEnabled ?? true }
+    /// «صلاحيات محدودة» (R1): شجرة النساء ومبدّلها مخفيان إن كانت مقفولة عليه
+    private var womenTreeEnabled: Bool { (appSettingsVM.settings.womenTreeEnabled ?? true) && !lineage.hides(.womenTree) }
 
     /// حساب امرأة: موقعها في شجرة النساء لا شجرة الرجال
     /// وابن البنت المكتمل: موقعه عقدته في شجرة النساء (طلب المالك ٢٠٢٦-١١-٠٨ «ظهور ابناء البنات فقط في شجرة النساء»)
     private var isWomanAccount: Bool {
-        (authVM.currentUser?.isWomanAccount ?? false) || lineage.status?.flagged == true
+        (authVM.currentUser?.isWomanAccount ?? false) || (lineage.status?.flagged == true && !lineage.isLimited)
     }
     @ObservedObject private var lineage = LineageGateStore.shared
 

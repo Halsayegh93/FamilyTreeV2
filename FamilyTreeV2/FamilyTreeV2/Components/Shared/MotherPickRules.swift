@@ -57,6 +57,51 @@ enum MotherPickRules {
         return parts.joined(separator: " · ")
     }
 
+    /// السطر الثاني مجزّأً (المالك ٢٠٢٦-١١-٢٧ «نص أخف»): شرائح صغيرة «الوالد: …» · «الجد: …» · «الميلاد: …» · «الزوج: …».
+    /// الوالد والجد من اسم والدها الكامل (الكلمة الأولى والثانية)، والزوج مختصراً إن وُجد
+    struct NamePart: Equatable {
+        let label: String
+        let value: String
+        /// يطابق بيانات الطلب ← شريحة خضراء (المالك «حركة ممتازة»)
+        var matches: Bool = false
+    }
+
+    /// الشرائح المطابقة لبيانات الطلب، بالتطبيع العربي الواحد (`NameSearch.words`):
+    /// «الوالد»/«الجد» = الكلمة الثانية/الثالثة من الاسم المكتوب (الاسم ثم والدها ثم جدها) · «الزوج» = أول كلمتين من اسم
+    /// الوالد المتوقَّع · «الميلاد» = السنة نفسها
+    static func markMatches(_ parts: [NamePart], typedName: String?, expectedHusband: String?,
+                            birthYear: Int? = nil) -> [NamePart] {
+        let typed = NameSearch.words(typedName ?? "")
+        let husband = NameSearch.words(expectedHusband ?? "")
+        return parts.map { p in
+            var q = p
+            let v = NameSearch.words(p.value)
+            switch p.label {
+            case text("الوالد", "Father"): q.matches = typed.count > 1 && v.first == typed[1]
+            case text("الجد", "Grandfather"): q.matches = typed.count > 2 && v.first == typed[2]
+            case text("الزوج", "Husband"): q.matches = husband.count >= 2 && v.count >= 2 && Array(v.prefix(2)) == Array(husband.prefix(2))
+            case text("الميلاد", "Born"): q.matches = birthYear.map { String($0) == p.value } ?? false
+            default: break
+            }
+            return q
+        }
+    }
+
+    static func disambiguationParts(fatherName: String?, husbandName: String?, birthYear: Int? = nil) -> [NamePart] {
+        var parts: [NamePart] = []
+        // «عبد الله» كلمة واحدة (نفس قاعدة البحث)
+        var w: [String] = []
+        for part in (fatherName ?? "").split(whereSeparator: { $0.isWhitespace }).map(String.init) {
+            if let last = w.last, last == "عبد" { w[w.count - 1] = last + part } else { w.append(part) }
+        }
+        if let f = w.first { parts.append(NamePart(label: text("الوالد", "Father"), value: f)) }
+        if w.count > 1 { parts.append(NamePart(label: text("الجد", "Grandfather"), value: w[1])) }
+        if let birthYear { parts.append(NamePart(label: text("الميلاد", "Born"), value: String(birthYear))) }
+        let h = shortName(husbandName ?? "")
+        if !h.isEmpty { parts.append(NamePart(label: text("الزوج", "Husband"), value: h)) }
+        return parts
+    }
+
     /// أول ثلاث كلمات من الاسم (الاسم والأب والجد) بمسافات موحّدة
     static func shortName(_ full: String, words: Int = 3) -> String {
         full.split(whereSeparator: { $0.isWhitespace }).prefix(words).joined(separator: " ")
