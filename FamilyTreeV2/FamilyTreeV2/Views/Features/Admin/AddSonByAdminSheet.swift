@@ -32,6 +32,8 @@ struct AddSonByAdminSheet: View {
     @State private var showSaveError = false
     @State private var saveErrorText = ""
     @State private var showCompoundNameCheck = false
+    /// «أنثى» في الإضافة — شجرة العائلة للرجال فقط (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧)
+    @State private var showMenOnly = false
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
 
@@ -164,6 +166,8 @@ struct AddSonByAdminSheet: View {
         } message: {
             Text(AddChildChecks.compoundNameWarning(firstName) ?? "")
         }
+        // الإضافة فقط: «إضافة بنت في شجرة النساء» تحت الأب نفسه، وبعد إغلاقها يُغلق هذا المربّع
+        .familyTreeMenOnly(isPresented: $showMenOnly, father: parent, typedName: firstName) { dismiss() }
         .onAppear {
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -205,7 +209,9 @@ struct AddSonByAdminSheet: View {
                             placeholder: L10n.t("الاسم الأول فقط", "First name only"),
                             text: $firstName, limit: 50)
 
-            DSGenderPicker(selection: $selectedGender)
+            // الإضافة: شجرة العائلة للرجال فقط — «أنثى» تنبيه وانتقال لشجرة النساء (طلب المالك ٢٠٢٦-١١-٢٧).
+            // التعديل: تغيير الجنس نقلٌ بين الشجرتين (`moveChildGender`) كما كان
+            DSGenderPicker(selection: isEditMode ? $selectedGender : $selectedGender.menOnly(alert: $showMenOnly))
 
             if !isDeceased {
                 DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
@@ -232,6 +238,10 @@ struct AddSonByAdminSheet: View {
     /// الإضافة: الاسم الأول فقط، والكلمتان بتأكيد. التعديل لا يُفحص (أسماء قائمة)
     private func submitAction() {
         guard !isEditMode else { return saveAction() }
+        guard FamilyTreeMenOnly.mayWriteToFamilyTree(gender: selectedGender) else {
+            showMenOnly = true
+            return
+        }
         if AddChildChecks.isMoreThanFirstName(firstName) {
             saveErrorText = AddChildChecks.firstNameOnlyMessage
             showSaveError = true

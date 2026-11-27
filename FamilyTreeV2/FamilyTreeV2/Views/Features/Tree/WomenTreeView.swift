@@ -271,6 +271,10 @@ struct WomanDetailSheet: View {
     var onChanged: (() async -> Void)? = nil
     /// يفتح تفاصيل عضو آخر (مثلاً بروفايل الزوجة بعد ربطها من العائلة).
     var onOpenMember: ((UUID) -> Void)? = nil
+    /// يفتح «أبناء» على ابنة واحدة (الاسم مملوء) فور الظهور — من تنبيه «شجرة العائلة للرجال فقط»
+    /// (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧). nil = التفاصيل كما هي
+    var startsDaughterAdd: String? = nil
+    @State private var startedDaughterAdd = false
     @Environment(\.dismiss) private var dismiss
     /// الشجرة العامة (لمعرفة من منها) ونقل الجنس وإضافة الابن من «عائلتي»
     @EnvironmentObject private var memberVM: MemberViewModel
@@ -495,6 +499,22 @@ struct WomanDetailSheet: View {
         // مربّع بالمنتصف قابل للتوسّع بدل الشيت — يُغلق بـ«إغلاق» أو بالضغط خارجه
         DSExpandableCenterPanel(isExpanded: $isExpanded, onClose: { dismiss() }) {
             detailsStack
+        }
+        .onAppear(perform: openDaughterAddIfAsked)
+    }
+
+    /// مربّع الإجراءات ثم «أبناء» بابنة واحدة — نفس مسار «إضافة بنت» بآلية الدور (مباشر · عائلتي · طلب)
+    private func openDaughterAddIfAsked() {
+        guard let name = startsDaughterAdd, !startedDaughterAdd, mode != .viewOnly else { return }
+        startedDaughterAdd = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
+            showAdminBox = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
+                startAdd(.child)
+                var daughter = DSAddEntry(gender: "female")
+                daughter.name = name
+                draft.addEntries = [daughter]
+            }
         }
     }
 

@@ -100,12 +100,14 @@ struct AddChildSheet: View {
     /// تنبيهات الفحص المحلي — الحفظ بعد «متابعة»
     @State private var localWarnings: [String] = []
     @State private var showLocalWarnings = false
+    /// «أنثى» اختيرت — شجرة العائلة للرجال فقط (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧)
+    @State private var showMenOnly = false
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
         DSComposer(
             title: L10n.t("إضافة فرد", "Add Member"),
-            subtitle: L10n.t("ابن أو بنت لعائلتك", "A son or daughter to your family"),
+            subtitle: L10n.t("ابن لشجرة العائلة — البنات في شجرة النساء", "A son to the family tree — daughters are in the women's tree"),
             icon: "person.crop.circle.badge.plus",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("إضافة", "Add"),
@@ -138,6 +140,8 @@ struct AddChildSheet: View {
         } message: {
             Text(localWarnings.joined(separator: "\n\n"))
         }
+        // «إضافة بنت في شجرة النساء» تحت الأب نفسه — وبعد إغلاقها يُغلق هذا المربّع (الطلب انتقل هناك)
+        .familyTreeMenOnly(isPresented: $showMenOnly, father: member, typedName: firstName) { dismiss() }
         .onAppear {
             if !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -195,8 +199,8 @@ struct AddChildSheet: View {
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
             // الجنس زرّان، ثم الميلاد والحالة متجاوران (وتاريخ الوفاة بعدها) — قرار المالك ٢٠٢٦-١١-١١
-            // أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
-            DSGenderPicker(selection: $selectedGender, buttons: true)
+            // شجرة العائلة للرجال فقط: «أنثى» لا تُقبل — تنبيه وزرّ «إضافة بنت» في شجرة النساء (طلب المالك ٢٠٢٦-١١-٢٧)
+            DSGenderPicker(selection: $selectedGender.menOnly(alert: $showMenOnly), buttons: true)
             DSTileGrid(dataTiles)
 
             // الهاتف — للابن (الذكر) فقط
@@ -275,6 +279,11 @@ struct AddChildSheet: View {
 
     private func performSave() {
         guard !isSubmitting else { return }
+        // آخر حارس: لا أنثى في شجرة العائلة من هنا
+        guard FamilyTreeMenOnly.mayWriteToFamilyTree(gender: selectedGender) else {
+            showMenOnly = true
+            return
+        }
         isSubmitting = true
         Task {
             defer { isSubmitting = false }
