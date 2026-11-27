@@ -3,7 +3,7 @@
 //  FamilyTreeV2
 //
 //  معاينة شاشات التسجيل الجديد بلا رمز دخول ولا سيرفر — للتصوير فقط (DEBUG):
-//  `-uiPreviewSignup choose|complete` — «التسجيل» بالمربّعين (ومنه «من العائلة»/«من خارج العائلة»)، و«استكمال التسجيل».
+//  `-uiPreviewSignup choose|complete|maintenance` — «التسجيل» بالمربّعين (ومنه «من العائلة»/«من خارج العائلة»)، و«استكمال التسجيل».
 //  لا شيء يُرسل: لا حساب في هذه المعاينة، وأزرار الإرسال لا تجد جلسة.
 //
 
@@ -23,6 +23,8 @@ struct SignupPreviewScreen: View {
 
     var body: some View {
         switch mode {
+        case "maintenance":
+            MaintenanceModeView()
         case "complete":
             CompleteRegistrationPage(status: nil, onSent: {}, onLater: nil)
         default:
