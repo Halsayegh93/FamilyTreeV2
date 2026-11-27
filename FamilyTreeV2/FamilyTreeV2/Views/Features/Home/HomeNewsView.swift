@@ -357,9 +357,13 @@ struct HomeNewsView: View {
         }
         // حظر ناشر الخبر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة)
         .dsBlockMemberFlow(target: $blockTarget)
-        // بطاقة العضو «أ»: ورقة طويلة من الأسفل (اعتمدها المالك ٢٠٢٦-١١-٢٧، كانت مربّعاً بالمنتصف)
-        .dsTallBox(item: $selectedMemberForDetails) { member in
-            MemberDetailsView(member: member)
+        .fullScreenCover(item: $selectedMemberForDetails) { member in
+            MemberDetailsView(member: member, centered: true)
+                .background(ClearPresentationBackground())
+        }
+        .transaction { t in
+            // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
+            if selectedMemberForDetails != nil { t.disablesAnimations = true }
         }
         // صورة الخبر بملء الشاشة — تكبير بالقرصة والتقليب بين صور الخبر
         .fullScreenCover(item: $mediaViewer) { item in

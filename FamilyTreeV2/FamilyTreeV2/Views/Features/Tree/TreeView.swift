@@ -775,9 +775,15 @@ struct TreeView: View {
                 Text(L10n.t("طلب الانضمام لدى الإدارة لربط الحساب بمكانه في الشجرة، وبعد الربط ينقل زرّ «موقعك» إلى الاسم مباشرة.",
                             "Your join request is with the admins to link your account to your place in the tree. After that, «Me» takes you straight to your name."))
             }
-            // بطاقة العضو «أ»: ورقة طويلة من الأسفل (اعتمدها المالك ٢٠٢٦-١١-٢٧، كانت مربّعاً بالمنتصف)
-            .dsTallBox(item: $selectedMember) { member in
-                MemberDetailsView(member: member)
+            // تفاصيل العضو: مربّع بالمنتصف قابل للتوسّع بدل الشيت (طلب المالك)
+            .fullScreenCover(item: $selectedMember) { member in
+                MemberDetailsView(member: member, centered: true)
+                    .background(ClearPresentationBackground())
+            }
+            .transaction { t in
+                // يظهر المربّع في مكانه بلا انزلاق من الأسفل
+                // يظهر المربّع في مكانه بلا انزلاق — والإغلاق بلا انزلاق يتم داخل المربّع
+                if selectedMember != nil { t.disablesAnimations = true }
             }
             // معامل «حجم النص» قبل أول تخطيط (الـ task بعده)
             .onAppear { treeScale = envTreeScale }
