@@ -298,7 +298,8 @@ struct AdminIssuesPage: View {
                 AdminMergeBox(context: context, onMerged: { await reload(force: true) }, onClose: { merge = nil })
             }
             .dsCenterBox(item: $deleteBox) { context in
-                AdminDeleteDuplicateBox(context: context, perform: { await deleteDuplicate($0) }, onClose: { deleteBox = nil })
+                AdminDeleteDuplicateBox(context: context, check: { await deleteExtrasCheck($0) },
+                                        perform: { await deleteDuplicate($0) }, onClose: { deleteBox = nil })
             }
             .refreshable { await reload(force: true) }
             .task { await reload(force: false) }
@@ -581,13 +582,33 @@ struct AdminIssuesPage: View {
                 hasLogin: hasLogin(id, inWomen: inWomen), isStaff: isStaff(id, inWomen: inWomen),
                 birth: has(m.birthDate), death: has(m.deathDate),
                 photo: has(m.avatarUrl) || has(m.photoURL), phone: has(m.phoneNumber), bio: !(m.bio ?? []).isEmpty,
+                cover: has(m.coverUrl),
                 facts: AdminMergeRules.Facts(deceased: m.isDeceased == true,
                                              birthYear: AdminMergeRules.year(fromBirthDate: m.birthDate)),
-                addedAt: m.createdAt.flatMap(DateParsing.iso))
+                addedAt: m.createdAt.flatMap(DateParsing.iso),
+                // الأم: في ملفه، أو في عقدته بشجرة النساء (الرجال)
+                mother: m.motherId ?? (inWomen ? nil : women.first(where: { $0.id == id })?.motherId))
         }
         // شجرة الرجال: قائمة الحسابات لازم تصل قبل الحكم بـ«بلا حساب»
         guard inWomen || accounts.loaded else { return [] }
         return AdminMergeRules.deleteCandidates(group: group.ids, records: records)
+    }
+
+    /// فحص ما قبل التأكيد: صور المعرض والطلبات المعلّقة عنه لا تُحمَّل في الصفحة — عدّ سريع. nil = لا شيء يُفقد،
+    /// وإلا الرسالة (ومعها يبقى «حذف» معطّلاً؛ «دمج» ينقلها). عقد شجرة النساء ليست في `profiles` فلا صور ولا طلبات لها.
+    private func deleteExtrasCheck(_ id: UUID) async -> String? {
+        guard memberVM.member(byId: id) != nil else { return nil }
+        do {
+            let photos = try await SupabaseConfig.client.from("member_gallery_photos")
+                .select("id", head: true, count: .exact).eq("member_id", value: id.uuidString).execute().count ?? 0
+            let requests = try await SupabaseConfig.client.from("admin_requests")
+                .select("id", head: true, count: .exact).eq("member_id", value: id.uuidString)
+                .eq("status", value: "pending").execute().count ?? 0
+            return photos + requests > 0 ? AdminMergeRules.deleteBlockedMessage : nil
+        } catch {
+            Log.error("[Duplicates] delete pre-check failed: \(ErrorHelper.description(error))")
+            return AdminMergeRules.deleteCheckFailedMessage
+        }
     }
 
     /// الحذف بطريق الإدارة الموجود — nil = نجح، وإلا رسالة رسمية
@@ -597,16 +618,15 @@ struct AdminIssuesPage: View {
                 try await WomenStore.delete(id: id)
             } catch {
                 Log.error("[Duplicates] women delete failed: \(ErrorHelper.description(error))")
-                return AdminMergeRules.deleteMessage(hint: (error as? PostgrestError)?.hint)
+                let pg = error as? PostgrestError
+                return AdminMergeRules.deleteMessage(hint: pg?.hint ?? pg?.code)
             }
             await loadWomen(force: true)
             return nil
         }
         guard await memberVM.deleteMember(memberId: id) else {
-            // `deleteMember` يضع رسالة السيرفر عند حماية الروابط، وإلا رسالته العامة
-            let generic = L10n.t("تعذّر حذف العضو. حاول مرة أخرى.", "Couldn't delete the member. Try again.")
-            let linked = memberVM.errorMessage.map { !$0.isEmpty && $0 != generic } ?? false
-            return AdminMergeRules.deleteMessage(hint: linked ? "family_links_protected" : nil)
+            // السبب من hint/code السيرفر (family_links_protected، 42501…) لا من نصّ الرسالة
+            return AdminMergeRules.deleteMessage(hint: memberVM.lastDeleteFailure)
         }
         await reload(force: true)
         return nil

@@ -53,6 +53,8 @@ class MemberViewModel: ObservableObject {
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    /// سبب فشل آخر `deleteMember` من السيرفر (hint، وإلا code) — لمن يحتاج رسالة خاصة (مربّع حذف المكرر)
+    private(set) var lastDeleteFailure: String?
     /// آخر «إضافة ابن» من العضو دخلت الشجرة مباشرة (لا طلب) — قرار المالك ٢٠٢٦-١٠-٢٧
     var lastChildAddWasDirect = false
 
@@ -2103,6 +2105,7 @@ class MemberViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        lastDeleteFailure = nil
         do {
             // حذف السجل أولاً: قاعدة البيانات تحذف معه إشعاراته وأجهزته وصوره (CASCADE)،
             // وترفض حذف من له أبناء أو بنات أو زوجة مرتبطون (حماية روابط العائلة) فلا يُمسّ
@@ -2121,6 +2124,7 @@ class MemberViewModel: ObservableObject {
             return true
         } catch {
             Log.error("فشل حذف العضو: \(error.localizedDescription)")
+            if let pg = error as? PostgrestError { lastDeleteFailure = pg.hint ?? pg.code }
             if let pgError = error as? PostgrestError, pgError.hint == "family_links_protected" {
                 errorMessage = pgError.message
             } else {

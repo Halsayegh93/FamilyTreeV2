@@ -70,15 +70,26 @@ check(M.isEmpty(R(death: true, facts: dead), others: [R(death: true, facts: dead
 check(M.deleteCandidates(group: [a, b], records: [a: full, b: bare]), [b], "المرشّح: الفارغ وحده")
 check(M.deleteCandidates(group: [a, b], records: [a: full, b: R(phone: true, facts: alive)]), [], "بيانات ناقصة عند الآخر: لا حذف")
 check(M.deleteCandidates(group: [a, b], records: [a: bare]), [], "سجلّ ناقص: لا حذف")
-// اثنان فارغان: الأفرغ أولاً، ثم الأقدم إضافة
+// اثنان فارغان: الأفرغ أولاً، ثم الأحدث إضافة (الأقدم غالباً الأصل بتاريخه)
 let thin = R(birth: true, facts: alive, addedAt: d0)
 check(M.deleteCandidates(group: [a, b, c], records: [a: full, b: thin, c: bare]), [c, b], "الأفرغ أولاً")
 check(M.deleteCandidates(group: [a, b, c], records: [a: full, b: R(facts: alive, addedAt: d1), c: R(facts: alive, addedAt: d0)]),
-      [c, b], "التعادل: الأقدم إضافة أولاً")
+      [b, c], "التعادل: الأحدث إضافة أولاً")
 check(M.deleteButtonTitle, "حذف", "نص زرّ الحذف")
 check(M.nothingLostNote, "لا توجد بيانات تُفقد.", "سطر لا شيء يُفقد")
 check(M.deleteForeverNote, "يُحذف نهائياً.", "سطر الحذف النهائي")
 check(M.deleteMessage(hint: "family_links_protected"), "لا يمكن الحذف؛ ما زال أحد أفراد العائلة مرتبطاً بهذا الاسم.", "حذف مرفوض للروابط")
+// الأم: إخوة من زوجتين ليسوا مكرّرين
+let m1 = UUID(), m2 = UUID()
+check(M.isEmpty(R(facts: alive, mother: m1), others: [R(birth: true, facts: alive, mother: m2)]), false, "أمّان مختلفتان: لا حذف")
+check(M.isEmpty(R(facts: alive, mother: m1), others: [R(birth: true, facts: alive)]), false, "له أم والآخر بلا أم: لا حذف")
+check(M.isEmpty(R(facts: alive, mother: m1), others: [R(birth: true, facts: alive, mother: m1)]), true, "الأم نفسها: فارغ")
+check(M.isEmpty(R(facts: alive), others: [R(birth: true, facts: alive, mother: m1)]), true, "بلا أم والآخر له أم: لا يُفقد شيء")
+// الغلاف والصور والطلبات المعلّقة: «دمج» فقط (ينقلها)
+check(M.isEmpty(R(cover: true, facts: alive), others: [full]), false, "له غلاف: دمج فقط")
+check(M.isEmpty(R(facts: alive, hasExtras: true), others: [full]), false, "له صور معرض أو طلبات معلّقة: دمج فقط")
+check(M.deleteBlockedMessage, "لهذا الاسم صور أو طلبات معلّقة تُفقد بحذفه. استعمل «دمج» لتنتقل إلى الاسم الباقي.", "سطر المنع بعد الفحص")
+check(M.deleteMessage(hint: "42501"), "الحذف متاح للمالك والمدير فقط.", "حذف: بلا صلاحية")
 check(M.deleteMessage(hint: nil), "تعذّر الحذف. تحقّق من الاتصال ثم حاول مرة أخرى.", "حذف: خطأ عام")
 
 // ٢) حراس السيرفر 20261127270000: متوفى/حيّ وميلادان متباعدان — لا زرّ حيث يرفض

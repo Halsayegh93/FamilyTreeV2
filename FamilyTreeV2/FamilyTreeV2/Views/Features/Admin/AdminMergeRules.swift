@@ -67,8 +67,14 @@ nonisolated enum AdminMergeRules {
         var photo = false
         var phone = false
         var bio = false
+        /// صورة الغلاف — لا تنتقل بالحذف
+        var cover = false
         var facts = Facts(deceased: false, birthYear: nil)
         var addedAt: Date? = nil
+        /// الأم (`mother_id`، أو عقدته في شجرة النساء) — إخوة من زوجتين ليسوا مكرّرين
+        var mother: UUID? = nil
+        /// صور المعرض أو طلبات معلّقة عنه (تُفحص قبل التأكيد)
+        var hasExtras = false
 
         fileprivate var data: [Bool] { [birth, death, photo, phone, bio] }
         fileprivate var dataCount: Int { data.filter { $0 }.count }
@@ -80,11 +86,15 @@ nonisolated enum AdminMergeRules {
 
     /// حذفه لا يُفقد شيئاً: فارغ من الروابط والحساب والإدارة، وآخر متوافق عنده كل ما عنده
     static func isEmpty(_ r: Record, others: [Record]) -> Bool {
-        guard r.children == 0, r.spouses == 0, !r.hasLogin, !r.isStaff else { return false }
-        return others.contains { o in !o.isStaff && compatible(r.facts, o.facts) && r.covered(by: o) }
+        guard r.children == 0, r.spouses == 0, !r.hasLogin, !r.isStaff, !r.cover, !r.hasExtras else { return false }
+        return others.contains { o in
+            // له أم: لازم تكون أم الآخر نفسها (أمّان مختلفتان أو الآخر بلا أم = قد يكونان أخوين)
+            !o.isStaff && compatible(r.facts, o.facts) && r.covered(by: o) && (r.mother == nil || r.mother == o.mother)
+        }
     }
 
-    /// المرشّحون للحذف بترتيب الاختيار: الأفرغ أولاً، ثم الأقدم إضافة، ثم ترتيب المجموعة. الأول مختار مسبقاً.
+    /// المرشّحون للحذف بترتيب الاختيار: الأفرغ أولاً، ثم الأحدث إضافة (الأقدم غالباً الأصل بتاريخه)، ثم ترتيب
+    /// المجموعة. الأول مختار مسبقاً.
     /// من لا سجلّ له في `records` لا يُرشَّح ولا يُحسب «آخر».
     static func deleteCandidates(group: [UUID], records: [UUID: Record]) -> [UUID] {
         let found = group.filter { empty(id: $0, group: group, records: records) }
@@ -92,7 +102,7 @@ nonisolated enum AdminMergeRules {
             let rx = records[x.element]!, ry = records[y.element]!
             if rx.dataCount != ry.dataCount { return rx.dataCount < ry.dataCount }
             switch (rx.addedAt, ry.addedAt) {
-            case let (dx?, dy?) where dx != dy: return dx < dy
+            case let (dx?, dy?) where dx != dy: return dx > dy
             case (_?, nil): return true
             case (nil, _?): return false
             default: return x.offset < y.offset
@@ -108,6 +118,9 @@ nonisolated enum AdminMergeRules {
     static let deleteButtonTitle = "حذف"
     static let nothingLostNote = "لا توجد بيانات تُفقد."
     static let deleteForeverNote = "يُحذف نهائياً."
+    /// فحص ما قبل التأكيد وجد صور معرض أو طلبات معلّقة عنه
+    static let deleteCheckFailedMessage = "تعذّر التحقق مما يُفقد بالحذف. تحقّق من الاتصال ثم حاول مرة أخرى."
+    static let deleteBlockedMessage = "لهذا الاسم صور أو طلبات معلّقة تُفقد بحذفه. استعمل «دمج» لتنتقل إلى الاسم الباقي."
 
     /// رسالة رسمية لفشل الحذف
     static func deleteMessage(hint: String?) -> String {

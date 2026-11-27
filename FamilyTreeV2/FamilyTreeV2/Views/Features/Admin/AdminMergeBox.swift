@@ -369,6 +369,8 @@ struct AdminDeleteDuplicateContext: Identifiable {
 
 struct AdminDeleteDuplicateBox: View {
     let context: AdminDeleteDuplicateContext
+    /// فحص ما قبل التأكيد (صور المعرض، الطلبات المعلّقة): nil = لا شيء يُفقد، وإلا رسالة و«حذف» معطّل
+    let check: (UUID) async -> String?
     /// الحذف: nil = نجح، وإلا رسالة رسمية
     let perform: (UUID) async -> String?
     let onClose: () -> Void
@@ -379,17 +381,37 @@ struct AdminDeleteDuplicateBox: View {
     @State private var chosen: UUID?
     @State private var failure: String?
     @State private var busy = false
+    /// نتيجة الفحص للمختار: nil = لم ينتهِ بعد
+    @State private var checked: UUID?
+    @State private var blocked: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(context: AdminDeleteDuplicateContext, perform: @escaping (UUID) async -> String?, onClose: @escaping () -> Void) {
+    init(context: AdminDeleteDuplicateContext, check: @escaping (UUID) async -> String?,
+         perform: @escaping (UUID) async -> String?, onClose: @escaping () -> Void) {
         self.context = context
+        self.check = check
         self.perform = perform
         self.onClose = onClose
         _step = State(initialValue: context.candidates.count > 1 ? .pick : .confirm)
         _chosen = State(initialValue: context.candidates.first?.id)
     }
 
-    var body: some View { AnyView(box) }
+    var body: some View {
+        AnyView(box)
+            .task(id: step == .confirm ? chosen : nil) { await runCheck() }
+    }
+
+    private var ready: Bool { chosen != nil && checked == chosen && blocked == nil }
+
+    private func runCheck() async {
+        guard step == .confirm, let id = chosen else { return }
+        checked = nil
+        blocked = nil
+        let result = await check(id)
+        guard id == chosen else { return }
+        blocked = result
+        checked = id
+    }
 
     private var person: AdminMergePerson? { context.candidates.first { $0.id == chosen } }
 
@@ -428,7 +450,7 @@ struct AdminDeleteDuplicateBox: View {
                 isBusy: busy,
                 extraActions: [
                     DSComposerAction(id: "delete", title: L10n.t("حذف", "Delete"), icon: "trash",
-                                     role: .destructive, isEnabled: chosen != nil && !busy, action: delete),
+                                     role: .destructive, isEnabled: ready && !busy, action: delete),
                     DSComposerAction(id: "back", title: L10n.t("رجوع", "Back"), role: .cancel, action: back)
                 ],
                 onSubmit: {},
@@ -439,7 +461,19 @@ struct AdminDeleteDuplicateBox: View {
                         lines(person)
                     }
                 }
-                DSNoteCard(AdminMergeRules.nothingLostNote, icon: "checkmark.circle.fill", tint: DS.Color.success)
+                if let blocked {
+                    DSNoteCard(blocked, icon: "exclamationmark.circle.fill", tint: DS.Color.warning)
+                } else if checked != chosen {
+                    HStack(spacing: DS.Spacing.sm) {
+                        ProgressView().scaleEffect(DS.Spinner.chipScale)
+                        Text(L10n.t("جارٍ التحقق مما يُفقد…", "Checking what would be lost…"))
+                            .dsFont(.subtitle)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: DS.Hub.rowMinHeight, alignment: .leading)
+                } else {
+                    DSNoteCard(AdminMergeRules.nothingLostNote, icon: "checkmark.circle.fill", tint: DS.Color.success)
+                }
                 if let failure {
                     DSNoteCard(failure, icon: "exclamationmark.circle.fill", tint: DS.Color.error)
                 } else {
@@ -505,7 +539,7 @@ struct AdminDeleteDuplicateBox: View {
     }
 
     private func delete() {
-        guard let chosen, !busy else { return }
+        guard let chosen, ready, !busy else { return }
         // تجربة دور: لا كتابة على السيرفر — نجاح مصطنع
         if DebugAdminProbe.dryRun("delete duplicate \(chosen)") {
             DSMomentToast.show(L10n.t("تم الحذف", "Deleted"), moment: .success)
