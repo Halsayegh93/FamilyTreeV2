@@ -317,9 +317,8 @@ struct SignupFormBox: View {
                 Text(verbatim: note).dsFont(.footnote).foregroundColor(DS.Color.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // «الجنس» أولاً، ثم الصورة الكبيرة بعد «ذكر» وحده (المالك ٢٠٢٦-١١-٢٧) — النساء بلا صور
-            fieldView(.gender)
-                .completionAskHighlight(highlights.contains(.gender))
+            // الصورة الكبيرة فوق بعد «ذكر» وحده — النساء بلا صور. الجنس تحت تاريخ الميلاد (طلب المالك ٢٠٢٦-١١-٢٧،
+            // كان أول المربّع) — ترتيب `R.fields`: الاسم · (العائلة) · الميلاد · الجنس
             if R.showsPhoto(gender: draft.gender) {
                 DSProfilePhotoPicker(selectedImage: $draft.photo, enableCrop: true, cropShape: .circle,
                                      title: L10n.t("الصورة الشخصية", "Profile Photo"),
@@ -329,7 +328,7 @@ struct SignupFormBox: View {
                     .completionAskHighlight(asksPhoto)
                     .transition(.dsReveal(reduceMotion: reduceMotion))
             }
-            ForEach(Array(R.fields(origin).filter { $0 != .gender }.enumerated()), id: \.offset) { _, field in
+            ForEach(Array(R.fields(origin).enumerated()), id: \.offset) { _, field in
                 fieldView(field)
                     .completionAskHighlight(highlights.contains(field))
             }
@@ -389,7 +388,7 @@ struct SignupFormBox: View {
                 }
                 hint(L10n.t(origin == .outside ? SignupText.outsideNameHint : SignupText.familyNameHint,
                             origin == .outside ? "First, father's and grandfather's name, without the family name."
-                                               : "Family Al-Mohammad Ali; the admins link you to your father after checking."))
+                                               : "Without the family name; Al-Mohammad Ali is added automatically."))
             }
         case .family:
             VStack(alignment: .leading, spacing: DS.Spacing.xs) {
