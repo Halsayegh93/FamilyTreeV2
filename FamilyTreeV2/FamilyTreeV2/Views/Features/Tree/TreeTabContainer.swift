@@ -45,6 +45,10 @@ struct TreeTabContainer: View {
         .onChange(of: womenTreeEnabled) { enabled in
             if !enabled { treeTab = 0 }
         }
+        // رجع لشجرة العائلة قبل أن تُبنى شجرة النساء (تحميل فشل) — طلب «موقعك» المعلّق لا يفاجئه في فتح لاحق
+        .onChange(of: treeTab) { tab in
+            if tab == 0 { WomenLocateRequest.pending = false }
+        }
         .environment(\.treeChromeAppeared, chromeAppeared)
         // قسم الشجرة دائماً (العُدّة المشتركة تأخذ لونها من البيئة — هنا مرة لكل الشجرتين)
         .dsSection(.tree)

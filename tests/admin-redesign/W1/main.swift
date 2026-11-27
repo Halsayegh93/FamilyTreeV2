@@ -39,6 +39,26 @@ check(mine(acct), nil, "غير موجود: لا تخمين")
 check(mine(acct, linked: [acct: UUID()]), nil, "ربط لعقدة غير ظاهرة: لا شيء")
 check(mine(me, linked: [me: womanNode]), me, "المعرّف نفسه أولاً")
 
+// MARK: - «موقعك» من شجرة العائلة (ابن/بنت البنت — أي حساب)
+func open(auto: Bool, req: Bool, me m: UUID?, has: Set<UUID> = nodes) -> WomenOpenAction {
+    WomenOpenAction.resolve(autoLocate: auto, requested: req, meId: m, hasNode: { has.contains($0) })
+}
+check(open(auto: false, req: true, me: me), .locate(me), "ابن البنت (حساب عادي) بطلب «موقعك»: يتمركز على عقدته")
+check(open(auto: true, req: false, me: womanNode), .locate(womanNode), "حساب المرأة: تفتح على عقدتها كما كانت")
+check(open(auto: true, req: true, me: womanNode), .locate(womanNode), "حساب المرأة بطلب صريح: عقدتها")
+check(open(auto: false, req: false, me: me), .fit, "فتح عادي لحساب عادي: ملاءمة البداية")
+check(open(auto: false, req: true, me: nil), .notInTree, "طلب صريح بلا عقدة: رسالة لا بداية صامتة")
+check(open(auto: false, req: true, me: acct), .notInTree, "طلب صريح وعقدته غير ظاهرة: رسالة")
+check(open(auto: true, req: false, me: nil), .fit, "حساب المرأة بلا عقدة: الفتح العادي كما كان")
+// الطلب يُنفَّذ مرة واحدة
+let (first, second, left) = MainActor.assumeIsolated { () -> (Bool, Bool, Bool) in
+    WomenLocateRequest.pending = true
+    return (WomenLocateRequest.take(), WomenLocateRequest.take(), WomenLocateRequest.pending)
+}
+check(first, true, "الطلب يُقرأ")
+check(second, false, "ثم يُمسح — لا يتكرر في فتح لاحق")
+check(left, false, "المعلّق فارغ بعد القراءة")
+
 // MARK: - الصور
 check(WomenTreePhoto.url(isFemale: true, own: "a", linked: "b"), nil, "الأنثى: بلا صورة أبداً")
 check(WomenTreePhoto.url(isFemale: false, own: "a", linked: "b"), "a", "الذكر: صورته")

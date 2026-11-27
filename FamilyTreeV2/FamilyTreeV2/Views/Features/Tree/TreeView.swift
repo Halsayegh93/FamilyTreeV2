@@ -1037,7 +1037,9 @@ struct TreeView: View {
                 locatePulseId = nil
             }
         case .women?:
-            // مكانه في شجرة النساء تحت أمّه — تبويب النساء يتمركز على عقدته (`autoLocate` + `.openWomenTree`)
+            // مكانه في شجرة النساء تحت أمّه — التبديل يبني شجرة النساء من جديد، فالطلب الصريح ينتظرها فتنفّذ
+            // «موقعك» بالمعرّفات و«أنت هنا» لكل أنواع الحسابات (`WomenLocateRequest` → `WomenOpenAction`، مفحوص: W1)
+            WomenLocateRequest.pending = true
             NotificationCenter.default.post(name: .openWomenTree, object: nil)
         case .notLinked?:
             showNotInTree = true

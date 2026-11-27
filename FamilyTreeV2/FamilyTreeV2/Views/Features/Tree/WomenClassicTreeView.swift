@@ -654,10 +654,15 @@ struct WomenClassicTreeView: View {
                     initIfNeeded()
                     let L = rebuild()
                     fit(in: geo.size, layout: L)
-                    // حساب المرأة: تفتح على عقدتها
-                    if autoLocate, let mid = meWomanId {
+                    // حساب المرأة، أو «موقعك» من شجرة العائلة (ابن/بنت البنت — أي حساب): تفتح على عقدته بـ «أنت هنا»
+                    let ids = byId
+                    switch WomenOpenAction.resolve(autoLocate: autoLocate, requested: WomenLocateRequest.take(),
+                                                   meId: meWomanId, hasNode: { ids[$0] != nil }) {
+                    case .locate(let mid):
                         locate(mid)
-                    } else {
+                    case .notInTree:
+                        showNotInWomenTree = true
+                    case .fit:
                         // أول فتح: ملاءمة الجذر وأبنائه مثل شجرة العائلة — بعد قياس بطاقة الأدوات وعمود الأزرار،
                         // فلا يقع الصف الأخير تحت الشريط السفلي ولا عقدة تحت الأزرار (طلب المالك ٢٠٢٦-١١-١٠)
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -668,7 +673,9 @@ struct WomenClassicTreeView: View {
                 }
                 // «عرض في شجرة النساء» من «حسابي» والشجرة مفتوحة أصلاً — تمركز على عقدتها
                 .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
-                    guard autoLocate, let mid = meWomanId else { return }
+                    // أو طلب «موقعك» الصريح والشجرة حيّة أصلاً — يُمسح هنا فلا يتكرر عند فتح لاحق
+                    let requested = WomenLocateRequest.take()
+                    guard autoLocate || requested, let mid = meWomanId else { return }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { locate(mid) }
                 }
                 .onChange(of: geo.size) { newSize in

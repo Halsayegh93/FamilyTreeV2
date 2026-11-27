@@ -33,6 +33,38 @@ nonisolated enum WomenMyNode {
     }
 }
 
+/// «موقعك» من شجرة العائلة لابن البنت/بنت البنت (مكانه في شجرة النساء وحدها): التبديل للنساء يبني الشجرة من جديد
+/// فيفوتها إشعار `.openWomenTree` — الطلب ينتظر هنا حتى تظهر الشجرة فتنفّذ «موقعك» بالمعرّفات مرة ثم يُمسح.
+/// كان التمركز لحساب المرأة والمقيّد وحدهما (`autoLocate`)، فيصل ابن البنت لتبويب النساء بلا تمركز على عقدته
+@MainActor
+enum WomenLocateRequest {
+    static var pending = false
+
+    /// يقرأ الطلب ويمسحه (يُنفَّذ مرة واحدة)
+    static func take() -> Bool {
+        defer { pending = false }
+        return pending
+    }
+}
+
+/// ماذا تفعل شجرة النساء أول ما تظهر
+nonisolated enum WomenOpenAction: Equatable {
+    /// تتمركز على عقدته وتُظهر «أنت هنا»
+    case locate(UUID)
+    /// طلب «موقعك» صريح ولا عقدة له — رسالة «لا مكان لك في شجرة النساء» بدل البداية الصامتة
+    case notInTree
+    /// الفتح العادي: ملاءمة الجذر وأبنائه
+    case fit
+
+    /// - autoLocate: حساب امرأة أو حساب مقيّد — تفتح على عقدتها إن وُجدت (وإلا الفتح العادي كما كان)
+    /// - requested: طلب «موقعك» من شجرة العائلة (`WomenLocateRequest`) — لكل أنواع الحسابات
+    /// - meId: عقدته (`WomenMyNode.resolve`)
+    static func resolve(autoLocate: Bool, requested: Bool, meId: UUID?, hasNode: (UUID) -> Bool) -> WomenOpenAction {
+        if let meId, hasNode(meId), autoLocate || requested { return .locate(meId) }
+        return requested ? .notInTree : .fit
+    }
+}
+
 /// صورة في شجرة النساء وبطاقتها — قاعدة واحدة: الإناث بلا صور أبداً، والذكر صورته أو صورة حسابه المربوط (ابن البنت)
 nonisolated enum WomenTreePhoto {
     static func url(isFemale: Bool, own: String?, linked: String?) -> String? {
