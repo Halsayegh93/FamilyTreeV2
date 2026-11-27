@@ -47,6 +47,9 @@ struct WaitingForApprovalView: View {
                     infoCard
                         .dsStaggerIn(0)
 
+                    // «بنت بنت العائلة» (B1): لم تجد أباها في الشجرة — تختار أمّها من بنات العائلة (السيرفر يقرّر الظهور)
+                    DaughterLineageCard()
+
                     // الأزرار
                     actionButtons
 

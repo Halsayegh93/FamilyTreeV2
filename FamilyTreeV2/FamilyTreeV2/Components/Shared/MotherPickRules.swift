@@ -31,10 +31,14 @@ enum MotherPickRules {
         return existsInWomenTree(accountId) ? accountId : nil
     }
 
-    /// مكانه في شجرة النساء لا في شجرة العائلة (ابن البنت، أو حساب مربوط بعقدة غير نسخته): أمّه من عقدته
-    static func isPlacedInWomenTree(accountId: UUID, nodeId: UUID?) -> Bool {
+    /// مكانه في شجرة النساء لا في شجرة العائلة (ابن البنت، أو حساب مربوط بعقدة غير نسخته): أمّه من عقدته.
+    /// منذ «بنت بنت» (B1، ٢٠٢٦-١١-٢٧) عقدة ابن/بنت البنت بمعرّف ملفه: نسخة بمعرّفه لها أب وملفه بلا أب = مكانه هناك
+    /// (نسخة الرجل لها أب في ملفه، وجذر الفرع بلا أب في عقدته)
+    static func isPlacedInWomenTree(accountId: UUID, nodeId: UUID?, nodeParentId: UUID? = nil,
+                                    profileFatherId: UUID? = nil) -> Bool {
         guard let nodeId else { return false }
-        return nodeId != accountId
+        if nodeId != accountId { return true }
+        return nodeParentId != nil && profileFatherId == nil
     }
 
     // MARK: السطر الثاني لصفّ البنت في مربّعي الأم والزوجة

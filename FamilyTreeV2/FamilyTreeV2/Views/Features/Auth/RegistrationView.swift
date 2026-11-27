@@ -396,8 +396,8 @@ struct RegistrationView: View {
             hintTitle: L10n.t("اكتبي اسم أبيك الثلاثي", "Type your father's three-part name"),
             hintMessage: L10n.t("بدون اسم العائلة", "Without the family name"),
             noMatchTitle: L10n.t("لم نجد هذا الاسم", "Name not found"),
-            emptyMessage: L10n.t("جرّبي الاسم بدون اسم العائلة، أو اتركيه وتربطك الإدارة",
-                                 "Try without the family name, or skip it and the admins will place you"),
+            emptyMessage: L10n.t("جرّبي الاسم بدون اسم العائلة، أو اتركيه — وإذا أمك من بنات العائلة تختارينها بعد الإرسال",
+                                 "Try without the family name, or skip it — if your mother is a family daughter you can pick her after sending"),
             selectedId: selectedFather?.id,
             onPick: { m in
                 selectedFather = m

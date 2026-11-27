@@ -158,6 +158,13 @@ enum DaughterSons {
         }
     }
 
+    /// عنوان بطاقة طلب النسب في «الوارد» حسب نوعه (ابن بنت من `daughter_sons_texts`، بنت بنت من التطبيق)
+    @MainActor static func inboxTitle(_ kind: DaughterDaughterRules.Kind) -> String {
+        kind == .daughterDaughter
+            ? L10n.t(DaughterDaughterRules.inboxTitle(kind), "Lineage request · daughter's daughter")
+            : text("inbox_title", "طلب نسب · ابن بنت", "Lineage request · daughter's son")
+    }
+
     /// نص من `daughter_sons_texts` (عربي فقط — الإنجليزية من التطبيق)، وإلا نص التطبيق
     @MainActor static func text(_ key: String, _ ar: String, _ en: String) -> String {
         if L10n.isArabic, let dict = config.values["daughter_sons_texts"] as? [String: Any],
@@ -295,6 +302,10 @@ enum DaughterSons {
         case "mother_father_not_found": return L10n.t("اختر أبوها من شجرة العائلة.", "Choose her father from the family tree.")
         case "name_too_long": return L10n.t("الاسم طويل.", "The name is too long.")
         case "requester_gone": return L10n.t("صاحب الطلب لم يعد له حساب.", "The requester no longer has an account.")
+        case "mother_has_other_husband":
+            return L10n.t("لأمّها زوج مسجّل باسم آخر — صحّح الشجرة أولاً أو ارفض الطلب.",
+                          "Her mother has a different recorded husband — fix the tree first or reject.")
+        case "account_frozen": return L10n.t("الحساب موقوف.", "The account is suspended.")
         default:
             return AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر الحفظ. حاول مرة أخرى.", "Couldn't save. Try again."))
         }
@@ -1081,10 +1092,21 @@ nonisolated struct LineageRequestDetails: Decodable, Sendable {
     /// v2: حي/متوفى للأب في الحالتين (المسجّل من الشجرة)
     let fatherIsDeceased: Bool?
     let father: Father?
+    /// «بنت بنت» (v3): لأمّها زوج مسجّل والاسم المكتوب لا يطابقه
+    let husbandConflict: Bool?
+    let motherHusbandName: String?
 
     enum CodingKeys: String, CodingKey {
         case motherId = "mother_id", motherName = "mother_name", newMother = "new_mother", fatherId = "father_id"
         case fatherName = "father_name", fatherIsDeceased = "father_is_deceased", father
+        case husbandConflict = "husband_conflict", motherHusbandName = "mother_husband_name"
+    }
+
+    /// اسم زوج الأم المسجّل حين يختلف عن الاسم المكتوب
+    var husbandConflictName: String? {
+        guard husbandConflict == true else { return nil }
+        let n = (motherHusbandName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : n
     }
 
     static func parse(_ details: String?) -> LineageRequestDetails? {
@@ -1213,6 +1235,8 @@ extension DaughterSons {
 struct LineageDetailsGroups: View {
     let details: LineageFullDetails
     var fallbackName: String = ""
+    /// «بنت بنت» (B1): «هي بنفسها» بدل «هو بنفسه»
+    var kind: DaughterDaughterRules.Kind = .daughterSon
     var compact: Bool = true
 
     var body: some View {
@@ -1274,8 +1298,9 @@ struct LineageDetailsGroups: View {
     @ViewBuilder private var registeredBy: some View {
         let j = details.join
         let who: String = {
-            if let r = j?.requester { return r.isSelf == true ? L10n.t("هو بنفسه", "Himself") : (nonEmpty(r.name) ?? "—") }
-            if let r = details.requester { return r.isSelf == true ? L10n.t("هو بنفسه", "Himself") : (nonEmpty(r.name) ?? "—") }
+            let me = L10n.t(DaughterDaughterRules.selfLabel(kind), kind == .daughterDaughter ? "Herself" : "Himself")
+            if let r = j?.requester { return r.isSelf == true ? me : (nonEmpty(r.name) ?? "—") }
+            if let r = details.requester { return r.isSelf == true ? me : (nonEmpty(r.name) ?? "—") }
             return "—"
         }()
         let joinNote: String = {
@@ -1389,11 +1414,12 @@ struct LineageInfoRow: View {
 struct LineageFullDetailsBox: View {
     let details: LineageFullDetails
     let name: String
+    var kind: DaughterDaughterRules.Kind = .daughterSon
     let onClose: () -> Void
 
     var body: some View {
         DSComposer(
-            title: DaughterSons.text("inbox_title", "طلب نسب · ابن بنت", "Lineage request · daughter's son"),
+            title: DaughterSons.inboxTitle(kind),
             subtitle: name,
             icon: "arrow.triangle.branch",
             tint: DS.Color.female,
@@ -1404,7 +1430,7 @@ struct LineageFullDetailsBox: View {
             onSubmit: {},
             onCancel: onClose
         ) {
-            LineageDetailsGroups(details: details, fallbackName: name, compact: false)
+            LineageDetailsGroups(details: details, fallbackName: name, kind: kind, compact: false)
         }
     }
 }
@@ -1445,11 +1471,13 @@ struct AdminLineageRequestCard: View {
     var body: some View {
         let d = LineageRequestDetails.parse(request.details)
         let isNewFather = (d?.fatherId ?? "").isEmpty
+        let kind = DaughterDaughterRules.kind(ofDetails: request.details)
+        let title = DaughterSons.inboxTitle(kind)
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "arrow.triangle.branch", tint: DS.Color.female)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(DaughterSons.text("inbox_title", "طلب نسب · ابن بنت", "Lineage request · daughter's son"))
+                    Text(title)
                         .dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
                     Text(request.member?.fullName ?? L10n.t("العضو", "the member"))
                         .dsFont(.footnote).foregroundColor(DS.Color.textSecondary).dsNameLines()
@@ -1460,14 +1488,24 @@ struct AdminLineageRequestCard: View {
                 }
             }
             if let full {
-                AnyView(LineageDetailsGroups(details: full, fallbackName: request.member?.fullName ?? ""))
+                AnyView(LineageDetailsGroups(details: full, fallbackName: request.member?.fullName ?? "", kind: kind))
                 DSChipButton(L10n.t("كل التفاصيل", "All details"), icon: "list.bullet.rectangle", size: .small) {
                     showFull = true
                 }
             } else {
                 legacyRows(d, isNewFather: isNewFather)
             }
-            Text(d?.newMother != nil
+            if kind == .daughterDaughter, let other = d?.husbandConflictName {
+                // كتبت اسماً غير زوج أمّها المسجّل — الموافقة يرفضها السيرفر (لا يُكتب فوق زوج مختلف)
+                DSNoteCard(L10n.t("كتبت اسم أبيها «\(d?.fatherName ?? "")» ولأمّها زوج مسجّل «\(other)». صحّح الشجرة أولاً أو ارفض الطلب.",
+                                  "She typed «\(d?.fatherName ?? "")» but her mother's recorded husband is «\(other)». Fix the tree first or reject."),
+                           icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+            }
+            Text(kind == .daughterDaughter
+                 ? L10n.t(DaughterDaughterRules.approveNote(kind, isNewFather: isNewFather),
+                          isNewFather ? "On approval her father is added as her mother's husband, she is placed under them in the women's tree and her account is activated."
+                                      : "On approval she is placed under her mother and father in the women's tree and her account is activated.")
+                 : d?.newMother != nil
                  ? L10n.t("عند الموافقة تُضاف أمّه بنتاً لأبيها، وأبوه زوجاً لها، ثم هو تحتهما في شجرة النساء.",
                           "On approval his mother is added as her father's daughter, his father as her husband, then he under them in the women's tree.")
                  : L10n.t("عند الموافقة يُضاف تحت أمّه في شجرة النساء" + (isNewFather ? "، ويُضاف أبوه زوجاً لها." : "."),
@@ -1476,7 +1514,7 @@ struct AdminLineageRequestCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣): أمّه في شجرة النساء — زرّ المعاينة الرئيسي = «موافقة»
             let men = adminRequestVM.memberVM?.allMembers ?? []
-            if let place = TreePlace.lineage(request, kindLabel: DaughterSons.text("inbox_title", "طلب نسب · ابن بنت", "Lineage request · daughter's son"),
+            if let place = TreePlace.lineage(request, kindLabel: title,
                                              data: TreePlaceData(men: men, women: WomenStore.cache)) {
                 AnyView(TreePlaceSection(place: place, men: men,
                                          primary: TreePlacePrimary(title: L10n.t("موافقة", "Approve")) {
@@ -1502,7 +1540,8 @@ struct AdminLineageRequestCard: View {
         .task(id: request.id) { full = await DaughterSons.fetchRequestDetails(request.id) }
         .dsTallBox(isPresented: $showFull) {
             if let full {
-                LineageFullDetailsBox(details: full, name: request.member?.fullName ?? "") { showFull = false }
+                LineageFullDetailsBox(details: full, name: request.member?.fullName ?? "",
+                                      kind: DaughterDaughterRules.kind(ofDetails: request.details)) { showFull = false }
             }
         }
         .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showReject) {
@@ -1511,7 +1550,10 @@ struct AdminLineageRequestCard: View {
             Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) { decide(approve: false, reason: reason) }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.t("تعود له خانة «أكمل حسابك» ليختار من جديد، ويصله السبب.", "He gets «Complete your account» again with the reason."))
+            let k = DaughterDaughterRules.kind(ofDetails: request.details)
+            Text(L10n.t(DaughterDaughterRules.rejectNote(k),
+                        k == .daughterDaughter ? "She gets the reason and can choose again; her join request stays open."
+                                               : "He gets «Complete your account» again with the reason."))
         }
     }
 

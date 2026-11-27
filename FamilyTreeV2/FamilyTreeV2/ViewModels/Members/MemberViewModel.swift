@@ -441,8 +441,12 @@ class MemberViewModel: ObservableObject {
             }
             self.currentMemberWomenFamily = entries
             if userId == currentUser?.id {
-                let placed = MotherPickRules.isPlacedInWomenTree(accountId: userId, nodeId: place?.id)
-                self.currentMemberWomenPlace = placed ? place : nil
+                // عقدة ابن/بنت البنت بمعرّف ملفه (منذ B1): نسختها بمعرّفه لها أب وملفه بلا أب
+                let spot = place ?? node
+                let placed = MotherPickRules.isPlacedInWomenTree(accountId: userId, nodeId: spot?.id,
+                                                                 nodeParentId: spot?.parentId,
+                                                                 profileFatherId: currentUser?.fatherId)
+                self.currentMemberWomenPlace = placed ? spot : nil
             }
         } catch {
             // تعثّر الجلب (شبكة، إلغاء أثناء السحب للتحديث) لا يمسح ما يظهر — كان يُفرّغ «عائلتي»

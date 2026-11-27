@@ -934,7 +934,10 @@ extension TreePlace {
         let mother = data.woman(mid)
         let name = mother.map { TreePlaceText.pair($0, fatherOf: { data.man($0) ?? data.woman($0) }) } ?? (d.motherName ?? "")
         return TreePlace(tree: .women, change: .subject(mid), kindLabel: kindLabel,
-                         noteOverride: L10n.t("ابن بنت العائلة «\(name)»", "Son of the family's daughter «\(name)»"))
+                         noteOverride: DaughterDaughterRules.kind(ofDetails: r.details) == .daughterDaughter
+                            ? L10n.t(DaughterDaughterRules.placeNote(.daughterDaughter, motherName: name),
+                                     "Daughter of the family's daughter «\(name)»")
+                            : L10n.t("ابن بنت العائلة «\(name)»", "Son of the family's daughter «\(name)»"))
     }
 }
 
