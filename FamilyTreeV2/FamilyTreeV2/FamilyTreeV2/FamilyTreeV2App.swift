@@ -21,6 +21,9 @@ struct FamilyTreeV2App: App {
     init() {
         // بلاغات الأعطال أولاً — قبل أي شيء آخر ليُلتقط أي عطل عند الإقلاع
         CrashReporting.start()
+        #if DEBUG
+        DebugPerfBench.runIfRequested()
+        #endif
     }
 
     private var preferredScheme: ColorScheme? {
