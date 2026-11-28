@@ -112,4 +112,21 @@ check(D.entryCount(duplicates: 0, problems: 0, nameless: 0), 0, "nothing")
 check(D.entryCount(duplicates: 5, problems: 12, nameless: 9), 26, "sum of the three lists")
 check(D.entryCount(duplicates: 5, problems: nil, nameless: 9), 14, "problems not ready yet")
 
+// MARK: الترتيب داخل المجموعة «الأحدث» (قرار المالك ٢٠٢٦-١١-٢٨)
+// الأحدث مواليداً أولاً (تاريخ الميلاد تنازلياً)، ومن بلا تاريخ في الآخر، ثم تاريخ الإضافة الأحدث، ثم ترتيب الدخل
+func q(_ id: Int, _ birth: String?, _ added: Double?) -> D.Person {
+    D.Person(id: uid(id), parent: uid(900), firstName: "محمد", birth: birth, added: added.map { Date(timeIntervalSince1970: $0) })
+}
+let newest = D.groups([q(1, "1950-03-01", 10), q(2, nil, 50), q(3, "1990-01-01", 5), q(4, "1970", 1),
+                       q(5, nil, 70), q(6, "1990-01-01", 9), q(7, nil, nil), q(8, "bad", 80)])
+check(newest.first?.ids, [uid(6), uid(3), uid(4), uid(1), uid(8), uid(5), uid(2), uid(7)],
+      "born latest first · same birth → added latest · no/bad birth last by added · nothing at all → input order last")
+check(D.newestFirst([q(10, "2001-05-05", nil), q(11, "2001-05-05", 3)]).map(\.id), [uid(11), uid(10)],
+      "same birth: the one with an added date first")
+check(D.birthKey("1985"), "1985-01-01", "year only = 1 Jan (as stored)")
+check(D.birthKey(" 1985-07-09T00:00:00 "), "1985-07-09", "timestamp trimmed to the day")
+check(D.birthKey(""), nil, "empty = no birth")
+check(newest.first?.signature, D.Group.signature(parent: uid(900), ids: (1...8).map(uid)),
+      "order does not change «ليسا مكرّرين» signature")
+
 if failures == 0 { print("ALL PASS") } else { print("\(failures) FAILED"); exit(1) }

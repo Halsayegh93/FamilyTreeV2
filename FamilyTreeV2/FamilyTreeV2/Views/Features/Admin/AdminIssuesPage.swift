@@ -142,13 +142,16 @@ struct AdminIssuesData {
                      dismissed: Set<String>, seesAll: Bool) -> AdminIssuesData {
         var out = AdminIssuesData()
         let live = members.filter { $0.status != .deleted }
-        out.men = AdminDuplicateNames.groups(live.map { .init(id: $0.id, parent: $0.fatherId, firstName: $0.firstName) },
+        out.men = AdminDuplicateNames.groups(live.map { .init(id: $0.id, parent: $0.fatherId, firstName: $0.firstName,
+                                                               birth: $0.birthDate, added: created($0, accounts: accounts)) },
                                              dismissed: dismissed)
         guard seesAll else { return out }
         if !women.isEmpty {
             // عقد الرجال المنسوخة في شجرة النساء (معرّفها في `profiles`) مكانها شجرة الرجال
             let profileIds = Set(members.map(\.id))
-            out.women = AdminDuplicateNames.groups(women.map { .init(id: $0.id, parent: $0.fatherId, firstName: $0.firstName) },
+            out.women = AdminDuplicateNames.groups(women.map { .init(id: $0.id, parent: $0.fatherId, firstName: $0.firstName,
+                                                                     birth: $0.birthDate,
+                                                                     added: $0.createdAt.flatMap(DateParsing.iso)) },
                                                    excluding: profileIds, dismissed: dismissed)
             out.marriedNoHusband = AdminMarriedNoHusband.ids(women.map(Self.woman), excluding: profileIds)
         }
