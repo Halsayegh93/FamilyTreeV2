@@ -129,7 +129,8 @@ class NewsViewModel: ObservableObject {
 
     func fetchNews(force: Bool = false) async {
         if allNews.isEmpty, feedSearch.isEmpty, feedType == nil,
-           let cached = CacheManager.shared.load([NewsPost].self, for: .news, in: cacheSession) {
+           let cached = await CacheManager.shared.loadAsync([NewsPost].self, for: .news, in: cacheSession),
+           allNews.isEmpty {
             allNews = Array(cached.prefix(newsPageSize))
         }
         guard force || (!isLoadingNews && throttler.canFetch(key: "news", interval: 10)) || allNews.isEmpty else { return }

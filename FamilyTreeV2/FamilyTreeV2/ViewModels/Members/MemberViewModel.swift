@@ -290,6 +290,13 @@ class MemberViewModel: ObservableObject {
 
     // MARK: - Fetch Members
 
+    /// فكّ ردّ الأعضاء على خيط خلفي
+    nonisolated private static func decodeMembers(_ data: Data) async throws -> [FamilyMember] {
+        try await Task.detached(priority: .userInitiated) {
+            try JSONDecoder().decode([FamilyMember].self, from: data)
+        }.value
+    }
+
     func fetchAllMembers(force: Bool = false) async {
         // تحميل من الكاش أولاً إذا لا توجد بيانات (في background لتجنب تجميد الواجهة)
         if allMembers.isEmpty,
@@ -320,7 +327,8 @@ class MemberViewModel: ObservableObject {
                 .limit(10000)
                 .execute()
 
-            let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
+            // فكّ ~٣ ميغابايت خارج الخيط الرئيسي (فحص التعليق عند الفتح ٢٠٢٦-١١-٢٨)
+            let members = try await Self.decodeMembers(response.data)
 
             guard CacheManager.shared.isCurrent(cacheSession), !Task.isCancelled else { return }
             self.allMembers = members

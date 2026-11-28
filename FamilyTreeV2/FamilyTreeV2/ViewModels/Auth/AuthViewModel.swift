@@ -1103,7 +1103,8 @@ class AuthViewModel: ObservableObject {
         // البداية لتجديد الجلسة وثلاثة طلبات للخادم (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). إن تغيّر شيء
         // (جُمّد، حُذف رقمه، انتهت الجلسة) ينقله التحقق للشاشة الصحيحة، والسيرفر يحمي البيانات بنفسه.
         if status == .checking, currentUser == nil {
-            restoreActiveMemberFromCache()
+            await restoreActiveMemberFromCache()
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
         }
 
         let user: Supabase.User
@@ -1330,10 +1331,14 @@ class AuthViewModel: ObservableObject {
 
     /// العضو المفعّل من كاش حسابه (جلسة محفوظة على الجهاز، بلا شبكة) — للدخول الفوري عند فتح التطبيق.
     /// غير المفعّل (معلّق، مجمّد، بلا رقم…) ينتظر التحقق من الخادم كما كان.
-    private func restoreActiveMemberFromCache() {
+    /// الكاش (~٢٨٠٠ عضو، ~٣ ميغابايت) يُقرأ ويُفكّ على طابور الكاش لا على الخيط الرئيسي — كان يُقرأ متزامناً عند الإقلاع
+    /// (فحص «App hanging» عند الفتح ٢٠٢٦-١١-٢٨)
+    private func restoreActiveMemberFromCache() async {
         guard let storedUser = supabase.auth.currentUser else { return }
         CacheManager.shared.beginAccount(storedUser.id)
-        guard let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+        let session = CacheManager.shared.session
+        guard let cached = await CacheManager.shared.loadAsync([FamilyMember].self, for: .members, in: session),
+              status == .checking, currentUser == nil,
               let profile = cached.first(where: { $0.id == storedUser.id }),
               resolveAuthAccess(for: profile) == .fullyAuthenticated else { return }
         Log.info("[AUTH] دخول فوري من الكاش — التحقق يكمل بالخلفية")

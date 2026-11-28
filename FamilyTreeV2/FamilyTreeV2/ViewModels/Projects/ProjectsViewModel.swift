@@ -30,7 +30,8 @@ class ProjectsViewModel: ObservableObject {
     func fetchProjects() async {
         // تحميل من الكاش أولاً
         if projects.isEmpty,
-           let cached = CacheManager.shared.load([Project].self, for: .projects, in: cacheSession) {
+           let cached = await CacheManager.shared.loadAsync([Project].self, for: .projects, in: cacheSession),
+           projects.isEmpty {
             self.projects = cached
             Log.info("[Projects] تم تحميل \(cached.count) مشروع من الكاش")
         }

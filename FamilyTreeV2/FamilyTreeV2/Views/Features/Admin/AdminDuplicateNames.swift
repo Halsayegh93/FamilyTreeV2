@@ -151,8 +151,55 @@ nonisolated enum AdminDuplicateNames {
 
     // MARK: المدخل
 
-    /// رقم مدخل «المكرر والأخطاء»: المجموعات المكررة + أصحاب مشكلات الشجرة + الأرقام بدون أسماء (nil = لم يصل بعد)
-    static func entryCount(duplicates: Int, problems: Int?, nameless: Int) -> Int {
-        duplicates + (problems ?? 0) + nameless
+    /// رقم مدخل «المكرر والأخطاء»: المجموعات المكررة + أصحاب مشكلات الشجرة + الأرقام بدون أسماء
+    /// + «متزوجة بلا زوج مربوط» (nil = لم يصل بعد)
+    static func entryCount(duplicates: Int, problems: Int?, nameless: Int, marriedNoHusband: Int = 0) -> Int {
+        duplicates + (problems ?? 0) + nameless + marriedNoHusband
+    }
+}
+
+// MARK: - «متزوجة بلا زوج مربوط» (طلب المالك ٢٠٢٦-١١-٢٨)
+//
+// بنات العائلة في شجرة النساء (`women_members` لها أصل `parent_id`) مكتوب أنها متزوجة (`is_married`) ولا زوج مربوط
+// (`husband_id` فارغ) — الصفّ يفتح مربّع المرأة نفسه حيث يُربط الزوج. فحصه: tests/admin-redesign/N2.
+nonisolated enum AdminMarriedNoHusband {
+    struct Woman: Equatable {
+        let id: UUID
+        /// الأصل في شجرة النساء (`parent_id`)
+        let parent: UUID?
+        let mother: UUID?
+        let isFemale: Bool
+        let isMarried: Bool
+        let husband: UUID?
+        let firstName: String
+        let fullName: String
+    }
+
+    /// المعرّفات بترتيب الدخل — بنت عائلة (لها أصل) أنثى متزوجة بلا زوج
+    /// - excluding: عقد الرجال المنسوخة (معرّفها في `profiles`)
+    static func ids(_ women: [Woman], excluding: Set<UUID> = []) -> [UUID] {
+        women.filter { $0.isFemale && $0.isMarried && $0.husband == nil && $0.parent != nil && !excluding.contains($0.id) }
+            .map(\.id)
+    }
+
+    /// أبناؤها: من أصله أو أمّه هي — مرة لكل ابن
+    static func childCount(_ id: UUID, in women: [Woman]) -> Int {
+        women.filter { $0.id != id && ($0.parent == id || $0.mother == id) }.count
+    }
+
+    /// «شهد بنت صلاح عبدالحميد» — من النسب، وإلا من كلمات الاسم الكامل (الثانية والثالثة)
+    static func displayName(first: String, father: String?, grandfather: String?, fullName: String) -> String {
+        let words = fullName.split(whereSeparator: \.isWhitespace).map(String.init)
+        let name = first.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? (words.first ?? "")
+                                                                                  : first.trimmingCharacters(in: .whitespacesAndNewlines)
+        var lineage: [String]
+        if let f = father?.trimmingCharacters(in: .whitespacesAndNewlines), !f.isEmpty {
+            lineage = [f]
+            if let g = grandfather?.trimmingCharacters(in: .whitespacesAndNewlines), !g.isEmpty { lineage.append(g) }
+        } else {
+            lineage = Array(words.dropFirst().prefix(2))
+        }
+        guard !lineage.isEmpty else { return name }
+        return "\(name) بنت " + lineage.joined(separator: " ")
     }
 }

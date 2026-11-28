@@ -126,8 +126,12 @@ class AppState: ObservableObject {
             async let m: () = member.fetchAllMembers(force: true)
             async let n: () = news.fetchNews(force: true)
             async let notif: () = notifications.fetchNotifications(force: true)
-            async let proj: () = projects.fetchProjects()
-            _ = await (m,n,notif,proj)
+            _ = await (m,n,notif)
+            // المشاريع ليست في أول شاشة — بعد الثلاثة لا معها (فحص التعليق عند الفتح ٢٠٢٦-١١-٢٨)
+            Task { @MainActor in
+                guard !Task.isCancelled, self?.sessionRevision == revision else { return }
+                await projects.fetchProjects()
+            }
             guard !Task.isCancelled, let self, self.sessionRevision == revision,
                   self.activeProfileId == profileId, self.authVM.status == .fullyAuthenticated else { return }
             await notifications.registerDevice()

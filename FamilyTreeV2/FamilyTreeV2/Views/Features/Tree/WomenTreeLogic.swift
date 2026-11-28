@@ -90,3 +90,65 @@ nonisolated enum WomenNodeSpeech {
         return collapsed ? "تُفتح فيظهر الأبناء (\(children))" : "تُطوى فيختفي الأبناء"
     }
 }
+
+/// العقدة التي يتمركز عليها البحث و«موقعك» (٢٠٢٦-١١-٢٨، مفحوص: tests/admin-redesign/W2):
+/// الزوجة الوافدة (بلا أب في الشجرة) مربّع جنب زوجها ← عقدته، والزوج من خارج العائلة مربّع جنب زوجته البنت ← عقدتها
+nonisolated enum WomenFocusTarget {
+    static func resolve(id: UUID, fatherInTree: Bool, husbandId: UUID?, husbandInTree: Bool,
+                        outsideWifeOf: [UUID: UUID]) -> UUID {
+        var target = id
+        if !fatherInTree, let h = husbandId, husbandInTree { target = h }
+        if let w = outsideWifeOf[target] { target = w }
+        return target
+    }
+}
+
+/// زوج البنت جنبها (من خارج العائلة، أو من العائلة باختيارها `spouse_shown`) — ظاهر دائماً متى كان ظاهراً لها،
+/// مطويّةً أو مفتوحة (طلب المالك ٢٠٢٦-١١-٢٨؛ كان يختفي وهي مطويّة ولها أبناء)
+nonisolated enum WomenSpouseRule {
+    static func showsHusband(hasHusband: Bool, collapsed: Bool, hasKids: Bool) -> Bool {
+        hasHusband
+    }
+}
+
+/// شكل واحد للزوج والزوجة جنب العقدة (طلب المالك ٢٠٢٦-١١-٢٨ «وحّد الشكل»): دائرة/ورقة بمقاس واحد، كبسولة اسم
+/// بعرض واحد، ومسافة واحدة عن العقدة، وخطّ ذهبي واحد من حافة العقدة إلى أبعد زوج/زوجة في الجهة.
+/// الأرقام = مقاس الزوج المعتمد (٢٠٢٦-١١-٢٤) × معامل «حجم النص»
+nonisolated struct WomenSpouseGeometry: Equatable {
+    let k: CGFloat
+    let circle: CGFloat
+    let nodeW: CGFloat
+
+    /// قطر شكل الزوج/الزوجة
+    var husbandSquare: CGFloat { 92 * k }
+    var wifeSquare: CGFloat { husbandSquare }
+    /// عرض خليته وكبسولة اسمه
+    var husbandCellW: CGFloat { 150 * k }
+    var wifeCellW: CGFloat { husbandCellW }
+    /// بين خليتين متجاورتين (زوجتان في جهة واحدة)
+    var spacing: CGFloat { 6 * k }
+    /// بين حافة العقدة وأول خلية
+    var gap: CGFloat { 18 * k }
+
+    /// مركز صفّ من n خلايا عن مركز العقدة
+    func centerX(_ n: Int) -> CGFloat {
+        circle / 2 + gap + (CGFloat(n) * wifeCellW + CGFloat(max(0, n - 1)) * spacing) / 2
+    }
+    var husbandCellX: CGFloat { centerX(1) }
+
+    /// كم يطلع صفّ n خلايا عن حافة العقدة
+    func overhang(_ n: Int) -> CGFloat {
+        guard n > 0 else { return 0 }
+        return circle / 2 + gap + CGFloat(n) * wifeCellW + CGFloat(n - 1) * spacing + 2 * k - nodeW / 2
+    }
+    var husbandOverhang: CGFloat { overhang(1) }
+
+    /// الخط الذهبي: من حافة شكل العضو…
+    var lineFrom: CGFloat { circle / 2 }
+    /// …إلى الحافة القريبة من شكل أبعد خلية في صفّ n
+    func lineTo(_ n: Int) -> CGFloat {
+        guard n > 0 else { return lineFrom }
+        let far = circle / 2 + gap + CGFloat(n - 1) * (wifeCellW + spacing) + wifeCellW / 2
+        return far - wifeSquare / 2
+    }
+}

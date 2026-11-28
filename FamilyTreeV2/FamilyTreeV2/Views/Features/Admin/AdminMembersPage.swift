@@ -587,9 +587,11 @@ struct AdminMembersPage: View {
     private var issuesRow: AnyView? {
         let problems = reviewCounts[.problems] ?? 0
         let total = AdminDuplicateNames.entryCount(duplicates: issues.duplicates, problems: problems,
-                                                   nameless: issues.nameless.count)
+                                                   nameless: issues.nameless.count,
+                                                   marriedNoHusband: issues.marriedNoHusband.count)
         guard total > 0 else { return nil }
-        let line = AdminIssuesRow.line(duplicates: issues.duplicates, problems: problems, nameless: issues.nameless.count)
+        let line = AdminIssuesRow.line(duplicates: issues.duplicates, problems: problems, nameless: issues.nameless.count,
+                                       marriedNoHusband: issues.marriedNoHusband.count)
         return AnyView(AdminIssuesRow(count: total, line: line))
     }
 

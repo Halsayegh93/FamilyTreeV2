@@ -122,7 +122,9 @@ struct WomenTreeView: View {
                         // حساب امرأة: تفتح الشجرة على عقدتها
                         autoLocate: (authVM.currentUser?.isWomanAccount ?? false) || LineageGateStore.shared.status?.flagged == true,
                         onRefresh: { await reloadWomen() },
-                        linkedAvatars: linkedAvatars
+                        linkedAvatars: linkedAvatars,
+                        // 🔍 مثل شجرة العائلة وبصلاحيتها نفسها (طلب المالك ٢٠٢٦-١١-٢٨)
+                        canSearch: authVM.memberSees(.treeSearch)
                     )
                 }
             }

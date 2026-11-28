@@ -131,6 +131,8 @@ struct AdminIssuesData {
     var women: [AdminDuplicateNames.Group] = []
     /// «أرقام بدون أسماء» (المالك والمدير فقط) — الأحدث أولاً
     var nameless: [UUID] = []
+    /// «متزوجة بلا زوج مربوط» (من يرى شجرة النساء) — بنات العائلة `is_married` بلا `husband_id`
+    var marriedNoHusband: [UUID] = []
 
     var duplicates: Int { men.count + women.count }
 
@@ -148,6 +150,7 @@ struct AdminIssuesData {
             let profileIds = Set(members.map(\.id))
             out.women = AdminDuplicateNames.groups(women.map { .init(id: $0.id, parent: $0.fatherId, firstName: $0.firstName) },
                                                    excluding: profileIds, dismissed: dismissed)
+            out.marriedNoHusband = AdminMarriedNoHusband.ids(women.map(Self.woman), excluding: profileIds)
         }
         let review = AppConfigValues.shared.reviewAccountIds
         out.nameless = AdminDuplicateNames.nameless(members.map { m in
@@ -157,6 +160,11 @@ struct AdminIssuesData {
                   created: created(m, accounts: accounts))
         })
         return out
+    }
+
+    static func woman(_ m: FamilyMember) -> AdminMarriedNoHusband.Woman {
+        .init(id: m.id, parent: m.fatherId, mother: m.motherId, isFemale: m.isFemale, isMarried: m.isMarried == true,
+              husband: m.husbandId, firstName: m.firstName, fullName: m.fullName)
     }
 
     /// السجلّ بلا اسم و«معلّق» يُنشأ عند الدخول برمز الدخول — وبعد وصول قوائم الحسابات يُشترط وجوده فيها
@@ -239,11 +247,14 @@ struct AdminIssuesRow: View {
     }
 
     /// «أسماء مكررة · مشكلات الشجرة · أرقام بدون أسماء» — ما فيه أحد فقط
-    static func line(duplicates: Int, problems: Int, nameless: Int) -> String {
+    static func line(duplicates: Int, problems: Int, nameless: Int, marriedNoHusband: Int = 0) -> String {
         var parts: [String] = []
         if duplicates > 0 { parts.append(L10n.t("أسماء مكررة \(duplicates)", "Duplicate names \(duplicates)")) }
         if problems > 0 { parts.append(L10n.t("مشكلات الشجرة \(problems)", "Tree problems \(problems)")) }
         if nameless > 0 { parts.append(L10n.t("أرقام بدون أسماء \(nameless)", "Numbers without names \(nameless)")) }
+        if marriedNoHusband > 0 {
+            parts.append(L10n.t("متزوجة بلا زوج \(marriedNoHusband)", "Married, no husband \(marriedNoHusband)"))
+        }
         return parts.joined(separator: " · ")
     }
 }
@@ -326,8 +337,8 @@ struct AdminIssuesPage: View {
 
     private var header: AdminPageHeader {
         AdminPageHeader(title: AdminIssuesRow.title,
-                        subtitle: L10n.t("أسماء مكررة تحت الأب نفسه، ومشكلات في الشجرة، وأرقام لم تكمل التسجيل",
-                                         "Same name under one father, tree problems, and numbers that didn't finish signing up"),
+                        subtitle: L10n.t("أسماء مكررة تحت الأب نفسه، ومشكلات في الشجرة، ومتزوجات بلا زوج مربوط، وأرقام لم تكمل التسجيل",
+                                         "Same name under one father, tree problems, married women with no husband linked, and numbers that didn't finish signing up"),
                         readOnly: !authVM.adminCanEdit(.family))
     }
 
@@ -386,6 +397,7 @@ struct AdminIssuesPage: View {
             } else {
                 AnyView(duplicatesSection)
                 AnyView(problemsSection)
+                if seesAll { AnyView(marriedSection) }
                 if seesAll { AnyView(namelessSection) }
             }
         }
@@ -722,7 +734,69 @@ struct AdminIssuesPage: View {
         }
     }
 
-    // MARK: ٣) أرقام بدون أسماء
+    // MARK: ٣) متزوجة بلا زوج مربوط
+
+    private var marriedSection: some View {
+        let rows = data.marriedNoHusband.compactMap { id in women.first { $0.id == id } }
+        return VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+            AdminSectionLabel(title: L10n.t("متزوجة بلا زوج مربوط", "Married, no husband linked"),
+                              trailing: rows.isEmpty ? nil : AdminNumberText.grouped(rows.count))
+            if rows.isEmpty {
+                emptyLine(L10n.t("كل المتزوجات مربوطات بأزواجهن", "Every married woman is linked to her husband"))
+            } else {
+                AdminRowsCard(dividerInset: 0) {
+                    ForEach(rows) { w in
+                        AnyView(marriedRow(w))
+                    }
+                }
+            }
+            footnote(L10n.t("بنات العائلة المكتوب أنهن متزوجات ولا زوج مربوطاً بهن. اضغط الاسم لربط الزوج من بياناتها.",
+                            "Family daughters marked as married with no husband linked. Tap a name to link the husband."))
+        }
+    }
+
+    /// «شهد بنت صلاح عبدالحميد» + «لها أبناء» — الأب والجد من شجرة النساء أو ملفاتهم
+    private func marriedName(_ w: FamilyMember) -> String {
+        func person(_ id: UUID?) -> FamilyMember? {
+            guard let id else { return nil }
+            return women.first { $0.id == id } ?? memberVM.member(byId: id)
+        }
+        let father = person(w.fatherId)
+        let grand = person(father?.fatherId)
+        return AdminMarriedNoHusband.displayName(first: w.firstName, father: father?.firstName,
+                                                 grandfather: grand?.firstName, fullName: w.fullName)
+    }
+
+    private func marriedRow(_ w: FamilyMember) -> some View {
+        let name = marriedName(w)
+        let kids = AdminMarriedNoHusband.childCount(w.id, in: women.map(AdminIssuesData.woman))
+        return Button {
+            selectedWoman = w
+        } label: {
+            HStack(spacing: DS.Spacing.md) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    Text(verbatim: name)
+                        .dsFont(.hubRow)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if kids > 0 {
+                        AdminMemberTagPill(tag: AdminMemberTag(text: L10n.t("لها أبناء", "Has children"), tone: .family))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                DSChevron()
+            }
+            .padding(.vertical, DS.Spacing.smd)
+            .frame(minHeight: DS.Hub.rowMinHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(AdminRowPressStyle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(L10n.t("يفتح بياناتها لربط الزوج", "Opens her details to link the husband"))
+    }
+
+    // MARK: ٤) أرقام بدون أسماء
 
     private var namelessSection: some View {
         let rows = data.nameless.compactMap { memberVM.member(byId: $0) }

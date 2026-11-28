@@ -10,6 +10,9 @@ private struct QuietSupabaseLogger: SupabaseLogger {
     )
 
     func log(message: SupabaseLogMessage) {
+        // المستوى أولاً — نصّ الرسالة (`description`) يُبنى لكل طلب ورد ولو كان «debug» (حتى ردّ الأعضاء ~٣ ميغابايت)،
+        // وكان يُبنى على الخيط الرئيسي عند الإقلاع (فحص التعليق عند الفتح ٢٠٢٦-١١-٢٨)
+        guard message.level == .warning || message.level == .error else { return }
         let text = message.description
         // تجاهل أخطاء الإلغاء (-999) — تحصل عند الخروج من شاشة أو بدء تحديث جديد، وهي غير مؤذية
         if text.contains("Code=-999") || text.contains("cancelled") || text.contains("CancellationError") {

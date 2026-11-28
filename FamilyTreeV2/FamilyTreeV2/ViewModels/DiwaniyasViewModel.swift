@@ -62,7 +62,8 @@ class DiwaniyasViewModel: ObservableObject {
     func fetchDiwaniyas() async {
         // تحميل من الكاش أولاً
         if diwaniyas.isEmpty,
-           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas, in: cacheSession) {
+           let cached = await CacheManager.shared.loadAsync([Diwaniya].self, for: .diwaniyas, in: cacheSession),
+           diwaniyas.isEmpty {
             self.diwaniyas = cached
             Log.info("[Diwaniyas] تم تحميل \(cached.count) ديوانية من الكاش")
         }
