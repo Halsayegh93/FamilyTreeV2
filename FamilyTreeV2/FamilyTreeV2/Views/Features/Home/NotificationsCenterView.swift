@@ -229,18 +229,21 @@ struct NotificationsCenterView: View {
                     let notifUnread = visible.filter { (belongsToNotificationsTab($0) || belongsToActivityTab($0)) && !$0.read }.count
                     let activityUnread = visible.filter { belongsToActivityTab($0) && !$0.read }.count
 
-                    segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread,
-                                    sentCount: adminRequestVM.myPendingRequests.count)
-                        .dsPageMargin()
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xs)
+                    // «الطلبات المرسلة» = «طلباتي» (`profile.my_requests`): مخفية لـ«لم يستكمل» و«مقيّد» — بلا مبدّل
+                    if authVM.memberSees(.profileMyRequests) {
+                        segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread,
+                                        sentCount: adminRequestVM.myPendingRequests.count)
+                            .dsPageMargin()
+                            .padding(.top, DS.Spacing.sm)
+                            .padding(.bottom, DS.Spacing.xs)
+                    }
                 }
 
                 // شريط الأدوات الموحد (لا تحديد ولا «قراءة الكل» في «الطلبات المرسلة»)
                 if selectedTab != .sent { actionBar }
                 }
 
-                if selectedTab == .sent {
+                if selectedTab == .sent && authVM.memberSees(.profileMyRequests) {
                     MySentRequestsList(section: pageSection)
                 } else if notificationVM.isLoading && filteredNotifications.isEmpty {
                     // هيكل صفوف الإشعارات بدل المجسّم (طلب المالك ٢٠٢٦-١١-١٧)

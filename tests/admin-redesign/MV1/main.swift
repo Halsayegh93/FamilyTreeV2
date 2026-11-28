@@ -46,4 +46,13 @@ check(V.adminSpouseTitle, "ظهور الزوج", "admin spouse title")
 check(V.adminChildrenTitle, "ظهور الأبناء", "admin children title")
 _ = U
 
+// ٦) الزوجة صاحبة الحساب (العيّنة spouse2 القسم ٤): زوجها من خارج العائلة فقط، والمفتاحان بنصّ العيّنة
+check(V.ownShowsToggles(canEdit: true, isFemale: true, husbandId: H, outsideIds: outside), true, "own: outside husband → toggles")
+check(V.ownShowsToggles(canEdit: true, isFemale: true, husbandId: F, outsideIds: outside), false, "own: family husband → none")
+check(V.ownShowsToggles(canEdit: false, isFemale: true, husbandId: H, outsideIds: outside), false, "own: deceased/no edit → none")
+check(V.ownShowsToggles(canEdit: true, isFemale: false, husbandId: H, outsideIds: outside), false, "own: male → none")
+check(V.ownSpouseTitle, "إظهار الزوج في الشجرة", "own spouse title")
+check(V.ownChildrenTitle, "إظهار الأبناء", "own children title")
+check(V.ownNote, "عند الإخفاء: لا يظهر الزوج ولا الأبناء للأعضاء. تبقين أنتِ والإدارة ترينهم.", "own note verbatim")
+
 if failures == 0 { print("ALL PASS") } else { print("\(failures) FAILED"); exit(1) }

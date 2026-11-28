@@ -478,7 +478,7 @@ struct ProfileView: View {
             // الصورة تقفز للظهور مرة (من ٠٫٥٥ بنابض لطيف، بلا دوران) بعد وصول بطاقة الملف — «تقليل الحركة»: تلاشٍ فقط
             .modifier(DSIconPop(delay: DSMotion.titleDelay, fromAngle: 0))
             .contentShape(Circle())
-            .onTapGesture { if !user.isFemale { showAvatarPreview = true } }
+            .onTapGesture { if !user.isFemale && authVM.memberSees(.profilePhoto) { showAvatarPreview = true } }
             .accessibilityAddTraits(user.isFemale ? [] : .isButton)
             .accessibilityLabel(user.isFemale ? "" : L10n.t("معاينة الصورة", "Preview photo"))
             .accessibilityHidden(user.isFemale)
@@ -490,8 +490,8 @@ struct ProfileView: View {
                     // سطر واحد إن وسع، وإلا سطران متوازنان (`DSBalanced`) — القلم ملتصق بآخر الاسم
                     let name = user.fullName.isEmpty ? L10n.t("غير معروف", "Unknown") : user.displayFullName
                     ViewThatFits(in: .horizontal) {
-                        profileNameLine(name).lineLimit(1)
-                        profileNameLine(DSBalanced.twoLines(name)).lineLimit(2)
+                        profileNameLine(name, editable: authVM.memberSees(.profileEditInfo)).lineLimit(1)
+                        profileNameLine(DSBalanced.twoLines(name), editable: authVM.memberSees(.profileEditInfo)).lineLimit(2)
                     }
                     .multilineTextAlignment(.center)
                 }
@@ -844,6 +844,11 @@ struct ProfileView: View {
         let canEdit = DaughterFamilyAPI.enabled && node.isDeceased != true
         // عيالها من زوج من العائلة يظهرون تحت أبيهم دائماً — العين لعيالها من زوج من خارجها فقط
         let kidsToggle = husband == nil || husbandOutside
+        // زوجها من خارج العائلة: مفتاحا «إظهار الزوج في الشجرة» و«إظهار الأبناء» تحت خانة الزوج (العيّنة spouse2 القسم ٤)
+        // بدل عين الزوج — الحقل نفسه `spouse_shown` عبر `women_family_set_visibility`، فلا مفتاحان للشيء نفسه
+        let ownToggles = MotherVisibilityLogic.ownShowsToggles(canEdit: canEdit && WomenStore.visibilitySupported,
+                                                                isFemale: node.isFemale, husbandId: node.husbandId,
+                                                                outsideIds: WomenStore.outsideFamilyIds)
         seedDaughterHidden(node, husbandOutside: husbandOutside, children: children)
         if daughterReordering && canEdit {
             return AnyView(VStack(spacing: 0) {
@@ -882,7 +887,8 @@ struct ProfileView: View {
                 }
                 if let husband {
                     Button { if let p = husbandProfile { relativeDetails = p } } label: {
-                        daughterFamilyCell(husbandProfile ?? husband, role: L10n.t("الزوج", "Husband"), canToggle: canEdit, toggleId: husband.id)
+                        daughterFamilyCell(husbandProfile ?? husband, role: L10n.t("الزوج", "Husband"),
+                                           canToggle: canEdit && !ownToggles, toggleId: husband.id)
                     }
                     .buttonStyle(DSPressStyle())
                     .disabled(husbandProfile == nil)
@@ -890,6 +896,10 @@ struct ProfileView: View {
                     addFamilyActionCell(title: L10n.t("إضافة الزوج", "Add Husband"), icon: "heart.fill",
                                         color: DS.Color.male) { daughterBox = .husband }
                 }
+            }
+            if ownToggles {
+                WomanVisibilityAdminSection(womanId: node.id, mode: .own) { await loadWomenPosition() }
+                    .id(womenStoreTick)
             }
             if !children.isEmpty || (canEdit && (husband == nil || husbandOutside)) {
                 Divider().padding(.vertical, DS.Spacing.xxs)
@@ -2323,10 +2333,13 @@ private struct WifeSourceCard: View {
 
 // MARK: - اسم «حسابي» مع القلم
 extension ProfileView {
-    func profileNameLine(_ name: String) -> Text {
-        Text(name)
+    /// `editable: false` (الملف للعرض فقط — «لم يستكمل»/«مقيّد»): الاسم بلا القلم
+    func profileNameLine(_ name: String, editable: Bool = true) -> Text {
+        let title = Text(name)
             .font(DS.Font.role(.pageTitle))
             .foregroundColor(DS.Color.textPrimary)
+        guard editable else { return title }
+        return title
         + Text("  ")
         + Text(Image(systemName: "pencil.circle.fill"))
             .font(DS.Glyph.font(DS.Glyph.xl))

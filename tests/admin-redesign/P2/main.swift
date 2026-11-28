@@ -123,5 +123,31 @@ check(A.summaryAr(category: .limited, matrix: empty, legacyLimited: nil), "5 ش�
 check(A.summaryAr(category: .familyMan, matrix: empty, legacyLimited: nil), "كل الشاشات", "كامل")
 check(A.summaryAr(category: .familyWoman, matrix: one, legacyLimited: nil), "خيار مخفي واحد", "مفرد")
 
+// ── ٨) الافتراضي من السيرفر (`member_category_access_defaults`، 20261128151000 — العيّنة spouse2 القسم ٢) ──
+let serverDefaults = A.Matrix(json: [
+    "incomplete": ["women_tree": false, "member_details": false, "news.add": false, "news.comment": false, "news.like": false,
+                   "profile.edit_info": false, "profile.my_family": false, "profile.my_requests": false, "profile.photo": false],
+    "limited": ["tree": false, "diwaniyas": false, "projects": false, "library": false, "women_tree": false,
+                "member_details": false, "news.comment": false, "profile.photo": false]])
+func seesD(_ s: S, _ c: C, _ m: A.Matrix = empty) -> Bool { A.sees(s, category: c, matrix: m, legacyLimited: nil, defaults: serverDefaults) }
+check(seesD(.womenTree, .incomplete), false, "لم يستكمل: بلا شجرة النساء")
+check(seesD(.memberDetails, .incomplete), false, "لم يستكمل: بلا تفاصيل الأعضاء")
+check(seesD(.newsComment, .incomplete) || seesD(.newsLike, .incomplete) || seesD(.newsAdd, .incomplete), false, "لم يستكمل: لا تعليق ولا إعجاب ولا نشر")
+check(seesD(.tree, .incomplete) && seesD(.diwaniyas, .incomplete) && seesD(.library, .incomplete), true, "لم يستكمل: الشجرة والديوانيات والمكتبة")
+check(seesD(.profileEditInfo, .incomplete) || seesD(.profileMyRequests, .incomplete) || seesD(.profilePhoto, .incomplete), false,
+      "لم يستكمل: الملف للعرض فقط")
+check(seesD(.news, .incomplete) && seesD(.contact, .incomplete) && seesD(.profile, .incomplete), true, "يبقى: الأخبار والتواصل وحسابي")
+check(seesD(.tree, .limited) || seesD(.diwaniyas, .limited) || seesD(.projects, .limited), false, "مقيّد: بلا الشجرة والديوانيات والمشاريع")
+check(seesD(.womenTree, .familyMan), true, "الافتراضي لا يمسّ فئة أخرى")
+check(seesD(.womenTree, .incomplete, A.setting(.womenTree, to: true, category: .incomplete, matrix: empty)), true,
+      "خانة المالك فوق الافتراضي")
+check(A.ownValue(.newsComment, category: .incomplete, matrix: empty, legacyLimited: nil, defaults: serverDefaults), false,
+      "قيمة الخانة من الافتراضي")
+check(A.hiddenCounts(category: .limited, matrix: empty, legacyLimited: nil, defaults: serverDefaults).screens, 6,
+      "مقيّد: الشجرة والنساء والتفاصيل والديوانيات والمشاريع والمكتبة")
+check(S(rawValue: "profile.my_requests"), .profileMyRequests, "مفتاح «طلباتي» كما على السيرفر")
+check(S(rawValue: "profile.photo"), .profilePhoto, "مفتاح الصورة كما على السيرفر")
+check(A.defaultsKey, "member_category_access_defaults", "مفتاح الافتراضي على السيرفر")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

@@ -19,6 +19,22 @@ nonisolated enum MotherVisibilityLogic {
     static var childSpouseTitle: String { L10n.t("ظهور الوالد بجانب الوالدة", "Father shown beside mother") }
     static var childChildrenTitle: String { L10n.t("ظهور الأبناء تحت الوالدة", "Children shown under mother") }
 
+    /// ٣) الزوجة صاحبة الحساب (العيّنة spouse2 القسم ٤، ٢٠٢٦-١١-٢٨): في «الأسرة» بـ«الملف الشخصي» تحت خانة الزوج —
+    ///    `women_family_set_visibility` (عقدتها هي فقط). الإدارة تبقى تستطيع، والزوج نفسه لا يملك المفتاح.
+    static var ownSpouseTitle: String { L10n.t("إظهار الزوج في الشجرة", "Show my husband in the tree") }
+    static var ownSpouseLine: String { L10n.t("يراه الأعضاء بجانبك في شجرة النساء", "Members see him beside you in the women's tree") }
+    static var ownChildrenTitle: String { L10n.t("إظهار الأبناء", "Show the children") }
+    static var ownChildrenLine: String { L10n.t("أبناؤك منه تحتك في الشجرة", "Your children with him, under you in the tree") }
+    static var ownNote: String {
+        L10n.t("عند الإخفاء: لا يظهر الزوج ولا الأبناء للأعضاء. تبقين أنتِ والإدارة ترينهم.",
+               "When hidden, members don't see your husband or children. You and the admins still do.")
+    }
+
+    /// الزوجة صاحبة الحساب: زوجها من خارج العائلة (قاعدة الإدارة نفسها على عقدتها)
+    static func ownShowsToggles(canEdit: Bool, isFemale: Bool, husbandId: UUID?, outsideIds: Set<UUID>) -> Bool {
+        adminShowsToggles(canEdit: canEdit, isFemale: isFemale, husbandId: husbandId, outsideIds: outsideIds)
+    }
+
     /// الإدارة: بنت زوجها من خارج العائلة
     static func adminShowsToggles(canEdit: Bool, isFemale: Bool, husbandId: UUID?, outsideIds: Set<UUID>) -> Bool {
         guard canEdit, isFemale, let h = husbandId else { return false }

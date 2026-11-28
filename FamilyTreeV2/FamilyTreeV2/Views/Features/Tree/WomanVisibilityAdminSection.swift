@@ -6,8 +6,10 @@ import SwiftUI
 /// - `.child`: «الظهور في شجرة النساء» في مربّع «الأم» عند ابن البنت / بنت البنت وأمّه بلا حساب
 ///   (`set_mother_visibility` — «اجعله عند تعديل الأم»).
 /// يُحفظ فوراً؛ النجاح لحظة «تم الحفظ»، والفشل يرجع المفتاح ويظهر السبب بالعربية.
+/// - `.own`: الزوجة صاحبة الحساب وزوجها من خارج العائلة — داخل «الأسرة» بـ«الملف الشخصي» تحت خانة الزوج، بلا إطار قسم،
+///   وسطر «عند الإخفاء…» تحته (`women_family_set_visibility` على عقدتها هي — العيّنة spouse2 القسم ٤).
 struct WomanVisibilityAdminSection: View {
-    enum Mode { case admin, child }
+    enum Mode { case admin, child, own }
 
     let womanId: UUID
     var mode: Mode = .admin
@@ -22,15 +24,36 @@ struct WomanVisibilityAdminSection: View {
     @Environment(\.dsSection) private var section
 
     var body: some View {
-        MemberCardSection(title: sectionTitle, icon: "eye.fill", fill: DS.Color.seaFill) {
-            VStack(spacing: DS.Spacing.sm) {
+        if mode == .own {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                 ForEach(Item.allCases, id: \.self) { row($0) }
+                Text(MotherVisibilityLogic.ownNote)
+                    .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let errorText {
                     DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
                 }
             }
+            .onAppear(perform: load)
+        } else {
+            MemberCardSection(title: sectionTitle, icon: "eye.fill", fill: DS.Color.seaFill) {
+                VStack(spacing: DS.Spacing.sm) {
+                    ForEach(Item.allCases, id: \.self) { row($0) }
+                    if let errorText {
+                        DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                    }
+                }
+            }
+            .onAppear(perform: load)
         }
-        .onAppear(perform: load)
+    }
+
+    /// السطر تحت العنوان: «ظاهر للأعضاء/مخفي عن الأعضاء»، وللزوجة نصّ العيّنة
+    private func line(_ i: Item, on: Bool) -> String {
+        guard mode == .own else {
+            return on ? L10n.t("ظاهر للأعضاء", "Shown to members") : L10n.t("مخفي عن الأعضاء", "Hidden from members")
+        }
+        return i == .spouse ? MotherVisibilityLogic.ownSpouseLine : MotherVisibilityLogic.ownChildrenLine
     }
 
     private var sectionTitle: String {
@@ -44,6 +67,8 @@ struct WomanVisibilityAdminSection: View {
         case (.admin, .children): return MotherVisibilityLogic.adminChildrenTitle
         case (.child, .spouse): return MotherVisibilityLogic.childSpouseTitle
         case (.child, .children): return MotherVisibilityLogic.childChildrenTitle
+        case (.own, .spouse): return MotherVisibilityLogic.ownSpouseTitle
+        case (.own, .children): return MotherVisibilityLogic.ownChildrenTitle
         }
     }
 
@@ -62,9 +87,10 @@ struct WomanVisibilityAdminSection: View {
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(on ? L10n.t("ظاهر للأعضاء", "Shown to members") : L10n.t("مخفي عن الأعضاء", "Hidden from members"))
+                    Text(line(i, on: on))
                         .dsFont(.caption)
-                        .foregroundColor(tint)
+                        .foregroundColor(mode == .own ? DS.Color.textTertiary : tint)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -97,6 +123,10 @@ struct WomanVisibilityAdminSection: View {
                 switch mode {
                 case .admin: try await WomenStore.setVisibilityAsAdmin(id: womanId, spouse: spouse, children: children)
                 case .child: try await DaughterFamilyAPI.setMotherVisibility(motherId: womanId, spouse: spouse, children: children)
+                case .own:
+                    // نفس مسار عين الزوج السابقة (`women_family_set_visibility`، عقدتها فقط) — مفتاح واحد للحقل الواحد
+                    try await DaughterFamilyAPI.setVisibility(spouse: spouse, children: children)
+                    WomenStore.rememberVisibility(id: womanId, spouse: spouse, children: children)
                 }
                 busy.remove(i)
                 DSMomentToast.show(L10n.t("تم الحفظ", "Saved"), moment: .success, section: section)
@@ -105,7 +135,7 @@ struct WomanVisibilityAdminSection: View {
             } catch {
                 busy.remove(i)
                 shown[i] = before
-                errorText = mode == .admin ? WomenStore.failureMessage(error)
+                errorText = mode != .child ? WomenStore.failureMessage(error)
                     : ((error as? LocalizedError)?.errorDescription ?? MotherVisibilityLogic.errorMessage(hint: nil))
             }
         }

@@ -135,6 +135,10 @@ nonisolated enum MemberScreen: String, CaseIterable, Hashable {
     case profileEditInfo = "profile.edit_info"
     case profileChangePhone = "profile.change_phone"
     case profileQR = "profile.qr"
+    /// «الطلبات المرسلة» (= «طلباتي»، 20261128151000)
+    case profileMyRequests = "profile.my_requests"
+    /// الصورة الشخصية (معاينتها وتغييرها)
+    case profilePhoto = "profile.photo"
 
     /// الشاشة الأم (nil = شاشة)
     var parent: MemberScreen? {
@@ -180,6 +184,8 @@ nonisolated enum MemberScreen: String, CaseIterable, Hashable {
         case .profileEditInfo: return "تعديل بياناتي"
         case .profileChangePhone: return "تغيير الرقم"
         case .profileQR: return "رمز العضو ومسحه"
+        case .profileMyRequests: return "«الطلبات المرسلة»"
+        case .profilePhoto: return "الصورة الشخصية"
         }
     }
     var titleEn: String {
@@ -215,6 +221,8 @@ nonisolated enum MemberScreen: String, CaseIterable, Hashable {
         case .profileEditInfo: return "Edit my details"
         case .profileChangePhone: return "Change number"
         case .profileQR: return "Member code and scan"
+        case .profileMyRequests: return "“Sent requests”"
+        case .profilePhoto: return "Profile photo"
         }
     }
     var symbol: String {
@@ -244,6 +252,8 @@ nonisolated enum MemberScreen: String, CaseIterable, Hashable {
 
 nonisolated enum MemberAccess {
     static let configKey = "member_category_access"
+    /// الافتراضي على السيرفر (20261128151000): ما تراه الفئة حين لا يذكر الجدول الخانة — «لم يستكمل» و«مقيّد»
+    static let defaultsKey = "member_category_access_defaults"
     /// المفتاح القديم لـ«الصلاحيات المحدودة» — احتياط حين لا يذكر الجدول الخانة
     static let legacyLimitedKey = "outside_member_locked_sections"
     static let legacyLimitedDefaults: [MemberScreen] = [.diwaniyas, .projects, .library, .womenTree, .memberDetails]
@@ -297,25 +307,30 @@ nonisolated enum MemberAccess {
         return v as? Bool
     }
 
-    /// الافتراضي = اليوم: كل شيء ظاهر، والمحدود بلا قائمة القفل القديمة (nil = المفتاح غائب أو ليس قائمة)
-    static func defaultValue(_ s: MemberScreen, category: MemberCategory, legacyLimited: [String]?) -> Bool {
+    /// الافتراضي: من السيرفر (`defaults`) إن ذكر الخانة، وإلا كل شيء ظاهر، والمحدود بلا قائمة القفل القديمة
+    /// (nil = المفتاح غائب أو ليس قائمة)
+    static func defaultValue(_ s: MemberScreen, category: MemberCategory, legacyLimited: [String]?,
+                             defaults: Matrix = Matrix()) -> Bool {
+        if let v = defaults.rows[category]?[s] { return v }
         guard category == .limited else { return true }
         let locked = legacyLimited ?? legacyLimitedDefaults.map(\.rawValue)
         return !locked.contains(s.rawValue)
     }
 
     /// قيمة الخانة نفسها (بلا أمّها)
-    static func ownValue(_ s: MemberScreen, category: MemberCategory, matrix: Matrix, legacyLimited: [String]?) -> Bool {
+    static func ownValue(_ s: MemberScreen, category: MemberCategory, matrix: Matrix, legacyLimited: [String]?,
+                         defaults: Matrix = Matrix()) -> Bool {
         if s.isLocked { return true }
-        return matrix.rows[category]?[s] ?? defaultValue(s, category: category, legacyLimited: legacyLimited)
+        return matrix.rows[category]?[s] ?? defaultValue(s, category: category, legacyLimited: legacyLimited, defaults: defaults)
     }
 
     /// يرى؟ — nil = الإدارة أو غير مفعّل (خارج الجدول). الأم المطفأة تخفي أبناءها
-    static func sees(_ s: MemberScreen, category: MemberCategory?, matrix: Matrix, legacyLimited: [String]?) -> Bool {
+    static func sees(_ s: MemberScreen, category: MemberCategory?, matrix: Matrix, legacyLimited: [String]?,
+                     defaults: Matrix = Matrix()) -> Bool {
         guard let category else { return true }
         var cur: MemberScreen? = s
         while let c = cur {
-            if !ownValue(c, category: category, matrix: matrix, legacyLimited: legacyLimited) { return false }
+            if !ownValue(c, category: category, matrix: matrix, legacyLimited: legacyLimited, defaults: defaults) { return false }
             cur = c.parent
         }
         return true
@@ -343,13 +358,14 @@ nonisolated enum MemberAccess {
     }
 
     /// كم مخفي: الشاشات المطفأة، والخيارات الداخلية المطفأة تحت شاشة ظاهرة
-    static func hiddenCounts(category: MemberCategory, matrix: Matrix, legacyLimited: [String]?) -> (screens: Int, inner: Int) {
+    static func hiddenCounts(category: MemberCategory, matrix: Matrix, legacyLimited: [String]?,
+                             defaults: Matrix = Matrix()) -> (screens: Int, inner: Int) {
         var screens = 0, inner = 0
         for s in MemberScreen.allCases where !s.isLocked {
-            let own = ownValue(s, category: category, matrix: matrix, legacyLimited: legacyLimited)
+            let own = ownValue(s, category: category, matrix: matrix, legacyLimited: legacyLimited, defaults: defaults)
             if s.parent == nil {
                 if !own { screens += 1 }
-            } else if let p = s.parent, sees(p, category: category, matrix: matrix, legacyLimited: legacyLimited), !own {
+            } else if let p = s.parent, sees(p, category: category, matrix: matrix, legacyLimited: legacyLimited, defaults: defaults), !own {
                 inner += 1
             }
         }
@@ -357,8 +373,8 @@ nonisolated enum MemberAccess {
     }
 
     /// سطر بطاقة الفئة: «كل الشاشات» · «5 شاشات مخفية» · «شاشة مخفية · خياران مخفيان»
-    static func summaryAr(category: MemberCategory, matrix: Matrix, legacyLimited: [String]?) -> String {
-        let c = hiddenCounts(category: category, matrix: matrix, legacyLimited: legacyLimited)
+    static func summaryAr(category: MemberCategory, matrix: Matrix, legacyLimited: [String]?, defaults: Matrix = Matrix()) -> String {
+        let c = hiddenCounts(category: category, matrix: matrix, legacyLimited: legacyLimited, defaults: defaults)
         if c.screens == 0 && c.inner == 0 { return "كل الشاشات" }
         var parts: [String] = []
         if c.screens > 0 { parts.append(count(c.screens, one: "شاشة مخفية", two: "شاشتان مخفيتان", few: "شاشات مخفية", many: "شاشة مخفية")) }
@@ -366,8 +382,8 @@ nonisolated enum MemberAccess {
         return parts.joined(separator: " · ")
     }
 
-    static func summaryEn(category: MemberCategory, matrix: Matrix, legacyLimited: [String]?) -> String {
-        let c = hiddenCounts(category: category, matrix: matrix, legacyLimited: legacyLimited)
+    static func summaryEn(category: MemberCategory, matrix: Matrix, legacyLimited: [String]?, defaults: Matrix = Matrix()) -> String {
+        let c = hiddenCounts(category: category, matrix: matrix, legacyLimited: legacyLimited, defaults: defaults)
         if c.screens == 0 && c.inner == 0 { return "All screens" }
         var parts: [String] = []
         if c.screens > 0 { parts.append("\(c.screens) hidden screen" + (c.screens == 1 ? "" : "s")) }
@@ -474,13 +490,15 @@ final class MemberAccessStore: ObservableObject {
     }
 
     var matrix: MemberAccess.Matrix { MemberAccess.Matrix(json: AppConfigValues.shared.values[MemberAccess.configKey]) }
+    /// الافتراضي من السيرفر (`member_category_access_defaults`) — لا ثوابت في التطبيق
+    var defaults: MemberAccess.Matrix { MemberAccess.Matrix(json: AppConfigValues.shared.values[MemberAccess.defaultsKey]) }
 
     var legacyLimited: [String]? {
         (AppConfigValues.shared.values[MemberAccess.legacyLimitedKey] as? [Any])?.compactMap { $0 as? String }
     }
 
     func sees(_ s: MemberScreen) -> Bool {
-        MemberAccess.sees(s, category: category, matrix: matrix, legacyLimited: legacyLimited)
+        MemberAccess.sees(s, category: category, matrix: matrix, legacyLimited: legacyLimited, defaults: defaults)
     }
 }
 

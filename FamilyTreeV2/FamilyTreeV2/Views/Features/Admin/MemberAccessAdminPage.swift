@@ -40,8 +40,8 @@ struct MemberAccessCategoriesCard: View {
                 ForEach(Array(MemberCategory.allCases.enumerated()), id: \.element) { i, c in
                     AdminTapWrap(tap: .page { AnyView(MemberAccessCategoryPage(category: c)) }, feel: .row, label: AnyView(
                         AdminListRow(icon: c.symbol, tint: c.tint, title: c.title,
-                                     subtitle: L10n.t(MemberAccess.summaryAr(category: c, matrix: matrix, legacyLimited: legacy),
-                                                      MemberAccess.summaryEn(category: c, matrix: matrix, legacyLimited: legacy))) {
+                                     subtitle: L10n.t(MemberAccess.summaryAr(category: c, matrix: matrix, legacyLimited: legacy, defaults: store.defaults),
+                                                      MemberAccess.summaryEn(category: c, matrix: matrix, legacyLimited: legacy, defaults: store.defaults))) {
                             let custom = MemberAccess.isCustom(category: c, matrix: matrix)
                             AdminStatePill(title: custom ? L10n.t("مخصّص", "Custom") : L10n.t("الافتراضي", "Default"),
                                            tone: custom ? .warn : .off).fixedSize()
@@ -97,8 +97,8 @@ struct MemberAccessCategoryPage: View {
         let legacy = store.legacyLimited
         return VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
             AdminSectionCard(title: L10n.t("الشاشات", "Screens"),
-                             tag: L10n.t(MemberAccess.summaryAr(category: category, matrix: matrix, legacyLimited: legacy),
-                                         MemberAccess.summaryEn(category: category, matrix: matrix, legacyLimited: legacy)),
+                             tag: L10n.t(MemberAccess.summaryAr(category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults),
+                                         MemberAccess.summaryEn(category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults)),
                              spacing: 0) {
                 AdminRowsCardBody {
                     ForEach(MemberScreen.screens, id: \.self) { s in
@@ -106,7 +106,7 @@ struct MemberAccessCategoryPage: View {
                         if expanded.contains(s) {
                             // الشاشة مخفية: ما بداخلها مطفأ رمادي، وسطر صغير واحد يقول لماذا
                             if !s.children.isEmpty
-                                && !MemberAccess.sees(s, category: category, matrix: matrix, legacyLimited: legacy) {
+                                && !MemberAccess.sees(s, category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults) {
                                 Text(L10n.t("مخفية مع الشاشة", "Hidden with the screen"))
                                     .dsFont(.subtitle)
                                     .foregroundColor(DS.Color.textTertiary)
@@ -139,7 +139,7 @@ struct MemberAccessCategoryPage: View {
     // MARK: الصفوف
 
     private func screenRow(_ s: MemberScreen, legacy: [String]?) -> some View {
-        let on = MemberAccess.ownValue(s, category: category, matrix: matrix, legacyLimited: legacy)
+        let on = MemberAccess.ownValue(s, category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults)
         let kids = s.children
         let isOpen = expanded.contains(s)
         let subtitle: String
@@ -150,7 +150,7 @@ struct MemberAccessCategoryPage: View {
         } else if kids.isEmpty {
             subtitle = s.serverNoteAr.map { L10n.t($0, "Also enforced on the server") } ?? ""
         } else {
-            let off = kids.filter { !MemberAccess.ownValue($0, category: category, matrix: matrix, legacyLimited: legacy) }.count
+            let off = kids.filter { !MemberAccess.ownValue($0, category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults) }.count
             subtitle = off == 0 ? L10n.t("\(kids.count) داخلها", "\(kids.count) inside")
                                 : L10n.t("\(off) من \(kids.count) مخفية بداخلها", "\(off) of \(kids.count) inside hidden")
         }
@@ -202,8 +202,8 @@ struct MemberAccessCategoryPage: View {
     }
 
     private func childRow(_ s: MemberScreen, parent: MemberScreen, legacy: [String]?) -> some View {
-        let on = MemberAccess.ownValue(s, category: category, matrix: matrix, legacyLimited: legacy)
-        let parentOn = MemberAccess.sees(parent, category: category, matrix: matrix, legacyLimited: legacy)
+        let on = MemberAccess.ownValue(s, category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults)
+        let parentOn = MemberAccess.sees(parent, category: category, matrix: matrix, legacyLimited: legacy, defaults: store.defaults)
         return HStack(spacing: DS.Spacing.md) {
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(s.title)
