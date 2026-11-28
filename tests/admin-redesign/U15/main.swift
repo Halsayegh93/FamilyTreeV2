@@ -155,7 +155,7 @@ check(AdminStatsText.requests(41), "41 طلباً", "«41 طلباً»")
 check(AdminStatsText.years(71), "71 سنة", "«71 سنة»")
 check(AdminStatsText.outsideLiving(50), "50 حياً من خارج العائلة", "«50 حياً من خارج العائلة»")
 check(AdminStatsText.title(.inApp), "في التطبيق", "section title")
-check(AdminStatsText.note(.outside), "لا يُحسبون في الأرقام فوق", "section note")
+check(AdminStatsText.note(.outside), "لا يُحسبون في أرقام العائلة", "section note")
 
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

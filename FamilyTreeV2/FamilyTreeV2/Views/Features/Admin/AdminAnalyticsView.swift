@@ -511,14 +511,7 @@ private struct AdminStatsDepartedSection: View {
                 AdminStatsRow(title: L10n.t("أطول عمر", "Longest life"),
                               value: lifespans.longest.map { AdminStatsText.years($0) } ?? AdminStatsText.number(nil),
                               dim: lifespans.longest == nil)
-                AdminRowDivider()
-                AdminStatsRow(title: L10n.t("بلا تاريخ وفاة كامل", "No full death date"),
-                              subtitle: incomplete > 0
-                                ? L10n.t("\(AdminNumberText.grouped(deathDates.missing)) بلا تاريخ · \(AdminNumberText.grouped(deathDates.yearOnly)) السنة فقط",
-                                         "\(AdminNumberText.grouped(deathDates.missing)) no date · \(AdminNumberText.grouped(deathDates.yearOnly)) year only")
-                                : L10n.t("كل التواريخ مكتملة", "All dates complete"),
-                              mark: incomplete > 0 ? .glyph("exclamationmark.triangle", DS.Color.warning) : .none,
-                              value: AdminNumberText.grouped(incomplete), dim: incomplete == 0, tap: tap)
+                // «بلا تاريخ وفاة كامل» حُذف (قاعدة المالك ٢٠٢٦-١١-٢٨ «لا تكرر من الرئيسية»): بطاقة «تواريخ الوفاة» في «اليوم»
             }
         }
     }
@@ -553,24 +546,11 @@ private struct AdminStatsInAppSection: View {
 
     private func content(staleSince: Date?) -> some View {
         let inApp = figures.inApp
-        let living = figures.totalAlive
-        let has = AdminStatsLogic.share(inApp, of: living)
-        let hasText = has.map { AdminStatsText.percent($0) } ?? AdminStatsText.number(nil)
-        let withoutText = has.map { AdminStatsText.percent(100 - $0) } ?? AdminStatsText.number(nil)
         let without = figures.totalAlive.flatMap { l in inApp.map { max(0, l - $0) } }
         let menWithout = figures.menAlive.flatMap { a in figures.menAccounts.map { max(0, a - $0) } }
         let womenWithout = figures.womenAlive.flatMap { a in figures.womenAccounts.map { max(0, a - $0) } }
         return AdminStatsCard {
-            AdminStatsHeadline(title: inApp.map { AdminStatsText.accounts($0) } ?? AdminStatsText.number(nil),
-                               line: living.map { AdminStatsText.ofLiving($0) })
-                .adminStatsBlock()
-            AdminStatsMeter(share: has, tint: DS.Chart.total, track: DS.Chart.inkTrack,
-                            leading: L10n.t("لهم حساب \(hasText)", "Have an account \(hasText)"),
-                            trailing: L10n.t("بلا حساب \(withoutText)", "No account \(withoutText)"),
-                            spoken: L10n.t("لهم حساب \(hasText)، بلا حساب \(withoutText)",
-                                           "Have an account \(hasText), no account \(withoutText)"))
-                .padding(.bottom, DS.Spacing.sm)
-            AdminRowDivider()
+            // «170 لهم حساب» وشريط النسبة حُذفا («لا تكرر من الرئيسية»: «في التطبيق 170» في رأس «اليوم») — التفصيل وحده
             AdminStatsRow(title: L10n.t("رجال لهم حساب", "Men with an account"),
                           subtitle: figures.menAlive.map { AdminStatsText.of($0) },
                           value: AdminStatsText.number(figures.menAccounts), dim: (figures.menAccounts ?? 0) == 0,
@@ -765,14 +745,8 @@ private struct AdminStatsOutsideSection: View {
     }
 
     private var content: some View {
-        let living = figures.outsideLiving
-        let headline = living.map { AdminStatsText.outsideLiving($0) } ?? AdminStatsText.number(nil)
-        return AdminStatsCard {
-            AdminTapWrap(tap: livingTap, feel: .row,
-                         label: AnyView(AdminStatsHeadline(title: headline, opens: livingTap.isTappable)
-                            .adminStatsBlock(top: true, bottom: false)),
-                         accessibilityLabel: AdminStatsText.spoken(headline, value: nil, sub: nil, opens: livingTap.isTappable))
-            AdminRowDivider()
+        AdminStatsCard {
+            // «50 حياً من خارج العائلة» حُذف («لا تكرر من الرئيسية»: «خارج العائلة 50 حياً» في رأس «اليوم») — الأجزاء وحدها
             part(L10n.t("نساء من خارج العائلة", "Women from outside the family"), outsideWomen)
             AdminRowDivider()
             part(L10n.t("أزواج البنات", "Daughters' husbands"), husbands)

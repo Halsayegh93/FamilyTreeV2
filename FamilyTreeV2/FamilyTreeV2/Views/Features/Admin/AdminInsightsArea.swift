@@ -426,7 +426,7 @@ nonisolated enum AdminStatsText {
         case .inApp:           return L10n.t("من الأحياء", "Of the living")
         case .growth:          return L10n.t("آخر 6 أشهر", "Last 6 months")
         case .ages, .roles:    return L10n.t("الرجال الأحياء", "Living men")
-        case .outside:         return L10n.t("لا يُحسبون في الأرقام فوق", "Not counted above")
+        case .outside:         return L10n.t("لا يُحسبون في أرقام العائلة", "Not counted in the family figures")
         case .approvals:       return L10n.t("آخر 30 يوماً", "Last 30 days")
         case .departed, .tree: return nil
         }
