@@ -543,7 +543,8 @@ struct AdminDashboardView: View {
         guard key != reviewKey else { return }
         reviewKey = key
         let index = AdminMembersIndex.build(members: memberVM.allMembers, accounts: accounts.accounts,
-                                            accountsReady: accounts.loaded, daughterSons: sons, branchName: { _ in nil })
+                                            accountsReady: accounts.loaded, daughterSons: sons, countsOnly: true,
+                                            branchName: { _ in nil })
         let counts = AdminReviewHubCounts.make(index: index, verified: verified, members: memberVM.allMembers,
                                                photos: .init(authVM: authVM), outside: key.outside)
         if counts != reviewCounts { reviewCounts = counts }

@@ -111,6 +111,9 @@ struct AdminMembersPage: View {
     /// «عرض المزيد» لكل قسم (الغائب = `pageSize`)
     @State private var limits: [Population: Int] = [:]
     @State private var index = AdminMembersIndex.empty
+    /// مدخلات آخر بناء للفهرس — نداء بلا تغيير لا يعيد البناء (تغيّر الحسابات يطلق `onChange` اثنين معاً، و«المكرر
+    /// والأخطاء» فوق الصفحة يطلق `reload` — Sentry FAMILYTREE-B)
+    @State private var builtKey: IndexKey?
     @State private var tree = AdminFamilyTree.empty
     /// صفوف الفلتر: الرجال بمواضع الفهرس، ثم النساء وخارج العائلة بعدها (`people` بإزاحة `index.entries.count`)
     @State private var persons: [AdminPeopleLogic.Person] = []
@@ -279,7 +282,21 @@ struct AdminMembersPage: View {
         }
     }
 
+    struct IndexKey: Equatable {
+        let membersVersion: Int
+        let members: Int
+        let accountsLoaded: Bool
+        let accounts: [UUID: AdminAccountInfo]
+        let sons: Set<UUID>
+        let branchNames: [String: String]?
+    }
+
     private func rebuild() {
+        let key = IndexKey(membersVersion: memberVM.membersVersion, members: memberVM.allMembers.count,
+                           accountsLoaded: accounts.loaded, accounts: accounts.accounts, sons: sons.ids,
+                           branchNames: appSettingsVM.settings.branchNames)
+        guard key != builtKey || memberVM.allMembers.isEmpty else { return }
+        builtKey = key
         let names = appSettingsVM
         index = AdminMembersIndex.build(members: memberVM.allMembers, accounts: accounts.accounts,
                                         accountsReady: accounts.loaded, daughterSons: sons.ids,

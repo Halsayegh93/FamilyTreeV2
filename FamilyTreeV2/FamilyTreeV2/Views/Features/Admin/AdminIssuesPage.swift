@@ -277,6 +277,11 @@ struct AdminIssuesPage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var index = AdminMembersIndex.empty
+    /// مدخلات آخر بناء — نداء بلا تغيير لا يعيد البناء (Sentry FAMILYTREE-B: كل `onChange` و`reload` كان يعيد بناء القوائم
+    /// كلها على الخيط الرئيسي، وتغيّر الحسابات يطلق اثنين معاً)
+    @State private var builtKey: RebuildKey?
+    /// يزيد مع كل وصول لشجرة النساء (جزء من المفتاح)
+    @State private var womenVersion = 0
     @State private var data = AdminIssuesData()
     @State private var women: [FamilyMember] = WomenStore.cache
     @State private var sheet: AdminMemberSheetContext?
@@ -362,16 +367,38 @@ struct AdminIssuesPage: View {
         if !force, !women.isEmpty { return }
         do {
             women = try await WomenStore.fetch()
+            womenVersion += 1
             rebuild()
         } catch {
             if !Log.isCancellation(error) { Log.fetchError("[AdminIssuesPage] women tree load failed", error) }
         }
     }
 
+    struct RebuildKey: Equatable {
+        let membersVersion: Int
+        let members: Int
+        let accountsLoaded: Bool
+        let accounts: [UUID: AdminAccountInfo]
+        let outsideSeen: Set<UUID>
+        let sons: Set<UUID>
+        let dismissed: Set<String>
+        let women: Int
+        let seesAll: Bool
+        let review: Set<UUID>
+    }
+
     private func rebuild() {
+        let key = RebuildKey(membersVersion: memberVM.membersVersion, members: memberVM.allMembers.count,
+                             accountsLoaded: accounts.loaded, accounts: accounts.accounts,
+                             outsideSeen: Set(accounts.outsideSeen.keys), sons: sons.ids,
+                             dismissed: dismissed.signatures, women: womenVersion, seesAll: seesAll,
+                             review: AppConfigValues.shared.reviewAccountIds)
+        guard key != builtKey || memberVM.allMembers.isEmpty else { return }
+        builtKey = key
         let names = appSettingsVM
+        // الصفحة تقرأ من الفهرس الأعداد وحدها («مشكلات الشجرة» و`built`) — بلا ترتيب ولا نصّ بحث
         index = AdminMembersIndex.build(members: memberVM.allMembers, accounts: accounts.accounts,
-                                        accountsReady: accounts.loaded, daughterSons: sons.ids,
+                                        accountsReady: accounts.loaded, daughterSons: sons.ids, countsOnly: true,
                                         branchName: { names.branchName(for: $0) })
         data = AdminIssuesData.make(members: memberVM.allMembers, women: women, accounts: accounts,
                                     dismissed: dismissed.signatures, seesAll: seesAll)

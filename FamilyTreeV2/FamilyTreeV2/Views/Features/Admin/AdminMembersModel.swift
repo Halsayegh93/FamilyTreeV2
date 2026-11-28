@@ -875,13 +875,24 @@ struct AdminMembersIndex {
     @MainActor
     static func build(members all: [FamilyMember], accounts: [UUID: AdminAccountInfo], accountsReady: Bool,
                       daughterSons: Set<UUID> = [],
+                      countsOnly: Bool = false,
                       branchName: (UUID) -> String?) -> AdminMembersIndex {
+        #if DEBUG
+        let started = CFAbsoluteTimeGetCurrent()
+        defer {
+            DebugProbeLog.line(String(format: "PERF index.build%@ %d members %.0f ms", countsOnly ? " (counts)" : "",
+                                      all.count, (CFAbsoluteTimeGetCurrent() - started) * 1000))
+        }
+        #endif
         var index = AdminMembersIndex()
         index.accountsReady = accountsReady
         index.built = !all.isEmpty
         index.pendingJoin = all.filter { $0.role == .pending }.count
         // أبجدياً بالحروف العربية المطبّعة (الهمزات على الألف ألفاً — `AdminGrouping.alphabetical`): كل القوائم بهذا الترتيب
-        let pool = AdminGrouping.alphabetical(all.filter { $0.role != .pending })
+        // `countsOnly` (من يقرأ الأعداد وحدها: «اليوم» و«المكرر والأخطاء»): بلا ترتيب ولا نصّ بحث — أثقل جزأين في البناء
+        // (تعليق «المكرر والأخطاء» ٥–٦ ث، Sentry FAMILYTREE-B)؛ الأعداد لا تتغيّر بالترتيب
+        let members = all.filter { $0.role != .pending }
+        let pool = countsOnly ? members : AdminGrouping.alphabetical(members)
         let ctx = AdminMemberFacts.TreeContext(all)
         let heads = branchHeads(all)
         // «تحقق من الأحياء»: من له حساب دخول حيّ قطعاً (حين تصل القوائم)
@@ -907,7 +918,7 @@ struct AdminMembersIndex {
             let problems = AdminMemberFacts.problems(m, in: ctx)
             entries.append(Entry(member: m, status: status, usage: info?.usage, hasLogin: info != nil, gaps: gaps, problems: problems,
                                  branch: heads[m.id], living: oldLiving[m.id],
-                                 needle: ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
+                                 needle: countsOnly ? "" : ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
                                  digits: AdminMemberFacts.asciiDigits(m.phoneNumber ?? "")))
             func addProblems() {
                 guard !problems.isEmpty else { return }
