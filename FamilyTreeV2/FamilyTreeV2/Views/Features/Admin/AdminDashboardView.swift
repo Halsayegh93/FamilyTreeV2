@@ -86,6 +86,9 @@ struct AdminDashboardView: View {
     /// أعداد قوائم «يحتاج مراجعتك» — كلمة مربّع «العائلة» v2 («5 قوائم للمراجعة»)، من مصدر صفّها في «العائلة» نفسه
     /// (`AdminReviewHubCounts`). المفتاح الغائب = لم يصل
     @State private var reviewCounts: [AdminReviewHubLogic.List: Int] = [:]
+    /// مربّعا «المكرر والأخطاء» و«متزوجة بلا زوج مربوط» في «يحتاج مراجعتك» — حتى تطابق الكلمة عدد المربّعات التي فيها أحد
+    /// (مشكلات الشجرة لا تُحسب هنا كما لا تُحسب في صفّها). nil = لم يصل
+    @State private var issueTileCounts: [Int?] = []
     /// ما بُنيت منه آخر مرة — فهرس الأعضاء يُبنى فقط حين يتغيّر (لا مع كل تغيّر في الطلبات)
     /// F4 (V30): فئة كل حساب في المفتاح — انتقال عضو بين «نشط» و«غير نشط» (العدد نفسه) يعيد الحساب
     @State private var reviewKey: AdminReviewHubLogic.CacheKey<AppUsageCategory>?
@@ -124,6 +127,8 @@ struct AdminDashboardView: View {
                     rootVisible = true
                     // «حي ✓» وما تغيّر في «العائلة» أثناء غيابها — كلمة مربّع «العائلة» (لا يُبنى شيء إن لم يتغيّر)
                     recalculateReview()
+                    AdminDuplicateDismissStore.shared.activate(user: authVM.currentUser?.id, shared: authVM.isAdmin)
+                    recalculateIssueTiles()
                     // لا يُصفَّر والإصبع ما زال يسحب للرجوع: «اليوم» يظهر من بداية السحب، فكان التصفير بعد ٠٫٤ ث يقطع
                     // الانزلاق ويقفز (فيديو المالك ٢٠٢٦-١١-٢٨) — ننتظر حتى ينتهي الانتقال ثم نفحص
                     clearStalePathWhenSettled(after: 0.4)
@@ -131,6 +136,10 @@ struct AdminDashboardView: View {
                 .onDisappear { rootVisible = false }
                 // أبناء البنات قد يصلون بعد الأعضاء — يُعاد الحساب فلا يُعدّون في «الرجال» (٢٠٢٦-١١-١٢)
                 .onReceive(DaughterSonsIndex.shared.$ids.dropFirst().removeDuplicates()) { _ in recalculate() }
+                // «ليسا مكرّرين» من السيرفر — رقم مربّع «المكرر والأخطاء» في كلمة «العائلة»
+                .onReceive(AdminDuplicateDismissStore.shared.$signatures.dropFirst().removeDuplicates()) { _ in
+                    recalculateIssueTiles()
+                }
                 .toolbar(.hidden, for: .navigationBar)
         }
         // بعد مغادرة تبويب «الإدارة» يفقد المكدس وجهاته (بلاغ المالك ٢٠٢٦-١١-٠٨) — يُعاد بناؤه عند العودة (`stackID`)
@@ -526,6 +535,7 @@ struct AdminDashboardView: View {
             if next != nextMemorial { nextMemorial = next }
         }
         recalculateReview()
+        recalculateIssueTiles()
         publishNotices()
     }
 
@@ -549,6 +559,18 @@ struct AdminDashboardView: View {
         let counts = AdminReviewHubCounts.make(index: index, verified: verified, members: memberVM.allMembers,
                                                photos: .init(authVM: authVM), outside: key.outside)
         if counts != reviewCounts { reviewCounts = counts }
+    }
+
+    /// أرقام مربّعَي «المكرر والأخطاء» و«متزوجة بلا زوج مربوط» — المصدر نفسه لمربّعات «العائلة» (`AdminIssuesData`)
+    private func recalculateIssueTiles() {
+        guard AdminArea.family.isVisible(for: authVM), !memberVM.allMembers.isEmpty else { return }
+        let seesAll = authVM.isAdmin
+        let women = seesAll ? WomenStore.cache : []
+        let data = AdminIssuesData.make(members: memberVM.allMembers, women: women, accounts: AdminAccountsStore.shared,
+                                        dismissed: AdminDuplicateDismissStore.shared.signatures, seesAll: seesAll)
+        var out: [Int?] = [AdminReviewTilesLogic.issuesCount(duplicates: data.duplicates, nameless: data.nameless.count)]
+        if seesAll { out.append(women.isEmpty ? nil : data.marriedNoHusband.count) }
+        if out != issueTileCounts { issueTileCounts = out }
     }
 
     // MARK: - مشتقات
@@ -823,7 +845,7 @@ struct AdminDashboardView: View {
         case .family:
             // v2: «5 قوائم للمراجعة» — قوائم «يحتاج مراجعتك» التي فيها أحد (رقم صفّها في «العائلة») أو «سليمة»؛ يفتح
             // «العائلة» حيث صفّ «يحتاج مراجعتك». قوائم الحسابات تنتظر قوائم الحسابات ما دام جلبها جارياً (لا عدد ناقص)
-            let counts = AdminReviewHubLogic.List.allCases.map { reviewCounts[$0] }
+            let counts = AdminReviewHubLogic.List.allCases.map { reviewCounts[$0] } + issueTileCounts
             let word = AdminTodayBandLogic.reviewListsWord(counts: counts)
             // F4 (V18): حال قوائم الحسابات نفسها — فشلها «تعذّر التحميل ↻» بإعادة المحاولة (كان المربّع فارغاً بلا كلمة)
             let stores = [membersHealth, accountsHealth]
