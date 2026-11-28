@@ -276,6 +276,9 @@ struct AdminAllRequestsView: View {
     /// «ظهور موحّد»: الصفوف تصعد مرة عند ظهورها الأول (`dsCardCascade`)
     @State private var rowsAppeared = false
     @State private var selectedIds: Set<UUID> = []
+    /// موافقات «قيد الإرسال» (معرّف الصفّ = `AllItem.id` = `RequestDetail.id`): السحب والقائمة وزرّ المربّع معطّلة لها
+    /// حتى تصل النتيجة — كانت الموافقة بالسحب ثم المربّع تُنفَّذ مرتين (ملاحظة «المنتقد» ٢٠٢٦-١١-٢٨)
+    @State private var approvingIds: Set<String> = []
     @State private var showBulkApproveConfirm = false
     @State private var bulkSelectApproveResult: String?
     @State private var showBulkSelectApproveResult = false
@@ -1642,6 +1645,10 @@ struct AdminAllRequestsView: View {
     }
 
     private func actions(for e: Entry) -> [RowAction] {
+        // قيد الإرسال: لا سحب ولا قائمة حتى تصل النتيجة (التفاصيل تبقى)
+        if approvingIds.contains(e.id) {
+            return [RowAction(kind: .details, title: L10n.t("التفاصيل", "Details"), icon: "ellipsis") { openDetail(e) }]
+        }
         let tab = allItemTab(e.item)
         // بالمسار: الموافقة بالسحب = «تنفيذ» للمختص والطلب معتمد، والرفض من مربّع التفاصيل (بسبب يصل للعضو)
         let allowsApprove = e.flow.map { adminRequestVM.canExecuteApproval($0) && authVM.adminCanEdit(.inbox) }
@@ -1798,8 +1805,68 @@ struct AdminAllRequestsView: View {
             return
         }
         guard let work = approveWork(e.item) else { return }
-        Task { await work() }
-        AdminApprovalMoment.after(adminRequestVM, title: title)
+        runApproval(id: e.id, probe: decisionProbe(e.item), title: title, work: work)
+    }
+
+    /// ما يثبت نجاح الموافقة: نتيجة `decide_admin_request` للطلبات، وصفّ السيرفر للمحتوى المتفائل
+    private enum DecisionProbe {
+        case request(UUID)
+        case content(AdminContentDecisionCheck.Table, UUID)
+    }
+
+    private func decisionProbe(_ item: AllItem) -> DecisionProbe? {
+        switch item {
+        case .join:                   return nil
+        case .news(let p):            return .content(.news, p.id)
+        case .diwaniya(let d):        return .content(.diwaniyas, d.id)
+        case .project(let p):         return .content(.projects, p.id)
+        case .archive(let a):         return .content(.archive, a.id)
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r), .treeEdit(let r, _):
+            return .request(r.id)
+        case .phone(let p):           return .request(p.id)
+        }
+    }
+
+    private func decisionProbe(_ detail: RequestDetail) -> DecisionProbe? {
+        switch detail {
+        case .join:                   return nil
+        case .news(let p):            return .content(.news, p.id)
+        case .diwaniya(let d):        return .content(.diwaniyas, d.id)
+        case .project(let p):         return .content(.projects, p.id)
+        case .archive(let a):         return .content(.archive, a.id)
+        case .report(let r), .nameChange(let r), .deceased(let r), .child(let r), .photo(let r), .treeEdit(let r, _):
+            return .request(r.id)
+        case .phone(let p):           return .request(p.id)
+        }
+    }
+
+    private func decisionSucceeded(_ probe: DecisionProbe?) async -> Bool {
+        switch probe {
+        case .request(let id)?:
+            return await adminRequestVM.awaitDecision(id)
+        case .content(let table, let id)?:
+            return await AdminContentDecisionCheck.confirmed(table, ids: [id], approve: true).contains(id)
+        case nil:
+            return adminRequestVM.errorMessage == nil
+        }
+    }
+
+    /// موافقة واحدة لكل صفّ في وقتها: لا تبدأ ثانية والأولى قيد الإرسال، و«لحظة النجاح» بعد النجاح الفعلي فقط
+    private func runApproval(id: String, probe: DecisionProbe?, title: String?, work: @escaping () async -> Void,
+                             finally: (@MainActor () -> Void)? = nil) {
+        guard !approvingIds.contains(id) else { return }
+        approvingIds.insert(id)
+        Task { @MainActor in
+            await work()
+            finally?()
+            let ok = await decisionSucceeded(probe)
+            approvingIds.remove(id)
+            guard ok, let title else { return }
+            // مهلة قصيرة لتُغلق نافذة التفاصيل قبل الكبسولة
+            DispatchQueue.main.asyncAfter(deadline: .now() + DS.MomentToast.settle) {
+                DSMomentToast.show(title, moment: .approved)
+            }
+        }
     }
 
     private func approveWork(_ item: AllItem) -> (() async -> Void)? {
@@ -2269,6 +2336,8 @@ struct AdminAllRequestsView: View {
     /// موافقة دفعية تعبر كل الأنواع (لوضع "الكل").
     private func bulkApproveAcrossAllTypes(ids: [UUID]) async -> Int {
         var count = 0
+        // المحتوى متفائل (بلا نتيجة) ← يُعدّ ما ثبت على السيرفر فقط بعد الحلقة (ملاحظة «المنتقد» ٢٠٢٦-١١-٢٨)
+        var content: [AdminContentDecisionCheck.Table: [UUID]] = [:]
         // ما خرج عن مجال الدور لا يُقبل ولو حُدّد (فحص الثغرات ب-٧)
         let idSet = idsInRoleScope(approving: true)
         // طلبات النساء لا تُقبل جماعياً — تُربط واحدة واحدة بشجرة النساء (تُحسب «لم تُقبل»)
@@ -2279,7 +2348,7 @@ struct AdminAllRequestsView: View {
                 if joiner.isFemale { skippedWomen += 1; continue }
                 count += await adminRequestVM.bulkApproveJoinRequests(memberIds: [id])
             } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
-                await newsVM.approveNewsPost(postId: post.id); count += 1
+                await newsVM.approveNewsPost(postId: post.id); content[.news, default: []].append(post.id)
             } else if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.approveNewsReport(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
@@ -2291,7 +2360,7 @@ struct AdminAllRequestsView: View {
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let d = diwaniyaVM.pendingDiwaniyas.first(where: { $0.id == id }),
                       let adminId = authVM.currentUser?.id {
-                await diwaniyaVM.approveDiwaniya(id: d.id, adminId: adminId); count += 1
+                await diwaniyaVM.approveDiwaniya(id: d.id, adminId: adminId); content[.diwaniyas, default: []].append(d.id)
             } else if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.approveDeceasedRequest(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
@@ -2303,23 +2372,34 @@ struct AdminAllRequestsView: View {
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let proj = projectsVM.pendingProjects.first(where: { $0.id == id }),
                       let adminId = authVM.currentUser?.id {
-                await projectsVM.approveProject(id: proj.id, approvedBy: adminId); count += 1
+                await projectsVM.approveProject(id: proj.id, approvedBy: adminId); content[.projects, default: []].append(proj.id)
             } else if let item = pendingArchiveItems.first(where: { $0.id == id }) {
-                await archiveVM.approveItem(item); count += 1
+                await archiveVM.approveItem(item); content[.archive, default: []].append(item.id)
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.approveTreeEditRequest(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             }
         }
+        count += await confirmedContentCount(content, approve: true)
         if skippedWomen > 0 {
             adminRequestVM.errorMessage = AdminRequestViewModel.womenOneByOneMessage
         }
         return count
     }
 
+    /// كم من المحتوى ثبت قراره على السيرفر فعلاً
+    private func confirmedContentCount(_ content: [AdminContentDecisionCheck.Table: [UUID]], approve: Bool) async -> Int {
+        var total = 0
+        for (table, ids) in content where !ids.isEmpty {
+            total += await AdminContentDecisionCheck.confirmed(table, ids: ids, approve: approve).count
+        }
+        return total
+    }
+
     /// رفض دفعي يعبر كل الأنواع (لوضع "الكل").
     private func bulkRejectAcrossAllTypes(ids: [UUID]) async -> Int {
         var count = 0
+        var content: [AdminContentDecisionCheck.Table: [UUID]] = [:]
         // ما خرج عن مجال الدور لا يُرفض ولو حُدّد (فحص الثغرات ب-٧)
         let idSet = idsInRoleScope(approving: false)
 
@@ -2327,7 +2407,7 @@ struct AdminAllRequestsView: View {
             if pendingMembers.contains(where: { $0.id == id }) {
                 if await adminRequestVM.rejectOrDeleteMember(memberId: id) { count += 1 }
             } else if let post = newsVM.pendingNewsRequests.first(where: { $0.id == id }) {
-                await newsVM.rejectNewsPost(postId: post.id); count += 1
+                await newsVM.rejectNewsPost(postId: post.id); content[.news, default: []].append(post.id)
             } else if let req = adminRequestVM.newsReportRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.rejectNewsReport(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
@@ -2338,7 +2418,7 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.rejectNameChangeRequest(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if let d = diwaniyaVM.pendingDiwaniyas.first(where: { $0.id == id }) {
-                await diwaniyaVM.rejectDiwaniya(id: d.id); count += 1
+                await diwaniyaVM.rejectDiwaniya(id: d.id); content[.diwaniyas, default: []].append(d.id)
             } else if let req = adminRequestVM.deceasedRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.rejectDeceasedRequest(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
@@ -2349,14 +2429,15 @@ struct AdminAllRequestsView: View {
                 await adminRequestVM.rejectPhotoSuggestion(request: req)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             } else if projectsVM.pendingProjects.contains(where: { $0.id == id }) {
-                await projectsVM.rejectProject(id: id); count += 1
+                await projectsVM.rejectProject(id: id); content[.projects, default: []].append(id)
             } else if let item = pendingArchiveItems.first(where: { $0.id == id }) {
-                await archiveVM.rejectItem(item); count += 1
+                await archiveVM.rejectItem(item); content[.archive, default: []].append(item.id)
             } else if let req = adminRequestVM.treeEditRequests.first(where: { $0.id == id }) {
                 await adminRequestVM.rejectTreeEditRequest(request: req, reason: nil)
                 if await adminRequestVM.awaitDecision(req.id) { count += 1 }
             }
         }
+        count += await confirmedContentCount(content, approve: false)
         return count
     }
 
@@ -4864,63 +4945,50 @@ struct AdminAllRequestsView: View {
 
     private func approveDetail(_ detail: RequestDetail) {
         if DebugAdminProbe.dryRun("inbox approve \(detail.id)") { return }
-        // «لحظة نجاح» (الدفعة ١٠) بعد أن تنتهي الموافقة — إلا «ربط» طلب الانضمام (يفتح مربّع الربط)
-        let title: String?
-        switch detail {
-        case .join:  title = nil
-        case .child: title = L10n.t("تم التأكيد", "Confirmed")
-        default:
-            title = selectedFlowIsExecute(detail) ? L10n.t("تم التنفيذ", "Carried out") : L10n.t("تمت الموافقة", "Approved")
+        // «ربط» طلب الانضمام يفتح مربّع الربط (بلا لحظة)
+        if case .join(let member) = detail {
+            selectedDetail = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + AdminRequestBoxMetrics.sheetHandoff) { openJoinBox(member) }
+            return
         }
-        Task {
+        // الصفّ نفسه قيد الإرسال (سحب سابق) ← لا موافقة ثانية
+        guard !approvingIds.contains(detail.id) else { return }
+        // «لحظة نجاح» (الدفعة ١٠) بعد نجاح الموافقة فعلاً
+        let title: String = {
+            if case .child = detail { return L10n.t("تم التأكيد", "Confirmed") }
+            return selectedFlowIsExecute(detail) ? L10n.t("تم التنفيذ", "Carried out") : L10n.t("تمت الموافقة", "Approved")
+        }()
+        let adminId = authVM.currentUser?.id
+        let work: () async -> Void = {
             switch detail {
-            case .join(let member):
-                await MainActor.run {
-                    selectedDetail = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + AdminRequestBoxMetrics.sheetHandoff) { openJoinBox(member) }
-                }
+            case .join:
+                break
             case .news(let post):
                 await newsVM.approveNewsPost(postId: post.id)
-                await MainActor.run { selectedDetail = nil }
             case .report(let request):
                 await adminRequestVM.approveNewsReport(request: request)
-                await MainActor.run { selectedDetail = nil }
             case .phone(let request):
                 await adminRequestVM.approvePhoneChangeRequest(request: request)
-                await MainActor.run { selectedDetail = nil }
             case .nameChange(let request):
                 await adminRequestVM.approveNameChangeRequest(request: request)
-                await MainActor.run { selectedDetail = nil }
             case .diwaniya(let diwaniya):
-                if let adminId = authVM.currentUser?.id {
-                    await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId)
-                }
-                await MainActor.run { selectedDetail = nil }
+                if let adminId { await diwaniyaVM.approveDiwaniya(id: diwaniya.id, adminId: adminId) }
             case .deceased(let request):
                 await adminRequestVM.approveDeceasedRequest(request: request)
-                await MainActor.run { selectedDetail = nil }
             case .child(let request):
                 await adminRequestVM.acknowledgeChildAddRequest(request: request)
-                await MainActor.run { selectedDetail = nil }
             case .photo(let request):
                 await adminRequestVM.approvePhotoSuggestion(request: request)
-                await MainActor.run { selectedDetail = nil }
             case .project(let project):
-                if let adminId = authVM.currentUser?.id {
-                    await projectsVM.approveProject(id: project.id, approvedBy: adminId)
-                }
-                await MainActor.run { selectedDetail = nil }
+                if let adminId { await projectsVM.approveProject(id: project.id, approvedBy: adminId) }
             case .archive(let item):
                 await archiveVM.approveItem(item)
-                await MainActor.run { selectedDetail = nil }
             case .treeEdit(let request, _):
                 await adminRequestVM.approveTreeEditRequest(request: request)
-                await MainActor.run { selectedDetail = nil }
-            }
-            if let title {
-                await MainActor.run { AdminApprovalMoment.after(adminRequestVM, title: title) }
             }
         }
+        runApproval(id: detail.id, probe: decisionProbe(detail), title: title, work: work,
+                    finally: { selectedDetail = nil })
     }
 
     /// الطلب في مرحلة «التنفيذ» من مسار الموافقات (الموافقة عندها = التنفيذ)
