@@ -725,6 +725,8 @@ enum DS {
         static let xl: CGFloat = 18
         /// قرص كبير
         static let xxl: CGFloat = 22
+        /// «خاتمان» المرسوم أعرض من رمز SF بالمقاس نفسه (`SignupRingsGlyph`) — يُضرب في مقاس الرمز
+        static let ringsScale: CGFloat = 1.35
 
         static func font(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> SwiftUI.Font {
             .system(size: size, weight: weight)
@@ -2095,6 +2097,9 @@ extension DS.Icon {
     static let signupPhoto: CGFloat = 120
     /// شارة «+ / تعديل» على طرف دائرة الصورة
     static let photoBadge: CGFloat = 28
+    /// مربّع الاختيار في «التسجيل» و«استكمال التسجيل» (العيّنة spouse2، ٢٠٢٦-١١-٢٨: كان ١٣٢ ورمز ٥٢): الارتفاع وقرص الرمز
+    static let choiceTileHeight: CGFloat = 96
+    static let choiceTileIcon: CGFloat = 36
     /// نقطة «متصل الآن» على طرف صورة العضو (حلقتها النابضة ضعفها)
     static let onlineDot: CGFloat = 11
 }
@@ -2163,6 +2168,8 @@ extension DS.TextRole {
     static let heroTitle = DS.TextRole(.title, weight: .heavy)
     /// رقم في مربّعات رمز التحقق — مستثنى من تغيير الخط (طلب المالك ٢٠٢٦-١٠-٠٨): كما كان ٢٦ مقيّداً بـ Title 2
     static let codeDigit = DS.TextRole(size: 26, weight: .bold, style: .title2)
+    /// سؤال مربّع «التسجيل» و«استكمال التسجيل» (العيّنة spouse2، ٢٠٢٦-١١-٢٨: كان Headline ١٧) — ١٩ يكبر مع Title 3
+    static let signupQuestion = DS.TextRole(size: 19, weight: .bold, style: .title3)
 }
 
 extension DS.Opacity {

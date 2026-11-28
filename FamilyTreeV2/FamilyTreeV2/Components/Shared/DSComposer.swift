@@ -1188,6 +1188,8 @@ struct DSComposerField: View {
     var ltrKeepsAutocorrect: Bool = false
     /// حقل مطلوب — نجمة حمراء بعد العنوان (مثل «العائلة *» في التسجيل)
     var required: Bool = false
+    /// نصّ ثابت في طرف الحقل لا يُكتب (مثل «المحمدعلي» بعد اسم الزوجة — العيّنة spouse2)
+    var suffix: String? = nil
     @FocusState private var focused: Bool
     /// نبضة صغيرة لأيقونة الحقل عند التركيز (مرة واحدة)
     @State private var iconPop = false
@@ -1247,11 +1249,19 @@ struct DSComposerField: View {
                             .monospacedDigit()
                     }
                 }
-                Group {
-                    if multiline {
-                        TextField(placeholder, text: $text, axis: .vertical).lineLimit(lines)
-                    } else {
-                        TextField(placeholder, text: $text)
+                HStack(spacing: DS.Spacing.xs) {
+                    Group {
+                        if multiline {
+                            TextField(placeholder, text: $text, axis: .vertical).lineLimit(lines)
+                        } else {
+                            TextField(placeholder, text: $text)
+                        }
+                    }
+                    if let suffix {
+                        Text(verbatim: suffix)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                 }
                 .dsFieldFont(DSBox.fieldValueSize, weight: DS.TextRole.fieldValue.weight)

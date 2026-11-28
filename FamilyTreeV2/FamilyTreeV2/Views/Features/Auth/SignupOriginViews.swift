@@ -94,21 +94,58 @@ struct SignupBoxShell<Content: View>: View {
     }
 }
 
-/// عنوان المربّع: قرص الرمز + العنوان (+ نقاط التقدّم فوقه إن وُجدت)
+/// رمز مربّعات التسجيل: رمز SF أو «خاتمان» المرسوم (الزوج/الزوجة — لا رمز SF لخاتمين)
+enum SignupGlyph: Equatable {
+    case symbol(String)
+    case rings
+
+    @ViewBuilder func view(size: CGFloat) -> some View {
+        switch self {
+        case .symbol(let name): Image(systemName: name).dsGlyph(size, weight: .semibold)
+        case .rings: SignupRingsGlyph(size: size * DS.Glyph.ringsScale)
+        }
+    }
+}
+
+/// «خاتمان» متشابكان بفصّ صغير — رسم بسيط بلون النص (العيّنة spouse2: «رمز الزوجة: القلب ← خاتمان»)
+struct SignupRingsGlyph: View {
+    let size: CGFloat
+
+    var body: some View {
+        let ring = size * 0.62
+        let line = max(1.5, size * 0.11)
+        ZStack {
+            Circle().stroke(lineWidth: line).frame(width: ring, height: ring).offset(x: -size * 0.17, y: size * 0.1)
+            Circle().stroke(lineWidth: line).frame(width: ring, height: ring).offset(x: size * 0.17, y: size * 0.1)
+            Rectangle().frame(width: size * 0.17, height: size * 0.17).rotationEffect(.degrees(45))
+                .offset(x: -size * 0.17, y: -size * 0.33)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// عنوان المربّع: قرص الرمز + السؤال (١٩، `signupQuestion`)
 struct SignupBoxTitle: View {
-    let icon: String
+    let glyph: SignupGlyph
     let title: String
     var tint: Color = DS.Color.primaryFill
 
+    init(icon: String, title: String, tint: Color = DS.Color.primaryFill) {
+        self.glyph = .symbol(icon); self.title = title; self.tint = tint
+    }
+    init(glyph: SignupGlyph, title: String, tint: Color = DS.Color.primaryFill) {
+        self.glyph = glyph; self.title = title; self.tint = tint
+    }
+
     var body: some View {
         HStack(spacing: DS.Spacing.sm) {
-            Image(systemName: icon)
-                .dsGlyph(DS.Glyph.md, weight: .semibold)
+            glyph.view(size: DS.Glyph.md)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .frame(width: DS.Icon.row, height: DS.Icon.row)
                 .background(Circle().fill(tint))
                 .accessibilityHidden(true)
-            Text(title).dsFont(.headline).foregroundColor(DS.Color.textPrimary)
+            Text(title).dsFont(.signupQuestion).foregroundColor(DS.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -136,6 +173,52 @@ struct SignupStepDots: View {
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(L10n.t("الخطوة \(current + 1) من \(count)", "Step \(current + 1) of \(count)"))
+    }
+}
+
+/// مربّع اختيار واحد لـ«التسجيل» وكل خطوات «استكمال التسجيل» (العيّنة spouse2: ارتفاع ٩٦ وقرص ٣٦): قرص الرمز فوق،
+/// العنوان تحته، وسطر صغير اختياري («من عائلة المحمدعلي»). المختار مطوّق بالذهبي مع ✓ على ركنه
+struct SignupChoiceTile: View {
+    let title: String
+    var subtitle: String? = nil
+    let glyph: SignupGlyph
+    let tint: Color
+    var selected: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+        Button(action: action) {
+            VStack(spacing: DS.Spacing.xs) {
+                glyph.view(size: DS.Glyph.lg)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .frame(width: DS.Icon.choiceTileIcon, height: DS.Icon.choiceTileIcon)
+                    .background(Circle().fill(tint))
+                    .accessibilityHidden(true)
+                Text(title).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(subtitle).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(DS.Spacing.sm)
+            .frame(maxWidth: .infinity, minHeight: DS.Icon.choiceTileHeight)
+            .background(shape.fill(selected ? DS.Color.cardBackgroundSoft : DS.Color.cardBackground))
+            .overlay(shape.strokeBorder(selected ? DS.Color.accentLight : DS.Color.cardBorder,
+                                        lineWidth: selected ? DS.Border.width * 2 : DS.Border.width))
+            .overlay(alignment: .topTrailing) { if selected { SignupCheckBadge() } }
+            .animation(DSMotion.tap, value: selected)
+            // قفزة الاختيار (A1) — «تقليل الحركة»: الإطار وحده
+            .dsSelectPop(selected)
+            .contentShape(shape)
+        }
+        // ضغطة المربّعات الموحّدة (تصغير ٠٫٩٧ في ١٢٠ م.ث؛ «تقليل الحركة» بلا تصغير)
+        .buttonStyle(AdminTilePressStyle())
+        .accessibilityLabel(subtitle.map { title + "، " + $0 } ?? title)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -218,7 +301,7 @@ struct SignupChooseBox: View {
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
             Text(L10n.t(SignupText.chooseBoxTitle, "Tell us how you're related to the family"))
-                .dsFont(.headline).foregroundColor(DS.Color.textPrimary)
+                .dsFont(.signupQuestion).foregroundColor(DS.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             // مربّعان كبيران جنباً إلى جنب — فوق بعض من أحجام إمكانية الوصول
             let layout = typeSize.isAccessibilitySize
@@ -234,41 +317,14 @@ struct SignupChooseBox: View {
 
     /// مربّع: قرص الرمز فوق والعنوان تحته — بلا نص فرعي (المالك)
     private func tile(_ title: String, icon: String, tint: Color, origin: SignupOriginRules.Origin) -> some View {
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-        let selected = picked == origin
-        return Button {
+        SignupChoiceTile(title: title, glyph: .symbol(icon), tint: tint, selected: picked == origin) {
             // ضغطة واحدة: يُطوَّق ويقفز، ثم ينتقل بعد لحظة (فوراً مع «تقليل الحركة»)
             guard picked == nil else { return }
             picked = origin
             DispatchQueue.main.asyncAfter(deadline: .now() + DSMotionRules.selectHold(reduceMotion: reduceMotion)) {
                 onChoose(origin)
             }
-        } label: {
-            VStack(spacing: DS.Spacing.sm) {
-                Image(systemName: icon)
-                    .dsGlyph(DS.Glyph.xl, weight: .semibold)
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: DS.Icon.state, height: DS.Icon.state)
-                    .background(Circle().fill(tint))
-                    .accessibilityHidden(true)
-                Text(title).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(DS.Spacing.sm)
-            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget * 3)
-            .background(shape.fill(selected ? DS.Color.cardBackgroundSoft : DS.Color.cardBackground))
-            .overlay(shape.strokeBorder(selected ? DS.Color.accentLight : DS.Color.cardBorder,
-                                        lineWidth: selected ? DS.Border.width * 2 : DS.Border.width))
-            .overlay(alignment: .topTrailing) { if selected { SignupCheckBadge() } }
-            .animation(DSMotion.tap, value: selected)
-            .dsSelectPop(selected)
-            .contentShape(shape)
         }
-        // ضغطة المربّعات الموحّدة (تصغير ٠٫٩٧ في ١٢٠ م.ث؛ «تقليل الحركة» بلا تصغير)
-        .buttonStyle(AdminTilePressStyle())
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
