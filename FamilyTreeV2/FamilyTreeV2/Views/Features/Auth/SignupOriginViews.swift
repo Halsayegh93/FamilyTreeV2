@@ -47,6 +47,15 @@ struct SignupBoxShell<Content: View>: View {
                             .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
                                 .fill(DS.Color.surface))
                             .dsCardShadow()
+                            // زرّ الرجوع على حافة المربّع الأبيض (طلب المالك «عند المربع الابيض بشكل فني»):
+                            // قرص أبيض بحلقة ذهبية نصفه فوق الحافة في الركن الأول
+                            .overlay(alignment: .topLeading) {
+                                if let onBack {
+                                    SignupBackBubble(action: onBack)
+                                        .offset(y: -DS.Icon.tapTarget / 2)
+                                        .padding(.leading, DS.Spacing.lg)
+                                }
+                            }
                             // المربّع يظهر مرة بتكبير هادئ من ٠٫٩٤ مع تلاشٍ (نابض المربّعات) — «تقليل الحركة»: تلاشٍ
                             .dsEntrance(delay: DSMotion.iconDelay, scale: DSMotion.panelScale,
                                         animation: DSMotion.panel, anchor: .center)
@@ -76,11 +85,8 @@ struct SignupBoxShell<Content: View>: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, DS.Icon.tapTarget)
-            if onSignOut != nil || onBack != nil {
+            if onSignOut != nil {
                 HStack {
-                    if let onBack {
-                        DSBackButton(context: .onColor, action: onBack)
-                    }
                     Spacer()
                     if let onSignOut {
                         DSHeaderButton(symbol: "rectangle.portrait.and.arrow.right",
@@ -91,6 +97,27 @@ struct SignupBoxShell<Content: View>: View {
         }
         .padding(.horizontal, DS.Spacing.lg)
         .padding(.top, DS.Spacing.lg)
+    }
+}
+
+/// زرّ الرجوع على حافة مربّع التسجيل: قرص أبيض بحلقة ذهبية وظلّ المربّع، يقفز مرة عند الظهور
+/// ويصغر عند الضغط — «تقليل الحركة»: تلاشٍ فقط.
+struct SignupBackBubble: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: DSBackButton.symbol)
+                .dsGlyph(DS.Glyph.lg, weight: .bold)
+                .foregroundColor(DS.Color.primary)
+                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                .background(Circle().fill(DS.Color.surface))
+                .overlay(Circle().strokeBorder(DS.Color.accentLight, lineWidth: DS.Border.widthBold))
+                .dsCardShadow()
+        }
+        .buttonStyle(DSPressStyle())
+        .modifier(DSIconPop(delay: DSMotion.iconDelay * 2))
+        .accessibilityLabel(L10n.t(SignupText.back, "Back"))
     }
 }
 
