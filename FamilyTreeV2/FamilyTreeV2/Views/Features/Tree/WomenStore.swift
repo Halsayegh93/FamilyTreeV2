@@ -453,7 +453,7 @@ enum WomenStore {
                 return L10n.t("الوالد غير مسجّل في الشجرة — اطلب ربطك من الإدارة.",
                               "Your father isn't in the tree — ask the administration to link you.")
             case "not_daughter":
-                return L10n.t("الأخت تُضاف تحت أبيك أنت فقط.", "A sister can only be added under your own father.")
+                return L10n.t("تُضاف الأخت تحت الوالد فقط.", "A sister can only be added under your own father.")
             case "name_required":
                 return L10n.t("اكتب الاسم.", "Enter the name.")
             case "not_allowed":
