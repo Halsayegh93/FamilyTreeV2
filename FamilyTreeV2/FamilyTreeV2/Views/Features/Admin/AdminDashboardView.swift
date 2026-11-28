@@ -910,6 +910,9 @@ struct AdminDashboardView: View {
             let word = AdminTodayBandLogic.departedWord(figures.totalDeceased)
             return TileModel(state: word?.state, health: censusHealth, retry: retryCensus, landing: word?.landing)
         case .team:
+            // «الفريق والنظام» (الدمج ٢٠٢٦-١١-٢٨): من يرى «النظام» (المالك) كلمته كلمة «التطبيق والنظام» السابقة (الصيانة،
+            // الدخول، الأجهزة، الإشعارات)؛ وغيره (المدير) كلمة «الفريق» كما كانت
+            if AdminArea.app.isVisible(for: authVM) { return tile(.app) }
             // `today.system_status` (المالك): حال «التسجيل» بكلمة (الدخول والأجهزة انتقلت إلى «التطبيق والنظام» ٢٠٢٦-١١-٢٨)
             // — المدير يرى «للاطلاع» وحدها
             guard authVM.adminSees(.todaySystemStatus) else { return TileModel() }

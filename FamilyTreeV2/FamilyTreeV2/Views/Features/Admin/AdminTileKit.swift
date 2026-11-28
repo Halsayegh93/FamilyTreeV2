@@ -464,7 +464,7 @@ struct AdminRowTileGrid<Content: View>: View {
     var body: some View {
         AdminTileRowsLayout(columns: AdminTileGridMath.areaColumns(accessibilitySize: typeSize.isAccessibilitySize,
                                                                    landscape: landscape),
-                            spacing: DS.Hub.areaTileGap, square: true) {
+                            spacing: DS.Hub.areaTileGap, square: true, fillLastRow: true) {
             content()
         }
     }
@@ -477,6 +477,9 @@ struct AdminTileRowsLayout: Layout {
     var spacing: CGFloat
     /// مربّعات مربّعة: كل مربّع بعرض عمود (الصفّ الناقص يتوسّط)، والصفّ لا يقلّ عن عرض مربّعه
     var square = false
+    /// المربّعات المربّعة: الصفّ الأخير الناقص (اثنان فأكثر) يملأ العرض بمربّعات أعرض قليلاً بطول صفّ كامل (الأقسام الخمسة في
+    /// «اليوم» ٢٠٢٦-١١-٢٨: «الإحصاءات · الفريق والنظام»)؛ مربّع وحيد يبقى بعرض عمود في الوسط
+    var fillLastRow = false
 
     private struct Row {
         let range: Range<Int>
@@ -493,11 +496,15 @@ struct AdminTileRowsLayout: Layout {
 
     private func rows(width: CGFloat, subviews: Subviews) -> [Row] {
         AdminTileGridMath.rows(count: subviews.count, columns: columns).map { range in
-            let w = AdminTileGridMath.itemWidth(rowWidth: width, items: square ? columns : range.count, spacing: spacing)
+            let column = AdminTileGridMath.itemWidth(rowWidth: width, items: columns, spacing: spacing)
+            let fills = square && fillLastRow && range.count > 1 && range.count < columns
+            let w = fills || !square ? AdminTileGridMath.itemWidth(rowWidth: width, items: range.count, spacing: spacing)
+                                     : column
             let contents = range.map { subviews[$0].sizeThatFits(ProposedViewSize(width: w, height: nil)).height }
-            let h = AdminTileGridMath.rowHeight(itemWidth: w, contents: contents, square: square)
-            let inset = square ? AdminTileGridMath.rowInset(rowWidth: width, items: range.count, columns: columns,
-                                                            spacing: spacing) : 0
+            // الأعرض بطول المربّع الكامل (عرض العمود) — كل الصفوف بارتفاع واحد
+            let h = AdminTileGridMath.rowHeight(itemWidth: square ? column : w, contents: contents, square: square)
+            let inset = square && !fills ? AdminTileGridMath.rowInset(rowWidth: width, items: range.count, columns: columns,
+                                                                      spacing: spacing) : 0
             return Row(range: range, itemWidth: w, height: h, inset: inset)
         }
     }

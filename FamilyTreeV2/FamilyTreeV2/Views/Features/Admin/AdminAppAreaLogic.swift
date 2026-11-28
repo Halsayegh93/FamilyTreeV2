@@ -113,6 +113,9 @@ nonisolated enum AdminAppLogic {
     // MARK: الرأس
 
     /// سطر الرأس تحت «التطبيق» (spec C.14)
+    /// ملاحظة عنوان مجموعة «النظام» في «الفريق والنظام»
+    static var ownerOnlyNote: String { L10n.t("للمالك فقط", "Owner only") }
+
     static var pageSubtitle: String {
         L10n.t("للمالك فقط. أي تغيير هنا يصل لكل الأعضاء.", "Owner only. Any change here reaches every member.")
     }

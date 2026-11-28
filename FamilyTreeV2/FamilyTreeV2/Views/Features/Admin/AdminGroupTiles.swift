@@ -150,13 +150,15 @@ struct AdminGroupTileItem: Identifiable {
 struct AdminGroupTilesSection: View {
     /// عنوان صغير فوق الشبكة — nil = بلا عنوان
     var title: String? = nil
+    /// ملاحظة رمادية في طرف العنوان («للمالك فقط»)
+    var note: String? = nil
     let items: [AdminGroupTileItem]
     @Namespace private var zoom
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            if let title { AdminSectionLabel(title: title) }
+            if let title { AdminSectionLabel(title: title, trailing: note) }
             if typeSize.isAccessibilitySize {
                 VStack(spacing: DS.Spacing.sm) {
                     ForEach(items) { item in tile(item, row: true) }

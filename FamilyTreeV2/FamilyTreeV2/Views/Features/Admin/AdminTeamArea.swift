@@ -380,31 +380,44 @@ struct AdminTeamAreaView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var config = AppConfigValues.shared
+    /// سحب الصفحة يعيد جلب مجموعة «النظام»
+    @State private var refreshToken = 0
 
     private var seesTeam: Bool { authVM.adminSees(.teamMembers) }
+    /// مجموعة «النظام» (كانت «التطبيق والنظام») — للمالك (`app` في جدول الأدوار)
+    private var seesSystem: Bool { AdminArea.app.isVisible(for: authVM) }
     private var seesRegistration: Bool { authVM.adminSees(.teamRegistration) }
 
     var body: some View {
         let tiles = AdminGroupTilesLogic.teamTiles(seesTeam: seesTeam, isOwner: authVM.isOwner,
                                                    seesRegistration: seesRegistration)
+        let groups = AdminAreaLayout.mergedGroups(seesTeam: !tiles.isEmpty, seesApp: seesSystem)
         AdminHubPage {
             AdminBandHeader(title: AdminArea.team.title, subtitle: AdminArea.team.subtitle,
                             badge: authVM.adminCanEdit(.team) ? nil : AdminPageHeader.readOnlyText,
                             isAreaRoot: true)
         } content: {
-            if tiles.isEmpty {
+            // «الفريق والنظام» (دمج المالك ٢٠٢٦-١١-٢٨): «الفريق» ثم «النظام» — كل مجموعة مربّعاتها كما كانت في قسمها
+            if groups.isEmpty {
                 // الجدول أخفى كل ما في القسم عن هذا الدور — حالة فارغة لا صفحة بيضاء
                 AnyView(AdminPageStateCard(.empty(L10n.t("لا شيء هنا لدورك", "Nothing here for your role"),
                                                   message: L10n.t("صلاحياتك في «صلاحياتي» على «اليوم»",
                                                                   "Your permissions are under “My scope” on Today"))))
             } else {
-                // كل مجموعة مربّع (طلب المالك ٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات»)
-                AnyView(AdminGroupTilesSection(items: tiles.map(item)))
+                if groups.contains(.team) {
+                    AnyView(AdminGroupTilesSection(title: AdminAreaGroup.team.title, items: tiles.map(item)))
+                }
+                if groups.contains(.system) {
+                    AnyView(AdminAppSystemTiles(refreshToken: refreshToken))
+                }
             }
         }
         // ما يُدفع من المربّعات يرجع باسم القسم
         .environment(\.adminPageTitle, AdminArea.team.title)
-        .refreshable { await load(force: true) }
+        .refreshable {
+            refreshToken += 1
+            await load(force: true)
+        }
         .task { await load(force: false) }
         .debugStackProbe("AdminTeamAreaView", limitKB: DebugStackLimit.page)
     }

@@ -36,7 +36,8 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
                                        "Deaths, memorials and posts, and announcing to members")
         case .metrics:   return L10n.t("أرقام العائلة والتطبيق والموافقات — للاطلاع",
                                        "Family, app and approval numbers — read only")
-        case .team:      return L10n.t("من يدير، وصلاحيات الأعضاء", "Who manages, and member permissions")
+        case .team:      return L10n.t("من يدير، وصلاحيات الأعضاء، وإعدادات التطبيق",
+                                       "Who manages, member permissions and app settings")
         case .app:       return L10n.t("إعدادات التطبيق، والدخول والأجهزة والأخطاء",
                                        "App settings, sign-in, devices and errors")
         }
@@ -85,11 +86,16 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
         authVM.adminAccess(self) == .read
     }
 
-    /// الأقسام الظاهرة لهذا الدور بترتيبها
+    /// الأقسام في القوائم لهذا الدور بترتيبها («اليوم»، قائمة العنوان): «التطبيق والنظام» مدموج في «الفريق والنظام» (`.team`)
+    /// منذ ٢٠٢٦-١١-٢٨ — يظهر لمن يرى أحدهما (`AdminAreaLayout.listedAreas`). البوابة لكل صفحة كما هي (`isVisible`)
     @MainActor
     static func visible(for authVM: AuthViewModel) -> [AdminArea] {
-        allCases.filter { $0.isVisible(for: authVM) }
+        AdminAreaLayout.listedAreas(visible: allCases.filter { $0.isVisible(for: authVM) }.map(\.rawValue))
+            .compactMap(AdminArea.init(rawValue:))
     }
+
+    /// القسم الذي تُفتح صفحته (رابط أو إشعار أو مسار قديم على «التطبيق» يفتح «الفريق والنظام»)
+    var pageArea: AdminArea { AdminArea(rawValue: AdminAreaLayout.pageArea(rawValue)) ?? self }
 }
 
 // MARK: التنقّل بين الأقسام (طلب المالك ٢٠٢٦-١٠-٢٠ «مابي تويب علوي فكر بشي ابسط»)

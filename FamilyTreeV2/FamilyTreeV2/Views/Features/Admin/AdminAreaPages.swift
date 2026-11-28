@@ -212,7 +212,7 @@ enum AdminToolCatalog {
         case .registrationBans: return AnyView(AdminRegistrationBansView())
         case .usage:            return AnyView(AdminActiveMembersView())
         case .devices:          return AnyView(AdminPushHealthView())
-        case .appRoot:          return AnyView(AdminAppAreaPage())
+        case .appRoot:          return AnyView(AdminTeamAreaView())
         case .categories:       return AnyView(CategoriesManagerView())
         case .familyNames:      return AnyView(AdminFamilyNamesView())
         case .forceUpdate:      return AnyView(AdminForceUpdateView())
@@ -233,17 +233,18 @@ struct AdminAreaView: View {
     let area: AdminArea
 
     var body: some View {
-        // قسم ليس لدورك (مسار قديم، رابط، إشعار): رسالة بدل الصفحة
-        AdminAreaGate(area: area) { page }.adminArea(area)
+        // «التطبيق» يفتح «الفريق والنظام» (الدمج ٢٠٢٦-١١-٢٨) — وقسم ليس لدورك: رسالة بدل الصفحة
+        let shown = area.pageArea
+        AdminAreaGate(area: shown) { page(shown) }.adminArea(shown)
     }
 
-    private var page: AnyView {
+    private func page(_ area: AdminArea) -> AnyView {
         switch area {
         case .inbox:     return AnyView(AdminAllRequestsView())
         case .family:    return AnyView(AdminMembersPage())
         case .metrics:   return AnyView(AdminMetricsAreaView())
         case .team:      return AnyView(AdminTeamAreaView())
-        case .app:       return AnyView(AdminAppAreaPage())
+        case .app:       return AnyView(AdminTeamAreaView())
         case .occasions: return AnyView(AdminOccasionsPage())
         }
     }

@@ -25,7 +25,15 @@ import Supabase
 // المنطق الخالص (الكلمات، ما يسأل، حال الحفظ) في AdminAppAreaLogic.swift ويُفحص بـ tests/admin-redesign/U17.
 // حارس المكدس: جسم الصفحة خفيف، كل بطاقة نوع مستقل خلف `AnyView`، والوجهات خلف `AdminLazyPage` (`AdminTapWrap`).
 
+/// «التطبيق والنظام» صار مجموعة «النظام» في «الفريق والنظام» (دمج المالك ٢٠٢٦-١١-٢٨) — الاسم باقٍ لمن يفتحه
 struct AdminAppAreaPage: View {
+    var body: some View { AdminTeamAreaView() }
+}
+
+/// مجموعة «النظام» في «الفريق والنظام»: مربّعات «التطبيق والنظام» السابقة نفسها بنموذجها وجلبها (للمالك — `app`)
+struct AdminAppSystemTiles: View {
+    /// يزيد مع سحب الصفحة للتحديث — يعيد الجلب بالقوة
+    var refreshToken: Int = 0
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
@@ -40,28 +48,22 @@ struct AdminAppAreaPage: View {
     private var seesDevices: Bool { authVM.adminSees(.teamDevices) }
 
     var body: some View {
-        AdminHubPage {
-            AdminBandHeader(title: AdminArea.app.title, subtitle: AdminAppLogic.pageSubtitle,
-                            badge: canEdit ? nil : AdminPageHeader.readOnlyText, isAreaRoot: true)
-        } content: {
-            // كل مجموعة مربّع بالترتيب المعتمد (طلب المالك ٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات»)
-            AnyView(AdminGroupTilesSection(items: tiles))
-        }
-        // ما يُدفع من المربّعات يرجع باسم القسم
-        .environment(\.adminPageTitle, AdminArea.app.title)
-        .onAppear { model.bind(settingsVM: appSettingsVM, authVM: authVM) }
-        .refreshable {
-            await model.reload(canEdit: canEdit, force: true)
-            await loadAccess(force: true)
-        }
-        .task {
-            model.bind(settingsVM: appSettingsVM, authVM: authVM)
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { @MainActor in await model.reload(canEdit: canEdit, force: false) }
-                group.addTask { @MainActor in await loadAccess(force: false) }
+        AdminGroupTilesSection(title: AdminAreaGroup.system.title, note: AdminAppLogic.ownerOnlyNote,
+                               items: tiles)
+            .onAppear { model.bind(settingsVM: appSettingsVM, authVM: authVM) }
+            .task {
+                model.bind(settingsVM: appSettingsVM, authVM: authVM)
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask { @MainActor in await model.reload(canEdit: canEdit, force: false) }
+                    group.addTask { @MainActor in await loadAccess(force: false) }
+                }
             }
-        }
-        .debugStackProbe("AdminAppAreaPage", limitKB: DebugStackLimit.page)
+            .onChange(of: refreshToken) { _ in
+                Task {
+                    await model.reload(canEdit: canEdit, force: true)
+                    await loadAccess(force: true)
+                }
+            }
     }
 
     /// رسائل رمز الدخول والأجهزة — كانت بطاقة «الدخول والإشعارات» تجلبها، والآن سطرا مربّعيهما

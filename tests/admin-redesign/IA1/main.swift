@@ -14,8 +14,8 @@ typealias Tool = AdminCatalogTool
 typealias G = AdminAreaGroup
 
 // MARK: الأسماء — ستة أقسام بألوانها، اسمان جديدان
-check(AdminAreaNames.title("team"), "الفريق والصلاحيات", "«الفريق والأمان» → «الفريق والصلاحيات»")
-check(AdminAreaNames.title("app"), "التطبيق والنظام", "«التطبيق» → «التطبيق والنظام»")
+check(AdminAreaNames.title("team"), "الفريق والنظام", "merged 2026-11-28: «الفريق والصلاحيات» + «التطبيق والنظام» → «الفريق والنظام»")
+check(AdminAreaNames.title("app"), "الفريق والنظام", "app pages carry the merged name (back titles)")
 check(AdminAreaNames.title("inbox"), "الوارد", "«الوارد» unchanged")
 check(AdminAreaNames.title("family"), "العائلة", "«العائلة» unchanged")
 check(AdminAreaNames.title("occasions"), "المناسبات والإعلانات", "«المناسبات والإعلانات» unchanged")
@@ -38,6 +38,25 @@ func homes(_ q: String) -> Set<AdminCatalogHome> { Set(AdminCatalogLogic.tools(m
 check(homes("الفريق والأمان").contains(.moderators), true, "old «الفريق والأمان» finds the team")
 check(homes("التطبيق والنظام").contains(.appRoot), true, "«التطبيق والنظام» finds the app root")
 check(homes("kwt"), [.sms], "«kwt» still finds the SMS page")
+check(homes("الفريق والصلاحيات").contains(.moderators), true, "old «الفريق والصلاحيات» finds the team")
+check(homes("الفريق والنظام").contains(.moderators), true, "new «الفريق والنظام» finds the team")
+check(homes("الفريق والنظام").contains(.appRoot), true, "new «الفريق والنظام» finds the system root")
+check(homes("التطبيق").contains(.appRoot), true, "old «التطبيق» finds the system root")
+
+// MARK: الدمج — الأقسام في القوائم لكل دور (٢٠٢٦-١١-٢٨)
+let all6 = ["inbox", "family", "occasions", "metrics", "team", "app"]
+check(AdminAreaLayout.listedAreas(visible: all6), ["inbox", "family", "occasions", "metrics", "team"], "owner: five sections")
+check(AdminAreaLayout.listedAreas(visible: ["inbox", "family", "occasions", "metrics", "team"]),
+      ["inbox", "family", "occasions", "metrics", "team"], "admin: five (team read-only)")
+check(AdminAreaLayout.listedAreas(visible: ["inbox", "family", "occasions", "metrics"]),
+      ["inbox", "family", "occasions", "metrics"], "monitor: no merged tile")
+check(AdminAreaLayout.listedAreas(visible: ["inbox", "occasions"]), ["inbox", "occasions"], "supervisor: no merged tile")
+check(AdminAreaLayout.listedAreas(visible: ["inbox", "app"]), ["inbox", "team"], "app alone → merged tile shows")
+check(AdminAreaLayout.mergedGroups(seesTeam: true, seesApp: true), [.team, .system], "owner: «الفريق» then «النظام»")
+check(AdminAreaLayout.mergedGroups(seesTeam: true, seesApp: false), [.team], "admin: «الفريق» only, «النظام» hidden")
+check(AdminAreaLayout.mergedGroups(seesTeam: false, seesApp: false), [], "monitor/supervisor: nothing")
+check(AdminAreaLayout.pageArea("app"), "team", "old app links open the merged page")
+check(AdminAreaLayout.pageArea("metrics"), "metrics", "«الإحصاءات» stays its own section")
 
 // MARK: ترتيب المجموعات داخل كل قسم
 check(AdminAreaLayout.groups("family"), [.review, .members], "العائلة: يحتاج مراجعتك ← الأعضاء")

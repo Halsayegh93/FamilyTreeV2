@@ -125,7 +125,7 @@ nonisolated enum AdminCatalogTool: String, CaseIterable, Hashable {
         case .teamMembers:
             // «الفريق والأمان» اسم القسم القديم (٢٠٢٦-١١-٢٨ ← «الفريق والصلاحيات»)
             return ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "الصلاحيات",
-                    "الفريق والأمان", "الفريق والصلاحيات"]
+                    "الفريق والأمان", "الفريق والصلاحيات", "الفريق والنظام"]
         case .accessSms:
             return ["رسائل", "sms", "رصيد", "kwt", "محاولات", "مرسل", "طلبات رمز الدخول", "مريبة", "مشبوهة"]
         case .accessRegistration:
@@ -139,7 +139,7 @@ nonisolated enum AdminCatalogTool: String, CaseIterable, Hashable {
                     "تسجيل فاشل", "بدون جهاز", "ما دخلوا"]
         case .appSections:
             // «حالة النظام» صارت حالة مربّع «التطبيق» وبطاقة حالته (spec B.2)
-            return ["التطبيق والنظام", "لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد", "شجرة النساء",
+            return ["التطبيق والنظام", "الفريق والنظام", "التطبيق", "لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد", "شجرة النساء",
                     "الأقسام الظاهرة للأعضاء", "عداد", "تعديل", "حد", "حدّ التعديلات الذاتية",
                     "صيانة", "تشغيل", "وضع الصيانة", "النظام", "حالة النظام", "معلومات", "إعادة التعيين", "افتراضي",
                     "استعادة"]
@@ -262,8 +262,8 @@ nonisolated enum AdminAreaNames {
         case "family":    return L10n.t("العائلة", "Family")
         case "occasions": return L10n.t("المناسبات والإعلانات", "Occasions & announcements")
         case "metrics":   return L10n.t("الإحصاءات", "Statistics")
-        case "team":      return L10n.t("الفريق والصلاحيات", "Team & permissions")
-        case "app":       return L10n.t("التطبيق والنظام", "App & system")
+        // «الفريق والنظام» (دمج المالك ٢٠٢٦-١١-٢٨): القسمان صفحة واحدة؛ المفتاحان باقيان في جدول السيرفر وبوابتيهما
+        case "team", "app": return L10n.t("الفريق والنظام", "Team & system")
         default:          return areaKey
         }
     }
@@ -305,6 +305,28 @@ nonisolated enum AdminAreaGroup: String, CaseIterable, Hashable {
 }
 
 nonisolated enum AdminAreaLayout {
+    /// الأقسام في القوائم (مربّعات «اليوم»، قائمة العنوان «⌄») من الأقسام الظاهرة لدورك بترتيبها: «التطبيق والنظام» مدموج في
+    /// «الفريق والنظام» (مفتاحه `team`) — يظهر المدموج لمن يرى أحدهما (المالك: الاثنين؛ المدير: الفريق للاطلاع؛ المراقب
+    /// والمشرف: لا شيء). الجدول على السيرفر كما هو (metrics/team/app)
+    static func listedAreas(visible: [String]) -> [String] {
+        var out: [String] = []
+        for key in visible where key != "app" { out.append(key) }
+        if visible.contains("app") && !out.contains("team") {
+            // «الفريق والنظام» مكان «الفريق» (قبل آخرها)
+            out.append("team")
+        }
+        let order = ["inbox", "family", "occasions", "metrics", "team"]
+        return out.sorted { (order.firstIndex(of: $0) ?? 99) < (order.firstIndex(of: $1) ?? 99) }
+    }
+
+    /// صفحة «الفريق والنظام»: مجموعتاها بعنوانيهما الصغيرين — «الفريق» لمن يرى `team`، و«النظام» لمن يرى `app`
+    static func mergedGroups(seesTeam: Bool, seesApp: Bool) -> [AdminAreaGroup] {
+        (seesTeam ? [.team] : []) + (seesApp ? [.system] : [])
+    }
+
+    /// القسم الذي تُفتح صفحته: «app» (رابط قديم، إشعار، فهرس) يفتح «الفريق والنظام»
+    static func pageArea(_ key: String) -> String { key == "app" ? "team" : key }
+
     /// مجموعات القسم بترتيبها (`AdminArea.rawValue`) — «الوارد» كما هو بلا مجموعات
     static func groups(_ areaKey: String) -> [AdminAreaGroup] {
         switch areaKey {
