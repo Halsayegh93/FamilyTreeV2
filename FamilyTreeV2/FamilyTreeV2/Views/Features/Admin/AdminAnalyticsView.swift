@@ -417,9 +417,10 @@ struct AdminStatsSnapshot {
         s.deathDates = DeathDatesCampaign.stats(all)
 
         // جديد في الشجرة: أعضاء الشجرة المسمَّون بتاريخ إضافتهم
-        let today = AdminStatsLogic.day(of: now, calendar: Calendar(identifier: .gregorian))
+        // اليوم ويوم الإضافة بتوقيت الكويت (لا غرينتش ولا منطقة الجهاز)
+        let today = AdminStatsLogic.kuwaitToday(now)
         s.growth = AdminStatsLogic.growth(created: all.filter { $0.hasName && $0.role != .pending }
-                                                      .compactMap { AdminStatsLogic.day($0.createdAt) },
+                                                      .compactMap { AdminStatsLogic.kuwaitDay($0.createdAt) },
                                           today: today)
 
         // الأعمار: الرجال الأحياء

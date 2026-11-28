@@ -105,6 +105,50 @@ nonisolated enum AdminStatsLogic {
         return Day(year: c.year ?? earliestYear, month: c.month ?? 1, day: c.day ?? 1)
     }
 
+    // MARK: توقيت الكويت (٢٠٢٦-١١-٢٨: «جديد في الشجرة» كان يأخذ يوم غرينتش من أول ١٠ حروف —
+    //        المضاف بعد ٩ مساءً بالكويت آخر يوم في الشهر يُحسب في الشهر السابق)
+
+    static let kuwaitZone = TimeZone(identifier: "Asia/Kuwait") ?? TimeZone(secondsFromGMT: 3 * 3600)!
+
+    static var kuwaitCalendar: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = kuwaitZone
+        return cal
+    }
+
+    /// اليوم بتوقيت الكويت أياً كانت منطقة الجهاز
+    static func kuwaitToday(_ now: Date = Date()) -> Day { day(of: now, calendar: kuwaitCalendar) }
+
+    /// يوم طابع زمني من السيرفر (`created_at` timestamptz) بتوقيت الكويت؛ التاريخ وحده يبقى كما كُتب
+    static func kuwaitDay(_ raw: String?) -> Day? {
+        guard let raw else { return nil }
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count > 10, let instant = timestamp(text) else { return day(text) }
+        let d = day(of: instant, calendar: kuwaitCalendar)
+        return d.year >= earliestYear ? d : nil
+    }
+
+    private static let isoPlain: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
+    }()
+    private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
+    }()
+
+    /// «2026-10-31T22:30:00.123+00:00» · «…Z» · «2026-10-31 22:30:00+00» — nil إن لم يُفهم
+    static func timestamp(_ text: String) -> Date? {
+        var s = text.replacingOccurrences(of: " ", with: "T")
+        // «+00» ← «+00:00»
+        if let r = s.range(of: #"[+-]\d{2}$"#, options: .regularExpression) { s.replaceSubrange(r, with: s[r] + ":00") }
+        let plain = isoPlain, fractional = isoFractional
+        if let d = fractional.date(from: s) ?? plain.date(from: s) { return d }
+        // بلا منطقة = غرينتش (كما يرسل السيرفر)
+        if !s.contains("Z"), s.range(of: #"[+-]\d{2}:\d{2}$"#, options: .regularExpression) == nil {
+            return fractional.date(from: s + "Z") ?? plain.date(from: s + "Z")
+        }
+        return nil
+    }
+
     /// السنوات الكاملة بين يومين — nil إن سبق الآخر الأول أو جاوز `maxAge`
     static func years(from start: Day, to end: Day) -> Int? {
         guard end >= start else { return nil }

@@ -126,6 +126,20 @@ check(january.months.map(\.year), [2025, 2025, 2025, 2025, 2025, 2026], "window 
 check(january.months.map(\.month), [8, 9, 10, 11, 12, 1], "Aug … Jan")
 check(january.months[4].count, 1, "December counted")
 
+// MARK: يوم الإضافة بتوقيت الكويت (لا غرينتش) — ٢٠٢٦-١١-٢٨
+check(L.kuwaitDay("2026-10-31T22:30:00+00:00"), L.Day(year: 2026, month: 11, day: 1),
+      "22:30 UTC on 31 Oct = 1 Nov in Kuwait (+3)")
+check(L.kuwaitDay("2026-10-31T20:59:59.123456+00:00"), L.Day(year: 2026, month: 10, day: 31),
+      "20:59 UTC stays 31 Oct (fractional seconds)")
+check(L.kuwaitDay("2026-11-30T21:00:00Z"), L.Day(year: 2026, month: 12, day: 1), "Z suffix, crosses the month")
+check(L.kuwaitDay("2026-11-05 23:10:00+00"), L.Day(year: 2026, month: 11, day: 6), "space separator, short offset")
+check(L.kuwaitDay("2026-11-05"), L.Day(year: 2026, month: 11, day: 5), "date only stays as written")
+check(L.kuwaitDay(nil), nil, "no date")
+var utcNoon = DateComponents(); utcNoon.year = 2026; utcNoon.month = 11; utcNoon.day = 30; utcNoon.hour = 22
+var utcCal = Calendar(identifier: .gregorian); utcCal.timeZone = TimeZone(identifier: "UTC")!
+check(L.kuwaitToday(utcCal.date(from: utcNoon)!), L.Day(year: 2026, month: 12, day: 1),
+      "today = Kuwait day, whatever the phone's zone")
+
 // MARK: النصوص
 check(AdminStatsText.accounts(170), "170 لهم حساب", "«170 لهم حساب»")
 check(AdminStatsText.ofLiving(2_489), "من 2,489 حياً في العائلة", "«من 2,489 حياً في العائلة»")
