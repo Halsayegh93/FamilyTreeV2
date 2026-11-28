@@ -9,7 +9,8 @@ import SwiftUI
 // (`AdminPeopleLogic` — المنطق الخالص، والأعداد والقائمة من النطاق نفسه). تحت الرأس على الأبيض:
 //  ١) شريحة لكل اختيار بـ✕ (`AdminActiveFilterChips` — الافتراضي «رجال» شريحة عادية) وسطر «2,729 رجل · بالفروع» دائماً
 //     (العدد الذي كان في مربّعات الرأس).
-//  ٢) بطاقة «يحتاج مراجعتك» ← صفحة «يحتاج مراجعتك» (`AdminReviewHubPage`، U12). تختفي حين تصل كل القوائم صفراً.
+//  ٢) «يحتاج مراجعتك» مربّعات ثلاثة في كل صف (اختيار المالك «ب» ٢٠٢٦-١١-٢٨، `AdminReviewTiles.swift`) — كل مربّع
+//     يفتح قائمته الموجودة؛ ثم عنوان «الأعضاء». (صفحة `AdminReviewHubPage` تبقى لمن يفتحها من رابط.)
 //  ٣) القائمة: فئة واحدة = قائمتها؛ أكثر = أقسام «الرجال · N» · «النساء · N» · «خارج العائلة · N». الرجال بلا تصفية ولا
 //     بحث بالفروع («▍فرع جاسم (214)»)، وإلا أبجدياً (والبحث بالأقرب) — صفّ العضو يفتح ورقة العضو
 //     (`AdminMemberSheet(ids:start:)`، U13) بالسابق والتالي في قسمه. النساء وخارج العائلة بصفّ «نساء العائلة»
@@ -566,15 +567,18 @@ struct AdminMembersPage: View {
                     AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الأعضاء…", "Loading members…"), rows: 8))
                 }
             } else {
+                // ترتيب المالك ٢٠٢٦-١١-٢٨: «يحتاج مراجعتك» مربّعات ثلاثة في كل صف (اختيار «ب») ثم «الأعضاء». المربّعات
+                // تغيب أثناء البحث — النتائج تبقى تحت الحقل مباشرة
+                if trimmedQuery.isEmpty {
+                    AnyView(AdminReviewTilesSection(counts: reviewTileCounts,
+                                                    kinds: AdminReviewTilesLogic.kinds(seesWomen: seesOthers)))
+                        .padding(.bottom, DS.Spacing.lg)
+                }
+                AdminSectionLabel(title: AdminAreaGroup.members.title)
+                    .padding(.bottom, DS.Spacing.xsm)
                 // العدد دائماً هنا (كان في مربّعات الرأس — F5)، والشرائح فوقه حين تكون
                 AnyView(filterStatus(model))
                     .padding(.bottom, DS.Spacing.md)
-                if let row = reviewRow {
-                    row.padding(.bottom, DS.Spacing.lg)
-                }
-                if let row = issuesRow {
-                    row.padding(.bottom, DS.Spacing.lg)
-                }
                 AnyView(listSection(model))
                 AnyView(footer)
             }
@@ -584,32 +588,22 @@ struct AdminMembersPage: View {
 
     // MARK: «يحتاج مراجعتك»
 
-    /// البطاقة بسطريها، أو هيكلها قبل وصول الأرقام — nil حين لا أحد في أي قائمة (أو فشلت قوائم الحسابات والباقي صفر).
-    /// الأعداد من المصدر الواحد مع صفحتها (`AdminReviewHubCounts`) بترتيب قوائمها
-    private var reviewRow: AnyView? {
-        // «تواريخ وفاة ناقصة» تتصدّر (حملة المالك — رقمها خرج من مربّع «المناسبات» إلى هنا)
-        let lists = AdminReviewHubLogic.List.allCases.map {
-            AdminMembersLogic.ReviewList($0.title, reviewCounts[$0], leads: $0 == .death, forms: $0.forms)
+    /// أعداد المربّعات — من المصادر نفسها (`AdminReviewHubCounts` لقوائم «يحتاج مراجعتك»، و`AdminIssuesData` للمكرر
+    /// والمتزوجات). الغائب = لم يصل («—»)
+    private var reviewTileCounts: [AdminReviewTileKind: Int] {
+        var out: [AdminReviewTileKind: Int] = [:]
+        for kind in AdminReviewTileKind.allCases {
+            if let list = kind.hubList {
+                out[kind] = reviewCounts[list]
+            }
         }
-        switch AdminMembersLogic.reviewState(lists, accountsFailed: accounts.health.look == .unknown) {
-        case .hidden:          return nil
-        case .loading:         return AnyView(AdminMembersReviewRow(card: nil))
-        case .card(let card):  return AnyView(AdminMembersReviewRow(card: card))
+        if index.built {
+            out[.issues] = AdminReviewTilesLogic.issuesCount(duplicates: issues.duplicates, nameless: issues.nameless.count)
         }
-    }
-
-    // MARK: «المكرر والأخطاء»
-
-    /// الصفّ بعدده حين يكون فيه أحد — nil = لا أسماء مكررة ولا مشكلات ولا أرقام بدون أسماء (طلب المالك ٢٠٢٦-١١-٢٧)
-    private var issuesRow: AnyView? {
-        let problems = reviewCounts[.problems] ?? 0
-        let total = AdminDuplicateNames.entryCount(duplicates: issues.duplicates, problems: problems,
-                                                   nameless: issues.nameless.count,
-                                                   marriedNoHusband: issues.marriedNoHusband.count)
-        guard total > 0 else { return nil }
-        let line = AdminIssuesRow.line(duplicates: issues.duplicates, problems: problems, nameless: issues.nameless.count,
-                                       marriedNoHusband: issues.marriedNoHusband.count)
-        return AnyView(AdminIssuesRow(count: total, line: line))
+        if seesOthers && !womenRows.isEmpty {
+            out[.married] = issues.marriedNoHusband.count
+        }
+        return out
     }
 
     // MARK: التصفية المفعّلة

@@ -82,21 +82,22 @@ struct AdminMembersHeaderButtons: View {
 
     var body: some View {
         HStack(spacing: DS.Spacing.xsm) {
+            // ثلاث دوائر متساوية (طلب المالك ٢٠٢٦-١١-٢٨): ⋯ (حين فيها شيء) · التقارير · تسجيل عضو — أيقونات بلا نصّ
             if let register {
                 // بيته الوحيد (المالك والمدير)
                 NavigationLink { AdminLazyPage { register() } } label: {
-                    AdminMembersBandCircle(symbol: "plus")
+                    AdminMembersBandCircle(symbol: "person.badge.plus")
                 }
                 .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t("تسجيل عضو جديد", "Register a new member"))
+                .accessibilityLabel(L10n.t("تسجيل عضو", "Register a member"))
             }
-            // «التقارير (PDF)» أيقونة ظاهرة لا داخل «⋯» (المالك ٢٠٢٦-١١-٢٧ «التقارير في العائلة خلها ايقونة مو داخل نقاط»)
+            // «التقارير» أيقونة ظاهرة لا داخل «⋯» (المالك ٢٠٢٦-١١-٢٧ «التقارير في العائلة خلها ايقونة مو داخل نقاط»)
             if let reports {
                 Button(action: reports) {
-                    AdminMembersBandCircle(symbol: "doc.richtext")
+                    AdminMembersBandCircle(symbol: "doc.text")
                 }
                 .buttonStyle(DSScaleButtonStyle())
-                .accessibilityLabel(L10n.t("التقارير (PDF)", "Reports (PDF)"))
+                .accessibilityLabel(L10n.t("التقارير", "Reports"))
             }
             if womenPage != nil || womenTree != nil {
                 Menu {
