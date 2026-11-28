@@ -694,7 +694,8 @@ struct AdminMemberSheet: View {
     /// عقدة شجرة النساء: إخفاؤها وإظهارها بنداء «إدارة السجل» في شجرة النساء (`WomenStore.update` بقيمها كما هي)
     static func setWomenHidden(_ node: FamilyMember, hidden: Bool) async -> Bool {
         do {
-            try await WomenStore.update(id: node.id, fullName: node.fullName, isDeceased: node.isDeceased == true,
+            try await WomenStore.update(id: node.id, fullName: node.fullName, storedFirst: node.firstName,
+                                        isDeceased: node.isDeceased == true,
                                         deathDate: node.deathDate, birthDate: node.birthDate, gender: node.gender,
                                         isHidden: hidden)
             return true

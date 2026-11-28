@@ -658,7 +658,8 @@ class MemberViewModel: ObservableObject {
 
     /// تعديل بيانات ابنة للمستخدم نفسه (RPC update_self_woman_child).
     @discardableResult
-    func updateSelfWomanChild(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool, deathDate: Date?) async -> Bool {
+    func updateSelfWomanChild(id: UUID, firstName: String, fullName: String? = nil, birthDate: Date?,
+                              isDeceased: Bool, deathDate: Date?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         // ترميز صريح: Swift يحذف المفاتيح الاختيارية الفارغة (encodeIfPresent)،
         // فيصل الطلب بأربعة معاملات وتفشل PostgREST في إيجاد الدالة.
@@ -683,7 +684,8 @@ class MemberViewModel: ObservableObject {
         let params = P(
             p_child_id: id.uuidString,
             p_first_name: firstName,
-            p_full_name: firstName,
+            // الاسم الكامل «اسمها + اسم أبيها» — كان يُرسل الاسم الأول وحده فيقصّ اسم البنت (أفنان، ٢٠٢٦-١١-٢٨)
+            p_full_name: (fullName?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? firstName,
             p_birth: birthDate.map { DateHelper.format($0) },
             p_deceased: isDeceased,
             p_death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) }

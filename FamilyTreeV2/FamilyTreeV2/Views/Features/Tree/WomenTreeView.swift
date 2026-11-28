@@ -3347,9 +3347,12 @@ struct WomanDetailSheet: View {
         let lifeChanged = birthKey != startBirthKey || deceased != wasDeceased || deathKey != startDeathKey
         let mirrorsProfile = !woman.isFemale && profileIds.contains(woman.id) && lifeChanged
         let vm = memberVM
+        let fatherFull = father?.fullName
         runWrite(failTitle: L10n.t("تعذّر الحفظ", "Couldn't save"), {
             if fieldsChanged {
                 try await WomenStore.update(id: woman.id, fullName: name,
+                                            storedFirst: woman.firstName,
+                                            fatherFullName: woman.isFemale ? fatherFull : nil,
                                             isDeceased: deceased,
                                             deathDate: deathToWrite, birthDate: birthToWrite,
                                             gender: woman.gender, isHidden: woman.isHiddenFromTree)

@@ -851,7 +851,7 @@ struct ProfileView: View {
                     if index > 0 { DSDivider() }
                     HStack(spacing: DS.Spacing.md) {
                         reorderIndexBadge(index + 1, color: c.isFemale ? DS.Color.female : DS.Color.male)
-                        Text(c.firstName.isEmpty ? c.fullName : c.firstName)
+                        Text(PersonName.displayFirst(firstName: c.firstName, fullName: c.fullName))
                             .dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary).lineLimit(1)
                         Spacer()
                         reorderArrows(canUp: index > 0, canDown: index < children.count - 1,
@@ -935,7 +935,7 @@ struct ProfileView: View {
                              : (m.isFemale ? L10n.t("مخفية من الشجرة", "Hidden from the tree") : L10n.t("مخفي من الشجرة", "Hidden from the tree")))
                     : nil
                 let statusColor = shown ? DS.Color.success : DS.Color.textTertiary
-                let name = m.firstName.isEmpty ? m.fullName : m.firstName
+                let name = PersonName.displayFirst(firstName: m.firstName, fullName: m.fullName)
                 Text(name).dsFont(.chip).foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 if let role { Text(role).dsFont(.caption).foregroundColor(DS.Color.textSecondary) }
@@ -1893,21 +1893,33 @@ struct WomanMemberEditSheet: View {
             if entry.role == .child {
                 // ابنة العضو نفسه — RPC مقيّد على النفس (يعمل لأي دور). تغيير الجنس
                 // (نقل بين الشجرتين) يبقى للإدارة؛ هنا الاسم/الميلاد/الوفاة فقط.
+                // اسمها الكامل «الاسم + اسم أبيها (أنا)» — يُحفظ كاملاً ويُعرض بالاسم الأول
+                let saved = PersonName.daughterSave(typedFirst: name, storedFull: entry.member.fullName,
+                                                    storedFirst: entry.member.firstName,
+                                                    fatherFullName: authVM.currentUser?.fullName)
                 ok = await memberVM.updateSelfWomanChild(
                     id: entry.member.id,
-                    firstName: name,
+                    firstName: saved.first,
+                    fullName: saved.full,
                     birthDate: hasBirthDate ? birthDate : nil,
                     isDeceased: isDeceased,
                     deathDate: hasDeathDate ? deathDate : nil
                 )
             } else {
+                // الاسم الأول تغيّر ← الاسم الكامل يتبعه (السلسلة كما هي) — كان يبقى بالاسم القديم
+                let cleanName = PersonName.clean(name)
+                let renamedFull = cleanName == PersonName.clean(entry.member.firstName)
+                    ? nil
+                    : PersonName.replacingFirstName(in: entry.member.fullName,
+                                                    old: entry.member.firstName, new: cleanName)
                 ok = await memberVM.updateWomanMember(
                     id: entry.member.id,
                     firstName: name,
                     birthDate: hasBirthDate ? birthDate : nil,
                     isDeceased: isDeceased,
                     deathDate: hasDeathDate ? deathDate : nil,
-                    gender: selectedGender
+                    gender: selectedGender,
+                    fullName: renamedFull
                 )
             }
             if ok, let img = selectedUIImage {

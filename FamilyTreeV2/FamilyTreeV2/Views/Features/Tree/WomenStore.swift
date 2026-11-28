@@ -272,12 +272,14 @@ enum WomenStore {
         }
     }
 
-    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
+    /// `storedFirst`: الاسم الأول المحفوظ (يبقى كما هو ولو مركّباً)؛ `fatherFullName`: أبوها في الشجرة —
+    /// اسم كُتب كلمة واحدة (أو الاسم الأول وحده) يُكمَّل «الاسم + اسم الأب الكامل» (طلب المالك ٢٠٢٦-١١-٢٨)
+    static func update(id: UUID, fullName: String, storedFirst: String? = nil, fatherFullName: String? = nil,
+                       isDeceased: Bool, deathDate: String?,
                        birthDate: String?, gender: String? = nil, isHidden: Bool) async throws {
-        // أول وحدة لا أول كلمة (PersonName القاعدة ١-ج) — «زين العابدين»/«فاطمة الزهراء» وحدة واحدة
-        let first = PersonName.firstUnit(fullName)
+        let (first, full) = PersonName.savedNames(fullName, storedFirst: storedFirst, fatherFullName: fatherFullName)
         var payload: [String: AnyEncodable] = [
-            "full_name": AnyEncodable(fullName),
+            "full_name": AnyEncodable(full),
             "first_name": AnyEncodable(first),
             "is_deceased": AnyEncodable(isDeceased),
             "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),

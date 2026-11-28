@@ -166,6 +166,59 @@ nonisolated enum PersonName {
         let rest = chainAfterFirstName(fullName, firstName: old, fatherFullName: fatherFullName)
         return [clean(new), rest].filter { !$0.isEmpty }.joined(separator: " ")
     }
+
+    // MARK: اسم البنت تحت أبيها (طلب المالك ٢٠٢٦-١١-٢٨)
+    // يُحفظ كاملاً «اسمها + اسم أبيها الكامل»، ويُعرض في الشجرة والملف بالاسم الأول وحده.
+
+    /// حفظ من حقل «الاسم الأول» (تعديل البنت من الملف الشخصي): الاسم الأول المحفوظ والاسم الكامل.
+    /// المكتوب ينتهي باسم الأب ← يُقصّ (لا تكرار)؛ والاسم الكامل بلا سلسلة ← يُكمَّل باسم الأب.
+    static func daughterSave(typedFirst: String, storedFull: String, storedFirst: String,
+                             fatherFullName: String?) -> (first: String, full: String) {
+        let father = clean(fatherFullName ?? "")
+        var first = clean(typedFirst)
+        if !father.isEmpty, first.hasSuffix(" " + father) {
+            let head = clean(String(first.dropLast(father.count + 1)))
+            if !head.isEmpty { first = head }
+        }
+        let base = clean(replacingFirstName(in: storedFull, old: storedFirst, new: first,
+                                            fatherFullName: father.isEmpty ? nil : father))
+        if !father.isEmpty, !first.isEmpty, base.isEmpty || base == first {
+            return (first, first + " " + father)
+        }
+        return (first, base.isEmpty ? first : base)
+    }
+
+    /// حفظ من حقل «الاسم الكامل» (إدارة السجل): كلمة واحدة أو الاسم الأول وحده ← يُكمَّل باسم الأب،
+    /// وما فيه سلسلة يبقى كما كُتب (لا تكرار لاسم الأب).
+    static func completedDaughterFullName(_ name: String, fatherFullName: String?,
+                                          storedFirst: String? = nil) -> String {
+        let n = clean(name)
+        let father = clean(fatherFullName ?? "")
+        guard !n.isEmpty, !father.isEmpty else { return n }
+        if n == father || n.hasSuffix(" " + father) { return n }
+        let prev = clean(storedFirst ?? "")
+        if !n.contains(" ") || (!prev.isEmpty && n == prev) { return n + " " + father }
+        return n
+    }
+
+    /// الاسمان المحفوظان من حقل «الاسم الكامل»: الكامل (مُكمَّل باسم الأب إن نقص) والأول —
+    /// الأول المحفوظ إن بقي أول الاسم، وإلا ما قبل اسم الأب، وإلا أول وحدة (PersonName القاعدة ١)
+    static func savedNames(_ fullName: String, storedFirst: String?,
+                                       fatherFullName: String?) -> (first: String, full: String) {
+        let full = completedDaughterFullName(fullName, fatherFullName: fatherFullName,
+                                                        storedFirst: storedFirst)
+        let prev = clean(storedFirst ?? "")
+        let keepsPrev = !prev.isEmpty && (full == prev || full.hasPrefix(prev + " "))
+        let first = firstName(fullName: full, explicit: keepsPrev ? prev : nil,
+                                         fatherFullName: fatherFullName)
+        return (first, full)
+    }
+
+    /// الاسم المعروض للبنت في الشجرة وقائمة البنات: الاسم الأول المحفوظ، وإلا أول وحدة من الكامل.
+    static func displayFirst(firstName: String, fullName: String) -> String {
+        let f = clean(firstName)
+        return f.isEmpty ? firstUnit(fullName) : f
+    }
 }
 
 // MARK: - الشجرة الحالية للقاعدة ٢

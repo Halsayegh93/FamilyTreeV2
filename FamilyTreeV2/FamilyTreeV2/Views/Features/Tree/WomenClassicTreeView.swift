@@ -1270,7 +1270,7 @@ struct WomenClassicTreeView: View {
             // القارئ الصوتي: جملة واحدة للعقدة — الاسم، الصلة، «متوفاة»، وما يحدث بالضغط (مراجعة ٢٠٢٦-١١-٢٧ #12).
             // قبل مربّعات الزوجات والزوج فتبقى عناصر مستقلة؛ وكبسولة الاسم تحتها مخفية عنه (إجراء «التفاصيل» هنا)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(WomenNodeSpeech.label(name: m.firstName.isEmpty ? m.fullName : m.firstName,
+            .accessibilityLabel(WomenNodeSpeech.label(name: PersonName.displayFirst(firstName: m.firstName, fullName: m.fullName),
                                                       isFemale: female, deceased: deceased,
                                                       relation: outsideTag(m)?.text))
             .accessibilityHint(WomenNodeSpeech.hint(children: kids.count, collapsed: isCollapsed))
@@ -1324,7 +1324,8 @@ struct WomenClassicTreeView: View {
             // الاسم كبسولة واحدة للحي والمتوفّى، وللمتوفّى مربّع ثانٍ منفصل تحته للسنوات بخط أكبر — نفس شجرة العائلة
             // (طلب المالك ٢٠٢٦-١٠-٢٧)
             VStack(spacing: 0) {
-                Text(m.firstName)
+                // الاسم الأول وحده — الكامل «اسمها + اسم أبيها» محفوظ (قرار المالك ٢٠٢٦-١١-٢٨)
+                Text(PersonName.displayFirst(firstName: m.firstName, fullName: m.fullName))
                     .dsTreeFont(.title3Tree, k)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
