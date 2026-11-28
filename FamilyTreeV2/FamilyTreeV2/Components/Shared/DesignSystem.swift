@@ -2648,6 +2648,14 @@ extension DS {
         static let inboxTileRingGap: CGFloat = 2
         /// بين سطر الأرقام وصفّ المربّعات
         static let inboxTilesTop: CGFloat = 14
+        /// رأس «الوارد» (العيّنة inbox-header ٢٠٢٦-١١-٢٨): دائرتا «تحديد» و«الإعدادات» متساويتان — زجاج أبيض ١٠٪ بإطار ١٦٪
+        static let inboxCircle: CGFloat = 38
+        static let inboxCircleFill = SwiftUI.Color.white.opacity(0.10)
+        static let inboxCircleLine = SwiftUI.Color.white.opacity(0.16)
+        /// سطر الأرقام الأربعة بلا مربّعات (طلب المالك «خلّهم بدون مربّعات»): «بانتظار المراجعة» بذهبي أقوى وسهم،
+        /// والأرقام باهتة في وضع «تحديد»
+        static let inboxReviewInk = DS.Color.accentLight
+        static let inboxSelectDim: Double = 0.4
         /// زرّ الاختيار في ورقة الفلاتر — spec A.13
         static let filterRadio: CGFloat = 22
         /// مربّعات الأقسام (`AdminRowTile`؛ غير `areaColumns` ٣ لمربّعات البحث والأدوات): عمودان بفراغ ١٠، حشوة ١٢ جانباً و١٠ فوق وتحت،

@@ -132,12 +132,14 @@ struct AdminRequestBoxNavRow: View {
     var menu: [AdminBoxMenuItem] = []
     /// «إغلاق» معطّل أثناء قرار يُرسل (لا يُغلق المربّع على طلب لم يُعرف مصيره)
     var closeEnabled: Bool = true
+    /// «إغلاق» — أو «إخفاء التفاصيل» داخل مربّع الطلب بالمنتصف (`AdminRequestPanel`)
+    var closeTitle: String = AdminRequestBoxText.close
     let onClose: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dsSection) private var section
 
     var body: some View {
-        let close = Button(AdminRequestBoxText.close, action: onClose)
+        let close = Button(closeTitle, action: onClose)
             .buttonStyle(AdminBoxTextButtonStyle(role: .callout))
             .disabled(!closeEnabled)
         let heading = Text(title)
@@ -732,7 +734,8 @@ private struct AdminDetailRowFrame: ViewModifier {
 
 /// قرار أو إجراء في الشريط — `style` يحدّد وجهه
 struct AdminBoxAction: Identifiable {
-    enum Style { case primary, reject, plain }
+    /// `approve` = «موافقة» الخضراء في المربّع المختصر (`AdminRequestPanelSummary`)
+    enum Style { case primary, approve, reject, plain }
     let id: String
     let title: String
     var icon: String? = nil
@@ -884,19 +887,23 @@ struct AdminBoxActionFace: View {
 
     private var ink: Color {
         switch style {
-        case .primary: return DS.Color.textOnPrimary
+        case .primary, .approve: return DS.Color.textOnPrimary
         case .reject: return DS.Color.error
         case .plain: return DS.Color.textPrimary
         }
     }
 
     private var fill: Color {
-        style == .primary ? DS.Color.primaryFill : DS.Color.cardBackground
+        switch style {
+        case .primary: return DS.Color.primaryFill
+        case .approve: return DS.Color.successFill
+        case .reject, .plain: return DS.Color.cardBackground
+        }
     }
 
     private var stroke: Color {
         switch style {
-        case .primary: return Color.clear
+        case .primary, .approve: return Color.clear
         case .reject: return DS.Color.error
         case .plain: return DS.Hub.frameStroke
         }

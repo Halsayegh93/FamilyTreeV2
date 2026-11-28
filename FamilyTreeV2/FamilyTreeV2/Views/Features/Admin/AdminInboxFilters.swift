@@ -394,6 +394,11 @@ nonisolated enum AdminInboxText {
     static func selected(_ n: Int) -> String {
         L10n.t("\(n) محدّد", "\(n) selected")
     }
+
+    /// عنوان الرأس في وضع «تحديد»: «تحديد · 2»
+    static func selectingTitle(_ n: Int) -> String {
+        L10n.t("تحديد · \(n)", "Select · \(n)")
+    }
 }
 
 #if !ADMIN_LOGIC_TEST
@@ -601,6 +606,28 @@ struct AdminInboxRefreshLine: View {
 /// رأس «الوارد» (spec A.3/C.2) بقطع رأس الأقسام نفسها: «‹ الإدارة» ← «الوارد ⌄» (قائمة الأقسام) + ⚙︎ و«تحديد» ← سطر المجال
 /// ← «للاطلاع» بقفل ← سطر الأرقام. يُرسم في أول خلية من `List` (يتمرّر مع الصفوف)، فالرجوع يُمرَّر من خارج القائمة
 /// (`dismiss` داخل خلية `List` لا يُخرج الصفحة — مثل `AdminPageBand`)
+/// دائرة رأس «الوارد» ٣٨ (زجاج أبيض ١٠٪ بإطار ١٦٪) بلمس ٤٤ — «تحديد» و«الإعدادات» بشكل واحد
+struct AdminInboxCircleButton: View {
+    let symbol: String
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(dsSymbol: symbol)
+                .dsGlyph(DS.Glyph.lg, weight: .medium)
+                .foregroundStyle(DS.Color.headerGlyph)
+                .frame(width: DS.Hub.inboxCircle, height: DS.Hub.inboxCircle)
+                .background(Circle().fill(DS.Hub.inboxCircleFill))
+                .overlay(Circle().strokeBorder(DS.Hub.inboxCircleLine, lineWidth: DS.Border.width))
+                .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .accessibilityLabel(label)
+    }
+}
+
 struct AdminInboxBand<Trailing: View>: View {
     let backTitle: String?
     let onBack: () -> Void
@@ -611,6 +638,8 @@ struct AdminInboxBand<Trailing: View>: View {
     var tiles: AnyView? = nil
     /// سطر البحث و«تصفية» على الكحلي تحت المربّعات (`AdminMembersFilterBar` — شكل «العائلة»)
     var accessory: AnyView? = nil
+    /// وضع «تحديد»: العنوان «تحديد · N» بدل قائمة الأقسام، والأرقام باهتة لا تُضغط
+    var selectingTitle: String? = nil
     @ViewBuilder let trailing: () -> Trailing
     @Environment(\.dsLandscape) private var landscape
 
@@ -618,7 +647,14 @@ struct AdminInboxBand<Trailing: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             AdminHeaderLead(backTitle: backTitle, onBack: backTitle == nil ? nil : onBack, subtitle: subtitle) {
                 // العنوان قائمة الأقسام (خلف `AnyView` — حارس المكدس)
-                AnyView(AdminAreaTitleMenu(title: AdminArea.inbox.title))
+                if let selectingTitle {
+                    AnyView(Text(verbatim: selectingTitle)
+                        .dsFont(.hubTitle)
+                        .foregroundColor(DS.Color.headerTitle)
+                        .accessibilityAddTraits(.isHeader))
+                } else {
+                    AnyView(AdminAreaTitleMenu(title: AdminArea.inbox.title))
+                }
             } trailing: {
                 trailing()
             }
@@ -627,6 +663,8 @@ struct AdminInboxBand<Trailing: View>: View {
             }
             if !items.isEmpty {
                 AnyView(AdminHeaderLine(items: items))
+                    .opacity(selectingTitle == nil ? 1 : DS.Hub.inboxSelectDim)
+                    .allowsHitTesting(selectingTitle == nil)
             }
             if let tiles {
                 tiles.padding(.top, DS.Hub.inboxTilesTop)
@@ -661,49 +699,38 @@ struct AdminInboxSelectionBar: View {
     let onReject: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
+    /// العيّنة inbox-header (٢٠٢٦-١١-٢٨): «موافقة (N)» أخضر · «رفض (N)» إطار أحمر · «تحديد الكل» رمادي في صفّ واحد —
+    /// العدد في عنوان الرأس «تحديد · N»
     var body: some View {
-        VStack(spacing: DS.Spacing.sm) {
-            HStack(spacing: DS.Spacing.md) {
-                Text(verbatim: AdminInboxText.selected(count))
-                    .dsFont(.subtitle)
-                    .monospacedDigit()
-                    .foregroundColor(DS.Color.textSecondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Button(action: onToggleAll) {
-                    Text(allPicked ? L10n.t("إلغاء تحديد الكل", "Deselect all") : L10n.t("تحديد الكل", "Select all"))
-                        .dsFont(.button)
-                        .foregroundColor(AppSection.admin.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                        .frame(minHeight: DS.Icon.tapTarget)
-                        .contentShape(Rectangle())
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: DS.Spacing.sm))
+            : AnyLayout(HStackLayout(spacing: DS.Spacing.sm))
+        layout {
+            Button(action: onApprove) {
+                AdminBoxActionFace(title: count > 0 ? L10n.t("موافقة (\(count))", "Approve (\(count))") : L10n.t("موافقة", "Approve"),
+                                   style: .approve, busy: busy)
+            }
+            .buttonStyle(DSPressStyle())
+            .disabled(count == 0 || busy)
+            .opacity(count == 0 ? DSActionFill.disabledOpacity : 1)
+            if canReject {
+                Button(action: onReject) {
+                    AdminBoxActionFace(title: count > 0 ? L10n.t("رفض (\(count))", "Reject (\(count))") : L10n.t("رفض", "Reject"),
+                                       style: .reject)
                 }
                 .buttonStyle(DSPressStyle())
-                .disabled(!canPickAll)
+                .disabled(count == 0 || busy)
+                .opacity(count == 0 ? DSActionFill.disabledOpacity : 1)
             }
-            let buttons = Group {
-                DSButton(count > 0 ? L10n.t("قبول (\(count))", "Approve (\(count))") : L10n.t("قبول", "Approve"),
-                         icon: "checkmark", action: onApprove)
-                    .disabled(count == 0 || busy)
-                if canReject {
-                    Button(action: onReject) {
-                        HStack(spacing: DS.Spacing.xs) {
-                            Image(systemName: "xmark").dsGlyph(DS.Glyph.md, weight: .semibold)
-                            Text(count > 0 ? L10n.t("رفض (\(count))", "Reject (\(count))") : L10n.t("رفض", "Reject"))
-                        }
-                        .modifier(DSSoftDestructiveFace(enabled: count > 0 && !busy))
-                    }
-                    .buttonStyle(DSPressStyle())
-                    .disabled(count == 0 || busy)
-                }
+            Button(action: onToggleAll) {
+                AdminBoxActionFace(title: allPicked ? L10n.t("إلغاء الكل", "Deselect all") : L10n.t("تحديد الكل", "Select all"),
+                                   style: .plain)
             }
-            if typeSize.isAccessibilitySize {
-                VStack(spacing: DS.Spacing.sm) { buttons }
-            } else {
-                HStack(spacing: DS.Spacing.sm) { buttons }
-            }
+            .buttonStyle(DSPressStyle())
+            .disabled(!canPickAll)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(AdminInboxText.selected(count))
         .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .background(DS.Hub.background.ignoresSafeArea(edges: .bottom))

@@ -573,9 +573,12 @@ struct AdminHeaderItem: Identifiable {
     var retry: (() -> Void)? = nil
     /// جملة القارئ الصوتي بدل «العدد الاسم» (spec A.17)
     var spoken: String? = nil
+    /// مميّز بذهبي أقوى («بانتظار المراجعة» أول أرقام «الوارد») — يبقى بلونه ولو صفراً
+    var emphasis: Bool = false
 
     init(id: String? = nil, value: Int?, text: String? = nil, label: String, health: AdminStoreHealth? = nil,
-         tap: AdminPageTap = .none, retry: (() -> Void)? = nil, spoken: String? = nil) {
+         tap: AdminPageTap = .none, retry: (() -> Void)? = nil, spoken: String? = nil, emphasis: Bool = false) {
+        self.emphasis = emphasis
         self.id = id ?? label
         self.value = value
         self.text = text

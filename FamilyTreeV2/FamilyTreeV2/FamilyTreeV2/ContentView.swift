@@ -21,6 +21,11 @@ struct ContentView: View {
             SignupPreviewScreen(mode: mode)
                 .environment(\.layoutDirection, .rightToLeft)
                 .environment(\.locale, Locale(identifier: "ar"))
+        } else if let mode = AdminInboxTilesPreview.mode, AdminRequestPanelPreview.modes.contains(mode) {
+            // مربّع الطلب والسحب و«تحديد» و«بانتظار المراجعة» (العيّنتان inbox-box وinbox-header)
+            AdminRequestPanelPreviewScreen(mode: mode)
+                .environment(\.layoutDirection, .rightToLeft)
+                .environment(\.locale, Locale(identifier: "ar"))
         } else if let mode = AdminInboxTilesPreview.mode {
             // مربّعات «الوارد» (العيّنة inbox-final): `-uiPreviewInbox requests|done|messages`
             AdminInboxTilesPreviewScreen(mode: mode)

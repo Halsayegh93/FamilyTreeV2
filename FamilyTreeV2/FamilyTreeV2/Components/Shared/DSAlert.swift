@@ -397,6 +397,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
     /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isExpanded: Bool
+    /// لا يُغلق (بالضغط خارجه أو ✕) ما دام صحيحاً — قرار يُرسل في مربّع الطلب
+    var closeLocked: Bool = false
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -466,7 +468,7 @@ struct DSExpandableCenterPanel<Content: View>: View {
     /// يصغّر المربّع ويخفيه ثم يغلقه — والإغلاق نفسه بلا انزلاق النظام من
     /// الأسفل (كانت الطبقة الفارغة تنزلق بعد اختفاء المربّع فيبدو الإغلاق مكسوراً)
     private func animatedClose() {
-        guard appeared else { return }
+        guard appeared, !closeLocked else { return }
         closing = true
         // هادئة وأوضح (طلب المالك): تلاشٍ مع تصغير ونزول ملحوظين
         withAnimation(.easeInOut(duration: 0.42)) { appeared = false }

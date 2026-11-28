@@ -88,59 +88,14 @@ final class PostReviewStore: ObservableObject {
     }
 }
 
-// MARK: - مدخل «الوارد»
-
-/// سطر في أعلى «الوارد» حين توجد طلبات بانتظار مراجعتك — يفتح صفحة المراجعة
-struct PostReviewInboxEntry: View {
-    @ObservedObject private var store = PostReviewStore.shared
-    @EnvironmentObject private var authVM: AuthViewModel
-    @EnvironmentObject private var memberVM: MemberViewModel
-    @State private var open = false
-
-    private var mine: [AdminRequest] {
-        store.pending.filter { PostReviewStore.canReview($0, me: authVM.currentUser, members: memberVM.allMembers) }
-    }
-
-    var body: some View {
-        Group {
-            if !mine.isEmpty {
-                Button { open = true } label: {
-                    HStack(spacing: DS.Spacing.md) {
-                        AdminIconSquare(symbol: "checkmark.shield.fill", tint: DS.Color.warning)
-                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                            Text(verbatim: L10n.t("بانتظار المراجعة · \(mine.count)", "Awaiting review · \(mine.count)"))
-                                .dsFont(.hubRow)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(L10n.t("طلبات قُبلت وتحتاج مراجعتك", "Approved requests that need your review"))
-                                .dsFont(.footnote)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        Spacer(minLength: DS.Spacing.xs)
-                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
-                            .dsGlyph(DS.Glyph.sm, weight: .semibold)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(DSPressStyle())
-                .adminCard()
-                .accessibilityHint(L10n.t("يفتح صفحة المراجعة", "Opens the review page"))
-            }
-        }
-        // كل ظهور للوارد يحدّث العدد (موافقات جديدة من الآخرين)
-        .task { await store.refresh() }
-        .dsTallBox(isPresented: $open) {
-            PostReviewQueuePage(onClose: { open = false })
-        }
-    }
-}
-
 // MARK: - صفحة المراجعة
 
 struct PostReviewQueuePage: View {
     let onClose: () -> Void
+    /// ملخّص الطلب بشكل مربّع الطلب المختصر (صاحب الطلب و«عن نفسه/عن فلان» و«قبل ← بعد») — يبنيه «الوارد»
+    var summary: ((AdminRequest) -> AdminRequestSummaryModel?)? = nil
+    /// «عرض التفاصيل الكاملة» — مربّع الطلب نفسه موسّعاً للاطلاع
+    var openFull: ((AdminRequest) -> Void)? = nil
     @ObservedObject private var store = PostReviewStore.shared
     @EnvironmentObject private var authVM: AuthViewModel
     @EnvironmentObject private var memberVM: MemberViewModel
@@ -176,9 +131,10 @@ struct PostReviewQueuePage: View {
                 } else {
                     AdminSectionLabel(title: L10n.t("بانتظار المراجعة · \(mine.count)", "Awaiting review · \(mine.count)"))
                     ForEach(mine) { r in
-                        PostReviewCard(request: r, busy: busyId == r.id,
+                        PostReviewCard(request: r, summary: summary?(r), busy: busyId == r.id,
                                        onOK: { Task { await run(r, ok: true, note: nil) } },
-                                       onFlag: { noteFor = r })
+                                       onFlag: { noteFor = r },
+                                       onFull: openFull.map { open in { open(r) } })
                     }
                 }
             }
@@ -205,11 +161,14 @@ struct PostReviewQueuePage: View {
 }
 
 /// بطاقة طلب مقبول: النوع والمعنيّ، ما تم، من وافق ومتى، وزرّا «سليم ✓» و«فيه ملاحظة»
-private struct PostReviewCard: View {
+struct PostReviewCard: View {
     let request: AdminRequest
+    /// ملخّص المربّع المختصر — nil = السطر القديم («ما تم» من القيمة)
+    var summary: AdminRequestSummaryModel? = nil
     let busy: Bool
     let onOK: () -> Void
     let onFlag: () -> Void
+    var onFull: (() -> Void)? = nil
     @EnvironmentObject private var memberVM: MemberViewModel
 
     private var subjectName: String {
@@ -242,7 +201,13 @@ private struct PostReviewCard: View {
                     Text(verbatim: AdminTrailText.typeTitle(request))
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
-                    if !subjectName.isEmpty {
+                    if let summary {
+                        Text(verbatim: [summary.name, summary.about].compactMap { $0 }.joined(separator: " · "))
+                            .dsFont(.footnote)
+                            .foregroundColor(DS.Color.textSecondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if !subjectName.isEmpty {
                         Text(verbatim: subjectName)
                             .dsFont(.footnote)
                             .foregroundColor(DS.Color.textSecondary)
@@ -253,8 +218,11 @@ private struct PostReviewCard: View {
                 Spacer(minLength: DS.Spacing.xs)
                 DSStatusChip(text: L10n.t("بانتظار المراجعة", "Awaiting review"), tint: DS.Color.warning, size: .mini)
             }
-            if let whatLine {
-                Text(verbatim: whatLine)
+            // ما تغيّر بالضبط: «قبل ← بعد» أو ملخّص النوع (نفس المربّع المختصر)، وإلا القيمة الجديدة
+            if let summary, !summary.changes.isEmpty {
+                AdminRequestChangeBox(changes: summary.changes)
+            } else if let line = summary?.summary ?? whatLine {
+                Text(verbatim: line)
                     .dsFont(.callout)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(3)
@@ -273,6 +241,20 @@ private struct PostReviewCard: View {
                          isLoading: busy, action: onOK)
                 DSButton(L10n.t("فيه ملاحظة", "Has an issue"), icon: "exclamationmark.bubble", role: .cancel, action: onFlag)
                     .disabled(busy)
+            }
+            if let onFull {
+                Button(action: onFull) {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Text(AdminRequestPanelText.showFull)
+                        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+                            .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    }
+                    .dsFont(.chip)
+                    .foregroundColor(DS.Color.info)
+                    .frame(minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .adminCard()

@@ -30,6 +30,12 @@ struct AdminAllRequestsView: View {
     @StateObject private var diwaniyaVM = DiwaniyasViewModel()
     @StateObject private var archiveVM = FamilyArchiveViewModel()
     @State private var selectedDetail: RequestDetail? = nil
+    /// مربّع الطلب موسّع («عرض التفاصيل الكاملة») أو مختصر
+    @State private var boxExpanded = false
+    /// مربّع الطلب للاطلاع فقط (طلب مقبول فُتح من «بانتظار المراجعة») — بلا قرار ولا «⋯»
+    @State private var boxViewOnly = false
+    /// مربّع الطلب فوق صفحة «بانتظار المراجعة» (تُعرض في ورقتها — لا يُقدَّم من «الوارد» تحتها)
+    @State private var reviewDetail: RequestDetail? = nil
     /// الطلب المطلوب (`focusId`) ليس بين المعلّق: «عولج من قبل» حين وصلت كل القوائم، و«تعذّر التحميل» حين فشلت قائمة
     @State private var focusMissing: FocusMissing? = nil
     // إدخال سبب الرفض — يُرسل كرسالة لمقدّم الطلب
@@ -334,7 +340,20 @@ struct AdminAllRequestsView: View {
             .navigationDestination(isPresented: $doorOpen) { doorPage }
             .adminFilterSheet(isPresented: $showsFilters, set: model.filterSet, selection: $filters)
             .dsTallBox(isPresented: $showsPostReview) {
-                PostReviewQueuePage(onClose: { showsPostReview = false })
+                // بطاقة لكل طلب بملخّص المربّع المختصر نفسه، و«عرض التفاصيل الكاملة» = مربّع الطلب موسّعاً للاطلاع
+                PostReviewQueuePage(onClose: { showsPostReview = false },
+                                    summary: { r in handledDetail(for: r).map(boxSummaryModel) },
+                                    openFull: { r in
+                                        guard let d = handledDetail(for: r) else { return }
+                                        boxExpanded = true
+                                        boxViewOnly = true
+                                        reviewDetail = d
+                                    })
+                .fullScreenCover(item: $reviewDetail) { detail in
+                    requestDetailSheet(detail)
+                        .background(ClearPresentationBackground())
+                }
+                .transaction { t in if reviewDetail != nil { t.disablesAnimations = true } }
             }
             .onChange(of: filters) { _ in clearSelection() }
             // أعداد «الوارد» تتبع القوائم لحظياً (قرار من مربّع، طلب جديد، تحديث من الإشعار)
@@ -573,9 +592,13 @@ struct AdminAllRequestsView: View {
     /// مربّع تفاصيل الطلب، والسحب (رفض/حذف)، وربط طلب الانضمام ودمجه — كل كتابة تمرّ بـ`DebugAdminProbe.dryRun`
     private func modalsLayer(_ content: AnyView) -> some View {
         content
-        // مربّع الطلب (U9، spec A.15/C.3): ورقة طويلة بمقبض ومكدسها — الانتقال للطلب التالي داخلها لا يُغلقها
-        .dsTallBox(item: $selectedDetail) { detail in
+        // مربّع الطلب يظهر ويختفي في مكانه بلا انزلاق الغطاء من الأسفل
+        .transaction { t in if selectedDetail != nil { t.disablesAnimations = true } }
+        // مربّع الطلب بالمنتصف (العيّنة inbox-box ٢٠٢٦-١١-٢٨): مختصر يتوسّع داخل نفسه للتفاصيل الكاملة —
+        // الانتقال للطلب التالي داخله لا يُغلقه. بلا انزلاق النظام: المربّع يتحرّك داخل نفسه (`DSExpandableCenterPanel`)
+        .fullScreenCover(item: $selectedDetail) { detail in
             requestDetailSheet(detail)
+                .background(ClearPresentationBackground())
                 .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showRejectReason) {
                     TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $rejectReasonText)
                         .dsAlertField()
@@ -1125,7 +1148,7 @@ struct AdminAllRequestsView: View {
             focusHandled = true
             focusMissing = nil
             if let item {
-                if case .join(let m) = item { openJoinBox(m) } else { selectedDetail = requestDetail(for: item) }
+                if case .join(let m) = item { openJoinBox(m) } else { presentBox(requestDetail(for: item)) }
             }
         case .policy:
             focusHandled = true
@@ -1339,19 +1362,25 @@ struct AdminAllRequestsView: View {
                               readOnly: !authVM.adminCanEdit(.inbox),
                               items: headerItems(m),
                               tiles: tiles,
-                              accessory: line) {
-            // ⚙︎ بيت «إعدادات مسار الموافقات» الوحيد — ظهوره من جدول السيرفر (`inbox.approval_settings`: المالك يعدّل،
-            // المدير يقرأ افتراضاً)؛ الصفحة نفسها تقفل مفاتيحها لغير المالك (`canManageSettings`)
-            if authVM.adminSees(.inboxApprovalSettings) {
-                AdminGlassButton(symbol: "gearshape", label: L10n.t("إعدادات مسار الموافقات", "Approval path settings")) {
-                    open(.settings)
+                              accessory: line,
+                              selectingTitle: requests && isSelectMode ? AdminInboxText.selectingTitle(selectedIds.count) : nil) {
+            // العيّنة inbox-header: «تحديد» و«الإعدادات» دائرتان متساويتان؛ وضع «تحديد» = زرّ «تم» وحده
+            if requests && isSelectMode {
+                AdminHeaderTextButton(title: L10n.t("تم", "Done")) { toggleSelectMode() }
+            } else {
+                if let pageActions {
+                    AdminInboxBandActions(actions: pageActions)
+                } else if canSelect(m) {
+                    AdminInboxCircleButton(symbol: "checkmark.circle", label: L10n.t("تحديد", "Select")) {
+                        toggleSelectMode()
+                    }
                 }
-            }
-            if let pageActions {
-                AdminInboxBandActions(actions: pageActions)
-            } else if canSelect(m) || isSelectMode {
-                AdminHeaderTextButton(title: isSelectMode ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select")) {
-                    toggleSelectMode()
+                // ⚙︎ بيت «إعدادات مسار الموافقات» الوحيد — ظهوره من جدول السيرفر (`inbox.approval_settings`: المالك يعدّل،
+                // المدير يقرأ افتراضاً)؛ الصفحة نفسها تقفل مفاتيحها لغير المالك (`canManageSettings`)
+                if authVM.adminSees(.inboxApprovalSettings) {
+                    AdminInboxCircleButton(symbol: "gearshape", label: L10n.t("إعدادات مسار الموافقات", "Approval path settings")) {
+                        open(.settings)
+                    }
                 }
             }
         }
@@ -1371,7 +1400,15 @@ struct AdminAllRequestsView: View {
             AdminHeaderItem(id: status.rawValue, value: m.ready ? n : nil, label: label, health: health,
                             tap: .action { land(status) }, retry: retry, spoken: spoken)
         }
-        return [
+        // «بانتظار المراجعة» أولاً بذهبي أقوى وسهم — لمن يراجع فقط (`PostReviewStore.canReview`)، يفتح صفحة المراجعة
+        let review = postReviewCount
+        let reviewItem: [AdminHeaderItem] = review > 0 ? [
+            AdminHeaderItem(id: "postReview", value: review, label: L10n.t("بانتظار المراجعة", "awaiting review"),
+                            tap: .action { showsPostReview = true },
+                            spoken: L10n.t("\(review) بانتظار المراجعة، يفتحها", "\(review) awaiting review, opens them"),
+                            emphasis: true),
+        ] : []
+        return reviewItem + [
             item(.waiting, m.header.waiting, L10n.t("بانتظار قرارك", "awaiting you"),
                  L10n.t("\(m.header.waiting) بانتظار قرارك، يعرضها", "\(m.header.waiting) awaiting you, shows them")),
             item(.urgent, m.header.urgent, L10n.t("عاجل", "urgent"),
@@ -1412,21 +1449,6 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// «بانتظار المراجعة» — بطاقة صفّ بلا عنوان تحت شرائح التصفية («رسائل الأعضاء» صارت مربّعاً في الرأس)
-    @ViewBuilder
-    private var doorCard: some View {
-        let mine = postReviewCount
-        if mine > 0 {
-            AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                AdminInboxDoorRow(icon: "checkmark.shield.fill", tint: DS.Color.accent,
-                                  title: L10n.t("بانتظار المراجعة", "Awaiting review"),
-                                  subtitle: AdminInboxText.postReviewLine(mine)) {
-                    showsPostReview = true
-                }
-            }
-        }
-    }
-
     /// ما ينتظر مراجعتك بعد الموافقة (مراجعة بعد الموافقة، ٢٠٢٦-١١-٢٥) — من يراجع ماذا: `PostReviewStore.canReview`
     private var postReviewCount: Int {
         postReview.pending.filter { PostReviewStore.canReview($0, me: authVM.currentUser, members: memberVM.allMembers) }.count
@@ -1446,10 +1468,6 @@ struct AdminAllRequestsView: View {
                 // تحت الرأس كـ«العائلة»: شريحة لكل اختيار بـ✕ ثم «12 طلباً · الأحدث أولاً» (البحث و«تصفية» في الكحلي)
                 AnyView(AdminInboxFilterStatus(set: m.filterSet, selection: $filters,
                                                note: L10n.t("الأحدث أولاً", "Newest first")))
-                    .adminPageRow(top: DS.Spacing.sm, bottom: 0)
-            }
-            if !isSelectMode && postReviewCount > 0 {
-                AnyView(doorCard)
                     .adminPageRow(top: DS.Spacing.sm, bottom: 0)
             }
             AnyView(joinOriginChips(m))
@@ -1691,8 +1709,7 @@ struct AdminAllRequestsView: View {
             approveIcon: list.first { $0.kind == .approve }?.icon ?? "checkmark",
             approveColor: DS.Color.successFill,
             reject: action(.reject),
-            delete: action(.delete),
-            more: { openDetail(e) }))
+            delete: action(.delete)))
         .modifier(RequestRowMenu(actions: list.map { a in
             RequestRowMenu.Item(id: "\(a.kind)", title: a.title, icon: a.icon, destructive: a.kind == .delete || a.kind == .reject,
                                 run: a.run)
@@ -1722,7 +1739,14 @@ struct AdminAllRequestsView: View {
             openJoinBox(m)
             return
         }
-        selectedDetail = requestDetail(for: e.item)
+        presentBox(requestDetail(for: e.item))
+    }
+
+    /// يفتح مربّع الطلب — مختصراً، أو موسّعاً («كل التفاصيل» من مربّعات الانضمام)
+    private func presentBox(_ detail: RequestDetail, expanded: Bool = false) {
+        boxExpanded = expanded
+        boxViewOnly = false
+        selectedDetail = detail
     }
 
     /// يفتح مربّعات الانضمام لطلب (R2)
@@ -1749,7 +1773,7 @@ struct AdminAllRequestsView: View {
             } : nil,
             onDetails: {
                 joinBox = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { selectedDetail = .join(member) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { presentBox(.join(member), expanded: true) }
             },
             onDone: {
                 joinBox = nil
@@ -2802,21 +2826,24 @@ struct AdminAllRequestsView: View {
             }
     }
 
+    /// المربّع بالمنتصف: رأس كحلي ← المختصر، أو التفاصيل الكاملة (المربّع الكامل بمكدسه) بعد «عرض التفاصيل الكاملة»
     private func requestBox(_ presented: RequestDetail) -> some View {
         let detail = boxCurrent(presented)
         let flow = liveFlow(detail)
-        return NavigationStack(path: $boxPath) {
-            AnyView(boxRoot(detail, flow: flow))
-                .toolbar(.hidden, for: .navigationBar)
-                .navigationDestination(for: BoxRoute.self) { route in
-                    // حارس المكدس: كل صفحة تُدفع داخل المربّع نوع مستقل خلف `AnyView`
-                    AdminLazyPage { AnyView(boxPage(route, detail: detail)) }
-                }
-        }
-        .tint(AppSection.admin.ink)
-        .background(DS.Hub.background.ignoresSafeArea())
-        .environment(\.adminRequestBoxRows, true)
-        .interactiveDismissDisabled(boxIsBusy)
+        let meta = detailMeta(for: detail)
+        let created = detailCreated(detail)
+        let when: String? = created == .distantPast ? nil
+            : Calendar.current.isDateInToday(created) ? L10n.t("اليوم ", "Today ") + AdminInboxClock.text(created)
+            : DateHelper.relativeTime(from: created)
+        let kind = detailTab(detail).title
+        let subtitle = [kind == meta.title ? nil : kind, when].compactMap { $0 }.joined(separator: " · ")
+        return AdminRequestPanel(
+            expanded: Binding(get: { boxExpanded }, set: { boxSetExpanded($0) }),
+            title: meta.title, subtitle: subtitle, icon: meta.icon,
+            closeLocked: boxIsBusy, onClose: closeBox,
+            compact: { AnyView(boxCompact(detail, flow: flow)) },
+            full: { AnyView(boxFullStack(detail, flow: flow)) })
+        .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
         .onAppear { boxOpened(presented) }
         .onChange(of: adminRequestVM.errorMessage) { boxCaptureError($0) }
         .onReceive(adminRequestVM.$mergeResult) { boxMergeFinished($0) }
@@ -2829,15 +2856,115 @@ struct AdminAllRequestsView: View {
         .debugStackProbe("AdminRequestBox", limitKB: DebugStackLimit.page)
     }
 
+    /// يكبّر المربّع أو يرجعه مختصراً بحركة DSMotion («تقليل الحركة»: تبديل بلا حركة) — المختصر بلا صفحات مدفوعة
+    private func boxSetExpanded(_ value: Bool) {
+        guard value != boxExpanded else { return }
+        if !value { boxPath = [] }
+        withAnimation(reduceMotion ? nil : DSMotion.expand) { boxExpanded = value }
+    }
+
+    /// التفاصيل الكاملة = المربّع الكامل بمكدسه (المسار، السجل، الملاحظات، «المزيد»، التالي…) يتمرّر داخل المربّع
+    private func boxFullStack(_ detail: RequestDetail, flow: ApprovalSnapshot?) -> some View {
+        NavigationStack(path: $boxPath) {
+            AnyView(boxRoot(detail, flow: flow))
+                .toolbar(.hidden, for: .navigationBar)
+                .navigationDestination(for: BoxRoute.self) { route in
+                    // حارس المكدس: كل صفحة تُدفع داخل المربّع نوع مستقل خلف `AnyView`
+                    AdminLazyPage { AnyView(boxPage(route, detail: detail)) }
+                }
+        }
+        .tint(AppSection.admin.ink)
+        .background(DS.Hub.background)
+        .environment(\.adminRequestBoxRows, true)
+    }
+
+    /// المختصر (العيّنة inbox-box): صاحب الطلب ← التغيير ← الحالة ← قرارا الشريط نفسهما (`boxActions`) ← «عرض التفاصيل الكاملة».
+    /// ما يحتاج صفحة ملاحظة (سبب الرفض، التوصية) يكبّر المربّع أولاً ثم يفتح صفحته داخله
+    private func boxCompact(_ detail: RequestDetail, flow: ApprovalSnapshot?) -> some View {
+        if case .finished(let title) = boxPhase {
+            return AnyView(VStack(spacing: 0) {
+                AdminRequestBoxEndState(title: title)
+                AdminRequestDecisionBar(buttons: [
+                    AdminBoxAction(id: "back", title: AdminRequestBoxText.backToInbox, style: .primary) { closeBox() },
+                ])
+            }.background(DS.Color.surface))
+        }
+        let acts = boxActions(detail, flow: flow)
+        let busyId: String? = { if case .busy(let id) = boxPhase { return id } else { return nil } }()
+        let notePages: Set<String> = ["reject", "recommendApprove", "recommendReject"]
+        let decisions = acts.decisions.prefix(2).map { action -> AdminBoxAction in
+            guard notePages.contains(action.id) else { return action }
+            return AdminBoxAction(id: action.id, title: action.title, icon: action.icon, style: action.style,
+                                  isEnabled: action.isEnabled) {
+                guard boxPhase == .idle else { return }
+                boxSetExpanded(true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0 : DSMotion.boxHandoff)) { action.run() }
+            }
+        }
+        return AnyView(AdminRequestPanelSummary(
+            model: boxSummaryModel(detail),
+            decisions: decisions,
+            busyId: busyId,
+            locked: boxPhase != .idle,
+            notice: boxNotice,
+            quietLine: decisions.isEmpty ? acts.quiet : nil,
+            onExpand: { boxSetExpanded(true) }))
+    }
+
+    /// ما يعرضه المختصر من الطلب — نفس سطر الحالة (`rowState`) وملخّص الصفّ (`rowAsk`) و«قبل ← بعد» (`changes`)
+    private func boxSummaryModel(_ detail: RequestDetail) -> AdminRequestSummaryModel {
+        let meta = detailMeta(for: detail)
+        let sender = senderId(for: detail).flatMap { memberVM.member(byId: $0) }
+        let item = sortedAllItems.first { requestDetail(for: $0).id == detail.id }
+        let state = item.map { rowState(entry($0)) }
+        let changes = AdminRequestInsights.changes(detail, men: memberVM.allMembers, women: WomenStore.cache)
+        return AdminRequestSummaryModel(
+            name: boxRequesterName(detail, sender: sender, meta: meta),
+            avatarURL: sender?.avatarUrl ?? meta.imageUrl,
+            about: boxAbout(detail, sender: sender),
+            changes: changes,
+            summary: changes.isEmpty ? item.map(rowAsk) : nil,
+            pills: state?.0 ?? [],
+            stateWord: state?.1,
+            stateTone: state?.2 ?? .neutral)
+    }
+
+    /// «عن نفسه» / «عن فلان» — من صاحب الطلب ومن يخصّه
+    private func boxAbout(_ detail: RequestDetail, sender: FamilyMember?) -> String? {
+        let female = sender?.isFemale ?? false
+        switch detail {
+        case .join(let m):
+            return AdminRequestPanelText.about(isSelf: true, female: m.isFemale, subject: nil)
+        case .phone(let r):
+            let isSelf = r.requesterId == nil || r.requesterId == r.memberId
+            return AdminRequestPanelText.about(isSelf: isSelf, female: r.member?.isFemale ?? female,
+                                               subject: r.member?.chainThreeName)
+        case .nameChange(let r), .deceased(let r), .child(let r), .photo(let r):
+            return AdminRequestPanelText.about(isSelf: r.requesterId == r.memberId, female: female,
+                                               subject: r.member?.chainThreeName)
+        case .treeEdit(let r, let action):
+            guard action != .add else { return nil }
+            let payload = r.treeEditPayload
+            let women = Self.womenSubjectName(payload)
+            let subject = women ?? r.member?.chainThreeName ?? payload?.targetMemberName
+            return AdminRequestPanelText.about(isSelf: women == nil && r.requesterId == r.memberId, female: female,
+                                               subject: subject)
+        case .news, .report, .diwaniya, .project, .archive:
+            return nil
+        }
+    }
+
     /// الجذر: صفّ التنقّل ثم المحتوى يتمرّر، والشريط السفلي في المنطقة الآمنة
     private func boxRoot(_ detail: RequestDetail, flow: ApprovalSnapshot?) -> some View {
         let meta = detailMeta(for: detail)
         let finished: String? = { if case .finished(let title) = boxPhase { return title } else { return nil } }()
         return VStack(spacing: 0) {
-            AdminRequestBoxNavRow(title: finished == nil ? meta.title : AdminArea.inbox.title,
+            // العنوان في الرأس الكحلي فوق — هنا «إخفاء التفاصيل» يرجعه مختصراً و«⋯» إدارة الطلب
+            AdminRequestBoxNavRow(title: "",
                                   menu: finished == nil ? boxMenu(detail, flow: flow) : [],
                                   closeEnabled: !boxIsBusy,
-                                  onClose: closeBox)
+                                  closeTitle: AdminRequestPanelText.hideFull,
+                                  onClose: { boxSetExpanded(false) })
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
@@ -3128,7 +3255,7 @@ struct AdminAllRequestsView: View {
 
     /// زرّ المعاينة: القرار المباشر وحده (الموافقة بلا مسار، أو «تنفيذ» للمختص) — يرجع للطلب ثم يمرّ بالقرار نفسه
     private func boxPlacePrimary(_ detail: RequestDetail) -> TreePlacePrimary? {
-        guard authVM.adminCanEdit(.inbox) else { return nil }
+        guard authVM.adminCanEdit(.inbox), !boxViewOnly else { return nil }
         if let flow = liveFlow(detail) {
             guard ApprovalDecisionRoles(adminRequestVM, snapshot: flow).primary == .execute else { return nil }
             return TreePlacePrimary(title: L10n.t("تنفيذ", "Carry out"), icon: "checkmark.circle.fill") {
@@ -3174,8 +3301,10 @@ struct AdminAllRequestsView: View {
     /// القرارات بحسب الدور والمرحلة (spec C.3 البند ٨) — بنفس الصلاحيات (`canApprove`/`canReject` × «يعدّل»، قواعد المسار)
     private func boxActions(_ detail: RequestDetail, flow: ApprovalSnapshot?) -> BoxActions {
         var out = BoxActions()
-        guard authVM.adminCanEdit(.inbox) else {
-            out.quiet = AdminRequestBoxText.readOnly
+        guard authVM.adminCanEdit(.inbox), !boxViewOnly else {
+            out.quiet = boxViewOnly ? L10n.t("للاطلاع — قُبل هذا الطلب وينتظر المراجعة.",
+                                             "View only — this request was approved and awaits review.")
+                                    : AdminRequestBoxText.readOnly
             return out
         }
         if let flow {
@@ -3251,7 +3380,7 @@ struct AdminAllRequestsView: View {
 
     /// «⋯» = إدارة الطلب وحدها (spec C.3 البند ١): عاجل · استلم/اترك/خذه («مسار ٢») · حذف الطلب (المالك/المدير، يسأل)
     private func boxMenu(_ detail: RequestDetail, flow: ApprovalSnapshot?) -> [AdminBoxMenuItem] {
-        guard authVM.adminCanEdit(.inbox) else { return [] }
+        guard authVM.adminCanEdit(.inbox), !boxViewOnly else { return [] }
         let enabled = boxPhase == .idle
         var items: [AdminBoxMenuItem] = []
         if let f = flow, f.hasV2 {
@@ -4318,11 +4447,12 @@ struct AdminAllRequestsView: View {
     private func closeBox() {
         guard !boxIsBusy else { return }
         selectedDetail = nil
+        reviewDetail = nil
     }
 
     /// خطأ نموذج العرض أثناء فتح المربّع: يظهر سطراً فوق الشريط (لا تنبيه فوق المربّع)
     private func boxCaptureError(_ message: String?) {
-        guard let message, selectedDetail != nil else { return }
+        guard let message, selectedDetail != nil || reviewDetail != nil else { return }
         adminRequestVM.errorMessage = nil
         boxLastError = message
         if boxPhase == .idle {
@@ -4940,54 +5070,6 @@ struct AdminAllRequestsView: View {
         case "تذكير": return DS.Color.newsReminder
         case "دعوة": return DS.Color.newsInvitation
         default: return AppSection.admin.ink
-        }
-    }
-}
-
-/// سحب بطاقة الطلب («الوارد» — لمسة «ب» مثل البريد): من الطرف «رفض» (لمن يملكه) + «المزيد» (التفاصيل)،
-/// ومن البداية الموافقة + «حذف نهائي» (للمالك/المدير) — نفس الاستدعاءات والصلاحيات السابقة
-private struct RequestSwipeActions: ViewModifier {
-    let enabled: Bool
-    let approve: (() -> Void)?
-    let approveLabel: String
-    let approveIcon: String
-    let approveColor: Color
-    let reject: (() -> Void)?
-    let delete: (() -> Void)?
-    let more: () -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if enabled {
-            content
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if let reject {
-                        Button(action: reject) {
-                            Label(L10n.t("رفض", "Reject"), systemImage: "xmark")
-                        }
-                        .tint(DS.Color.reject)
-                    }
-                    Button(action: more) {
-                        Label(L10n.t("المزيد", "More"), systemImage: "ellipsis")
-                    }
-                    .tint(DS.Color.slateFill)
-                }
-                .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                    if let approve {
-                        Button(action: approve) {
-                            Label(approveLabel, systemImage: approveIcon)
-                        }
-                        .tint(approveColor)
-                    }
-                    if let delete {
-                        Button(role: .destructive, action: delete) {
-                            Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
-                        }
-                        .tint(DS.Color.error)
-                    }
-                }
-        } else {
-            content
         }
     }
 }

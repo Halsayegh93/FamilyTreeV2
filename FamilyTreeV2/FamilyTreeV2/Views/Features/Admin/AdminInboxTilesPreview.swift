@@ -108,6 +108,7 @@ struct AdminInboxTilesPreviewScreen: View {
                                                       activeCount: Self.messageSet.activeCount(messageFilters)) {})
         }
         return AdminInboxBand(backTitle: "الإدارة", onBack: {}, items: [
+            AdminHeaderItem(id: "review", value: 2, label: "بانتظار المراجعة", tap: .action {}, emphasis: true),
             AdminHeaderItem(id: "waiting", value: 1, label: "بانتظار قرارك", tap: .action {}),
             AdminHeaderItem(id: "urgent", value: 0, label: "عاجل", tap: .action {}),
             AdminHeaderItem(id: "late", value: 0, label: "متأخر", tap: .action {}),
@@ -118,8 +119,8 @@ struct AdminInboxTilesPreviewScreen: View {
         ], selected: tile, onSelect: { next in
             withAnimation(reduceMotion ? nil : .easeInOut(duration: DSMotion.tabFade)) { tile = next }
         })), accessory: accessory) {
-            AdminGlassCircle(symbol: "gearshape")
-            if tile != .done { AdminHeaderTextButton(title: "تحديد") {} }
+            if tile != .done { AdminInboxCircleButton(symbol: "checkmark.circle", label: "تحديد") {} }
+            AdminInboxCircleButton(symbol: "gearshape", label: "إعدادات مسار الموافقات") {}
         }
     }
 

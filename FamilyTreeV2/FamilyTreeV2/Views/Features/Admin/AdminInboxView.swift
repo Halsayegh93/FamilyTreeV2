@@ -586,7 +586,7 @@ struct AdminInboxView: View {
         }
     }
 
-    /// الخلية: الضغط يفتح المربّع (أو يحدّد في وضع التحديد)، السحب «مقروء»/«تمّت المعالجة» من البداية و«حذف» من الطرف
+    /// الخلية: الضغط يفتح المربّع (أو يحدّد في وضع التحديد)، السحب «مقروء»/«تمّت المعالجة» من الطرف (يسار بالعربية) و«حذف» من البداية (يمين)
     /// (يسأل أولاً فلا يُسحب للآخر)، والضغط المطوّل القائمة نفسها
     private func messageCell(_ entry: Entry, position: DSGroupPosition) -> some View {
         let picked = selectedIDs.contains(entry.id)
@@ -607,7 +607,8 @@ struct AdminInboxView: View {
                     Button(L10n.t("مراسلة عبر واتساب", "Message on WhatsApp")) { UIApplication.shared.open(whatsapp) }
                 }
             }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            // نفس سحب الطلبات (العيّنة inbox-box): بالعربية «حذف» وحده على اليمين (`.leading`) بتأكيد، والباقي على اليسار
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 if list.contains(.delete) {
                     Button { perform(.delete, entry) } label: {
                         Label(RowAction.delete.title, systemImage: RowAction.delete.icon)
@@ -615,7 +616,7 @@ struct AdminInboxView: View {
                     .tint(DS.Color.errorFill)
                 }
             }
-            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 if list.contains(.read) {
                     Button { perform(.read, entry) } label: {
                         Label(RowAction.read.title, systemImage: RowAction.read.icon)
