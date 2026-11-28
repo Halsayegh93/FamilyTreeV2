@@ -93,6 +93,8 @@ struct AdminDashboardView: View {
     /// مربّعا «المكرر والأخطاء» و«متزوجة بلا زوج مربوط» في «يحتاج مراجعتك» — حتى تطابق الكلمة عدد المربّعات التي فيها أحد
     /// (مشكلات الشجرة لا تُحسب هنا كما لا تُحسب في صفّها). nil = لم يصل
     @State private var issueTileCounts: [Int?] = []
+    /// ما بُني منه رقما المربّعين آخر مرة — لا يُعاد الحساب (~٤٦ م.ث على ٢٥٠٠ عضو) ما لم يتغيّر شيء منه
+    @State private var issueTilesKey: IssueTilesKey?
     /// ما بُنيت منه آخر مرة — فهرس الأعضاء يُبنى فقط حين يتغيّر (لا مع كل تغيّر في الطلبات)
     /// F4 (V30): فئة كل حساب في المفتاح — انتقال عضو بين «نشط» و«غير نشط» (العدد نفسه) يعيد الحساب
     @State private var reviewKey: AdminReviewHubLogic.CacheKey<AppUsageCategory>?
@@ -134,7 +136,8 @@ struct AdminDashboardView: View {
                     // «حي ✓» وما تغيّر في «العائلة» أثناء غيابها — كلمة مربّع «العائلة» (لا يُبنى شيء إن لم يتغيّر)
                     recalculateReview()
                     AdminDuplicateDismissStore.shared.activate(user: authVM.currentUser?.id, shared: authVM.isAdmin)
-                    recalculateIssueTiles()
+                    // بعد انتهاء سحب الرجوع لا أثناءه (لا تقطيع في الانزلاق)، وبلا حساب إن لم يتغيّر شيء
+                    recalculateIssueTiles(afterTransition: true)
                     // لا يُصفَّر والإصبع ما زال يسحب للرجوع: «اليوم» يظهر من بداية السحب، فكان التصفير بعد ٠٫٤ ث يقطع
                     // الانزلاق ويقفز (فيديو المالك ٢٠٢٦-١١-٢٨) — ننتظر حتى ينتهي الانتقال ثم نفحص
                     clearStalePathWhenSettled(after: 0.4)
@@ -576,10 +579,38 @@ struct AdminDashboardView: View {
     }
 
     /// أرقام مربّعَي «المكرر والأخطاء» و«متزوجة بلا زوج مربوط» — المصدر نفسه لمربّعات «العائلة» (`AdminIssuesData`)
-    private func recalculateIssueTiles() {
+    /// مفتاح رقمي «المكرر والأخطاء» و«متزوجة بلا زوج» (كـ`AdminIssuesPage.RebuildKey`)
+    private struct IssueTilesKey: Equatable {
+        let membersVersion: Int
+        let members: Int
+        let women: Int
+        let accountsLoaded: Bool
+        let accounts: [UUID: AdminAccountInfo]
+        let outsideSeen: Set<UUID>
+        let dismissed: Set<String>
+        let seesAll: Bool
+        let review: Set<UUID>
+    }
+
+    /// `afterTransition`: من ظهور «اليوم» — ينتظر انتهاء انتقال الرجوع (سحب باليد أو انزلاق) قبل أي حساب
+    private func recalculateIssueTiles(afterTransition: Bool = false, attempts: Int = 20) {
+        if afterTransition && AdminNavTransition.inProgress && attempts > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                recalculateIssueTiles(afterTransition: true, attempts: attempts - 1)
+            }
+            return
+        }
         guard AdminArea.family.isVisible(for: authVM), !memberVM.allMembers.isEmpty else { return }
         let seesAll = authVM.isAdmin
         let women = seesAll ? WomenStore.cache : []
+        let accounts = AdminAccountsStore.shared
+        let key = IssueTilesKey(membersVersion: memberVM.membersVersion, members: memberVM.allMembers.count,
+                                women: women.count, accountsLoaded: accounts.loaded, accounts: accounts.accounts,
+                                outsideSeen: Set(accounts.outsideSeen.keys),
+                                dismissed: AdminDuplicateDismissStore.shared.signatures, seesAll: seesAll,
+                                review: AppConfigValues.shared.reviewAccountIds)
+        guard key != issueTilesKey else { return }
+        issueTilesKey = key
         let data = AdminIssuesData.make(members: memberVM.allMembers, women: women, accounts: AdminAccountsStore.shared,
                                         dismissed: AdminDuplicateDismissStore.shared.signatures, seesAll: seesAll)
         var out: [Int?] = [AdminReviewTilesLogic.issuesCount(duplicates: data.duplicates, nameless: data.nameless.count)]
