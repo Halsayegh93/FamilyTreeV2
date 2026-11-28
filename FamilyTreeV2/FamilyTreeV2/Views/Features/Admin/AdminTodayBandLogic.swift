@@ -87,12 +87,12 @@ nonisolated enum AdminTodayBandLogic {
         return "\(what) للمراجعة"
     }
 
-    /// «الإحصاءات»: «الراحلون 502» ← قسم «العائلة» أول الصفحة، حيث صفّ «متوفون 502» نفسه (F4، V16: قسم «الراحلون»
-    /// متوسط الأعمار وأطولها — لا 502 فيه). nil قبل وصول الأعداد
+    /// «الإحصاءات»: «الراحلون 502» — كلمة المربّع، والضغط يفتح «الإحصاءات» من أولها (قسم «الراحلون»). كان يهبط على قسم
+    /// «العائلة» وحُذف (٢٠٢٦-١١-٢٨ «لا تكرر من الرئيسية») — بلا هبوط ميت. nil قبل وصول الأعداد
     static func departedWord(_ deceased: Int?) -> AdminTodayWord? {
         guard let deceased else { return nil }
         let n = AdminNumberText.grouped(deceased)
-        return AdminTodayWord(state: .neutral(L10n.t("الراحلون \(n)", "Departed \(n)")), landing: .stats(.family))
+        return AdminTodayWord(state: .neutral(L10n.t("الراحلون \(n)", "Departed \(n)")))
     }
 
     // MARK: سطر التحية

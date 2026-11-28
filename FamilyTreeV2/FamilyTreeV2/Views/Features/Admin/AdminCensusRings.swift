@@ -191,7 +191,8 @@ nonisolated enum AdminCensusRoutes {
                             seesWomenPage: Bool) -> AdminCensusDestination {
         switch number {
         case .total:
-            return screen == .today ? .stats(.family) : .none
+            // بلا وجهة في الشاشتين: كان «اليوم» يهبط على بطاقة «العائلة» في «الإحصاءات» وحُذفت (لا تكرار — ٢٠٢٦-١١-٢٨)
+            return .none
         case .men:
             return .members(AdminMembersLanding(account: .all, life: .all, population: [.men]))
         case .women:

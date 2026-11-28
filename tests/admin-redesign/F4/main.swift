@@ -76,8 +76,8 @@ check(key4 == key3, false, "outside logins arriving (daughter's son) change the 
 
 // MARK: - V16: «الراحلون 502» يهبط حيث يُرى 502 أولاً
 
-check(AdminTodayBandLogic.departedWord(502)?.landing, .stats(.family),
-      "V16: «الراحلون 502» lands on «العائلة» (its «متوفون» row shows 502 first)")
+check(AdminTodayBandLogic.departedWord(502)?.landing, nil,
+      "«الراحلون 502» opens «الإحصاءات» at the top (its «العائلة» card was removed 2026-11-28 — no dead landing)")
 
 // MARK: - V21/V22: العدد والمعدود
 

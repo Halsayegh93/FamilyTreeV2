@@ -84,7 +84,7 @@ check(AdminCensusText.estimateSpoken(unverified: 41, opens: true).contains("41 �
 check(AdminCensusText.estimateSpoken(unverified: 41, opens: true).contains("≈"), false, "no «≈» glyph read aloud")
 
 // MARK: T2 — الوجهات والرقم الذي تساويه القائمة
-check(AdminCensusRoutes.destination(.total, on: .today, seesWomenPage: true), .stats(.family), "today total → stats family")
+check(AdminCensusRoutes.destination(.total, on: .today, seesWomenPage: true), .none, "today total → no link (stats family card removed)")
 check(AdminCensusRoutes.destination(.total, on: .stats, seesWomenPage: true), .none, "stats total → its own home")
 // F5: الرجال والنساء و«خارج العائلة» فئات «مَن» في «العائلة» — كل رقم يفتحها على شريحة فئته
 check(AdminCensusRoutes.destination(.men, on: .today, seesWomenPage: true),
