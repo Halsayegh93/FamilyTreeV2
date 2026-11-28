@@ -58,6 +58,11 @@ struct ProfileView: View {
     @State private var relativeDetails: FamilyMember? = nil
     /// مربّعات «عائلتي» عند البنت (الأم/الزوج/الأبناء — اختياري، طلب المالك ٢٠٢٦-١١-٠٩)
     @State private var daughterBox: DaughterFamilyContent.Box?
+    /// مربّع «الأم» بمفتاحي «الظهور في شجرة النساء» — لابن البنت / بنت البنت وأمّه بلا حساب (٢٠٢٦-١١-٢٨)
+    @State private var motherVisibilityBox: MotherVisibilityItem?
+    /// يُعاد الرسم بعد جلب شجرة النساء لحساب الرجل (لمعرفة أمّه بلا حساب)
+    @State private var womenStoreTick = 0
+    struct MotherVisibilityItem: Identifiable { let id: UUID; let name: String }
     /// ترتيب أبنائها (وضع «ترتيب») — الترتيب المحلي حتى يُحفظ على السيرفر
     @State private var daughterReordering = false
     @State private var daughterOrder: [UUID] = []
@@ -240,6 +245,9 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
             .dsCenterBox(item: $fieldBox) { field in
                 if let c = user { ProfileFieldEditBox(field: field, member: c) }
+            }
+            .dsCenterBox(item: $motherVisibilityBox) { item in
+                MotherVisibilityBox(motherId: item.id, motherName: item.name)
             }
             .dsCenterBox(isPresented: $showPrivacySettings) {
                 ProfilePrivacyBox(treeNode: isWomanAccount && DaughterFamilyAPI.enabled ? myWomanNode : nil,
@@ -858,7 +866,16 @@ struct ProfileView: View {
         return AnyView(VStack(spacing: DS.Spacing.sm) {
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                 if let mother {
-                    daughterFamilyCell(mother, role: L10n.t("الأم", "Mother"))   // الأم تظهر دائماً — بلا إخفاء
+                    // الأم تظهر دائماً — بلا إخفاء؛ بلا حساب وزوجها من خارج العائلة ← مربّع «الأم» بمفتاحي الظهور
+                    if let mid = MotherVisibilityTarget.motherId(fatherId: node.fatherId, motherId: mother.id) {
+                        Button { motherVisibilityBox = MotherVisibilityItem(id: mid, name: mother.fullName.isEmpty ? mother.firstName : mother.fullName) } label: {
+                            daughterFamilyCell(mother, role: L10n.t("الأم", "Mother"))
+                        }
+                        .buttonStyle(DSPressStyle())
+                        .accessibilityHint(L10n.t("الظهور في شجرة النساء", "Shown in the women's tree"))
+                    } else {
+                        daughterFamilyCell(mother, role: L10n.t("الأم", "Mother"))
+                    }
                 } else if canEdit {
                     addFamilyActionCell(title: L10n.t("إضافة الأم", "Add Mother"), icon: "person.fill",
                                         color: DS.Color.accent) { daughterBox = .mother }
@@ -1051,6 +1068,12 @@ struct ProfileView: View {
         }
         .animation(DS.Anim.medium, value: isLoadingChildren)
         .dsPageMargin()
+        // ابن البنت: شجرة النساء لا تُجلب لحساب الرجل — جلب واحد لمعرفة إن كانت أمّه بلا حساب (مفتاحا الظهور)
+        .task(id: memberVM.currentMemberWomenPlace?.id) {
+            guard memberVM.currentMemberWomenPlace != nil, WomenStore.cache.isEmpty else { return }
+            _ = try? await WomenStore.fetch()
+            womenStoreTick += 1
+        }
     }
 
     // MARK: - Grid View (الوضع العادي)
@@ -1081,7 +1104,9 @@ struct ProfileView: View {
             .accessibilityHint(L10n.t("تعديل", "Edit"))
     }
 
-    /// «الأم: سهيلة علي موسى …» — أمّ ابن البنت من عقدته في شجرة النساء، للقراءة فقط (M1)
+    private func womenTreeMotherName(_ m: WomanMember) -> String { m.fullName.isEmpty ? m.firstName : m.fullName }
+
+    /// «الأم: سهيلة علي موسى …» — أمّ ابن البنت من عقدته في شجرة النساء؛ أمّه بلا حساب ← تفتح مربّع «الأم» بمفتاحي الظهور (M1)
     private func womenTreeMotherLine(_ mother: WomanMember) -> some View {
         let name = mother.fullName.isEmpty ? mother.firstName : mother.fullName
         return HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
@@ -1166,7 +1191,17 @@ struct ProfileView: View {
         let womenTreeMother = memberVM.currentMemberWomenPlace != nil ? motherEntry : nil
         return VStack(spacing: DS.Spacing.sm) {
             if let womenTreeMother {
-                womenTreeMotherLine(womenTreeMother.member)
+                let _ = womenStoreTick
+                if let mid = MotherVisibilityTarget.motherId(fatherId: memberVM.currentMemberWomenPlace?.parentId,
+                                                             motherId: womenTreeMother.member.id) {
+                    Button { motherVisibilityBox = MotherVisibilityItem(id: mid, name: womenTreeMotherName(womenTreeMother.member)) } label: {
+                        womenTreeMotherLine(womenTreeMother.member)
+                    }
+                    .buttonStyle(DSPressStyle())
+                    .accessibilityHint(L10n.t("الظهور في شجرة النساء", "Shown in the women's tree"))
+                } else {
+                    womenTreeMotherLine(womenTreeMother.member)
+                }
             }
             // ═══ الأم / الزوجة — أماكن ثابتة (البطاقة أو زر الإضافة/الاختيار) ═══
             if showParents {

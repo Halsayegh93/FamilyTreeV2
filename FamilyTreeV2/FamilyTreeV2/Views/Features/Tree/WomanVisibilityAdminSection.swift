@@ -1,10 +1,16 @@
 import SwiftUI
 
-/// «الظهور للأعضاء» في تفاصيل البنت التي زوجها من خارج العائلة — للإدارة (مالك، مدير، مراقب؛ قرار المالك ٢٠٢٦-١١-٢٨).
-/// مفتاحا «ظهور الزوج» (`spouse_shown`) و«ظهور الأبناء» (`children_shown`) — أغلب الأمهات بلا حساب، فالإدارة تقرّر عنهن.
-/// يُحفظ فوراً (`WomenStore.setVisibilityAsAdmin`)؛ النجاح لحظة «تم الحفظ»، والفشل يرجع المفتاح ويظهر السبب.
+/// مفتاحا ظهور زوج البنت من خارج العائلة وأبنائها منه (`spouse_shown` / `children_shown`، قرار المالك ٢٠٢٦-١١-٢٨) —
+/// قسم واحد بمكانين:
+/// - `.admin`: «الظهور للأعضاء» في تفاصيل البنت للإدارة (مالك، مدير، مراقب) — كتابة مباشرة (`WomenStore.setVisibilityAsAdmin`).
+/// - `.child`: «الظهور في شجرة النساء» في مربّع «الأم» عند ابن البنت / بنت البنت وأمّه بلا حساب
+///   (`set_mother_visibility` — «اجعله عند تعديل الأم»).
+/// يُحفظ فوراً؛ النجاح لحظة «تم الحفظ»، والفشل يرجع المفتاح ويظهر السبب بالعربية.
 struct WomanVisibilityAdminSection: View {
+    enum Mode { case admin, child }
+
     let womanId: UUID
+    var mode: Mode = .admin
     var onChanged: (() async -> Void)? = nil
 
     enum Item: CaseIterable { case spouse, children }
@@ -16,7 +22,7 @@ struct WomanVisibilityAdminSection: View {
     @Environment(\.dsSection) private var section
 
     var body: some View {
-        MemberCardSection(title: L10n.t("الظهور للأعضاء", "Shown to members"), icon: "eye.fill", fill: DS.Color.seaFill) {
+        MemberCardSection(title: sectionTitle, icon: "eye.fill", fill: DS.Color.seaFill) {
             VStack(spacing: DS.Spacing.sm) {
                 ForEach(Item.allCases, id: \.self) { row($0) }
                 if let errorText {
@@ -27,8 +33,18 @@ struct WomanVisibilityAdminSection: View {
         .onAppear(perform: load)
     }
 
+    private var sectionTitle: String {
+        mode == .admin ? L10n.t("الظهور للأعضاء", "Shown to members")
+                       : L10n.t("الظهور في شجرة النساء", "Shown in the women's tree")
+    }
+
     private func title(_ i: Item) -> String {
-        i == .spouse ? MotherVisibilityLogic.adminSpouseTitle : MotherVisibilityLogic.adminChildrenTitle
+        switch (mode, i) {
+        case (.admin, .spouse): return MotherVisibilityLogic.adminSpouseTitle
+        case (.admin, .children): return MotherVisibilityLogic.adminChildrenTitle
+        case (.child, .spouse): return MotherVisibilityLogic.childSpouseTitle
+        case (.child, .children): return MotherVisibilityLogic.childChildrenTitle
+        }
     }
 
     private func row(_ i: Item) -> some View {
@@ -36,7 +52,7 @@ struct WomanVisibilityAdminSection: View {
         let tint = on ? DS.Color.success : DS.Color.textTertiary
         return Toggle(isOn: Binding(get: { shown[i] ?? false }, set: { save(i, $0) })) {
             HStack(spacing: DS.Spacing.sm) {
-                Image(systemName: i == .spouse ? "heart.fill" : "person.2.fill")
+                Image(systemName: i == .spouse ? (mode == .admin ? "heart.fill" : "person.fill") : "person.2.fill")
                     .dsGlyph(DS.Glyph.md)
                     .foregroundColor(tint)
                     .frame(width: DS.Icon.row, height: DS.Icon.row)
@@ -45,6 +61,7 @@ struct WomanVisibilityAdminSection: View {
                     Text(title(i))
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(on ? L10n.t("ظاهر للأعضاء", "Shown to members") : L10n.t("مخفي عن الأعضاء", "Hidden from members"))
                         .dsFont(.caption)
                         .foregroundColor(tint)
@@ -73,18 +90,64 @@ struct WomanVisibilityAdminSection: View {
         shown[i] = on
         busy.insert(i)
         errorText = nil
+        let spouse: Bool? = i == .spouse ? on : nil
+        let children: Bool? = i == .children ? on : nil
         Task {
             do {
-                if i == .spouse { try await WomenStore.setVisibilityAsAdmin(id: womanId, spouse: on) }
-                else { try await WomenStore.setVisibilityAsAdmin(id: womanId, children: on) }
+                switch mode {
+                case .admin: try await WomenStore.setVisibilityAsAdmin(id: womanId, spouse: spouse, children: children)
+                case .child: try await DaughterFamilyAPI.setMotherVisibility(motherId: womanId, spouse: spouse, children: children)
+                }
                 busy.remove(i)
                 DSMomentToast.show(L10n.t("تم الحفظ", "Saved"), moment: .success, section: section)
+                NotificationCenter.default.post(name: .womenMembersChanged, object: nil)
                 await onChanged?()
             } catch {
                 busy.remove(i)
                 shown[i] = before
-                errorText = WomenStore.failureMessage(error)
+                errorText = mode == .admin ? WomenStore.failureMessage(error)
+                    : ((error as? LocalizedError)?.errorDescription ?? MotherVisibilityLogic.errorMessage(hint: nil))
             }
+        }
+    }
+}
+
+/// الأم التي تظهر مفاتيحها لصاحب الحساب (من آخر جلب لشجرة النساء): بلا حساب، وأبوه أو زوجها من خارج العائلة — nil = لا مفاتيح.
+/// الأم يجب أن تكون في الجلب (وإلا لا نعرف إن كان لها حساب).
+@MainActor
+enum MotherVisibilityTarget {
+    static func motherId(fatherId: UUID?, motherId: UUID?) -> UUID? {
+        guard WomenStore.visibilitySupported, let mid = motherId,
+              let mother = WomenStore.cache.first(where: { $0.id == mid }) else { return nil }
+        let show = MotherVisibilityLogic.childShowsToggles(
+            motherId: mid, motherHasAccount: WomenStore.linkedUserByWoman[mid] != nil,
+            fatherId: fatherId, motherHusbandId: mother.husbandId, outsideIds: WomenStore.outsideFamilyIds)
+        return show ? mid : nil
+    }
+}
+
+/// مربّع «الأم» لابن البنت / بنت البنت وأمّه بلا حساب: اسمها، ثم «الظهور في شجرة النساء» بالمفتاحين
+/// (طلب المالك ٢٠٢٦-١١-٢٨ «شيل زر الخصوصية وخله عند تعديل الام»)
+struct MotherVisibilityBox: View {
+    let motherId: UUID
+    let motherName: String
+    var onChanged: (() async -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        DSComposer(
+            title: L10n.t("الأم", "Mother"),
+            subtitle: motherName,
+            icon: "person.fill",
+            tint: DS.Color.female,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: { dismiss() }
+        ) {
+            WomanVisibilityAdminSection(womanId: motherId, mode: .child, onChanged: onChanged)
         }
     }
 }
