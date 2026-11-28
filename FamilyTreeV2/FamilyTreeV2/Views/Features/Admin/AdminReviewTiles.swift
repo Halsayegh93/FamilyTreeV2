@@ -82,9 +82,10 @@ nonisolated enum AdminReviewTilesLogic {
         return count > 0
     }
 
-    /// مربّع «✓ الباقي سليم» يملأ فراغ آخر صفّ (واحد فقط، وحين يكون فراغ)
-    static func showsFiller(tileCount: Int, columns: Int = columns) -> Bool {
-        guard columns > 1, tileCount > 0 else { return false }
+    /// مربّع «✓ الباقي سليم» يملأ فراغ آخر صفّ (واحد فقط، وحين يكون فراغ) — وبعد وصول كل الأرقام فقط (`allArrived`):
+    /// لا «سليم» أثناء التحميل ولا ورقم ما زال «—»
+    static func showsFiller(tileCount: Int, columns: Int = columns, allArrived: Bool = true) -> Bool {
+        guard allArrived, columns > 1, tileCount > 0 else { return false }
         return tileCount % columns != 0
     }
 
@@ -175,7 +176,8 @@ struct AdminReviewTilesSection: View {
                                          count: columns),
                           spacing: DS.Spacing.sm) {
                     ForEach(kinds, id: \.self) { kind in tile(kind, row: false) }
-                    if AdminReviewTilesLogic.showsFiller(tileCount: kinds.count, columns: columns) {
+                    if AdminReviewTilesLogic.showsFiller(tileCount: kinds.count, columns: columns,
+                                                         allArrived: kinds.allSatisfy { counts[$0] != nil }) {
                         AdminReviewFillerTile()
                     }
                 }
