@@ -158,6 +158,8 @@ struct AdminReviewTilesSection: View {
     let counts: [AdminReviewTileKind: Int]
     let kinds: [AdminReviewTileKind]
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// الفتح «يتوسّع» من المربّع (طلب المالك ٢٠٢٦-١١-٢٨ — `adminZoomSource`/`adminZoomDestination`، iOS 18)
+    @Namespace private var zoom
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
@@ -190,7 +192,8 @@ struct AdminReviewTilesSection: View {
         if AdminReviewTilesLogic.opens(count) {
             NavigationLink {
                 AdminLazyPage { AnyView(kind.page().adminBackTitle(AdminArea.family.title).adminArea(.family)) }
-            } label: { face }
+                    .adminZoomDestination(kind, in: zoom)
+            } label: { face.adminZoomSource(kind, in: zoom) }
             .buttonStyle(AdminTilePressStyle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: spoken))

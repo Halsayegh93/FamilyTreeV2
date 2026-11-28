@@ -16,6 +16,9 @@ import Supabase
 //  ٤) «النظام»: بطاقة «الدخول والإشعارات» (رسائل رمز الدخول KWT SMS · محاولات مريبة · الأجهزة والإشعارات — انتقلت من
 //     «الفريق والأمان» بخاناتها `team.sms`/`team.devices`) ثم «الأخطاء» (Sentry) ‹ · آخر تعديل للإعدادات · «استعادة
 //     الإعدادات الافتراضية».
+// منذ ٢٠٢٦-١١-٢٨ («المجموعات بشكل مربعات»): جذر القسم مربّعات (`AdminGroupTilesSection`) — الأقسام الظاهرة · قواعد الأعضاء ·
+// القوائم · التشغيل · رسائل رمز الدخول · الأجهزة والإشعارات · الأخطاء · النظام؛ مربّع المجموعة يفتح `AdminAppGroupPage` بالبطاقة
+// نفسها ونموذج الصفحة نفسه، ورسائل الدخول والأجهزة والأخطاء تفتح صفحاتها مباشرة.
 // نفس المفاتيح والنداءات (`updateSetting`، `resetToDefaults`، `set_app_config`، `ProfileEditCooldown`). كل كتابة تمرّ أولاً
 // بـ`DebugAdminProbe.dryRun` (نجاح مصطنع محلي أثناء تجربة دور). الحالات (T1/T5): الحفظ = دوّارة صغيرة والباقي معطّل؛ الفشل
 // يُرجع القيمة القديمة + «لم يُحفظ. أعد المحاولة»؛ قبل وصول الإعدادات الحبّات «تعذّر التحميل» أو هيكل والمفاتيح معطّلة.
@@ -25,37 +28,152 @@ import Supabase
 struct AdminAppAreaPage: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @EnvironmentObject var notificationVM: NotificationViewModel
     @StateObject private var model = AdminAppAreaModel()
-    /// سحب الصفحة يعيد جلب بطاقة «الدخول والإشعارات» في «النظام»
-    @State private var refreshToken = 0
+    @ObservedObject private var sms = SmsBalanceStore.shared
+    @ObservedObject private var devices = AdminDeviceReachStore.shared
+    @ObservedObject private var errors = AdminErrorsStore.shared
 
     /// المالك (`canManageSettings`) × «يعدّل» القسم في جدول السيرفر
     private var canEdit: Bool { authVM.canManageSettings && authVM.adminCanEdit(.app) }
+    private var seesSms: Bool { authVM.adminSees(.teamSms) }
+    private var seesDevices: Bool { authVM.adminSees(.teamDevices) }
 
     var body: some View {
         AdminHubPage {
             AdminBandHeader(title: AdminArea.app.title, subtitle: AdminAppLogic.pageSubtitle,
                             badge: canEdit ? nil : AdminPageHeader.readOnlyText, isAreaRoot: true)
         } content: {
-            // ترتيب المالك ٢٠٢٦-١١-٢٨ (`AdminAreaLayout.groups("app")`): الأقسام الظاهرة ← القوائم ← التشغيل ← النظام.
-            // «قواعد الأعضاء» (حقيقية، ليست في النموذج) تبقى تحت «الأقسام الظاهرة» — ما يراه الأعضاء وقواعدهم معاً
-            AnyView(AdminAppMembersCard(model: model, canEdit: canEdit))
-            AnyView(AdminAppRulesCard(model: model, canEdit: canEdit))
-            AnyView(AdminAppListsCard())
-            AnyView(AdminAppStatusCard(model: model, canEdit: canEdit))
-            AnyView(AdminAppSystemCard(model: model, canEdit: canEdit, refreshToken: refreshToken))
+            // كل مجموعة مربّع بالترتيب المعتمد (طلب المالك ٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات»)
+            AnyView(AdminGroupTilesSection(items: tiles))
         }
-        // ما يُدفع من الصفوف يرجع باسم القسم
+        // ما يُدفع من المربّعات يرجع باسم القسم
         .environment(\.adminPageTitle, AdminArea.app.title)
         .onAppear { model.bind(settingsVM: appSettingsVM, authVM: authVM) }
         .refreshable {
-            refreshToken += 1
             await model.reload(canEdit: canEdit, force: true)
+            await loadAccess(force: true)
         }
         .task {
             model.bind(settingsVM: appSettingsVM, authVM: authVM)
-            await model.reload(canEdit: canEdit, force: false)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { @MainActor in await model.reload(canEdit: canEdit, force: false) }
+                group.addTask { @MainActor in await loadAccess(force: false) }
+            }
         }
+        .debugStackProbe("AdminAppAreaPage", limitKB: DebugStackLimit.page)
+    }
+
+    /// رسائل رمز الدخول والأجهزة — كانت بطاقة «الدخول والإشعارات» تجلبها، والآن سطرا مربّعيهما
+    private func loadAccess(force: Bool) async {
+        await withTaskGroup(of: Void.self) { group in
+            if seesSms {
+                group.addTask { @MainActor in
+                    await sms.refresh(force: force)
+                    if sms.state == .loaded, force || AdminTeamClock.smsLoadedAt == nil { AdminTeamClock.smsLoadedAt = Date() }
+                }
+            }
+            if seesDevices { group.addTask { @MainActor in await devices.refresh(force: force) } }
+        }
+    }
+
+    // MARK: المربّعات
+
+    private var tiles: [AdminGroupTileItem] {
+        AdminGroupTilesLogic.appTiles(seesSms: seesSms, seesDevices: seesDevices).map(item)
+    }
+
+    private func item(_ tile: AdminAppTile) -> AdminGroupTileItem {
+        let s = appSettingsVM.settings
+        let loaded = model.settingsHealth.hasData
+        var status: String?
+        var tone = AdminGroupStatusTone.plain
+        var page: () -> AnyView
+        let fill: Color
+        switch tile {
+        case .visible:
+            fill = DS.Color.navyFill
+            if loaded {
+                let on = [s.diwaniyasEnabled ?? true, s.womenTreeEnabled ?? true, s.projectsEnabled ?? true,
+                          s.pollsEnabled ?? true].filter { $0 }.count
+                status = L10n.t("\(on) من 4 ظاهرة", "\(on) of 4 shown")
+            }
+            page = { [model] in AnyView(AdminAppGroupPage(tile: tile, model: model)) }
+        case .rules:
+            fill = DS.Color.palmFill
+            if loaded {
+                status = s.newsRequiresApproval ? L10n.t("الأخبار تنتظر الاعتماد", "News waits for approval")
+                                                : L10n.t("الأخبار تُنشر مباشرة", "News publishes directly")
+            }
+            page = { [model] in AnyView(AdminAppGroupPage(tile: tile, model: model)) }
+        case .lists:
+            fill = DS.Color.goldFill
+            status = L10n.t("التصنيفات · العوائل", "Categories · families")
+            page = { [model] in AnyView(AdminAppGroupPage(tile: tile, model: model)) }
+        case .operations:
+            fill = DS.Color.slateFill
+            if loaded {
+                let word = AdminAppLogic.statusWord(maintenanceOn: s.maintenanceMode)
+                status = word.text + (word.tone == .ok ? " ✓" : "")
+                tone = word.tone == .ok ? .ok : .error
+            }
+            page = { [model] in AnyView(AdminAppGroupPage(tile: tile, model: model)) }
+        case .sms:
+            fill = DS.Hub.securityFill
+            let suspicious = notificationVM.notifications
+                .filter { !$0.read && $0.kind == AdminNotices.smsSuspicious }.count
+            if suspicious > 0 {
+                status = "⚠ " + AdminTeamLogic.suspiciousWord(suspicious).text
+                tone = .error
+            } else if sms.adminHealth.hasData, let balance = sms.status?.balance {
+                let points = AdminNumberText.grouped(Int(balance.rounded(.down)))
+                let word = AdminTeamLogic.smsWord(sms.adminLevel)
+                status = L10n.t("\(points) نقطة", "\(points) pts") + " · " + word.text
+                switch word.tone {
+                case .ok:    tone = .plain
+                case .warn:  tone = .warn
+                case .error: tone = .error
+                case .off:   tone = .plain
+                }
+            }
+            page = { AnyView(AdminSmsView()) }
+        case .devices:
+            fill = DS.Color.seaFill
+            if let stats = devices.stats {
+                status = L10n.t("\(AdminNumberText.grouped(stats.reach)) من \(AdminNumberText.grouped(stats.total))",
+                                "\(AdminNumberText.grouped(stats.reach)) of \(AdminNumberText.grouped(stats.total))")
+                tone = stats.invalid > 0 ? .warn : .plain
+            }
+            page = { AnyView(AdminPushHealthView()) }
+        case .errors:
+            fill = DS.Color.errorFill
+            if !errors.notConfigured, let list = errors.current {
+                status = AdminAppLogic.errorsValue(totals: Array(list.totals.values))
+            }
+            page = { AnyView(AdminErrorsPage()) }
+        case .system:
+            fill = DS.Color.navyFill
+            status = L10n.t("الإصدار \(AppVersionText.short)", "Version \(AppVersionText.short)")
+            page = { [model] in AnyView(AdminAppGroupPage(tile: tile, model: model)) }
+        }
+        return AdminGroupTileItem(id: "app." + tile.rawValue, title: tile.title, icon: tile.icon, fill: fill,
+                                  status: status, tone: tone, backTitle: AdminArea.app.title, area: .app, page: page)
+    }
+}
+
+/// صفحة مجموعة من «التطبيق والنظام»: البطاقة نفسها بمفاتيحها ونداءاتها (نموذج الصفحة نفسه — الحفظ والتأكيد واحد)
+struct AdminAppGroupPage: View {
+    let tile: AdminAppTile
+    @ObservedObject var model: AdminAppAreaModel
+    @EnvironmentObject var authVM: AuthViewModel
+
+    private var canEdit: Bool { authVM.canManageSettings && authVM.adminCanEdit(.app) }
+
+    var body: some View {
+        AdminGroupPage(title: tile.title, badge: canEdit ? nil : AdminPageHeader.readOnlyText) {
+            card
+        }
+        .refreshable { await model.reload(canEdit: canEdit, force: true) }
         .dsAlert(model.pendingConfirm?.title ?? "",
                  isPresented: Binding(get: { model.pendingConfirm != nil },
                                       set: { if !$0 { model.pendingConfirm = nil } }),
@@ -65,7 +183,35 @@ struct AdminAppAreaPage: View {
         } message: { confirm in
             Text(confirm.message)
         }
-        .debugStackProbe("AdminAppAreaPage", limitKB: DebugStackLimit.page)
+        .debugStackProbe("AdminAppGroupPage", limitKB: DebugStackLimit.page)
+    }
+
+    private var card: AnyView {
+        switch tile {
+        case .visible:    return AnyView(AdminAppMembersCard(model: model, canEdit: canEdit))
+        case .rules:      return AnyView(AdminAppRulesCard(model: model, canEdit: canEdit))
+        case .lists:      return AnyView(AdminAppListsCard())
+        case .operations: return AnyView(AdminAppStatusCard(model: model, canEdit: canEdit))
+        case .system:     return AnyView(AdminAppSystemCard(model: model, canEdit: canEdit))
+        case .sms, .devices, .errors: return AnyView(EmptyView())
+        }
+    }
+}
+
+/// صفحة مجموعة تُفتح وحدها (بيت «الصيانة» من «اليوم») — تحمل نموذجها وتجلب إعداداتها
+struct AdminAppGroupHost: View {
+    let tile: AdminAppTile
+    @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @StateObject private var model = AdminAppAreaModel()
+
+    var body: some View {
+        AdminAppGroupPage(tile: tile, model: model)
+            .onAppear { model.bind(settingsVM: appSettingsVM, authVM: authVM) }
+            .task {
+                model.bind(settingsVM: appSettingsVM, authVM: authVM)
+                await model.reload(canEdit: authVM.canManageSettings && authVM.adminCanEdit(.app), force: false)
+            }
     }
 }
 
@@ -849,26 +995,20 @@ struct AdminAppListsCard: View {
 struct AdminAppSystemCard: View {
     @ObservedObject var model: AdminAppAreaModel
     let canEdit: Bool
-    var refreshToken: Int = 0
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
-    @ObservedObject private var errors = AdminErrorsStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
             AdminSectionLabel(title: AdminAreaGroup.system.title)
-            // رسائل رمز الدخول (KWT SMS) · محاولات مريبة · الأجهزة والإشعارات — انتقلت من «الفريق والأمان» (٢٠٢٦-١١-٢٨)
-            // بخاناتها نفسها (`team.sms`/`team.devices` — للمالك)
-            AdminAccessStatusSection(rows: [.sms, .devices], title: AdminAccessStatusSection.systemTitle,
-                                     refreshToken: refreshToken)
+            // رسائل رمز الدخول والأجهزة والأخطاء مربّعات وحدها في جذر القسم (٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات»)
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                // «الأخطاء» (طلب المالك ٢٠٢٦-١١-٢٦): ما يصل Sentry من الآيفون والأندرويد والموقع — `AdminErrorsPage.swift`
-                AdminTapWrap(tap: .page { AnyView(AdminErrorsPage()) }, feel: .row, label: AnyView(
-                    AdminListRow(icon: "exclamationmark.triangle.fill", tint: DS.Color.slateFill,
-                                 title: AdminErrorsText.pageTitle,
-                                 subtitle: L10n.t("من الآيفون والأندرويد والموقع", "From iPhone, Android and the website")) {
-                        errorsValue
-                    }
-                ))
+                AdminInfoRow(icon: "info.circle.fill", tint: DS.Color.slateFill,
+                             title: L10n.t("الإصدار", "Version"),
+                             trailing: AnyView(Text(verbatim: AppVersionText.short)
+                                .dsFont(.body)
+                                .monospacedDigit()
+                                .foregroundColor(DS.Color.textSecondary)
+                                .lineLimit(1)))
                 AdminInfoRow(icon: "clock.fill", tint: DS.Color.slateFill,
                              title: L10n.t("آخر تعديل للإعدادات", "Last settings change"),
                              trailing: AnyView(Text(verbatim: lastChange)
@@ -881,21 +1021,6 @@ struct AdminAppSystemCard: View {
                                        subtitle: L10n.t("المفاتيح في هذه الصفحة ترجع لأولها", "The switches here go back to their defaults"))
                 }
             }
-        }
-    }
-
-    /// عدد الأخطاء المختلفة في فترة الصفحة (Sentry) — «—» أثناء أول جلب، ولا شيء حين لم يُربط أو فشل (الصفحة تقول السبب)
-    @ViewBuilder
-    private var errorsValue: some View {
-        if !errors.notConfigured, let list = errors.current {
-            let count = AdminAppLogic.errorsValue(totals: Array(list.totals.values))
-            AdminRowValue(text: count)
-                .accessibilityLabel(Text(verbatim: "\(count) · \(AdminErrorsText.period(list.days))"))
-        } else if errors.isLoading {
-            Text(verbatim: AdminStoreHealthText.placeholder)
-                .dsFont(.body)
-                .foregroundColor(DS.Color.textTertiary)
-                .accessibilityLabel(AdminStoreHealthText.loading)
         }
     }
 

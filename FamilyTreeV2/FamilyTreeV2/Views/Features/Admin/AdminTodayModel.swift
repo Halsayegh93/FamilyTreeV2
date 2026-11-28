@@ -35,7 +35,7 @@ extension AdminStatusPill.Home {
         // يُدفع من «اليوم» — الرجوع باسم رأسه «الإدارة»
         let today = AdminArea.homeTitle
         switch self {
-        case .maintenance: return AnyView(AdminAppAreaPage().adminArea(.app))
+        case .maintenance: return AnyView(AdminAppGroupHost(tile: .operations).adminArea(.app).adminBackTitle(today))
         case .sms:         return AnyView(AdminSmsView(backTitle: today).adminArea(.app))
         case .scheduled:   return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(today))
         case .devices:     return AnyView(AdminPushHealthView().adminArea(.app).adminBackTitle(today))

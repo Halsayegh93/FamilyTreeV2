@@ -765,8 +765,18 @@ struct AdminSectionLabel: View {
     var trailing: String? = nil
     /// رابط نصّي في الطرف (`AdminCardLinkLabel` داخل زرّ أو `NavigationLink`) — بدل الملاحظة
     var link: AnyView? = nil
+    /// صفحة مجموعة بالاسم نفسه (`AdminGroupPage`): العنوان في الرأس الكحلي — لا يتكرّر هنا (والملاحظة في وصف الرأس)
+    @Environment(\.adminGroupTitle) private var groupTitle
 
     var body: some View {
+        if link == nil, let groupTitle, groupTitle == title {
+            EmptyView()
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
         HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
             Text(title)
                 .dsFont(.hubSection)

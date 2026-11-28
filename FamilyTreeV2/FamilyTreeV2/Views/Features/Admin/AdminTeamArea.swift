@@ -378,51 +378,110 @@ extension AdminTeamLogic.Tone {
 struct AdminTeamAreaView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @State private var refreshToken = 0
+    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @ObservedObject private var config = AppConfigValues.shared
+
+    private var seesTeam: Bool { authVM.adminSees(.teamMembers) }
+    private var seesRegistration: Bool { authVM.adminSees(.teamRegistration) }
 
     var body: some View {
-        let seesPeople = authVM.isOwner || authVM.adminSees(.teamRegistration)
+        let tiles = AdminGroupTilesLogic.teamTiles(seesTeam: seesTeam, isOwner: authVM.isOwner,
+                                                   seesRegistration: seesRegistration)
         AdminHubPage {
             AdminBandHeader(title: AdminArea.team.title, subtitle: AdminArea.team.subtitle,
                             badge: authVM.adminCanEdit(.team) ? nil : AdminPageHeader.readOnlyText,
                             isAreaRoot: true)
         } content: {
-            if authVM.adminSees(.teamMembers) {
-                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-                    AdminSectionLabel(title: AdminAreaGroup.team.title)
-                    AdminTeamMembersCard(canEdit: authVM.canManageRoles && authVM.adminCanEdit(.team))
-                })
-            }
-            if seesPeople {
-                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-                    AdminSectionLabel(title: AdminAreaGroup.people.title)
-                    // «صلاحيات الأعضاء حسب الفئة» (المالك وحده — `MemberAccessAdminPage.swift`)
-                    if authVM.isOwner {
-                        MemberAccessCategoriesCard()
-                    }
-                    // «التسجيل والمنع» (`team.registration` — المالك)
-                    AdminAccessStatusSection(rows: [.registration], title: AdminAccessStatusSection.registrationTitle,
-                                             refreshToken: refreshToken)
-                })
-            }
-            if !authVM.adminSees(.teamMembers) && !seesPeople {
+            if tiles.isEmpty {
                 // الجدول أخفى كل ما في القسم عن هذا الدور — حالة فارغة لا صفحة بيضاء
                 AnyView(AdminPageStateCard(.empty(L10n.t("لا شيء هنا لدورك", "Nothing here for your role"),
                                                   message: L10n.t("صلاحياتك في «صلاحياتي» على «اليوم»",
                                                                   "Your permissions are under “My scope” on Today"))))
+            } else {
+                // كل مجموعة مربّع (طلب المالك ٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات»)
+                AnyView(AdminGroupTilesSection(items: tiles.map(item)))
             }
         }
-        // ما يُدفع من البطاقات يرجع باسم القسم
+        // ما يُدفع من المربّعات يرجع باسم القسم
         .environment(\.adminPageTitle, AdminArea.team.title)
-        .refreshable {
-            refreshToken += 1
-            if authVM.adminSees(.teamMembers) { await memberVM.fetchAllMembers(force: true) }
-        }
-        .task {
-            // الأعضاء يحمّلهم التطبيق — هنا فقط إن لم يصلوا بعد (لا جلب ثقيل لكل الشجرة مع كل سحب)
-            if authVM.adminSees(.teamMembers), memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
-        }
+        .refreshable { await load(force: true) }
+        .task { await load(force: false) }
         .debugStackProbe("AdminTeamAreaView", limitKB: DebugStackLimit.page)
+    }
+
+    /// الأعضاء (عدد الفريق) — هنا فقط إن لم يصلوا بعد (لا جلب ثقيل لكل الشجرة مع كل ظهور)، والتسجيل والمنع لسطر مربّعه
+    private func load(force: Bool) async {
+        await withTaskGroup(of: Void.self) { group in
+            if seesTeam, force || memberVM.allMembers.isEmpty {
+                group.addTask { @MainActor in await memberVM.fetchAllMembers(force: force) }
+            }
+            if seesRegistration {
+                group.addTask { @MainActor in await appSettingsVM.fetchSettings() }
+                group.addTask { @MainActor in await authVM.fetchBannedPhones() }
+            }
+            if authVM.isOwner { group.addTask { @MainActor in await AppConfigValues.shared.refresh(force: force) } }
+        }
+    }
+
+    private func item(_ tile: AdminTeamTile) -> AdminGroupTileItem {
+        var number: String?
+        var status: String?
+        var tone = AdminGroupStatusTone.plain
+        let fill: Color
+        let ink: Color
+        let page: () -> AnyView
+        switch tile {
+        case .team:
+            fill = DS.Color.navyFill
+            ink = DS.Color.primary
+            if !memberVM.allMembers.isEmpty {
+                let staff = memberVM.allMembers.filter {
+                    $0.isDeceased != true && [.owner, .admin, .monitor, .supervisor].contains($0.role)
+                }
+                number = AdminNumberText.grouped(staff.count)
+            } else if memberVM.membersLoadFailed {
+                number = AdminStoreHealthText.placeholder
+            }
+            status = L10n.t("الأدوار وصلاحياتها", "Roles and their permissions")
+            page = { AnyView(AdminModeratorsView()) }
+        case .memberAccess:
+            fill = DS.Color.palmFill
+            ink = DS.Color.palm
+            let matrix = MemberAccessStore.shared.matrix
+            let custom = MemberCategory.allCases.filter { MemberAccess.isCustom(category: $0, matrix: matrix) }.count
+            number = AdminNumberText.grouped(MemberCategory.allCases.count)
+            status = custom > 0 ? L10n.t("\(custom) مخصّص", "\(custom) custom") : L10n.t("حسب الفئة", "By category")
+            tone = custom > 0 ? .warn : .plain
+            page = { AnyView(AdminTeamGroupPage(tile: .memberAccess)) }
+        case .registration:
+            fill = DS.Color.slateFill
+            ink = DS.Color.slate
+            if appSettingsVM.settings.updatedAt != nil {
+                let word = AdminTeamLogic.registrationWord(open: appSettingsVM.settings.allowNewRegistrations)
+                let banned = authVM.bannedPhones.count
+                // قصير ليبقى سطراً واحداً: «مسموح» أو «مسموح · 3 ممنوع» (التفصيل في صفحتها)
+                status = banned == 0 ? word.text
+                    : word.text + " · " + L10n.t("\(AdminNumberText.grouped(banned)) ممنوع",
+                                                 "\(AdminNumberText.grouped(banned)) blocked")
+                tone = word.tone == .ok ? .plain : .warn
+            }
+            page = { AnyView(AdminRegistrationBansView()) }
+        }
+        return AdminGroupTileItem(id: "team." + tile.rawValue, title: tile.title, icon: tile.icon, fill: fill, ink: ink,
+                                  number: number, status: status, tone: tone, backTitle: AdminArea.team.title,
+                                  area: .team, page: page)
+    }
+}
+
+/// صفحة مجموعة من «الفريق والصلاحيات» — «صلاحيات الأعضاء حسب الفئة» (المالك وحده — `MemberAccessAdminPage.swift`)
+struct AdminTeamGroupPage: View {
+    let tile: AdminTeamTile
+
+    var body: some View {
+        AdminGroupPage(title: tile.title, subtitle: L10n.t("ما تراه كل فئة من الأعضاء", "What each member category sees")) {
+            AnyView(MemberAccessCategoriesCard())
+        }
+        .debugStackProbe("AdminTeamGroupPage", limitKB: DebugStackLimit.page)
     }
 }
 

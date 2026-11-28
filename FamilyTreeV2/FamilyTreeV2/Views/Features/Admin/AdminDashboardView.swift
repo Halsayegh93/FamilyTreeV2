@@ -59,6 +59,10 @@ struct AdminDashboardView: View {
     @State private var navigationPath = NavigationPath()
     /// عدّاد الانتقالات إلى صفحات الأقسام (قيمة جديدة في المسار كل مرة، ومفتاح الهبوط)
     @State private var areaHops = 0
+    /// الفتح «يتوسّع» من مربّع القسم (طلب المالك ٢٠٢٦-١١-٢٨، iOS 18): الانتقال الذي فُتح بضغط مربّع — وحده يتكبّر من
+    /// مربّعه (قائمة العنوان والإشعارات والأرقام دفع عادي)
+    @Namespace private var areaZoom
+    @State private var zoomHop: Int?
     /// جذر المكدس («اليوم») ظاهر الآن
     @State private var rootVisible = false
     /// هوية المكدس — تتجدّد عند العودة لـ«اليوم» بعد مغادرة التبويب
@@ -116,7 +120,9 @@ struct AdminDashboardView: View {
         NavigationStack(path: $navigationPath) {
             root
                 .navigationDestination(for: AdminReviewDestination.self) { destination in
+                    let source = zoomSource(destination)
                     AdminLazyPage { Self.page(for: destination) }
+                        .adminZoomDestination(source ?? .inbox, in: areaZoom, enabled: source != nil)
                 }
                 .navigationDestination(isPresented: $womenPushed) {
                     AdminLazyPage { womenPage }
@@ -195,6 +201,12 @@ struct AdminDashboardView: View {
     }
 
 
+    /// صفحة القسم التي فُتحت بضغط مربّعها — تتكبّر منه (nil = دفع عادي)
+    private func zoomSource(_ destination: AdminReviewDestination) -> AdminArea? {
+        guard case .area(let area, let hop) = destination, hop == zoomHop else { return nil }
+        return area
+    }
+
     /// وجهات المسار — كل وجهة بقسمها؛ وجهات «الوارد» من الإشعارات خلف بوابته (جدول الأدوار)
     static func page(for destination: AdminReviewDestination) -> AnyView {
         switch destination {
@@ -214,8 +226,9 @@ struct AdminDashboardView: View {
     }
 
     /// من «اليوم» (مربّع، رقم، سطر التحية، إشعار): مسار جديد بصفحة القسم وحدها وهبوطها (قيمة فريدة كل مرة)
-    private func openFromToday(_ area: AdminArea, landing: AdminLanding? = nil) {
+    private func openFromToday(_ area: AdminArea, landing: AdminLanding? = nil, fromTile: Bool = false) {
         areaHops += 1
+        zoomHop = fromTile ? areaHops : nil
         AdminAreaRouter.land(landing, hop: areaHops)
         var path = NavigationPath()
         path.append(AdminReviewDestination.area(area, areaHops))
@@ -225,6 +238,7 @@ struct AdminDashboardView: View {
     /// قائمة العنوان: المسار كله يصير صفحة القسم المطلوب على افتراضه (`navigate` يمسح الهبوطات قبل هذا)
     private func openArea(_ area: AdminArea) {
         areaHops += 1
+        zoomHop = nil
         var path = NavigationPath()
         path.append(AdminReviewDestination.area(area, areaHops))
         // من «اليوم»: دفع عادي؛ من قسم إلى قسم: تذوب الصفحة في الأخرى بلا انزلاق
@@ -813,10 +827,11 @@ struct AdminDashboardView: View {
                 ForEach(visibleAreas) { area in
                     let model = tile(area)
                     // زرّ يضع مساراً جديداً بقيمة فريدة (لا رابط بقيمة ثابتة — كان يُتجاهل إن بقيت القيمة نفسها في المسار)
-                    Button { openFromToday(area, landing: model.landing) } label: {
+                    Button { openFromToday(area, landing: model.landing, fromTile: true) } label: {
                         AdminRowTile(area: area, state: model.state, health: model.health, retry: model.retry,
                                      readOnly: area.isReadOnly(for: authVM),
                                      index: visibleAreas.firstIndex(of: area) ?? 0)
+                            .adminZoomSource(area, in: areaZoom)
                     }
                     .buttonStyle(AdminTilePressStyle())
                 }
