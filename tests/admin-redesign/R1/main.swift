@@ -60,9 +60,9 @@ check(R.isOutside(details: nil), false, "nil → no marker")
 check(R.outsideMarker.hasPrefix("|") && R.familyMarker.hasPrefix("|"), true, "markers are |key:value before matched_ids")
 
 // ٤) مربّع «استكمال التسجيل»
-check(R.Ar.motherQuestion, "هل الأم من العائلة؟", "owner's question wording")
+check(R.Ar.motherQuestion, "هل الوالدة من العائلة؟", "owner's question wording (spouse2 2026-11-28)")
 check(R.afterQuestion(motherInFamily: true), .motherName, "«نعم» → mother's name in the same box")
-check(R.afterQuestion(motherInFamily: false), .limited, "«لا» → limited, no request")
+check(R.afterQuestion(motherInFamily: false), .familyQuestion, "«لا» → family question (20261128), no request")
 check(R.derivedFatherName(fullName: " سالم  ناصر فهد العتيبي "), "ناصر فهد العتيبي", "father = registered name after the first")
 check(R.derivedFatherName(fullName: "سالم العتيبي"), nil, "father needs two words")
 check(R.canSendCompletion(motherInFamily: true, motherName: "منيرة عبدالله أحمد صالح", fatherName: "ناصر فهد"), true, "«نعم» + name → send")

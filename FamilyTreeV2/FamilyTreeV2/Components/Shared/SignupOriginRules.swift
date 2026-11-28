@@ -122,11 +122,70 @@ enum SignupOriginRules {
 
     // MARK: مربّع «استكمال التسجيل» (بعد قبول الانضمام)
 
-    /// «هل الأم من العائلة؟»: نعم ← اسم الوالدة في المربّع نفسه · لا ← صلاحيات محدودة مباشرة
-    enum QuestionOutcome: Equatable { case motherName, limited }
+    /// «هل الأم من العائلة؟»: نعم ← اسم الوالدة في المربّع نفسه · لا ← «هل أحد أفراد أسرتك من العائلة؟» (٢٠٢٦-١١-٢٨)
+    /// ← الزوجة/الزوج ← بياناته · «لا يوجد» ← صلاحيات محدودة مباشرة (كما كانت «لا»)
+    enum QuestionOutcome: Equatable { case motherName, familyQuestion, spouseName, limited }
 
     static func afterQuestion(motherInFamily: Bool) -> QuestionOutcome {
-        motherInFamily ? .motherName : .limited
+        motherInFamily ? .motherName : .familyQuestion
+    }
+
+    static func afterFamily(hasSpouse: Bool) -> QuestionOutcome {
+        hasSpouse ? .spouseName : .limited
+    }
+
+    // MARK: «هل أحد أفراد أسرتك من العائلة؟» — الزوج أو الزوجة (العيّنة spouse2، المالك ٢٠٢٦-١١-٢٨ «نفّذ كل شي»)
+
+    /// صلة صاحب الحساب بالعائلة: الرجل ← «الزوجة»، المرأة ← «الزوج» (السيرفر يقرّرها بالجنس نفسه)
+    enum Relation: String, Equatable, Sendable { case wife, husband }
+
+    static func relation(gender: String?) -> Relation {
+        (gender ?? "").lowercased() == "female" ? .husband : .wife
+    }
+
+    /// خطوات «استكمال التسجيل» = النقاط الثلاث: الوالدة · الأسرة · بيانات الزوج/الزوجة
+    enum CompletionStep: Int, CaseIterable, Equatable { case mother = 0, family = 1, spouse = 2 }
+
+    /// «رجوع» (زرّ الرأس وزرّ المربّع): خطوة واحدة للخلف — لا رجوع من الأولى
+    static func back(from step: CompletionStep) -> CompletionStep? {
+        CompletionStep(rawValue: step.rawValue - 1)
+    }
+
+    /// اسم الزوج/الزوجة الرباعي بلا العائلة — «المحمدعلي» تُحذف إن كُتبت (تُضاف ثابتة)، و«محمد علي» اسمين يبقى
+    static func spouseNameToSend(_ s: String) -> String {
+        var w = tidy(s).split(separator: " ").map(String.init)
+        if let last = w.last, last == familyName { w.removeLast() }
+        else if w.count >= 2, w[w.count - 2] == "المحمد", w[w.count - 1] == "علي" { w.removeLast(2) }
+        return w.joined(separator: " ")
+    }
+
+    static let spouseNameParts = 4
+
+    static func spouseNameComplete(_ s: String) -> Bool { nameParts(spouseNameToSend(s)) >= spouseNameParts }
+
+    static func spouseNameError(_ s: String, relation: Relation = .wife) -> String? {
+        guard !tidy(s).isEmpty, !spouseNameComplete(s) else { return nil }
+        return Ar.spouseNameShort(relation)
+    }
+
+    static func canSendSpouse(_ s: String) -> Bool {
+        let n = spouseNameToSend(s)
+        return spouseNameComplete(n) && n.count <= 120 && n.filter(\.isLetter).count >= 2
+    }
+
+    private static func requestKind(_ details: String?) -> String? {
+        guard let data = details?.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj["kind"] as? String
+    }
+
+    /// طلب ربط الزوج/الزوجة في «الوارد» (`outside_spouse`، 20261128150000)
+    static func isSpouseLink(details: String?) -> Bool { requestKind(details) == "outside_spouse" }
+
+    /// طلبات «استكمال التسجيل» كلها: اسم الوالدة مكتوباً أو الزوج/الزوجة
+    static func isCompletionRequest(details: String?) -> Bool {
+        let k = requestKind(details)
+        return k == "outside_typed" || k == "outside_spouse"
     }
 
     /// اسم الوالد = اسم صاحب الحساب بعد الاسم الأول — nil إن بقي أقل من كلمتين (السيرفر يشتقّه بالقاعدة نفسها)
@@ -143,11 +202,7 @@ enum SignupOriginRules {
     }
 
     /// طلب «استكمال التسجيل» في «الوارد» (`outside_typed`): اسم الوالدة مكتوباً
-    static func isTypedLineage(details: String?) -> Bool {
-        guard let data = details?.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
-        return (obj["kind"] as? String) == "outside_typed"
-    }
+    static func isTypedLineage(details: String?) -> Bool { requestKind(details) == "outside_typed" }
 
     // MARK: «الوارد»: طلبات الانضمام من العائلة / من خارج العائلة (المالك ٢٠٢٦-١١-٢٧)
     //
@@ -232,7 +287,7 @@ enum SignupOriginRules {
         // مربّع «استكمال التسجيل»
         static let completeTitle = "استكمال التسجيل"
         static let approvedLine = "تم قبول طلبك. يُرجى الإجابة لاستكمال التسجيل."
-        static let motherQuestion = "هل الأم من العائلة؟"
+        static let motherQuestion = "هل الوالدة من العائلة؟"
         static let yes = "نعم"
         static let no = "لا"
         /// تأكيد «لا» — بلا أي ذكر للصلاحيات (قاعدة المالك)
@@ -254,6 +309,31 @@ enum SignupOriginRules {
         static let lockedTitle = "يُرجى استكمال التسجيل لعرض هذا القسم"
         static let lockedBody = "يُرجى إدخال بيانات الوالدة، وبعد اعتماد الإدارة يُفتح القسم."
         static let homeBody = "يُرجى إدخال بيانات الوالدة لاستكمال التسجيل وفتح جميع الأقسام."
+        // «هل أحد أفراد أسرتك من العائلة؟» (٢٠٢٦-١١-٢٨)
+        static let familyQuestion = "هل أحد أفراد أسرتك من العائلة؟"
+        static let familyQuestionSub = "يساعد الإدارة على ربطك بالشجرة."
+        static func spouseTile(_ r: Relation) -> String { r == .wife ? "الزوجة" : "الزوج" }
+        static let fromFamilyLine = "من عائلة المحمدعلي"
+        static let noneTile = "لا يوجد"
+        static let confirmNoneBody = "لا يوجد أحد من أفراد الأسرة من عائلة المحمدعلي. لا يمكن تغيير هذا الاختيار لاحقاً من التطبيق."
+        static func spouseTitle(_ r: Relation) -> String { r == .wife ? "بيانات الزوجة" : "بيانات الزوج" }
+        static func spouseSub(_ r: Relation) -> String {
+            r == .wife ? "تتحقّق الإدارة من الاسم وتربطك بها في الشجرة." : "تتحقّق الإدارة من الاسم وتربطك به في الشجرة."
+        }
+        static func spouseNameLabel(_ r: Relation) -> String { r == .wife ? "اسم الزوجة الرباعي" : "اسم الزوج الرباعي" }
+        static func spouseNameExample(_ r: Relation) -> String { r == .wife ? "مثال: فاطمة أحمد زيد حسن" : "مثال: زيد حسن علي أحمد" }
+        static func spouseNameShort(_ r: Relation) -> String {
+            r == .wife ? "يُرجى كتابة اسم الزوجة رباعياً، بدون اسم العائلة." : "يُرجى كتابة اسم الزوج رباعياً، بدون اسم العائلة."
+        }
+        static let spouseSentTitle = "تم إرسال البيانات"
+        static func spouseSentBody(_ r: Relation) -> String {
+            r == .wife ? "تتحقّق الإدارة من الاسم وتربطك بالزوجة في الشجرة، ويصلك إشعار عند الربط."
+                       : "تتحقّق الإدارة من الاسم وتربطك بالزوج في الشجرة، ويصلك إشعار عند الربط."
+        }
+        static let editData = "تعديل البيانات"
+        static let relationLabel = "الصلة"
+        static let nameLabel = "الاسم"
+
         /// «صلاحيات محدودة» (الأم ليست من العائلة) — للإدارة وحدها في بطاقة العضو؛ لا يُعرض للعضو شيء عنها
         static let limitedTag = "صلاحيات محدودة"
 
@@ -314,7 +394,12 @@ enum SignupOriginRules {
              inboxTag, approveOutside, approveOutsideNote, inboxAll, inboxFamilyJoins, inboxOutsideJoins, inboxCompleteDoor,
              inboxTypedTitle, inboxPickMother, inboxNoSuggestions, inboxHusbandMatches, fatherDerivedNote, sentMoment, addPhoto, photoOptional,
              familyNameExample, outsideNameExample, motherNameExample, motherNameHelp, familyNameShort, outsideNameShort,
-             familyShort, motherNameShort, missingLine(["الجنس"])]
+             familyShort, motherNameShort, missingLine(["الجنس"]),
+             familyQuestion, familyQuestionSub, spouseTile(.wife), spouseTile(.husband), fromFamilyLine, noneTile, confirmNoneBody,
+             spouseTitle(.wife), spouseTitle(.husband), spouseSub(.wife), spouseSub(.husband),
+             spouseNameLabel(.wife), spouseNameLabel(.husband), spouseNameExample(.wife), spouseNameExample(.husband),
+             spouseNameShort(.wife), spouseNameShort(.husband), spouseSentTitle, spouseSentBody(.wife), spouseSentBody(.husband),
+             editData, relationLabel, nameLabel]
         }
     }
 }

@@ -21,6 +21,10 @@ enum CompletionAsk {
         enum CodingKeys: String, CodingKey { case requestId = "request_id", kind, fields, note }
 
         var isLineage: Bool { kind == "lineage" }
+        /// طلب ربط الزوج/الزوجة (20261128150000): «اسم الزوج أو الزوجة» يُصحَّح من «استكمال التسجيل»
+        var isSpouse: Bool { kind == "spouse" }
+        /// طلب انضمام معلّق — بطاقته في «قيد المراجعة»
+        var isJoin: Bool { !isLineage && !isSpouse }
         var missing: [AdminJoinBoxRules.MissingField] { AdminJoinBoxRules.parseFields(fields) }
     }
 
@@ -115,7 +119,7 @@ struct CompletionAskCard: View {
 
     var body: some View {
         Group {
-            if let open = store.open, !open.isLineage {
+            if let open = store.open, open.isJoin {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
                     Label(L10n.t(T.memberAskTitle, "Please complete your details"), systemImage: "exclamationmark.circle.fill")
                         .dsFont(.rowTitle).foregroundColor(DS.Color.warning)
