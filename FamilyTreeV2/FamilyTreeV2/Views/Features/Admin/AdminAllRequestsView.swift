@@ -4,16 +4,18 @@ import SwiftUI
 //
 // جذر القسم صفحة واحدة تتمرّر (`List` لأجل السحب): الرأس الكحلي «‹ الإدارة» · «الوارد ⌄» · ⚙︎ «إعدادات مسار الموافقات» ·
 // «تحديد»، ومجال الدور للمراقب والمشرف، وسطر الأرقام «5 بانتظار قرارك ‹ · 2 عاجل ‹ · 1 متأخر ‹» (كل رقم يضبط «الحالة»)
-// ← صفوف الأبواب: «رسائل الأعضاء» (`AdminInboxView`، `inbox.messages`) و«بانتظار المراجعة» (`PostReviewQueuePage`)
-// ← شريط الفلاتر (البحث + «الفلاتر»: الحالة · المجموعة · النوع · المصدر في ورقة واحدة — U5) والشرائح المفعّلة وسطر العدد
+// ← مربّعات «الطلبات · المنجزة · الرسائل» (`AdminInboxTileRow`، ٢٠٢٦-١١-٢٨) ثم البحث و«تصفية» على الكحلي بشكل «العائلة»
+// (`AdminMembersFilterBar`)؛ المربّع يبدّل ما تحت الرأس: الطلبات هنا، والمنجزة (`AdminInboxHandledPage`) والرسائل
+// (`AdminInboxView`، `inbox.messages`) برأس «الوارد» نفسه (`adminInboxBand`)
+// ← شرائح المفعّل وسطر العدد (`AdminActiveFilterChips` + `AdminFilterCaption`) ← باب «بانتظار المراجعة» (`PostReviewQueuePage`)
 // ← سطر «تعذّر تحميل …» حين تفشل قائمة ← «هذا الطلب عولج من قبل» للطلب المطلوب ← «الموافقة على كل طلبات إضافة ابن»
 // ← باب «طلبات الخصوصية» (`AdminPolicyRequestsPage`) ← الطلبات بالأيام (اليوم · أمس · التاريخ)، كل يوم بطاقة من صفوفها
-// ← باب «المنجز» (`AdminInboxHandledPage`). لا مسار أقسام ولا صفوف شرائح (spec E.7/E.8).
+// (لا باب «المنجز» آخر القائمة ولا صفّ «رسائل الأعضاء» — صارا مربّعين). لا مسار أقسام (spec E.7/E.8).
 // السحب كما كان (الطرف: «رفض» + «المزيد»، البداية: الموافقة + «حذف»)، والضغط المطوّل القائمة نفسها، و«تحديد» ← شريط سفلي
 // «قبول (N)» · «رفض (N)». نفس الاستدعاءات والصلاحيات تماماً (`canApprove(_:)` / `canReject(_:)` مضروبة في «يعدّل»
 // `adminCanEdit(.inbox)`، مسار الموافقات)، وكل كتابة من هنا تمرّ بـ`DebugAdminProbe.dryRun` (T0).
 // التوجيه: `focusId` يفتح مربّع الطلب فوق «الوارد» (يُبحث في كل المعلّق بلا فلاتر)، `initialFilter` = «الحالة»،
-// `initialSearch` في الحقل، `startsWithMessages` يدفع صفحة الرسائل لمن يملكها، والهبوط (`AdminInboxLanding`) من
+// `initialSearch` في الحقل، `startsWithMessages` يختار مربّع «الرسائل» لمن يملكها، والهبوط (`AdminInboxLanding`) من
 // `AdminAreaRouter.take(.inbox, hop:)` — المعاملات الصريحة تغلبه.
 // حارس المكدس: الجسم طبقات خلف `AnyView` (كان يفيض بـ١٢٨ ك.ب)، وكل بطاقة جديدة نوع مستقل خلف `AnyView`.
 // مربّع الطلب (`requestDetailSheet` … `hardDeleteDetail`) منطقة U9 — بلا تعديل هنا.
@@ -231,11 +233,14 @@ struct AdminAllRequestsView: View {
     private let explicitStatus: Bool
     private let explicitSearch: Bool
     private let startsWithMessages: Bool
+    /// المربّع المختار في الرأس — «الرسائل» لمن فُتح عليها (`startsWithMessages`؛ لغير صاحبها يرجع «الطلبات» عند الرسم)
+    @State private var tile: AdminInboxTile
 
     init(focusId: UUID? = nil, initialFilter: ApprovalListFilter = .all,
          startsWithMessages: Bool = false, initialSearch: String = "") {
         self.focusId = focusId
         self.startsWithMessages = startsWithMessages
+        _tile = State(initialValue: startsWithMessages ? .messages : .requests)
         explicitStatus = initialFilter != .all
         explicitSearch = !initialSearch.isEmpty
         _filters = State(initialValue: AdminInboxLogic.Filters(
@@ -309,7 +314,7 @@ struct AdminAllRequestsView: View {
     }
 
     private enum Door: Equatable {
-        case messages, handled, settings
+        case settings
         case policy(UUID?)
     }
 
@@ -325,7 +330,7 @@ struct AdminAllRequestsView: View {
     /// الصفحة: القائمة وشريط التحديد والأرضية (طبقة)، ثم الوجهة والورقتان والمراقبات
     private var pageLayer: some View {
         let model = makeModel()
-        return AnyView(pageChrome(AnyView(list(model)), model))
+        return tileContent(model)
             .navigationDestination(isPresented: $doorOpen) { doorPage }
             .adminFilterSheet(isPresented: $showsFilters, set: model.filterSet, selection: $filters)
             .dsTallBox(isPresented: $showsPostReview) {
@@ -347,6 +352,59 @@ struct AdminAllRequestsView: View {
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .task { await start() }
             .task { await OutsideJoinStore.shared.refresh() }
+    }
+
+    // MARK: - المربّعات
+
+    /// المربّع الظاهر فعلاً — «الرسائل» لمن لا يملكها = «الطلبات»
+    private var shownTile: AdminInboxTile {
+        tile == .messages && !canSeeMessages ? .requests : tile
+    }
+
+    /// ما تحت الرأس حسب المربّع — تبديل بتلاشٍ (`DSMotion.tabFade`)، و«تقليل الحركة» بلا حركة. كل صفحة خلف `AnyView`
+    private func tileContent(_ model: InboxModel) -> AnyView {
+        let page: AnyView
+        switch shownTile {
+        case .requests:
+            page = AnyView(pageChrome(AnyView(list(model)), model))
+        case .done:
+            let store = handledStore
+            let box: (AdminRequest, @escaping () -> Void) -> AnyView = { request, close in
+                AnyView(handledBox(request, onClose: close))
+            }
+            page = AnyView(AdminInboxHandledPage(store: store, box: box)
+                .environment(\.adminInboxBand, bandMaker(model)))
+        case .messages:
+            page = AnyView(AdminInboxView()
+                .environment(\.adminInboxBand, bandMaker(model)))
+        }
+        return AnyView(page.id(shownTile).transition(.opacity))
+    }
+
+    /// رأس «الوارد» فوق «المنجزة» و«الرسائل»: الأرقام والمربّعات + ⚙︎ وأزرار الصفحة وسطر بحثها
+    private func bandMaker(_ m: InboxModel) -> AdminInboxBandMaker {
+        AdminInboxBandMaker { actions, accessory in
+            AnyView(band(m, pageActions: actions, accessory: accessory))
+        }
+    }
+
+    private func tileItems(_ m: InboxModel) -> [AdminInboxTileItem] {
+        var items = [
+            AdminInboxTileItem(tile: .requests, value: m.ready ? m.entries.count : nil),
+            AdminInboxTileItem(tile: .done, value: AdminInboxHandledPage.todayCount(store: handledStore, authVM: authVM,
+                                                                                     memberVM: memberVM)),
+        ]
+        if canSeeMessages {
+            items.append(AdminInboxTileItem(tile: .messages, value: m.ready ? adminRequestVM.unreadContactMessagesCount : nil))
+        }
+        return items
+    }
+
+    private func select(_ next: AdminInboxTile) {
+        guard next != shownTile else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+        if isSelectMode { isSelectMode = false; selectedIds.removeAll() }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: DSMotion.tabFade)) { tile = next }
     }
 
     private func pageChrome(_ list: AnyView, _ model: InboxModel) -> some View {
@@ -739,7 +797,7 @@ struct AdminAllRequestsView: View {
                                count: counts.family),
                 DSFilterOption(id: .outside, title: L10n.t(SignupOriginRules.Ar.inboxOutsideJoins, "Join requests from outside the family"),
                                count: counts.outside)
-            ], selection: $joinFilter, style: .admin)
+            ], selection: $joinFilter, style: .admin, compact: true)
                 // الشرائح تصعد مرة حين تظهر (يصل عددها بعد التحميل) — «تقليل الحركة»: تلاشٍ
                 .dsEntrance(delay: DSMotion.sectionsOnPage, y: DSMotion.rise, scale: DSMotion.riseScale))
             .adminPageRow(top: DS.Spacing.sm, bottom: 0)
@@ -966,21 +1024,13 @@ struct AdminAllRequestsView: View {
             loadHandledIfNeeded()
             return
         }
-        let opened = Date()
         // أُلغي (غادر «الوارد» قبل انتهائه): المخازن رجعت لحالها — الظهور التالي يعيده
         guard await reload() else { return }
         firstLoadDone = true
         loadHandledIfNeeded()
         // الطلب المطلوب بعد وصول القوائم (`reload` يفتحه بنفسه في إعادة المحاولة فقط)
         openFocusIfNeeded()
-        // فُتح على «الرسائل» (إشعار/بحث/رابط): صفحتها فوق «الوارد» بعد أول جلب — لمن يراها في جدول السيرفر وحده،
-        // وفي الظهور الأول فقط (من رجع بعد مغادرة لا تُدفع له)، وبعد انتهاء دفع «الوارد» نفسه
-        if firstAppear && startsWithMessages && canSeeMessages {
-            let wait = DSMotion.boxHandoff - Date().timeIntervalSince(opened)
-            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
-            guard !Task.isCancelled else { return }
-            open(.messages)
-        }
+        // «الرسائل» (إشعار/بحث/رابط) مربّعٌ مختار من البداية (`tile`) — لا دفع صفحة
     }
 
     /// «المنجز» (رقم صفّه، وصفحته تفتح على ما وصل) — مهمة مستقلّة: دفع صفحة فوق «الوارد» لا يقطعها
@@ -1272,12 +1322,24 @@ struct AdminAllRequestsView: View {
         authVM.adminCanEdit(.inbox) && !m.entries.isEmpty
     }
 
-    private func band(_ m: InboxModel) -> some View {
+    /// `pageActions`/`accessory` = أزرار وسطر بحث «المنجزة» أو «الرسائل»؛ بلا ذلك = «الطلبات» («تحديد» وبحثها)
+    private func band(_ m: InboxModel, pageActions: [AdminPageAction]? = nil, accessory: AnyView? = nil) -> some View {
         let dismiss = dismiss
+        let requests = pageActions == nil
+        let tiles = AnyView(AdminInboxTileRow(items: tileItems(m), selected: shownTile, onSelect: { select($0) }))
+        let line: AnyView? = requests
+            ? (showsFilterBar(m)
+               ? AnyView(AdminMembersFilterBar(query: $searchText, activeCount: m.filterSet.activeCount(filters)) {
+                     showsFilters = true
+                 })
+               : nil)
+            : accessory
         return AdminInboxBand(backTitle: outerBack ?? AdminArea.homeTitle, onBack: { dismiss() },
                               subtitle: scopeLine,
                               readOnly: !authVM.adminCanEdit(.inbox),
-                              items: headerItems(m)) {
+                              items: headerItems(m),
+                              tiles: tiles,
+                              accessory: line) {
             // ⚙︎ بيت «إعدادات مسار الموافقات» الوحيد — ظهوره من جدول السيرفر (`inbox.approval_settings`: المالك يعدّل،
             // المدير يقرأ افتراضاً)؛ الصفحة نفسها تقفل مفاتيحها لغير المالك (`canManageSettings`)
             if authVM.adminSees(.inboxApprovalSettings) {
@@ -1285,7 +1347,9 @@ struct AdminAllRequestsView: View {
                     open(.settings)
                 }
             }
-            if canSelect(m) || isSelectMode {
+            if let pageActions {
+                AdminInboxBandActions(actions: pageActions)
+            } else if canSelect(m) || isSelectMode {
                 AdminHeaderTextButton(title: isSelectMode ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select")) {
                     toggleSelectMode()
                 }
@@ -1335,16 +1399,6 @@ struct AdminAllRequestsView: View {
     private var doorPage: AnyView {
         let back = AdminArea.inbox.title
         switch door {
-        case .messages?:
-            return AnyView(AdminLazyPage { AnyView(AdminInboxView().adminBackTitle(back).adminArea(.inbox)) })
-        case .handled?:
-            let store = handledStore
-            let box: (AdminRequest, @escaping () -> Void) -> AnyView = { request, close in
-                AnyView(handledBox(request, onClose: close))
-            }
-            return AnyView(AdminLazyPage {
-                AnyView(AdminInboxHandledPage(store: store, box: box).adminBackTitle(back).adminArea(.inbox))
-            })
         case .policy(let id)?:
             return AnyView(AdminLazyPage {
                 AnyView(AdminPolicyRequestsPage(focusId: id).adminBackTitle(back).adminArea(.inbox))
@@ -1358,26 +1412,16 @@ struct AdminAllRequestsView: View {
         }
     }
 
-    /// «رسائل الأعضاء» و«بانتظار المراجعة» — بطاقة صفوف بلا عنوان أعلى القائمة
+    /// «بانتظار المراجعة» — بطاقة صفّ بلا عنوان تحت شرائح التصفية («رسائل الأعضاء» صارت مربّعاً في الرأس)
     @ViewBuilder
     private var doorCard: some View {
         let mine = postReviewCount
-        if canSeeMessages || mine > 0 {
+        if mine > 0 {
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                if canSeeMessages {
-                    AdminInboxDoorRow(icon: "bubble.left.and.bubble.right.fill", tint: DS.Color.sea,
-                                      title: AdminInboxView.title,
-                                      subtitle: AdminInboxText.messagesLine(unread: adminRequestVM.unreadContactMessagesCount,
-                                                                            awaiting: adminRequestVM.pendingContactMessagesCount)) {
-                        open(.messages)
-                    }
-                }
-                if mine > 0 {
-                    AdminInboxDoorRow(icon: "checkmark.shield.fill", tint: DS.Color.accent,
-                                      title: L10n.t("بانتظار المراجعة", "Awaiting review"),
-                                      subtitle: AdminInboxText.postReviewLine(mine)) {
-                        showsPostReview = true
-                    }
+                AdminInboxDoorRow(icon: "checkmark.shield.fill", tint: DS.Color.accent,
+                                  title: L10n.t("بانتظار المراجعة", "Awaiting review"),
+                                  subtitle: AdminInboxText.postReviewLine(mine)) {
+                    showsPostReview = true
                 }
             }
         }
@@ -1398,15 +1442,15 @@ struct AdminAllRequestsView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
-            if !isSelectMode && (canSeeMessages || postReviewCount > 0) {
-                AnyView(doorCard)
-                    .adminPageRow(top: DS.Spacing.lg, bottom: 0)
-            }
             if showsFilterBar(m) {
-                AnyView(AdminFilterPanel(set: m.filterSet, selection: $filters, search: $searchText,
-                                         note: L10n.t("الأحدث أولاً", "Newest first"),
-                                         openFilters: { showsFilters = true }))
-                    .adminPageRow(top: DS.Hub.stackSpacing, bottom: 0)
+                // تحت الرأس كـ«العائلة»: شريحة لكل اختيار بـ✕ ثم «12 طلباً · الأحدث أولاً» (البحث و«تصفية» في الكحلي)
+                AnyView(AdminInboxFilterStatus(set: m.filterSet, selection: $filters,
+                                               note: L10n.t("الأحدث أولاً", "Newest first")))
+                    .adminPageRow(top: DS.Spacing.sm, bottom: 0)
+            }
+            if !isSelectMode && postReviewCount > 0 {
+                AnyView(doorCard)
+                    .adminPageRow(top: DS.Spacing.sm, bottom: 0)
             }
             AnyView(joinOriginChips(m))
             AnyView(notices(m))
@@ -1428,19 +1472,6 @@ struct AdminAllRequestsView: View {
                 .adminPageRow(top: DS.Spacing.sm, bottom: 0)
             }
             AnyView(requestRows(m))
-            if !isSelectMode {
-                AnyView(AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
-                    AdminInboxDoorRow(icon: "checkmark.circle.fill", tint: DS.Color.palm,
-                                      title: AdminInboxHandledPage.title,
-                                      subtitle: L10n.t("آخر 30 يوماً، للاطلاع", "Last 30 days, view only"),
-                                      value: AdminInboxHandledPage.doorValue(store: handledStore, authVM: authVM,
-                                                                             memberVM: memberVM),
-                                      hint: L10n.t("يفتح الطلبات المعالجة", "Opens the handled requests")) {
-                        open(.handled)
-                    }
-                })
-                .adminPageRow(top: DS.Hub.sectionGap, bottom: 0)
-            }
             // آخر صفّ لا يختفي تحت شريط التبويبات
             DS.Hub.background
                 .frame(height: landscape ? DS.Landscape.tabBarClearance + DS.Spacing.lg : DS.Spacing.xxxl)
@@ -1509,9 +1540,9 @@ struct AdminAllRequestsView: View {
             AnyView(AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
                 AdminInboxDoorRow(icon: "checkmark.circle", tint: DS.Color.palm,
                                   title: L10n.t("هذا الطلب عولج من قبل", "This request was already handled"),
-                                  subtitle: L10n.t("افتح المنجز لترى ما تم فيه", "Open what's done to see what happened"),
-                                  hint: L10n.t("يفتح المنجز", "Opens what's done")) {
-                    open(.handled)
+                                  subtitle: L10n.t("افتح «المنجزة» لترى ما تم فيه", "Open “Done” to see what happened"),
+                                  hint: L10n.t("يفتح المنجزة", "Opens Done")) {
+                    select(.done)
                 }
             })
             .adminPageRow(top: DS.Spacing.sm, bottom: 0)

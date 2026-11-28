@@ -381,7 +381,10 @@ struct AdminPage: View {
     let content: AnyView
     /// وقت آخر بيانات صالحة — «آخر تحديث 9:41» ١٣ رمادي في الوسط آخر الصفحة (spec A.2). nil = بلا سطر
     var updatedAt: Date? = nil
+    /// سطر تحت الرأس الكحلي حين تُرسم الصفحة تحت مربّعات «الوارد» (`adminInboxBand`) — البحث و«تصفية» بشكل «العائلة»
+    var bandAccessory: AnyView? = nil
     @Environment(\.adminBackTitle) private var outerBack
+    @Environment(\.adminInboxBand) private var inboxBand
     @Environment(\.adminArea) private var area
     @Environment(\.dsLandscape) private var landscape
     /// رجوع الصفحة نفسها (خارج `List`) — يُمرَّر للرأس
@@ -416,7 +419,8 @@ struct AdminPage: View {
         return AnyView(AdminLazyPage(make: pushed.make)
             .adminBackTitle(pushed.backTitle)
             .adminArea(area)
-            .environment(\.adminPagePusher, nil))
+            .environment(\.adminPagePusher, nil)
+            .environment(\.adminInboxBand, nil))
     }
 
     private func frame(_ page: AnyView) -> some View {
@@ -435,6 +439,8 @@ struct AdminPage: View {
 
     /// ما يدفعه الرأس (رقم يفتح قائمة، زرّ ＋) يرجع باسم هذه الصفحة لا باسم ما قبلها
     private var band: AnyView {
+        // مضمّنة تحت مربّعات «الوارد»: رأسه هو (الأرقام والمربّعات) بأزرار هذه الصفحة وسطر بحثها
+        if let inboxBand { return inboxBand.make(header.actions, bandAccessory) }
         let dismiss = dismiss
         return AnyView(AdminPageBand(header: header, backTitle: resolvedBack, onBack: { dismiss() })
             .environment(\.adminPageTitle, header.title))

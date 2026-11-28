@@ -607,6 +607,10 @@ struct AdminInboxBand<Trailing: View>: View {
     var subtitle: String? = nil
     var readOnly: Bool = false
     var items: [AdminHeaderItem] = []
+    /// مربّعات «الطلبات · المنجزة · الرسائل» تحت سطر الأرقام (`AdminInboxTileRow`)
+    var tiles: AnyView? = nil
+    /// سطر البحث و«تصفية» على الكحلي تحت المربّعات (`AdminMembersFilterBar` — شكل «العائلة»)
+    var accessory: AnyView? = nil
     @ViewBuilder let trailing: () -> Trailing
     @Environment(\.dsLandscape) private var landscape
 
@@ -624,11 +628,18 @@ struct AdminInboxBand<Trailing: View>: View {
             if !items.isEmpty {
                 AnyView(AdminHeaderLine(items: items))
             }
+            if let tiles {
+                tiles.padding(.top, DS.Hub.inboxTilesTop)
+            }
+            if let accessory {
+                accessory.padding(.top, DS.Spacing.md)
+            }
         }
         .dsLandscapeReadable(maxWidth: DS.Hub.landscapeWidth - 2 * DS.Spacing.lg)
         .padding(.horizontal, landscape ? DS.Spacing.xxl : DS.Spacing.lg)
         .padding(.top, DS.Hub.headerTop)
-        .padding(.bottom, items.isEmpty ? DS.Hub.headerBottom : DS.Hub.headerBottomLine)
+        .padding(.bottom, tiles != nil || accessory != nil ? DS.Hub.headerBottom
+                          : (items.isEmpty ? DS.Hub.headerBottom : DS.Hub.headerBottomLine))
         .frame(maxWidth: .infinity, alignment: .leading)
         .adminBandBackground(landscape: landscape)
         .dsLightStatusBar()

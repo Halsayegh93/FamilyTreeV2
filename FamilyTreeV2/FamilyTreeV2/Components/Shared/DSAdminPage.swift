@@ -172,6 +172,8 @@ struct DSFilterChips<ID: Hashable>: View {
     var tint: Color = DS.Color.primary
     /// `.admin` = شرائح الإدارة الملتفّة؛ الافتراضي شكل اليوم
     var style: DSFilterChipsStyle = .standard
+    /// `.admin` بشكل فلاتر «العائلة» (`DSAdminChipLabel(compact: true)`: ٣٠ وبلا ✓، لمسها ٤٤) — «الوارد» (٢٠٢٦-١١-٢٨)
+    var compact: Bool = false
     @Namespace private var ns
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dsSection) private var section
@@ -198,7 +200,8 @@ struct DSFilterChips<ID: Hashable>: View {
                     DSAdminChipLabel(title: option.title,
                                      count: option.count.map { DSNumber.grouped($0) },
                                      icon: option.icon,
-                                     selected: selected)
+                                     selected: selected,
+                                     compact: compact)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])

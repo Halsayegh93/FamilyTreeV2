@@ -6,7 +6,9 @@ import Supabase
 
 // MARK: - «رسائل الأعضاء» (إعادة تصميم الإدارة ٢٠٢٦-١١-٢٦، الوحدة U10 — spec C.4)
 //
-// صفحة مستقلة تُدفع من صفّ «رسائل الأعضاء» في «الوارد» (لم تعد شريحة داخله): رأس الصفحات الداخلية (`AdminPage`) —
+// منذ ٢٠٢٦-١١-٢٨ تُرسم تحت مربّع «الرسائل» في رأس «الوارد» (`adminInboxBand`): رأسه بأرقامه ومربّعاته و«تحديد» هذه الصفحة،
+// والبحث و«تصفية» على الكحلي بشكل «العائلة» (`AdminMembersFilterBar`)، وتحت الرأس الشرائح المفعّلة وسطر العدد. وحدها (رابط
+// قديم) كما كانت: رأس الصفحات الداخلية (`AdminPage`) —
 // «‹ الوارد» · «رسائل الأعضاء» · «تحديد» نصّاً في الطرف · سطر الأرقام «7 غير مقروءة ‹» «2 بانتظار الرد ‹» (كل رقم يضبط
 // «الحالة» فيكون أول رقم تحت الشريط هو نفسه) ← شريط التصفية (البحث + «تصفية»: «الحالة» و«النوع» في الورقة، اختيار
 // متعدّد يُطبَّق فوراً — F3، وشريحة لكل اختيار تحته) ← «● 7 رسائل جديدة … تحديد الكل كمقروء» ← الأيام (اليوم · أمس · التاريخ)، كل يوم بطاقة من
@@ -179,6 +181,8 @@ struct AdminInboxView: View {
     @State private var dryReadIds: Set<UUID> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.adminBackTitle) private var outerBack
+    /// غير nil = تحت مربّع «الرسائل» في «الوارد»
+    @Environment(\.adminInboxBand) private var inboxBand
 
     private var trimmedSearch: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -203,8 +207,12 @@ struct AdminInboxView: View {
     }
 
     private func pageView(_ m: Model) -> some View {
-        AdminPage(header: header(m), lead: lead(m), layout: .list, content: AnyView(rows(m)),
-                  updatedAt: health.lastGood)
+        AdminPage(header: header(m), lead: inboxBand == nil ? lead(m) : embeddedLead(m), layout: .list,
+                  content: AnyView(rows(m)), updatedAt: health.lastGood,
+                  bandAccessory: inboxBand == nil || !showsFilterBar(m) ? nil
+                    : AnyView(AdminMembersFilterBar(query: $search, activeCount: m.set.activeCount(filters)) {
+                        showsFilters = true
+                    }))
             .refreshable { await reload(force: true) }
             // شريط التحديد السفلي — مثبّت، وآخر رسالة تبقى فوقه
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -411,6 +419,21 @@ struct AdminInboxView: View {
                                  note: L10n.t("الأحدث أولاً", "Newest first"),
                                  showsCaption: !filters.isEmpty || !trimmedSearch.isEmpty,
                                  openFilters: { showsFilters = true })
+            }
+            if unreadLine {
+                unreadRow(m.unread)
+            }
+        })
+    }
+
+    /// تحت رأس «الوارد»: الشرائح المفعّلة وسطر العدد (شكل «العائلة») ← «● 7 رسائل جديدة … تحديد الكل كمقروء»
+    private func embeddedLead(_ m: Model) -> AnyView? {
+        let status = showsFilterBar(m) && m.ready
+        let unreadLine = m.ready && m.unread > 0 && !isSelectMode
+        guard status || unreadLine else { return nil }
+        return AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if status {
+                AdminInboxFilterStatus(set: m.set, selection: $filters, note: L10n.t("الأحدث أولاً", "Newest first"))
             }
             if unreadLine {
                 unreadRow(m.unread)

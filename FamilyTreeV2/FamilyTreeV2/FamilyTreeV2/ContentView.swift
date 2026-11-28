@@ -21,6 +21,11 @@ struct ContentView: View {
             SignupPreviewScreen(mode: mode)
                 .environment(\.layoutDirection, .rightToLeft)
                 .environment(\.locale, Locale(identifier: "ar"))
+        } else if let mode = AdminInboxTilesPreview.mode {
+            // مربّعات «الوارد» (العيّنة inbox-final): `-uiPreviewInbox requests|done|messages`
+            AdminInboxTilesPreviewScreen(mode: mode)
+                .environment(\.layoutDirection, .rightToLeft)
+                .environment(\.locale, Locale(identifier: "ar"))
         } else if let mode = AdminTrailPreview.mode {
             AdminTrailPreviewScreen(mode: mode)
                 .environment(\.layoutDirection, .rightToLeft)

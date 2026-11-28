@@ -75,6 +75,11 @@ enum DS {
         /// ذهبي المربّعات: أغمق من ذهبي المصمم حتى يُقرأ الأبيض فوقه
         static let goldFill  = SwiftUI.Color(hex: "#806631")
         static let goldDeep  = SwiftUI.Color(hex: "#40351E")
+        /// مربّعات رأس «الوارد» (٢٠٢٦-١١-٢٨، العيّنة `inbox-final`): اللون حسب المعنى، ثابت بالوضعين (فوق الشريط الكحلي)،
+        /// والنص الأبيض فوقها ≥ ٤٫٥:١ — الطلبات أزرق (٧٫١:١) · المنجزة أخضر (٥٫٠:١) · الرسائل بترولي (٥٫٠:١)
+        static let inboxRequestsFill = SwiftUI.Color(hex: "#2F5A8F")
+        static let inboxDoneFill     = SwiftUI.Color(hex: "#2E7D4F")
+        static let inboxMessagesFill = SwiftUI.Color(hex: "#1E7A86")
 
         // Gradients
         // الهوية: الأزرار والهيدرات والبطاقات بلون واحد بدون تدرّج — يبقى الاسم للتوافق.
@@ -2634,6 +2639,15 @@ extension DS {
         static let filterChipHeight: CGFloat = 36
         /// شريحة الفلتر المفعّل تحت شريط «العائلة» — أصغر (٣٠) وبلا ✓ (طلب المالك ٢٠٢٦-١١-٢٧)، لمسها يبقى ٤٤
         static let activeFilterChipHeight: CGFloat = 30
+        /// مربّعات رأس «الوارد» (الطلبات · المنجزة · الرسائل): أقل ارتفاع ٥٤ (يكبر مع حجم النص)، الزاوية ١٤، إطار أبيض ١٨٪،
+        /// والمختار حلقة ذهبية `accentLight` بعرض ٢ بعد فاصل ٢ من لون الشريط
+        static let inboxTileHeight: CGFloat = 54
+        static let inboxTileRadius: CGFloat = 14
+        static let inboxTileStrokeOpacity: Double = 0.18
+        static let inboxTileRing: CGFloat = 2
+        static let inboxTileRingGap: CGFloat = 2
+        /// بين سطر الأرقام وصفّ المربّعات
+        static let inboxTilesTop: CGFloat = 14
         /// زرّ الاختيار في ورقة الفلاتر — spec A.13
         static let filterRadio: CGFloat = 22
         /// مربّعات الأقسام (`AdminRowTile`؛ غير `areaColumns` ٣ لمربّعات البحث والأدوات): عمودان بفراغ ١٠، حشوة ١٢ جانباً و١٠ فوق وتحت،
@@ -2760,6 +2774,8 @@ extension DS.TextRole {
     /// Title 1 (٢٨) بموافقة المالك على رأس «أ». وأرقام المربّع اللي ينسحب في «اليوم» (الدفعة ١٣ «إلى داخله نكبر»): الأربعة في
     /// «يحتاج انتباهك» ووسط حلقات «إحصاء الأفراد» (`DS.Ring.census`)
     static let hubKPI = DS.TextRole(.title3, weight: .semibold)
+    /// اسم مربّع رأس «الوارد» جنب رقمه (`AdminInboxTileRow`) — Caption 1 (١٢) شبه عريض
+    static let inboxTileLabel = DS.TextRole(.caption, weight: .semibold)
     /// وسط الحلقة المتوسطة الموحّدة (`DS.Ring.medium`)، ورقم رسائل الدخول — Title 2 (٢٢)
     static let hubPulse = DS.TextRole(.headline, weight: .semibold)
     /// اسم الرقم في «يحتاج انتباهك» وسطر «54 حياً · 14 متوفى» تحت حلقات «إحصاء الأفراد» (الدفعة ١٣ — كانت Caption 1 ١٢) —

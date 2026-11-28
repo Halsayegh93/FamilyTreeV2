@@ -9,6 +9,8 @@ import SwiftUI
 // الإدارة المباشر (§9) مربّعه `AdminDeletionBox`. لكل المشرفين، كلٌّ بمجاله (نفس قواعد ظهور «الطلبات»).
 // المخزن واحد (`AdminHandledStore` في «الوارد») — رقم صفّ «المنجز» هو عدد هذه القائمة نفسها (T2).
 // الحالات: هيكل · «لا شيء منجز في آخر 30 يوماً» · خطأ + «أعد المحاولة» (والقديم يبقى بـ«آخر تحديث»). للعرض فقط — لا كتابة.
+// منذ ٢٠٢٦-١١-٢٨ تُرسم تحت مربّع «المنجزة» في رأس «الوارد» (`adminInboxBand` في البيئة): البحث و«تصفية» على الكحلي،
+// والورقة بمجموعة «الفترة» (اليوم · هذا الأسبوع — من المخزن نفسه، والمحايد «اليوم»)، وتحت الرأس الشرائح وسطر العدد.
 
 struct AdminInboxHandledPage: View {
     @ObservedObject var store: AdminHandledStore
@@ -27,8 +29,37 @@ struct AdminInboxHandledPage: View {
     /// «ظهور موحّد»: الأيام تصعد مرة عند الظهور الأول
     @State private var appeared = false
     @Environment(\.adminBackTitle) private var outerBack
+    /// غير nil = تحت مربّع «المنجزة» في «الوارد» (الفترة بدل آخر ٣٠ يوماً)
+    @Environment(\.adminInboxBand) private var inboxBand
+    @State private var doneFilters = AdminInboxDoneLogic.Filters()
+    @State private var showsFilters = false
 
     static var title: String { L10n.t("المنجز", "Done") }
+
+    /// رقم مربّع «المنجزة»: ما أُنجز اليوم (العدد نفسه تحت «اليوم») — nil قبل الوصول أو بعد الفشل
+    @MainActor
+    static func todayCount(store: AdminHandledStore, authVM: AuthViewModel, memberVM: MemberViewModel) -> Int? {
+        guard store.loadedOnce, !store.failed else { return nil }
+        return entries(store: store, authVM: authVM, memberVM: memberVM, search: "")
+            .filter { AdminInboxDoneLogic.contains(date($0, store: store), .today) }.count
+    }
+
+    /// ورقة «تصفية» للمنجزة: «الفترة» اختيار واحد بأعداده
+    @MainActor
+    static func doneFilterSet(store: AdminHandledStore, all: [AdminHandledEntry])
+        -> AdminFilterSet<AdminInboxDoneLogic.Filters> {
+        typealias D = AdminInboxDoneLogic
+        let dates = all.map { date($0, store: store) }
+        let count: (D.Range) -> Int? = { range in
+            store.loadedOnce ? dates.filter { D.contains($0, range) }.count : nil
+        }
+        return AdminFilterSet(noun: AdminInboxText.requestsNoun, resultCount: { count($0.range) }) { _ in
+            [.single("range", title: L10n.t("الفترة", "Period"), value: \.range, neutral: D.Range.today,
+                     options: D.Range.allCases.map { AdminFilterOption($0, $0.title, count: count($0)) })]
+        }
+    }
+
+    private var embedded: Bool { inboxBand != nil }
 
     var body: some View {
         AnyView(boxes(AnyView(page)))
@@ -125,20 +156,40 @@ struct AdminInboxHandledPage: View {
     }
 
     private var page: some View {
-        let visible = Self.entries(store: store, authVM: authVM, memberVM: memberVM, search: search)
+        let searched = Self.entries(store: store, authVM: authVM, memberVM: memberVM, search: search)
+        let range = doneFilters.range
+        let visible = embedded
+            ? searched.filter { AdminInboxDoneLogic.contains(Self.date($0, store: store), range) } : searched
+        let set = Self.doneFilterSet(store: store, all: searched)
         return AdminPage(header: AdminPageHeader(back: outerBack == nil ? AdminArea.inbox.title : nil,
                                                  title: Self.title,
                                                  subtitle: L10n.t("آخر 30 يوماً، للاطلاع", "Last 30 days, view only")),
-                         lead: lead(visible),
+                         lead: embedded ? embeddedLead(set) : lead(visible),
                          layout: .list,
                          content: AnyView(rows(visible)),
-                         updatedAt: health.lastGood)
+                         updatedAt: health.lastGood,
+                         bandAccessory: embedded ? bandLine(set) : nil)
+            .adminFilterSheet(isPresented: $showsFilters, set: set, selection: $doneFilters)
             .refreshable { await reload() }
             .task {
                 appeared = true
                 // كل فتح يحدّث (قرار اتُّخذ للتوّ في «الوارد» يظهر هنا)
                 await reload()
             }
+    }
+
+    /// على الكحلي تحت المربّعات: البحث و«تصفية» بشكل «العائلة» — مع وجود ما يُبحث فيه
+    private func bandLine(_ set: AdminFilterSet<AdminInboxDoneLogic.Filters>) -> AnyView? {
+        guard store.loadedOnce, !store.items.isEmpty || !store.deletions.isEmpty || !search.isEmpty else { return nil }
+        return AnyView(AdminMembersFilterBar(query: $search, activeCount: set.activeCount(doneFilters)) {
+            showsFilters = true
+        })
+    }
+
+    /// تحت الرأس: شريحة الفترة المختارة بـ✕ وسطر العدد
+    private func embeddedLead(_ set: AdminFilterSet<AdminInboxDoneLogic.Filters>) -> AnyView? {
+        guard store.loadedOnce else { return nil }
+        return AnyView(AdminInboxFilterStatus(set: set, selection: $doneFilters))
     }
 
     /// البحث — مع وجود ما يُبحث فيه (لا فوق «لا شيء» ولا فوق خطأ)
@@ -180,7 +231,9 @@ struct AdminInboxHandledPage: View {
                         cell(entry, position: DSGroupPosition(index: index, count: day.items.count))
                     }
                 }
-                if store.hasMore {
+                if embedded {
+                    if showsEmbeddedMore { moreButton }
+                } else if store.hasMore {
                     moreButton
                 } else {
                     Text(L10n.t("آخر 30 يوماً", "Last 30 days"))
@@ -204,12 +257,27 @@ struct AdminInboxHandledPage: View {
                                             : L10n.t("جرّب كلمة أخرى", "Try another word"),
                                           actionTitle: L10n.t("مسح البحث", "Clear search"),
                                           action: { search = "" }))
+            } else if embedded {
+                AdminPageStateCard(.empty(doneFilters.range == .today
+                                            ? L10n.t("لا شيء منجز اليوم", "Nothing done today")
+                                            : L10n.t("لا شيء منجز هذا الأسبوع", "Nothing done this week"),
+                                          message: L10n.t("الطلبات التي قُبلت أو رُفضت تظهر هنا.",
+                                                          "Requests approved or rejected show here.")))
             } else {
                 AdminPageStateCard(.empty(L10n.t("لا شيء منجز في آخر 30 يوماً", "Nothing done in the last 30 days"),
                                           message: L10n.t("الطلبات التي قُبلت أو رُفضت تظهر هنا.",
                                                           "Requests approved or rejected show here.")))
             }
         }
+    }
+
+    /// تحت «المنجزة»: «عرض المزيد» ما دام آخر المحمَّل داخل الفترة (صفحات المخزن ٤٠ — الأسبوع قد يزيد عليها)
+    private var showsEmbeddedMore: Bool {
+        guard store.hasMore else { return false }
+        let all = Self.entries(store: store, authVM: authVM, memberVM: memberVM, search: "")
+        guard let oldest = all.last.map({ Self.date($0, store: store) }) else { return false }
+        let start = doneFilters.range == .today ? Calendar.current.startOfDay(for: Date()) : AdminInboxDoneLogic.weekStart()
+        return oldest >= start
     }
 
     /// «عرض المزيد» — الصفحة التالية من المخزن

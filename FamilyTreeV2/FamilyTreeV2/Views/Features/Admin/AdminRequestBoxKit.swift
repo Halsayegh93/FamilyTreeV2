@@ -910,7 +910,7 @@ struct AdminRequestBoxEndState: View {
 
     var body: some View {
         DSEmptyView(title,
-                    message: L10n.t("لا طلب آخر ينتظر هنا. «المنجز» في آخر «الوارد».",
+                    message: L10n.t("لا طلب آخر ينتظر هنا. ما عولج في مربّع «المنجزة» أعلى «الوارد».",
                                     "Nothing else is waiting here. «Done» is at the end of the inbox."),
                     icon: "checkmark.circle", tint: DS.Color.success, style: .card)
             .frame(maxWidth: .infinity)
