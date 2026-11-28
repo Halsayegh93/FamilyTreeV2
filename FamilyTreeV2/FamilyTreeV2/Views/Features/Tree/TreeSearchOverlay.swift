@@ -15,8 +15,6 @@ struct TreeSearchOverlay: View {
     var onClose: (() -> Void)? = nil
     /// عند `true` تظهر الفلاتر فور فتح البحث حتى لو الحقل فارغ (العرض الكلاسيكي).
     var showFiltersWhenEmpty: Bool = false
-    /// أفراد البحث بدل أعضاء شجرة العائلة — شجرة النساء تمرّر أفرادها (٢٠٢٦-١١-٢٨). nil = شجرة العائلة كما كانت
-    var source: [FamilyMember]? = nil
 
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -81,19 +79,16 @@ struct TreeSearchOverlay: View {
         }
     }
 
-    /// أفراد البحث والفروع: `source` إن مُرِّر، وإلا أعضاء شجرة العائلة
-    private var pool: [FamilyMember] { source ?? memberVM.allMembers }
-
     /// عضو جذر الفرع المختار (إن وُجد).
     private var branchRootMember: FamilyMember? {
         guard let id = branchRootId else { return nil }
-        return pool.first { $0.id == id }
+        return memberVM.allMembers.first { $0.id == id }
     }
 
     /// مجموعة معرّفات الفرع المختار (الجذر + كل ذرّيته). محسوبة بإمتداد BFS.
     private var branchDescendantIds: Set<UUID>? {
         guard let rootId = branchRootId else { return nil }
-        let kidsMap = Dictionary(grouping: pool) { $0.fatherId }
+        let kidsMap = Dictionary(grouping: memberVM.allMembers) { $0.fatherId }
         var ids: Set<UUID> = [rootId]
         var stack: [UUID] = [rootId]
         while let cur = stack.popLast() {
@@ -131,7 +126,7 @@ struct TreeSearchOverlay: View {
         // اختيار الفرع — مربّع بمنتصف الشاشة (بحجم محتواه)
         .dsTallBox(isPresented: $branchPickerOpen) {   // شجرة فروع طويلة (توصية أبل)
             BranchPickerSheet(
-                allMembers: pool,
+                allMembers: memberVM.allMembers,
                 selectedId: branchRootId,
                 showsSearch: false,
                 onSelect: { id in
@@ -322,9 +317,8 @@ struct TreeSearchOverlay: View {
         if Self.waitsForMoreName(raw) { searchResults = []; return }
 
         // snapshot البيانات مرة وحدة — isCountable يستثني المعلّق/المجمّد/المخفي (يُبقي المتوفّى)
-        // شجرة النساء: كل أفرادها بأسماء غير المخفيين (`isCountable` يستبعد النساء — يُعددن في شجرتهن)
-        let members = source.map { $0.filter { !$0.isHiddenFromTree && $0.hasName } } ?? memberVM.allMembers.filter { $0.isCountable }
-        let lookup = source.map { Dictionary($0.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }) } ?? memberVM._memberById
+        let members = memberVM.allMembers.filter { $0.isCountable }
+        let lookup = memberVM._memberById
 
         searchTask = Task {
             // العضو العادي: أول ١٠ فقط (`NamePrivacy`)
@@ -482,10 +476,7 @@ struct TreeSearchOverlay: View {
     private func searchResultRow(_ result: SearchResult) -> some View {
         HStack(spacing: DS.Spacing.sm) {
             // صورة العضو الواحدة في صفوف القوائم (`DSMemberAvatar`) + شارة الوفاة على طرفها
-            // شجرة النساء: الإناث بلا صور أبداً (`WomenTreePhoto`)
-            DSMemberAvatar(name: result.member.firstName,
-                           avatarUrl: source == nil ? result.member.avatarUrl
-                               : WomenTreePhoto.url(isFemale: result.member.isFemale, own: result.member.avatarUrl, linked: nil),
+            DSMemberAvatar(name: result.member.firstName, avatarUrl: result.member.avatarUrl,
                            size: DS.Icon.avatarRow, roleColor: result.member.roleColor)
                 .overlay(alignment: .bottomTrailing) {
                     if result.member.isDeceased ?? false {
@@ -505,8 +496,7 @@ struct TreeSearchOverlay: View {
 
                 HStack(spacing: DS.Spacing.xs) {
                     if result.member.isDeceased ?? false {
-                        DSStatusChip(text: result.member.isFemale ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
-                                     tint: DS.Color.deceased, size: .mini)
+                        DSStatusChip(text: L10n.t("متوفى", "Deceased"), tint: DS.Color.deceased, size: .mini)
                     }
                     if let context = result.matchContext {
                         DSStatusChip(text: context, tint: DS.Color.info, size: .mini)

@@ -1,4 +1,4 @@
-// فحص شجرة النساء ٢ (الوحدة W2، ٢٠٢٦-١١-٢٨) — هدف البحث/«موقعك» · زوج البنت وهي مطويّة · شكل الزوج والزوجة الواحد — بلا محاكي:
+// فحص شجرة النساء ٢ (الوحدة W2، ٢٠٢٦-١١-٢٨) — هدف «موقعك» · زوج البنت يختفي وهي مطويّة · شكل الزوج والزوجة الواحد — بلا محاكي:
 //   xcrun swiftc -swift-version 5 -default-isolation MainActor -D ADMIN_LOGIC_TEST -o /private/tmp/claude-501/w2-logic \
 //     FamilyTreeV2/FamilyTreeV2/Views/Features/Tree/WomenTreeLogic.swift tests/admin-redesign/W2/main.swift \
 //     && /private/tmp/claude-501/w2-logic
@@ -10,7 +10,7 @@ func check<T: Equatable>(_ got: T, _ want: T, _ label: String) {
     if got == want { print("PASS \(label)") } else { print("FAIL \(label): got \(got) want \(want)"); failures += 1 }
 }
 
-// MARK: - هدف التمركز (البحث و«موقعك»)
+// MARK: - هدف التمركز («موقعك»)
 let daughter = UUID(), husbandOut = UUID(), man = UUID(), wifeIn = UUID()
 let wifeOf: [UUID: UUID] = [husbandOut: daughter]
 func target(_ id: UUID, fatherInTree: Bool, husband: UUID? = nil, husbandInTree: Bool = false) -> UUID {
@@ -23,8 +23,8 @@ check(target(husbandOut, fatherInTree: false), daughter, "الزوج من خار
 check(target(wifeIn, fatherInTree: false, husband: man, husbandInTree: false), wifeIn, "زوجة وزوجها غير ظاهر: عقدتها")
 check(target(wifeIn, fatherInTree: true, husband: man, husbandInTree: true), wifeIn, "بنت متزوجة من العائلة: عقدتها تحت أبيها")
 
-// MARK: - زوج البنت ظاهر وهي مطويّة
-check(WomenSpouseRule.showsHusband(hasHusband: true, collapsed: true, hasKids: true), true, "مطويّة ولها أبناء: الزوج جنبها")
+// MARK: - زوج البنت يختفي معها وهي مطويّة (طلب المالك ٢٠٢٦-١١-٢٨)
+check(WomenSpouseRule.showsHusband(hasHusband: true, collapsed: true, hasKids: true), false, "مطويّة ولها أبناء: الزوج يختفي معها")
 check(WomenSpouseRule.showsHusband(hasHusband: true, collapsed: false, hasKids: true), true, "مفتوحة: الزوج جنبها")
 check(WomenSpouseRule.showsHusband(hasHusband: true, collapsed: true, hasKids: false), true, "بلا أبناء: الزوج جنبها")
 check(WomenSpouseRule.showsHusband(hasHusband: false, collapsed: false, hasKids: true), false, "بلا زوج ظاهر: لا شيء")

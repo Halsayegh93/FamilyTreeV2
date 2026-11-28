@@ -91,7 +91,7 @@ nonisolated enum WomenNodeSpeech {
     }
 }
 
-/// العقدة التي يتمركز عليها البحث و«موقعك» (٢٠٢٦-١١-٢٨، مفحوص: tests/admin-redesign/W2):
+/// العقدة التي يتمركز عليها «موقعك» (٢٠٢٦-١١-٢٨، مفحوص: tests/admin-redesign/W2):
 /// الزوجة الوافدة (بلا أب في الشجرة) مربّع جنب زوجها ← عقدته، والزوج من خارج العائلة مربّع جنب زوجته البنت ← عقدتها
 nonisolated enum WomenFocusTarget {
     static func resolve(id: UUID, fatherInTree: Bool, husbandId: UUID?, husbandInTree: Bool,
@@ -103,11 +103,11 @@ nonisolated enum WomenFocusTarget {
     }
 }
 
-/// زوج البنت جنبها (من خارج العائلة، أو من العائلة باختيارها `spouse_shown`) — ظاهر دائماً متى كان ظاهراً لها،
-/// مطويّةً أو مفتوحة (طلب المالك ٢٠٢٦-١١-٢٨؛ كان يختفي وهي مطويّة ولها أبناء)
+/// زوج البنت جنبها (من خارج العائلة، أو من العائلة باختيارها `spouse_shown`) — يظهر متى فُتحت أو ما لها أبناء،
+/// ويختفي معها وهي مطويّة ولها أبناء مثل الزوجات (طلب المالك ٢٠٢٦-١١-٢٨ «مابي الزوج يكون ظاهر حتى انطوت عقدة البنت»)
 nonisolated enum WomenSpouseRule {
     static func showsHusband(hasHusband: Bool, collapsed: Bool, hasKids: Bool) -> Bool {
-        hasHusband
+        hasHusband && (!collapsed || !hasKids)
     }
 }
 

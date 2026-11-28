@@ -90,8 +90,6 @@ struct WomenClassicTreeView: View {
     /// بلا شريط أدوات ولا أزرار عائمة، لمس العقد لا يفعل شيئاً، وتفتح على مسار الجذر ← الأب والشخص بعلامة التغيير،
     /// والباقي باهت. nil = الشجرة العادية كما هي
     var preview: TreePlaceTreeFocus? = nil
-    /// 🔍 بحث بالاسم مثل شجرة العائلة (طلب المالك ٢٠٢٦-١١-٢٨) — حسب «صلاحيات الأعضاء» (`treeSearch`)
-    var canSearch: Bool = false
 
     // أبعاد العقدة والفجوات: `WomenTreeMetrics` × معامل «حجم النص» — يُقرأ مرة هنا ويُخزَّن مع التخطيط
     @Environment(\.dsTreeScale) private var envTreeScale
@@ -113,11 +111,6 @@ struct WomenClassicTreeView: View {
     @State private var meHighlightTask: Task<Void, Never>? = nil
     /// «موقعك» ولا عقدة للمستخدم في شجرة النساء — رسالة بدل الرجوع الصامت للبداية
     @State private var showNotInWomenTree = false
-    /// لوحة البحث مفتوحة (مكان شريط الأدوات — مثل شجرة العائلة)
-    @State private var showSearch = false
-    /// علامة الشخص المبحوث عنه (إطار ذهبي يتلاشى بعد ٥ ثوانٍ — نفس شجرة العائلة)
-    @State private var searchedId: UUID? = nil
-    @State private var searchMarkTask: Task<Void, Never>? = nil
 
     @State private var scale: CGFloat = TreeGroupFit.defaultScale
     @State private var baseScale: CGFloat = TreeGroupFit.defaultScale
@@ -744,28 +737,14 @@ struct WomenClassicTreeView: View {
                     }
                 }
             }
-            // لوحة المفاتيح (البحث) لا تصغّر مساحة الشجرة — كانت تقلبها «أفقية» فيُعاد ترتيب الأبناء في صفّ واحد
-            .ignoresSafeArea(.keyboard)
 
             // ── شريط الأدوات يطفو فوق الشجرة (شفافيته تبان لما تمر العقد تحته) ──
             // الوضع الأفقي: البار يصير جانبياً عمودياً (طلب المالك). المعاينة: بلا أدوات
             if preview == nil {
                 if verticalSizeClass == .compact {
-                    if showSearch {
-                        searchPanel
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                            .zIndex(102)
-                    }
                     landscapeSideToolbar
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                         .padding(.leading, DS.Spacing.sm)
-                        .zIndex(101)
-                } else if showSearch {
-                    searchPanel
-                        .padding(.horizontal, DS.Spacing.sm)
-                        .padding(.top, DS.Spacing.sm)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .zIndex(101)
                 } else {
                     toolbarRow
@@ -929,8 +908,6 @@ struct WomenClassicTreeView: View {
     // ─── شريط الأدوات العلوي — نفس بطاقة شجرة العائلة المدمّجة (`treeToolbarCard`) ───
     private var toolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
-            // الترتيب كشجرة العائلة: بحث → البداية → التبويب → موقعك
-            if canSearch { searchButton(.toolbar) }
             // البداية — رجوع للجذر + إعادة الملاءمة (بحركة واضحة)
             homeButton(.toolbar)
 
@@ -957,7 +934,6 @@ struct WomenClassicTreeView: View {
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
         VStack(spacing: DS.Spacing.xs) {
-            if canSearch { searchButton(.mini) }
             homeButton(.mini)
 
             if let treeTab {
@@ -977,31 +953,6 @@ struct WomenClassicTreeView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             goHome()
         }
-    }
-
-    /// 🔍 «بحث» — يفتح لوحة البحث مكان شريط الأدوات (نفس شجرة العائلة)
-    private func searchButton(_ size: DSNavButtonSize) -> some View {
-        DSHeaderButton(symbol: "magnifyingglass", label: L10n.t("بحث", "Search"), context: .surface,
-                       size: size, tint: AppSection.tree.ink) {
-            withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.smooth) { showSearch = true }
-        }
-    }
-
-    /// لوحة البحث — `TreeSearchOverlay` نفسه (الحقل، شرائح الكل/أحياء/متوفين، الفرع، النتائج) على أفراد شجرة النساء
-    private var searchPanel: some View {
-        TreeSearchOverlay(onSelect: { m in chooseSearchResult(m) },
-                          autoFocus: true,
-                          onClose: { withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false } },
-                          showFiltersWhenEmpty: true,
-                          source: members)
-            .transition(.dsReveal(reduceMotion: reduceMotion))
-    }
-
-    /// اختيار نتيجة: تُغلق اللوحة (يرجع شريط الأدوات) ثم تفتح الشجرة على الشخص بعلامة ذهبية
-    private func chooseSearchResult(_ m: FamilyMember) {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false }
-        locate(m.id, search: true)
     }
 
     /// «موقعي» — زرّ العُدّة الدائري
@@ -1106,7 +1057,7 @@ struct WomenClassicTreeView: View {
     }
 
     /// «موقعي»: يوسّع مسار الأجداد حتى العضو، ويعرض **النسب كامل من الجذر لين اسمك** معًا.
-    private func locate(_ id: UUID, search: Bool = false) {
+    private func locate(_ id: UUID) {
         let ids = byId
         guard let node = ids[id] else { if let r = activeRoot { moveCamera { focusMember(r, in: layout) } }; return }
         // الزوجة الوافدة (بلا أب في الشجرة) تُرسم كبسولة جنب زوجها — فالمسار والتمركز على الزوج، وفرعه يُفتح فتظهر؛
@@ -1129,19 +1080,6 @@ struct WomenClassicTreeView: View {
         collapsed = Set(members.compactMap { $0.fatherId }).union(outsideWifeOf.values).subtracting(path)
         let L = rebuild()
         moveCamera { focusMember(target, in: L) }
-        if search {
-            // البحث: علامة ذهبية على الشخص نفسه (عقدته، أو خليته زوجةً/زوجاً جنب العقدة) تتلاشى بعد ٥ ثوانٍ
-            meHighlightTask?.cancel(); meHighlight = nil
-            searchMarkTask?.cancel()
-            searchedId = id
-            searchMarkTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 5_000_000_000)   // = TreeConst.highlightDuration
-                guard !Task.isCancelled else { return }
-                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { searchedId = nil }
-            }
-            return
-        }
-        searchMarkTask?.cancel(); searchedId = nil
         meHighlight = target
         meHighlightTask?.cancel()
         meHighlightTask = Task { @MainActor in
@@ -1208,13 +1146,6 @@ struct WomenClassicTreeView: View {
                                 .stroke(DS.Color.currentLocation, lineWidth: 4 * k)
                                 .frame(width: CIRCLE + 10 * k, height: CIRCLE + 10 * k)
                                 .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12 * k)
-                                .transition(.opacity)
-                        } else if searchedId == m.id {
-                            // علامة الشخص المبحوث عنه — ذهبي الإطارات، يتلاشى بعد ٥ ثوانٍ (نفس شجرة العائلة)
-                            TreeNodeShape(leaf: leafNode, sharp: leafSharp + 5 * k)
-                                .stroke(DS.Color.accentLight, lineWidth: 5 * k)
-                                .frame(width: CIRCLE + 12 * k, height: CIRCLE + 12 * k)
-                                .shadow(color: DS.Color.accentLight.opacity(0.55), radius: 8 * k)
                                 .transition(.opacity)
                         }
                     }
@@ -1479,21 +1410,25 @@ struct WomenClassicTreeView: View {
         spouseCell(h, name: wifeShortName(h), female: false)
     }
 
-    /// خلية الزوج/الزوجة الواحدة (٢٠٢٦-١١-٢٨): نفس المقاس والكبسولة والمسافة للاثنين — الفرق اللون والشكل
-    /// (الرجل دائرة بصورته، والمرأة «ورقة» وردية بكلمة «زوجة»)
+    /// خلية الزوج/الزوجة الواحدة (٢٠٢٦-١١-٢٨): نفس المقاس والكبسولة والمسافة للاثنين — الفرق اللون والشكل.
+    /// كل واحد بلونه (طلب المالك ٢٠٢٦-١١-٢٨ «كل واحد منهم لون اذا الزوج بدون صورة»): الزوجة «ورقة» بلون الإناث
+    /// وكلمة «زوجة»، والزوج دائرة بصورته، وبلا صورة دائرة مليئة بلون الذكور وأول حرف أبيض (المتوفى رمادي)
     private func spouseCell(_ p: FamilyMember, name: String, female: Bool) -> some View {
         let k = layout.m.k, side = layout.m.husbandSquare
         let deceased = p.isDeceased == true
         let tint: Color = female ? (deceased ? DS.Color.femaleDeceased : rose) : husbandRingColor(p)
         let shape = TreeNodeShape(leaf: female, sharp: 5 * k)
         let photo = female ? nil : p.avatarUrl.flatMap { URL(string: $0) }
+        // اللون المليء: الزوجة دائماً، والزوج بلا صورة (لون الذكور، والمتوفى رمادي)
+        let solid = female || photo == nil
+        let fill: Color = female ? tint : (deceased ? DS.Color.textTertiary : DS.Color.maleFill)
         // كبسولة اسمه على مستوى كبسولة اسم العضو (أعلاها = الدائرة + ٧) — الخلية تبدأ من أعلى شكله (وسطه على وسط شكل العضو)
         let nameGap = layout.m.circle / 2 + 7 * k - side / 2
         let deceasedWord = female ? L10n.t("متوفية", "Deceased") : L10n.t("متوفى", "Deceased")
         return VStack(spacing: max(DS.Spacing.xs * k, nameGap)) {
             shape
                 .fill(DS.Color.background)
-                .overlay(shape.fill(female ? tint : tint.opacity(DS.Opacity.tintFill)))
+                .overlay(shape.fill(solid ? fill : tint.opacity(DS.Opacity.tintFill)))
                 .overlay {
                     if let u = photo {
                         CachedAsyncImage(url: u) { img in img.resizable().scaledToFill() } placeholder: { Color.clear }
@@ -1508,12 +1443,11 @@ struct WomenClassicTreeView: View {
                     } else {
                         Text(name.isEmpty ? L10n.t("زوج", "H") : String(name.prefix(1)))
                             .dsTreeFont(.title3Tree, k)
-                            .foregroundColor(tint)
+                            .foregroundColor(DS.Color.textOnPrimary)
                     }
                 }
                 .frame(width: side, height: side)
-                .overlay(female ? AnyView(shape.strokeBorder(DS.Color.textOnPrimary, lineWidth: 2 * k))
-                                : AnyView(shape.strokeBorder(tint, lineWidth: 2 * k)))
+                .overlay(shape.strokeBorder(solid ? DS.Color.textOnPrimary : tint, lineWidth: 2 * k))
                 .overlay(alignment: .topTrailing) {
                     if p.isHiddenFromTree {
                         Circle().fill(DS.Color.background)
@@ -1524,16 +1458,6 @@ struct WomenClassicTreeView: View {
                                     .foregroundColor(DS.Color.slate)
                             )
                             .offset(x: 3 * k, y: -3 * k)
-                    }
-                }
-                .overlay {
-                    // علامة البحث الذهبية — نفس علامة العقدة
-                    if searchedId == p.id {
-                        TreeNodeShape(leaf: female, sharp: 10 * k)
-                            .stroke(DS.Color.accentLight, lineWidth: 4 * k)
-                            .frame(width: side + 10 * k, height: side + 10 * k)
-                            .shadow(color: DS.Color.accentLight.opacity(0.55), radius: 8 * k)
-                            .transition(.opacity)
                     }
                 }
                 .opacity(p.isHiddenFromTree ? DS.Opacity.disabled : 1)
