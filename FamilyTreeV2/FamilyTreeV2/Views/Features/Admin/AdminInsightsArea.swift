@@ -48,7 +48,9 @@ nonisolated enum AdminStatsLogic {
     static func sections(_ access: Access, membersFailed: Bool = false) -> [AdminStatsAnchor] {
         var list: [AdminStatsAnchor] = []
         if access.family {
-            list += membersFailed ? [.family] : [.family, .departed, .inApp]
+            // بطاقة «العائلة» (الحلقات الثلاث وأحياء/متوفون) حُذفت من الصفحة (قرار المالك ٢٠٢٦-١١-٢٨: تكرّر رأس «اليوم») —
+            // تبقى مكان خطأ جلب الأعضاء وحده (إعادة المحاولة)، والصفحة تبدأ بـ«الراحلون». الهبوط على «العائلة» = أول الصفحة
+            list += membersFailed ? [.family] : [.departed, .inApp]
         }
         if access.approvals { list.append(.approvals) }
         if access.family && !membersFailed {

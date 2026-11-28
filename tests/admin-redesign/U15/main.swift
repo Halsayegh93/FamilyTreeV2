@@ -16,13 +16,14 @@ typealias L = AdminStatsLogic
 // MARK: الظهور (Autoplan note 7)
 let owner = L.Access.make(familyItem: true, approvalsItem: true, workflowOn: true)
 // ترتيب المالك ٢٠٢٦-١١-٢٨: العائلة ← في التطبيق ← الموافقات ← التفاصيل
-check(L.sections(owner), [.family, .departed, .inApp, .approvals, .growth, .ages, .roles, .tree, .outside],
-      "owner/admin: family → in the app → approvals → details")
+check(L.sections(owner), [.departed, .inApp, .approvals, .growth, .ages, .roles, .tree, .outside],
+      "owner/admin: departed → in the app → approvals → details (family card removed 2026-11-28)")
+check(L.sections(owner).contains(.family), false, "no «العائلة» card (duplicated the Today header)")
 check(L.startsDetails(.growth, in: L.sections(owner)), true, "«التفاصيل» header sits above «جديد في الشجرة»")
 check(L.sections(owner).filter { L.startsDetails($0, in: L.sections(owner)) }.count, 1, "one «التفاصيل» header")
 let monitor = L.Access.make(familyItem: true, approvalsItem: false, workflowOn: true)
 check(L.sections(monitor).contains(.approvals), false, "monitor: no approvals")
-check(L.sections(monitor).count, 8, "monitor: the eight family sections")
+check(L.sections(monitor).count, 7, "monitor: the seven family sections")
 let workflowOff = L.Access.make(familyItem: true, approvalsItem: true, workflowOn: false)
 check(L.sections(workflowOff).contains(.approvals), false, "workflow off: no approvals section")
 let approvalsOnly = L.Access.make(familyItem: false, approvalsItem: true, workflowOn: true)
