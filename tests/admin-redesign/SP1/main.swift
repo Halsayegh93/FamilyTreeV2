@@ -86,6 +86,23 @@ check(S.Ar.addUnderFather("فاطمة"), "إضافة «فاطمة» تحت وا�
 check(S.Ar.notInApp(.wife), "الزوجة غير مضافة بالتطبيق", "banner wife")
 check(S.Ar.notInApp(.husband), "الزوج غير مضاف بالتطبيق", "banner husband")
 
+// ٥ب) اختيار زوجة الرجل قبل ربط «الزوج» (المنتقد ٢٠٢٦-١١-٢٨ — لا عقدة زوجة مكرّرة)
+let wA = S.Wife(id: UUID(), fullName: "سارة علي", hasAccount: false, isDeceased: false, nameMatch: false)
+let wB = S.Wife(id: UUID(), fullName: "مريم حسن", hasAccount: false, isDeceased: true, nameMatch: true)
+let wC = S.Wife(id: UUID(), fullName: "نورة محمد", hasAccount: true)
+check(S.linkableWives([wA, wB, wC]).map(\.id), [wB.id, wA.id], "linkable wives: no account, name match first")
+check(S.needsWifeChoice(.husband, wives: [wA]), true, "husband with a free wife → choose")
+check(S.needsWifeChoice(.husband, wives: [wC]), false, "only wives with accounts → no choice")
+check(S.needsWifeChoice(.husband, wives: []), false, "no wives → link directly")
+check(S.needsWifeChoice(.wife, wives: [wA]), false, "wife relation never asks")
+let detail = #"[{"id": "\#(wA.id.uuidString)", "full_name": "سارة علي", "is_deceased": false}]"#
+check(S.wives(fromErrorDetail: detail).map(\.id), [wA.id], "choose_wife DETAIL parsed")
+check(S.wives(fromErrorDetail: nil).count, 0, "no detail → empty")
+check(S.newWifeNode.uuidString, "00000000-0000-0000-0000-000000000000", "«زوجة أخرى» sentinel")
+let sugg = try! JSONDecoder().decode(S.Suggestions.self, from: Data(#"{"matches":[{"id":"\#(man.id.uuidString)","full_name":"زيد","can_link":true,"wives":[{"id":"\#(wB.id.uuidString)","full_name":"مريم حسن","has_account":false,"is_deceased":true,"name_match":true}]}]}"#.utf8))
+check(sugg.matches.first?.wives.map(\.id) ?? [], [wB.id], "match decodes wives")
+check(sugg.matches.first?.wives.first?.nameMatch ?? false, true, "wife name_match decoded")
+
 // ٦) نصوص رسمية
 let forbidden = ["زوجك", "زوجتك", "أمك", "أبوك", "أباك", "أبيك"]
 for s in R.Ar.all + S.Ar.all {

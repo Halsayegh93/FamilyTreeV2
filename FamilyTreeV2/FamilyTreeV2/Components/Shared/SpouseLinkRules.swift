@@ -44,15 +44,78 @@ nonisolated enum SpouseLinkRules {
         let wifeNodeId: UUID?
         var husbandName: String? = nil
         var hasAccount: Bool = false
+        /// للزوج: زوجاته كلهن في شجرة النساء (20261128191000) — يختار المدير منهن قبل الربط
+        var wives: [Wife] = []
 
         enum CodingKeys: String, CodingKey {
             case id, fullName = "full_name", fatherId = "father_id", canLink = "can_link", wifeNodeId = "wife_node_id",
-                 husbandName = "husband_name", hasAccount = "has_account"
+                 husbandName = "husband_name", hasAccount = "has_account", wives
         }
 
-        init(id: UUID, fullName: String, fatherId: UUID?, canLink: Bool, wifeNodeId: UUID?) {
+        init(id: UUID, fullName: String, fatherId: UUID?, canLink: Bool, wifeNodeId: UUID?, wives: [Wife] = []) {
             self.id = id; self.fullName = fullName; self.fatherId = fatherId; self.canLink = canLink; self.wifeNodeId = wifeNodeId
+            self.wives = wives
         }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(UUID.self, forKey: .id)
+            fullName = (try? c.decode(String.self, forKey: .fullName)) ?? ""
+            fatherId = try? c.decode(UUID.self, forKey: .fatherId)
+            canLink = (try? c.decode(Bool.self, forKey: .canLink)) ?? false
+            wifeNodeId = try? c.decode(UUID.self, forKey: .wifeNodeId)
+            husbandName = try? c.decode(String.self, forKey: .husbandName)
+            hasAccount = (try? c.decode(Bool.self, forKey: .hasAccount)) ?? false
+            wives = (try? c.decode([Wife].self, forKey: .wives)) ?? []
+        }
+    }
+
+    /// زوجة للرجل في شجرة النساء (من الاقتراحات، أو من تفصيل خطأ `choose_wife`، أو من الشجرة المحمّلة)
+    struct Wife: Decodable, Equatable, Identifiable, Sendable {
+        let id: UUID
+        let fullName: String
+        var hasAccount: Bool = false
+        var isDeceased: Bool = false
+        /// اسمها الأول = الاسم الأول لصاحبة الطلب
+        var nameMatch: Bool = false
+
+        enum CodingKeys: String, CodingKey {
+            case id, fullName = "full_name", hasAccount = "has_account", isDeceased = "is_deceased", nameMatch = "name_match"
+        }
+
+        init(id: UUID, fullName: String, hasAccount: Bool = false, isDeceased: Bool = false, nameMatch: Bool = false) {
+            self.id = id; self.fullName = fullName; self.hasAccount = hasAccount; self.isDeceased = isDeceased
+            self.nameMatch = nameMatch
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(UUID.self, forKey: .id)
+            fullName = (try? c.decode(String.self, forKey: .fullName)) ?? ""
+            hasAccount = (try? c.decode(Bool.self, forKey: .hasAccount)) ?? false
+            isDeceased = (try? c.decode(Bool.self, forKey: .isDeceased)) ?? false
+            nameMatch = (try? c.decode(Bool.self, forKey: .nameMatch)) ?? false
+        }
+    }
+
+    /// «زوجة أخرى غير مضافة» صراحةً لـ `link_outside_spouse` (تُنشأ عقدة جديدة) — بدونها يرفض السيرفر `choose_wife`
+    static let newWifeNode = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+
+    /// الزوجات اللاتي يُربط بهن (بلا حساب)، المطابقة بالاسم أولاً
+    static func linkableWives(_ wives: [Wife]) -> [Wife] {
+        let free = wives.filter { !$0.hasAccount }
+        return free.filter(\.nameMatch) + free.filter { !$0.nameMatch }
+    }
+
+    /// قبل ربط الزوج: للرجل زوجة بلا حساب ← يختار المدير (أو «زوجة أخرى غير مضافة»)
+    static func needsWifeChoice(_ relation: Relation, wives: [Wife]) -> Bool {
+        relation == .husband && !linkableWives(wives).isEmpty
+    }
+
+    /// قائمة الزوجات من تفصيل خطأ `choose_wife` (DETAIL = jsonb)
+    static func wives(fromErrorDetail detail: String?) -> [Wife] {
+        guard let data = detail?.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([Wife].self, from: data)) ?? []
     }
 
     struct Father: Decodable, Equatable, Identifiable, Sendable {
@@ -120,12 +183,17 @@ nonisolated enum SpouseLinkRules {
         static let askBody = "يصل العضو إشعار بطلب تصحيح الاسم، ويعدّله من «استكمال التسجيل»."
         static let linked = "تم الربط"
         static let rejectWithReason = "رفض مع سبب"
+        static let chooseWifeTitle = "اختيار الزوجة"
+        static let chooseWifeBody = "للرجل زوجة في الشجرة. اختر الزوجة صاحبة الطلب، أو «زوجة أخرى غير مضافة»."
+        static let otherWife = "زوجة أخرى غير مضافة"
+        static let deceasedWife = "متوفاة"
+        static let nameMatches = "الاسم الأول مطابق"
 
         static var all: [String] {
             [outsideHusband, outsideWife, typedLine(.wife), typedLine(.husband), notInApp(.wife), notInApp(.husband),
              notInAppBody(.wife), notInAppBody(.husband), fatherFound, addUnderFather("فاطمة"), pickManually, askInfo, link,
              suggestions, linkedTo(.wife), linkedTo(.husband), hasOtherSpouse, askNotePlaceholder, askSend, askTitle, askBody,
-             linked, rejectWithReason]
+             linked, rejectWithReason, chooseWifeTitle, chooseWifeBody, otherWife, deceasedWife, nameMatches]
         }
     }
 }

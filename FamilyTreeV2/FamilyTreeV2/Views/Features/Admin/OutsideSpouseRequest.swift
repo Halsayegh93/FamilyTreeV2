@@ -46,6 +46,14 @@ enum SpouseLinkAdmin {
         case "spouse_in_family": return L10n.t("زوجها من العائلة — لا يُكتب فوقه.", "Her husband is from the family — not overwritten.")
         case "spouse_has_account": return L10n.t("مربوط بحساب آخر في التطبيق.", "Linked to another account in the app.")
         case "own_request": return L10n.t("لا تقرّر في طلبك.", "You can't decide your own request.")
+        // 20261128191000: نصوص السيرفر العربية
+        case "choose_wife":
+            return L10n.t("للرجل زوجة في الشجرة — اختر الزوجة أو «زوجة أخرى غير مضافة».", "He has a wife in the tree — choose her or «another wife».")
+        case "daughter_exists":
+            return AuthViewModel.serverMessage(error, fallback: L10n.t("للوالد بنت بهذا الاسم في الشجرة — اربطها هي.",
+                                                                       "The father already has a daughter with this name — link her."))
+        case "approval_needs_manager", "bad_payload":
+            return AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر الربط.", "Couldn't link."))
         default: return DaughterSons.message(error)
         }
     }
@@ -102,6 +110,15 @@ struct OutsideSpouseRequestContent: View {
     @State private var askNote = ""
     @State private var showReject = false
     @State private var reason = ""
+    /// اختيار زوجة الرجل قبل ربط «الزوج» (ملاحظة «المنتقد» ٢٠٢٦-١١-٢٨): للرجل زوجة بلا حساب ← يختار المدير، وإلا
+    /// كانت تُنشأ عقدة زوجة ثانية لنفس المرأة
+    @State private var wifeChoice: WifeChoice?
+
+    private struct WifeChoice: Identifiable {
+        let manId: UUID
+        let wives: [S.Wife]
+        var id: UUID { manId }
+    }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var relation: S.Relation { details?.relation ?? .wife }
@@ -144,6 +161,7 @@ struct OutsideSpouseRequestContent: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         }
         .dsCenterBox(isPresented: $showPicker) { picker }
+        .dsCenterBox(item: $wifeChoice) { choice in wifeChooser(choice) }
     }
 
     // MARK: الرأس: النوع والوقت · الاسم · الاسم المكتوب
@@ -295,6 +313,66 @@ struct OutsideSpouseRequestContent: View {
                           onCancel: { showPicker = false })
     }
 
+    // MARK: اختيار الزوجة (الزوج من العائلة)
+
+    /// زوجات الرجل: من الاقتراح إن كان منها، وإلا من شجرة النساء المحمّلة (المنتقي اليدوي)
+    private func wives(of manId: UUID) -> [S.Wife] {
+        if let m = matches.first(where: { $0.id == manId }), !m.wives.isEmpty { return m.wives }
+        return WomenStore.cache
+            .filter { $0.husbandId == manId && $0.isFemale }
+            .map { S.Wife(id: $0.id, fullName: $0.fullName, hasAccount: WomenStore.linkedUserByWoman[$0.id] != nil,
+                          isDeceased: $0.isDeceased == true) }
+    }
+
+    private func wifeChooser(_ choice: WifeChoice) -> some View {
+        DSComposer(title: T.chooseWifeTitle, subtitle: targetName(.link(choice.manId)), icon: "person.2.fill",
+                   tint: DS.Color.female, actionTitle: "", showsAction: false, canSubmit: false,
+                   onSubmit: {}, onCancel: { wifeChoice = nil }) {
+            VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+                Text(T.chooseWifeBody).dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 0) {
+                    ForEach(Array(choice.wives.enumerated()), id: \.element.id) { i, w in
+                        if i > 0 { DSDivider() }
+                        wifeRow(w) { pickWife(choice.manId, node: w.id) }
+                    }
+                }
+                .padding(.horizontal, DS.Spacing.sm)
+                .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.cardBackgroundSoft))
+                DSButton(T.otherWife, icon: "person.badge.plus", role: .cancel) {
+                    pickWife(choice.manId, node: S.newWifeNode)
+                }
+            }
+        }
+    }
+
+    private func wifeRow(_ w: S.Wife, onPick: @escaping () -> Void) -> some View {
+        Button(action: onPick) {
+            HStack(spacing: DS.Spacing.sm) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(verbatim: w.fullName).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    let tags = [w.nameMatch ? T.nameMatches : nil, w.isDeceased ? T.deceasedWife : nil].compactMap { $0 }
+                    if !tags.isEmpty {
+                        Text(verbatim: tags.joined(separator: " · ")).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                Spacer(minLength: DS.Spacing.sm)
+                Image(systemName: "link").dsGlyph(DS.Glyph.md).foregroundColor(DS.Color.success)
+            }
+            .padding(.vertical, DS.Spacing.sm)
+            .frame(minHeight: DS.Icon.tapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    private func pickWife(_ manId: UUID, node: UUID) {
+        wifeChoice = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) { link(manId, wifeNode: node) }
+    }
+
     // MARK: التأكيد والتنفيذ
 
     private var confirmTitle: String {
@@ -342,14 +420,28 @@ struct OutsideSpouseRequestContent: View {
 
     private func run(_ a: S.Action) {
         confirm = nil
-        guard canDecide, !busy, injected == nil, NetworkMonitor.shared.requireOnline() else { return }
+        guard canDecide, !busy, injected == nil else { return }
+        if case .link(let id) = a {
+            // الزوج: للرجل زوجة بلا حساب ← اختيار الزوجة أولاً (لا تُنشأ عقدة مكرّرة)
+            let free = S.linkableWives(wives(of: id))
+            if S.needsWifeChoice(relation, wives: free) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
+                    wifeChoice = WifeChoice(manId: id, wives: free)
+                }
+                return
+            }
+            link(id, wifeNode: nil)
+            return
+        }
+        guard NetworkMonitor.shared.requireOnline() else { return }
         busy = true
         errorText = nil
         Task {
             do {
                 switch a {
-                case .link(let id):
-                    try await SpouseLinkAdmin.link(requestId, target: id, wifeNode: matches.first { $0.id == id }?.wifeNodeId)
+                case .link:
+                    busy = false
+                    return
                 case .addUnderFather(let f):
                     try await SpouseLinkAdmin.addUnderFather(requestId, fatherId: f, firstName: typedFirst)
                 default:
@@ -360,6 +452,34 @@ struct OutsideSpouseRequestContent: View {
                 DSMomentToast.show(T.linked)
                 onDone()
             } catch {
+                errorText = SpouseLinkAdmin.message(error)
+            }
+            busy = false
+        }
+    }
+
+    /// الربط نفسه — `wifeNode`: عقدة الزوجة المختارة، أو `newWifeNode` لـ«زوجة أخرى غير مضافة»، أو nil (بلا زوجات)
+    private func link(_ id: UUID, wifeNode: UUID?) {
+        guard canDecide, !busy, injected == nil, NetworkMonitor.shared.requireOnline() else { return }
+        busy = true
+        errorText = nil
+        Task {
+            do {
+                try await SpouseLinkAdmin.link(requestId, target: id, wifeNode: wifeNode)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                DSMomentToast.show(T.linked)
+                onDone()
+            } catch {
+                let pg = error as? PostgrestError
+                // السيرفر وجد زوجة لم تصل التطبيق ← قائمته هو
+                if pg?.hint == "choose_wife" {
+                    let free = S.linkableWives(S.wives(fromErrorDetail: pg?.detail))
+                    if !free.isEmpty {
+                        busy = false
+                        wifeChoice = WifeChoice(manId: id, wives: free)
+                        return
+                    }
+                }
                 errorText = SpouseLinkAdmin.message(error)
             }
             busy = false

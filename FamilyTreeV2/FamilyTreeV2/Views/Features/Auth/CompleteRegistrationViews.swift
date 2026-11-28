@@ -26,7 +26,11 @@ enum OutsideLineage {
 
     static func message(_ error: Error) -> String {
         switch (error as? PostgrestError)?.hint ?? "" {
-        case "name_required": return L10n.t("يُرجى كتابة الاسم.", "Type the name.")
+        // نصّ السيرفر (الزوج/الزوجة: «يُرجى كتابة الاسم الثنائي على الأقل»)
+        case "name_required": return AuthViewModel.serverMessage(error, fallback: L10n.t("يُرجى كتابة الاسم.", "Type the name."))
+        case "spouse_edit_limit":
+            return AuthViewModel.serverMessage(error, fallback: L10n.t("تم بلوغ الحد الأقصى لتعديل الطلب — يُرجى انتظار مراجعة الإدارة.",
+                                                                       "You've reached the edit limit — please wait for the admins."))
         case "father_name_missing": return L10n.t(SignupOriginRules.Ar.fatherMissing, "Your father's name is incomplete — contact the admins.")
         default: return DaughterSons.message(error)
         }
