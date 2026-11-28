@@ -22,23 +22,6 @@ check(L.appTiles(seesSms: false, seesDevices: false).count, 6, "without both: si
 check(AdminAppTile.allCases.filter(\.isGroupPage), [.visible, .rules, .lists, .operations, .system],
       "group pages (switches inside); sms/devices/errors open their existing page")
 
-// MARK: «الإحصاءات» — بلا «العائلة» (أرقامها فوق)، و«الاستخدام» بعد «في التطبيق»
-let ownerShown: [AdminStatsAnchor] = [.family, .departed, .inApp, .approvals, .growth, .ages, .roles, .tree, .outside]
-check(L.statsTiles(shown: ownerShown, seesUsage: true),
-      [.section(.departed), .section(.inApp), .usage, .section(.approvals), .section(.growth), .section(.ages),
-       .section(.roles), .section(.tree), .section(.outside)], "owner/admin: nine tiles, usage after «في التطبيق»")
-let monitorShown: [AdminStatsAnchor] = [.family, .departed, .inApp, .growth, .ages, .roles, .tree, .outside]
-let monitor = L.statsTiles(shown: monitorShown, seesUsage: false)
-check(monitor.contains(.usage), false, "monitor: no usage tile")
-check(monitor.contains(.section(.approvals)), false, "monitor: no approvals tile")
-check(monitor.count, 7, "monitor: seven tiles")
-check(L.statsTiles(shown: [.approvals], seesUsage: true), [.usage, .section(.approvals)],
-      "usage without «في التطبيق» → first")
-check(L.statsTiles(shown: [.family], seesUsage: false), [], "members failed: family card only, no tiles")
-check(L.statsTiles(shown: ownerShown, seesUsage: true).contains(.section(.family)), false, "family never a tile")
-check(AdminStatsTile.section(.inApp).key, "stats.inApp", "stable key (zoom id / landing scroll)")
-check(AdminStatsTile.usage.key, "stats.usage", "usage key")
-
 // MARK: «الفريق والصلاحيات»
 check(L.teamTiles(seesTeam: true, isOwner: true, seesRegistration: true), [.team, .memberAccess, .registration],
       "owner: three tiles")

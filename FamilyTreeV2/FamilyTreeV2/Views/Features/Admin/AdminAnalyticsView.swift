@@ -23,25 +23,10 @@ struct AdminAnalyticsView: View {
     private let anchor: AdminStatsAnchor?
     /// جذر القسم: العنوان قائمة الأقسام والرجوع «الإدارة» — وإلا صفحة مدفوعة برجوع إلى ما فتحها
     private let isAreaRoot: Bool
-    /// صفحة مربّع واحد (طلب المالك ٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات») — nil = الصفحة الجامعة: أرقام «العائلة» ثم المربّعات
-    private let only: AdminStatsTile?
-    /// أرقام الصفحة الجامعة لحظة الضغط — صفحة المربّع تُرسم بها فوراً (لا تعيد الحساب أثناء انتقال التكبير)
-    private let seed: AdminStatsSeed?
 
-    init(anchor: AdminStatsAnchor? = nil, isAreaRoot: Bool = false, only: AdminStatsTile? = nil, seed: AdminStatsSeed? = nil) {
+    init(anchor: AdminStatsAnchor? = nil, isAreaRoot: Bool = false) {
         self.anchor = anchor
         self.isAreaRoot = isAreaRoot
-        self.only = only
-        self.seed = seed
-        if let seed {
-            _snapshot = State(initialValue: seed.snapshot)
-            _women = State(initialValue: seed.women)
-            _womenHealth = State(initialValue: seed.womenHealth)
-            _accountsHealth = State(initialValue: seed.accountsHealth)
-            _membersFetch = State(initialValue: seed.membersFetch)
-            _updatedAt = State(initialValue: seed.updatedAt)
-            _flagReady = State(initialValue: true)
-        }
     }
 
     @EnvironmentObject var authVM: AuthViewModel
@@ -109,61 +94,43 @@ struct AdminAnalyticsView: View {
     private var page: some View {
         ScrollViewReader { proxy in
             AdminHubPage {
-                if let only {
-                    AdminBandHeader(backTitle: AdminArea.metrics.title, title: Self.title(only),
-                                    subtitle: Self.note(only))
-                } else {
-                    AdminBandHeader(backTitle: isAreaRoot ? AdminArea.homeTitle : L10n.t("رجوع", "Back"),
-                                    title: AdminArea.metrics.title, subtitle: AdminStatsText.subtitle(access),
-                                    isAreaRoot: isAreaRoot)
-                }
+                AdminBandHeader(backTitle: isAreaRoot ? AdminArea.homeTitle : L10n.t("رجوع", "Back"),
+                                title: AdminArea.metrics.title, subtitle: AdminStatsText.subtitle(access),
+                                isAreaRoot: isAreaRoot)
             } content: {
-                if let only {
-                    // صفحة المربّع: القسم نفسه بعنوانه في الرأس
-                    switch only {
-                    case .usage:               AnyView(AdminUsageSection())
-                    case .section(let anchor): section(anchor)
+                // «الاستخدام» (`team.usage`) لمن لا يرى أقسام العائلة — أول الصفحة (وإلا تحت «في التطبيق»)
+                if seesUsage && !shown.contains(.inApp) {
+                    AnyView(AdminUsageSection())
+                }
+                ForEach(shown, id: \.self) { anchor in
+                    if AdminStatsLogic.startsDetails(anchor, in: shown) {
+                        AnyView(AdminGroupHeader(title: AdminAreaGroup.details.title))
                     }
-                } else {
-                    // أرقام «العائلة» الثلاثة كما هي، ثم كل قسم مربّع (و«الاستخدام» بعد «في التطبيق» — بخانته نفسها)
-                    if shown.contains(.family) {
-                        section(.family).id(AdminStatsAnchor.family)
+                    section(anchor).id(anchor)
+                    // «الاستخدام» في «في التطبيق» (انتقل من «الفريق والأمان» ٢٠٢٦-١١-٢٨ — بخانته نفسها)
+                    if anchor == .inApp && seesUsage {
+                        AnyView(AdminUsageSection())
                     }
-                    let tiles = AdminGroupTilesLogic.statsTiles(shown: shown, seesUsage: seesUsage)
-                    if !tiles.isEmpty {
-                        AnyView(AdminGroupTilesSection(title: AdminAreaGroup.details.title, items: tiles.map(tileItem)))
-                    }
-                    if shown.isEmpty && !seesUsage {
-                        emptyState
-                    } else if let updatedAt {
-                        AdminStatsFooter(date: updatedAt)
-                    }
+                }
+                if shown.isEmpty && !seesUsage {
+                    emptyState
+                } else if let updatedAt {
+                    AdminStatsFooter(date: updatedAt)
                 }
             }
-            .environment(\.adminGroupTitle, only.map(Self.title))
             .onChange(of: scrollTarget) { target in
                 guard let target else { return }
                 scrollTarget = nil
-                // الهبوط على قسم صار مربّعاً: يُمرَّر إلى مربّعه
-                let id = AdminStatsTile.section(target).key
                 if reduceMotion {
-                    proxy.scrollTo(id, anchor: .top)
+                    proxy.scrollTo(target, anchor: .top)
                 } else {
-                    withAnimation(DS.Anim.smooth) { proxy.scrollTo(id, anchor: .top) }
+                    withAnimation(DS.Anim.smooth) { proxy.scrollTo(target, anchor: .top) }
                 }
             }
         }
         .navigationDestination(isPresented: $isPushed) { pushedPage }
         .refreshable { await load(force: true) }
         .task {
-            // صفحة مربّع بأرقام الصفحة الجامعة: لا جلب ولا إعادة حساب (التغيّر الحقيقي يعيده `onChange`)؛ «الموافقات» تجلب
-            // أرقامها هي
-            if only != nil, seed != nil {
-                guard !started else { return }
-                started = true
-                if only == .section(.approvals), access.approvals { await approvals.load() }
-                return
-            }
             guard !started else {
                 // جلب أعضاء أُلغي قبل انتهائه (`membersFetch` رجع هيكلاً): الظهور التالي يعيده (F2)
                 if memberVM.allMembers.isEmpty && membersFetch == .idle { await load(force: false) }
@@ -174,7 +141,7 @@ struct AdminAnalyticsView: View {
             let possible = AdminStatsLogic.sections(.make(familyItem: authVM.adminSees(.metricsFamily),
                                                           approvalsItem: authVM.adminSees(.metricsApprovals),
                                                           workflowOn: true))
-            pendingAnchor = only != nil ? nil : AdminStatsLogic.scrollTarget(explicit: anchor, stored: AdminAreaRouter.take(.stats, hop: hop),
+            pendingAnchor = AdminStatsLogic.scrollTarget(explicit: anchor, stored: AdminAreaRouter.take(.stats, hop: hop),
                                                          shown: possible)
             rebuild()
             await load(force: false)
@@ -331,80 +298,6 @@ struct AdminAnalyticsView: View {
             .adminArea(pushed.area))
     }
 
-    // MARK: المربّعات
-
-    static func title(_ tile: AdminStatsTile) -> String {
-        switch tile {
-        case .section(let anchor): return AdminStatsText.title(anchor)
-        case .usage:               return L10n.t("الاستخدام", "Usage")
-        }
-    }
-
-    static func note(_ tile: AdminStatsTile) -> String? {
-        switch tile {
-        case .section(let anchor): return AdminStatsText.note(anchor)
-        case .usage:               return L10n.t("نشط = دخل خلال 3 أسابيع", "Active = signed in within 3 weeks")
-        }
-    }
-
-    /// مربّع قسم: رقمه الأول بلون المربّع وسطر قصير — والضغط يفتح القسم نفسه صفحةً بأرقام هذه اللحظة
-    private func tileItem(_ tile: AdminStatsTile) -> AdminGroupTileItem {
-        let s = snapshot
-        let f = s.figures
-        var number: String?
-        var status: String?
-        let icon: String
-        let fill: Color
-        let ink: Color
-        func n(_ value: Int?) -> String { s.built ? AdminStatsText.number(value) : AdminStoreHealthText.placeholder }
-        switch tile {
-        case .usage:
-            icon = "clock.fill"; fill = DS.Color.navyFill; ink = DS.Color.primary
-            status = L10n.t("النشطون والخاملون", "Active and idle")
-        case .section(let anchor):
-            switch anchor {
-            case .departed:
-                icon = "moon.fill"; fill = DS.Color.saduFill; ink = DS.Color.sadu
-                number = n(f.totalDeceased)
-                if let average = s.lifespans.average {
-                    status = L10n.t("متوسط \(AdminStatsText.years(average))", "Average \(AdminStatsText.years(average))")
-                }
-            case .inApp:
-                icon = "iphone"; fill = DS.Color.seaFill; ink = DS.Color.sea
-                number = n(f.inApp)
-                status = AdminStatsText.note(.inApp)
-            case .approvals:
-                icon = "checkmark.seal.fill"; fill = DS.Color.goldFill; ink = DS.Color.accent
-                status = AdminStatsText.note(.approvals)
-            case .growth:
-                icon = "chart.line.uptrend.xyaxis"; fill = DS.Color.palmFill; ink = DS.Color.palm
-                number = s.built ? AdminNumberText.grouped(s.growth.total) : AdminStoreHealthText.placeholder
-                status = AdminStatsText.note(.growth)
-            case .ages:
-                icon = "person.crop.circle.badge.clock"; fill = DS.Color.navyFill; ink = DS.Color.primary
-                status = AdminStatsText.note(.ages)
-            case .roles:
-                icon = "star.fill"; fill = DS.Color.slateFill; ink = DS.Color.slate
-                status = AdminStatsText.note(.roles)
-            case .tree:
-                icon = "tree.fill"; fill = DS.Color.palmFill; ink = DS.Color.palm
-                number = s.built ? AdminNumberText.grouped(s.fathers) : AdminStoreHealthText.placeholder
-                status = L10n.t("آباء في الشجرة", "Fathers in the tree")
-            case .outside:
-                icon = "person.2.fill"; fill = DS.Color.femaleFill; ink = DS.Color.female
-                number = n(f.outsideLiving)
-                status = L10n.t("الأحياء", "Living")
-            case .family:
-                icon = "person.3.fill"; fill = DS.Color.navyFill; ink = DS.Color.primary
-            }
-        }
-        let seed = AdminStatsSeed(snapshot: snapshot, women: women, womenHealth: womenHealth,
-                                  accountsHealth: accountsHealth, membersFetch: membersFetch, updatedAt: updatedAt)
-        return AdminGroupTileItem(id: tile.key, title: Self.title(tile), icon: icon, fill: fill, ink: ink,
-                                  number: number, status: status, backTitle: AdminArea.metrics.title, area: .metrics,
-                                  page: { AnyView(AdminAnalyticsView(only: tile, seed: seed)) })
-    }
-
     // MARK: التحميل
 
     private func load(force: Bool) async {
@@ -423,7 +316,7 @@ struct AdminAnalyticsView: View {
         flagReady = true
         rebuild()
         updatedAt = Date()
-        if access.approvals && (only == nil || only == .section(.approvals)) { await approvals.load() }
+        if access.approvals { await approvals.load() }
     }
 
     private func reloadAccountsAndWomen() async {
@@ -472,16 +365,6 @@ struct AdminAnalyticsView: View {
         // بعد رسم الأقسام بأرقامها — وإلا تقفز الصفحة تحت القسم
         DispatchQueue.main.async { scrollTarget = target }
     }
-}
-
-/// أرقام الصفحة الجامعة تُمرَّر لصفحة المربّع (تُرسم بها فوراً)
-struct AdminStatsSeed {
-    let snapshot: AdminStatsSnapshot
-    let women: [FamilyMember]
-    let womenHealth: AdminStoreHealth
-    let accountsHealth: AdminStoreHealth
-    let membersFetch: AdminStoreHealth
-    let updatedAt: Date?
 }
 
 /// صفحة تُدفع فوق «الإحصاءات» وقسمها

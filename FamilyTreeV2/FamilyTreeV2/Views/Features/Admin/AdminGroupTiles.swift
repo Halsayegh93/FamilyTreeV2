@@ -5,7 +5,7 @@ import SwiftUI
 
 // MARK: - مجموعات الأقسام مربّعات (طلب المالك ٢٠٢٦-١١-٢٨ «المجموعات بشكل مربعات» — `app-review/inbox/group-tiles.png`)
 //
-// في «التطبيق والنظام» و«الإحصاءات» و«الفريق والصلاحيات» كل مجموعة مربّع، ثلاثة في كل صف، بشكل «يحتاج مراجعتك» نفسه:
+// في «التطبيق والنظام» و«الفريق والصلاحيات» كل مجموعة مربّع (و«الإحصاءات» بقيت كما كانت — قرار المالك «رد الاحصائيات نفس الوضع السابق»)، ثلاثة في كل صف، بشكل «يحتاج مراجعتك» نفسه:
 // مربّع أيقونة ملوّن · رقم حيّ اختياري بلون المربّع · الاسم · سطر حال قصير. الضغط يفتح صفحة المجموعة وفيها ما كانت تعرضه
 // المجموعة نفسه (المفاتيح والصفوف والرسوم) — لا ينتقل إعداد إلى بيت آخر ولا يتغيّر منطق. المجموعة التي هي باب واحد إلى صفحة
 // موجودة (رسائل رمز الدخول، الأجهزة، الأخطاء، فريق الإدارة، التسجيل والمنع) يفتح مربّعها تلك الصفحة نفسها (بلا صفحة وسيطة
@@ -59,20 +59,6 @@ nonisolated enum AdminAppTile: String, CaseIterable, Hashable {
     }
 }
 
-/// مربّعات «الإحصاءات» تحت أرقام «العائلة» الثلاثة: كل قسم من أقسام الصفحة مربّع، و«الاستخدام» بعد «في التطبيق» كما كان
-nonisolated enum AdminStatsTile: Hashable {
-    case section(AdminStatsAnchor)
-    case usage
-
-    /// مفتاح ثابت (مفتاح انتقال التكبير ومعرّف التمرير)
-    var key: String {
-        switch self {
-        case .section(let anchor): return "stats." + anchor.rawValue
-        case .usage:               return "stats.usage"
-        }
-    }
-}
-
 /// مربّعات «الفريق والصلاحيات»: «الفريق» (فريق الإدارة) ثم «الأعضاء» (صلاحيات الأعضاء · التسجيل والمنع)
 nonisolated enum AdminTeamTile: String, CaseIterable, Hashable {
     case team, memberAccess, registration
@@ -107,18 +93,6 @@ nonisolated enum AdminGroupTilesLogic {
             default:       return true
             }
         }
-    }
-
-    /// «الإحصاءات»: أقسام الصفحة الظاهرة لدورك (`AdminStatsLogic.sections`) بلا «العائلة» (أرقامها الثلاثة فوق المربّعات)،
-    /// و«الاستخدام» (`team.usage`) بعد «في التطبيق» — وأولها حين لا يُرى «في التطبيق»
-    static func statsTiles(shown: [AdminStatsAnchor], seesUsage: Bool) -> [AdminStatsTile] {
-        var list: [AdminStatsTile] = []
-        if seesUsage && !shown.contains(.inApp) { list.append(.usage) }
-        for anchor in shown where anchor != .family {
-            list.append(.section(anchor))
-            if anchor == .inApp && seesUsage { list.append(.usage) }
-        }
-        return list
     }
 
     /// «الفريق والصلاحيات»: فريق الإدارة (`team.members`) · صلاحيات الأعضاء (المالك وحده) · التسجيل والمنع
