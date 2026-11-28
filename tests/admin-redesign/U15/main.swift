@@ -15,8 +15,11 @@ typealias L = AdminStatsLogic
 
 // MARK: الظهور (Autoplan note 7)
 let owner = L.Access.make(familyItem: true, approvalsItem: true, workflowOn: true)
-check(L.sections(owner), [.family, .departed, .inApp, .growth, .ages, .roles, .tree, .outside, .approvals],
-      "owner/admin: the «أ» order, approvals last")
+// ترتيب المالك ٢٠٢٦-١١-٢٨: العائلة ← في التطبيق ← الموافقات ← التفاصيل
+check(L.sections(owner), [.family, .departed, .inApp, .approvals, .growth, .ages, .roles, .tree, .outside],
+      "owner/admin: family → in the app → approvals → details")
+check(L.startsDetails(.growth, in: L.sections(owner)), true, "«التفاصيل» header sits above «جديد في الشجرة»")
+check(L.sections(owner).filter { L.startsDetails($0, in: L.sections(owner)) }.count, 1, "one «التفاصيل» header")
 let monitor = L.Access.make(familyItem: true, approvalsItem: false, workflowOn: true)
 check(L.sections(monitor).contains(.approvals), false, "monitor: no approvals")
 check(L.sections(monitor).count, 8, "monitor: the eight family sections")

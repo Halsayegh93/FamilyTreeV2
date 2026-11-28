@@ -279,10 +279,16 @@ nonisolated enum AdminTodayLogic {
         return AdminTodayWord(state: .good(L10n.t("سليم", "All good")))
     }
 
-    /// «التطبيق» (المالك): «الصيانة مفعّلة» › «الإشعارات موقوفة» › «يعمل للجميع» ✓
-    static func appWord(maintenance: Bool, notificationsPaused: Bool) -> AdminTodayWord {
+    /// «التطبيق والنظام» (المالك): «الصيانة مفعّلة» › ما كان على «الفريق والأمان» من الدخول والأجهزة (محاولات مريبة ·
+    /// الرصيد منخفض جداً/منخفض · أجهزة لا تصلها الإشعارات — انتقلت بيوتها إلى «النظام» هنا ٢٠٢٦-١١-٢٨) › «الإشعارات موقوفة» ›
+    /// «يعمل للجميع» ✓. بلا معاملات الدخول = الكلمة القديمة نفسها
+    static func appWord(maintenance: Bool, notificationsPaused: Bool, suspicious: Int = 0,
+                        smsLevel: AdminTodaySmsLevel = .unknown, devicesFailed: Int = 0) -> AdminTodayWord {
         if maintenance { return AdminTodayWord(state: .urgent(L10n.t("الصيانة مفعّلة", "Maintenance on"))) }
+        let access = teamWord(suspicious: suspicious, smsLevel: smsLevel, devicesFailed: devicesFailed, registrationOpen: nil)
+        if access.state.tone == .urgent { return access }
         if notificationsPaused { return AdminTodayWord(state: .attention(L10n.t("الإشعارات موقوفة", "Notifications paused"))) }
+        if access.state.tone == .attention { return access }
         return AdminTodayWord(state: .good(L10n.t("يعمل للجميع", "Open to everyone")))
     }
 

@@ -76,6 +76,9 @@ struct AdminAnalyticsView: View {
                                       fetch: membersFetch)
     }
 
+    /// «الاستخدام» — خانة `team.usage` كما كانت في «الفريق والأمان» (المالك والمدير)
+    private var seesUsage: Bool { authVM.adminSees(.teamUsage) }
+
     private var shown: [AdminStatsAnchor] {
         AdminStatsLogic.sections(access, membersFailed: membersHealth == .failed(lastGood: nil))
     }
@@ -95,10 +98,21 @@ struct AdminAnalyticsView: View {
                                 title: AdminArea.metrics.title, subtitle: AdminStatsText.subtitle(access),
                                 isAreaRoot: isAreaRoot)
             } content: {
-                ForEach(shown, id: \.self) { anchor in
-                    section(anchor).id(anchor)
+                // «الاستخدام» (`team.usage`) لمن لا يرى أقسام العائلة — أول الصفحة (وإلا تحت «في التطبيق»)
+                if seesUsage && !shown.contains(.inApp) {
+                    AnyView(AdminUsageSection())
                 }
-                if shown.isEmpty {
+                ForEach(shown, id: \.self) { anchor in
+                    if AdminStatsLogic.startsDetails(anchor, in: shown) {
+                        AnyView(AdminGroupHeader(title: AdminAreaGroup.details.title))
+                    }
+                    section(anchor).id(anchor)
+                    // «الاستخدام» في «في التطبيق» (انتقل من «الفريق والأمان» ٢٠٢٦-١١-٢٨ — بخانته نفسها)
+                    if anchor == .inApp && seesUsage {
+                        AnyView(AdminUsageSection())
+                    }
+                }
+                if shown.isEmpty && !seesUsage {
                     emptyState
                 } else if let updatedAt {
                     AdminStatsFooter(date: updatedAt)

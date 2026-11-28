@@ -21,7 +21,8 @@ let monitor = L.Access.make(isAdmin: false, canSendNotifications: false, cardKin
 let supervisor = L.Access.make(isAdmin: false, canSendNotifications: false, cardKind: true, announceKind: false,
                                seesPublished: false, areaEdit: true, canEditMembers: false, familyEdit: false, ownerSystem: false)
 
-check(L.sections(owner), [.joys, .grief, .launch, .announcements], "owner: the four sections in «أ» order")
+// ترتيب المالك ٢٠٢٦-١١-٢٨: القادم ← عزاء وذكرى ← أفراح العائلة ← (عند الفتح) ← المنشور
+check(L.sections(owner), [.upcoming, .grief, .joys, .launch, .published], "owner: the approved order (2026-11-28)")
 check(owner.create && owner.card && owner.announceDeath && owner.stopLaunch && owner.editScheduled, true,
       "owner: every command")
 check(owner.reach, true, "owner: device reach row")
@@ -36,7 +37,7 @@ check(monitor.create || monitor.card || monitor.announceDeath || monitor.stopLau
 check(monitor.datesRow && monitor.datesOpens, true, "monitor: incomplete dates row opens «تواريخ الوفاة» (family edit)")
 check(monitor.headerLine, false, "monitor: no header line")
 
-check(L.sections(supervisor), [.joys, .grief], "supervisor: joys + memorials")
+check(L.sections(supervisor), [.grief, .joys], "supervisor: memorials then joys")
 check(supervisor.create && supervisor.card, true, "supervisor: «＋ إنشاء» (cards) and «بطاقة»")
 check(supervisor.deaths || supervisor.announceDeath, false, "supervisor: no unannounced deaths")
 check(supervisor.datesRow, false, "supervisor: no incomplete dates row")
@@ -44,7 +45,7 @@ check(supervisor.datesRow, false, "supervisor: no incomplete dates row")
 // «يعدّل» القسم يُضرب مع صلاحية الدور: مدير والقسم «للاطلاع»
 let adminRead = L.Access.make(isAdmin: true, canSendNotifications: true, cardKind: true, announceKind: true,
                               seesPublished: true, areaEdit: false, canEditMembers: true, familyEdit: true, ownerSystem: false)
-check(L.sections(adminRead), [.joys, .grief, .launch, .announcements], "admin + area read: sections still shown")
+check(L.sections(adminRead), [.upcoming, .grief, .joys, .launch, .published], "admin + area read: sections still shown")
 check(adminRead.create || adminRead.card || adminRead.announceDeath || adminRead.stopLaunch || adminRead.editScheduled,
       false, "admin + area read: every command hidden")
 check(adminRead.readOnly, true, "admin + area read: read-only line")
@@ -52,7 +53,8 @@ check(adminRead.readOnly, true, "admin + area read: read-only line")
 let cardsOnly = L.Access.make(isAdmin: true, canSendNotifications: true, cardKind: true, announceKind: false,
                               seesPublished: false, areaEdit: true, canEditMembers: true, familyEdit: true, ownerSystem: false)
 check(cardsOnly.create, true, "announce item none + cards: «＋ إنشاء» stays (cards)")
-check(L.sections(cardsOnly).contains(.announcements), false, "published item none: no «الإعلانات»")
+check(L.sections(cardsOnly).contains(.upcoming) || L.sections(cardsOnly).contains(.published), false,
+      "published item none: no «القادم» and no «المنشور»")
 let nothing = L.Access.make(isAdmin: true, canSendNotifications: true, cardKind: false, announceKind: false,
                             seesPublished: true, areaEdit: true, canEditMembers: true, familyEdit: false, ownerSystem: false)
 check(nothing.create, false, "no creator kind: no «＋ إنشاء»")
@@ -61,18 +63,20 @@ check(nothing.datesOpens, false, "family not editable: dates row shows the numbe
 // MARK: الهبوط
 check(L.section(for: .awaiting), .grief, "awaiting (unannounced death) → «عزاء وذكرى»")
 check(L.section(for: .memorials), .grief, "memorials → «عزاء وذكرى»")
-check(L.section(for: .scheduled), .announcements, "scheduled → «الإعلانات»")
-check(L.section(for: .doors), .announcements, "doors → «الإعلانات»")
+check(L.section(for: .scheduled), .upcoming, "scheduled → «القادم»")
+check(L.section(for: .doors), .published, "doors → «المنشور»")
 check(L.section(for: .launch), .launch, "launch → «الإعلانات عند الفتح»")
 let all = L.sections(owner)
-check(L.scrollTarget(explicit: nil, stored: .scheduled, shown: all), .announcements, "stored landing scrolls")
+check(L.scrollTarget(explicit: nil, stored: .doors, shown: all), .published, "stored landing scrolls")
+check(L.scrollTarget(explicit: nil, stored: .scheduled, shown: all), nil, "«القادم» is first = top, no scroll")
 check(L.scrollTarget(explicit: .launch, stored: .scheduled, shown: all), .launch, "explicit beats stored")
 check(L.scrollTarget(explicit: nil, stored: nil, shown: all), nil, "no landing: top")
 check(L.scrollTarget(explicit: nil, stored: .scheduled, shown: L.sections(supervisor)), nil, "hidden section ignored")
 check(L.scrollTarget(explicit: nil, stored: .memorials, shown: L.sections(monitor)), nil,
       "first section = top, no scroll (header stays)")
-check(L.scrollTarget(explicit: nil, stored: .memorials, shown: L.sections(supervisor)), .grief,
-      "supervisor memorials → scroll past joys")
+check(L.scrollTarget(explicit: nil, stored: .memorials, shown: L.sections(supervisor)), nil,
+      "supervisor memorials: «عزاء وذكرى» is first = top")
+check(L.scrollTarget(explicit: nil, stored: .memorials, shown: all), .grief, "owner memorials → scroll past «القادم»")
 check(Set(AdminOccasionsAnchor.allCases.map { L.section(for: $0) }).isSubset(of: Set(AdminOccasionsSection.allCases)), true,
       "every anchor has a section")
 

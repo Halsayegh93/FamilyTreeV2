@@ -3,7 +3,9 @@ import Foundation
 import SwiftUI
 #endif
 
-// MARK: - «الفريق والأمان» (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec C.13، الوحدة U16)
+// MARK: - «الفريق والصلاحيات» (كان «الفريق والأمان» — إعادة التصميم ٢٠٢٦-١١-٢٦ spec C.13 الوحدة U16، ثم ترتيب المالك
+// ٢٠٢٦-١١-٢٨: «الفريق» ← «الأعضاء»؛ رسائل رمز الدخول والأجهزة إلى «التطبيق والنظام ← النظام»، و«الاستخدام» إلى
+// «الإحصاءات ← في التطبيق». البطاقات أدناه نفسها؛ `AdminAccessStatusSection` يرسم بطاقة الحال في البيتين)
 //
 // الرأس الكحلي («‹ الإدارة» · «الفريق والأمان ⌄» · «من يدير، ومن يدخل التطبيق»، وسطر «للاطلاع» للمدير) ثم ثلاث بطاقات:
 //  ١) بطاقة الحالة «الدخول والأمان» (المالك — `team.sms`/`team.registration`/`team.devices`): بدل الحلقات الثلاث ومربّعات
@@ -370,9 +372,78 @@ extension AdminTeamLogic.Tone {
 
 // MARK: - الصفحة
 
+/// «الفريق والصلاحيات» (ترتيب المالك ٢٠٢٦-١١-٢٨): «الفريق» (فريق الإدارة) ← «الأعضاء» (صلاحيات الأعضاء حسب الفئة ·
+/// التسجيل والمنع). رسائل رمز الدخول والأجهزة انتقلت إلى «التطبيق والنظام ← النظام»، و«الاستخدام» إلى «الإحصاءات ← في
+/// التطبيق» — بنفس خاناتها في جدول الأدوار
 struct AdminTeamAreaView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
+    @State private var refreshToken = 0
+
+    var body: some View {
+        let seesPeople = authVM.isOwner || authVM.adminSees(.teamRegistration)
+        AdminHubPage {
+            AdminBandHeader(title: AdminArea.team.title, subtitle: AdminArea.team.subtitle,
+                            badge: authVM.adminCanEdit(.team) ? nil : AdminPageHeader.readOnlyText,
+                            isAreaRoot: true)
+        } content: {
+            if authVM.adminSees(.teamMembers) {
+                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+                    AdminSectionLabel(title: AdminAreaGroup.team.title)
+                    AdminTeamMembersCard(canEdit: authVM.canManageRoles && authVM.adminCanEdit(.team))
+                })
+            }
+            if seesPeople {
+                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+                    AdminSectionLabel(title: AdminAreaGroup.people.title)
+                    // «صلاحيات الأعضاء حسب الفئة» (المالك وحده — `MemberAccessAdminPage.swift`)
+                    if authVM.isOwner {
+                        MemberAccessCategoriesCard()
+                    }
+                    // «التسجيل والمنع» (`team.registration` — المالك)
+                    AdminAccessStatusSection(rows: [.registration], title: AdminAccessStatusSection.registrationTitle,
+                                             refreshToken: refreshToken)
+                })
+            }
+            if !authVM.adminSees(.teamMembers) && !seesPeople {
+                // الجدول أخفى كل ما في القسم عن هذا الدور — حالة فارغة لا صفحة بيضاء
+                AnyView(AdminPageStateCard(.empty(L10n.t("لا شيء هنا لدورك", "Nothing here for your role"),
+                                                  message: L10n.t("صلاحياتك في «صلاحياتي» على «اليوم»",
+                                                                  "Your permissions are under “My scope” on Today"))))
+            }
+        }
+        // ما يُدفع من البطاقات يرجع باسم القسم
+        .environment(\.adminPageTitle, AdminArea.team.title)
+        .refreshable {
+            refreshToken += 1
+            if authVM.adminSees(.teamMembers) { await memberVM.fetchAllMembers(force: true) }
+        }
+        .task {
+            // الأعضاء يحمّلهم التطبيق — هنا فقط إن لم يصلوا بعد (لا جلب ثقيل لكل الشجرة مع كل سحب)
+            if authVM.adminSees(.teamMembers), memberVM.allMembers.isEmpty { await memberVM.fetchAllMembers() }
+        }
+        .debugStackProbe("AdminTeamAreaView", limitKB: DebugStackLimit.page)
+    }
+}
+
+// MARK: - بطاقة الحال لبيوت الدخول (مشتركة: «الفريق والصلاحيات» و«التطبيق والنظام»)
+
+/// بطاقة حال بيوت «الدخول»: صفّ لكل بيت بكلمة حاله من مخزنه (رسائل رمز الدخول · محاولات مريبة · التسجيل والمنع · الأجهزة
+/// والإشعارات). كانت كلها في «الفريق والأمان»؛ منذ ٢٠٢٦-١١-٢٨ التسجيل في «الفريق والصلاحيات» والباقي في «التطبيق والنظام ←
+/// النظام». كل صفّ بخانته في جدول الأدوار كما كان (`team.sms`/`team.registration`/`team.devices` — للمالك)، وتجلب البطاقة
+/// مخازنها هي — كل مخزن وحده (فشل واحد لا يوقف الباقي)
+struct AdminAccessStatusSection: View {
+    enum Row: Hashable { case sms, registration, devices }
+
+    let rows: Set<Row>
+    let title: String
+    /// يزيد مع سحب الصفحة للتحديث — البطاقة تعيد جلب مخازنها بالقوة
+    var refreshToken: Int = 0
+
+    static var registrationTitle: String { L10n.t("التسجيل", "Sign-up") }
+    static var systemTitle: String { L10n.t("الدخول والإشعارات", "Sign-in and notifications") }
+
+    @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @ObservedObject private var sms = SmsBalanceStore.shared
@@ -381,66 +452,19 @@ struct AdminTeamAreaView: View {
     @State private var settingsHealth: AdminStoreHealth = .idle
     /// الأرقام الممنوعة (`fetchBannedPhones` لا يُبلغ الفشل — انتهى بلا اتصال = فشل، كصفحة المنع)
     @State private var bansHealth: AdminStoreHealth = .idle
-    @State private var usage: AppUsageStats? = AppUsageStats.cached
-    @State private var usageHealth: AdminStoreHealth = .idle
-    @State private var refreshedAt: Date?
+
+    private var seesSms: Bool { rows.contains(.sms) && authVM.adminSees(.teamSms) }
+    private var seesRegistration: Bool { rows.contains(.registration) && authVM.adminSees(.teamRegistration) }
+    private var seesDevices: Bool { rows.contains(.devices) && authVM.adminSees(.teamDevices) }
 
     var body: some View {
         let facts = self.facts
-        AdminHubPage {
-            AdminBandHeader(title: AdminArea.team.title, subtitle: AdminArea.team.subtitle,
-                            badge: authVM.adminCanEdit(.team) ? nil : AdminPageHeader.readOnlyText,
-                            isAreaRoot: true)
-        } content: {
-            if facts.showsCard {
-                AnyView(AdminTeamStatusCard(facts: facts, retry: retryFailed))
-            }
-            if authVM.adminSees(.teamMembers) {
-                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-                    AdminSectionLabel(title: L10n.t("فريق الإدارة", "Admin team"))
-                    AdminTeamMembersCard(canEdit: authVM.canManageRoles && authVM.adminCanEdit(.team))
-                })
-            }
-            // «صلاحيات الأعضاء حسب الفئة» (المالك وحده — `MemberAccessAdminPage.swift`)
-            if authVM.isOwner {
-                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-                    AdminSectionLabel(title: L10n.t("صلاحيات الأعضاء حسب الفئة", "Member access by category"),
-                                      trailing: L10n.t("ما يظهر لكل فئة", "What each category sees"))
-                    MemberAccessCategoriesCard()
-                })
-            }
-            if authVM.adminSees(.teamUsage) {
-                AnyView(VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-                    AdminSectionLabel(title: L10n.t("الاستخدام", "Usage"),
-                                      trailing: L10n.t("نشط = دخل خلال 3 أسابيع", "Active = signed in within 3 weeks"))
-                    AdminTeamUsageCard(usage: usage, health: usageHealth, retry: { Task { await loadUsage() } })
-                })
-            }
-            if !facts.showsCard && !authVM.adminSees(.teamMembers) && !authVM.adminSees(.teamUsage) {
-                // الجدول أخفى كل ما في القسم عن هذا الدور — حالة فارغة لا صفحة بيضاء
-                AnyView(AdminPageStateCard(.empty(L10n.t("لا شيء هنا لدورك", "Nothing here for your role"),
-                                                  message: L10n.t("صلاحياتك في «صلاحياتي» على «اليوم»",
-                                                                  "Your permissions are under “My scope” on Today"))))
-            }
-            if let footer = footerDate(facts) {
-                AnyView(Text(AdminStoreHealthText.updated(footer))
-                    .dsFont(.subtitle)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .frame(maxWidth: .infinity))
-            }
+        if facts.showsCard {
+            AdminTeamStatusCard(title: title, facts: facts, retry: retryFailed)
+                .task { await reload(force: false) }
+                .onChange(of: refreshToken) { _ in Task { await reload(force: true) } }
         }
-        // ما يُدفع من البطاقات يرجع باسم القسم
-        .environment(\.adminPageTitle, AdminArea.team.title)
-        .refreshable { await reload(force: true) }
-        .task { await reload(force: false) }
-        .debugStackProbe("AdminTeamAreaView", limitKB: DebugStackLimit.page)
     }
-
-    // MARK: ما يقرؤه هذا الدور
-
-    private var seesSms: Bool { authVM.adminSees(.teamSms) }
-    private var seesRegistration: Bool { authVM.adminSees(.teamRegistration) }
-    private var seesDevices: Bool { authVM.adminSees(.teamDevices) }
 
     private var facts: AdminTeamLogic.Facts {
         let reach = devices.stats
@@ -456,18 +480,6 @@ struct AdminTeamAreaView: View {
             devicesFailed: reach?.invalid ?? 0)
     }
 
-    /// «آخر تحديث 9:41» آخر الصفحة — فقط حين وصل كل ما يُعرض (الفاشل يقول حاله في مكانه)
-    private func footerDate(_ f: AdminTeamLogic.Facts) -> Date? {
-        guard let refreshedAt else { return nil }
-        var shown: [AdminStoreHealth] = []
-        if f.showsCard { shown.append(AdminTeamLogic.headHealth(f)) }
-        if f.seesRegistration { shown.append(f.bans) }
-        if authVM.adminSees(.teamUsage) { shown.append(usageHealth) }
-        return shown.contains(where: \.canRetry) || memberVM.membersLoadFailed ? nil : refreshedAt
-    }
-
-    // MARK: الجلب — كل مخزن وحده (فشل واحد لا يوقف الباقي)
-
     private func reload(force: Bool) async {
         await withTaskGroup(of: Void.self) { group in
             if seesSms { group.addTask { @MainActor in await loadSms(force: force) } }
@@ -476,23 +488,19 @@ struct AdminTeamAreaView: View {
                 group.addTask { @MainActor in await loadSettings() }
                 group.addTask { @MainActor in await loadBans() }
             }
-            if authVM.adminSees(.teamUsage) { group.addTask { @MainActor in await loadUsage() } }
-            // الأعضاء يحمّلهم التطبيق — هنا فقط إن لم يصلوا بعد (لا جلب ثقيل لكل الشجرة مع كل سحب)
-            if authVM.adminSees(.teamMembers), memberVM.allMembers.isEmpty {
-                group.addTask { @MainActor in await memberVM.fetchAllMembers() }
-            }
         }
-        refreshedAt = Date()
     }
 
-    /// «تعذّر التحميل ↻» في رأس بطاقة الحالة: يعيد جلب ما فشل وحده
+    /// «تعذّر التحميل ↻» في رأس البطاقة: يعيد جلب ما فشل وحده
     private func retryFailed() {
         Task {
             await withTaskGroup(of: Void.self) { group in
-                if sms.adminHealth.canRetry { group.addTask { @MainActor in await loadSms(force: true) } }
-                if devices.adminHealth.canRetry { group.addTask { @MainActor in await devices.refresh(force: true) } }
-                if settingsHealth.canRetry { group.addTask { @MainActor in await loadSettings() } }
-                if bansHealth.canRetry { group.addTask { @MainActor in await loadBans() } }
+                if seesSms, sms.adminHealth.canRetry { group.addTask { @MainActor in await loadSms(force: true) } }
+                if seesDevices, devices.adminHealth.canRetry {
+                    group.addTask { @MainActor in await devices.refresh(force: true) }
+                }
+                if seesRegistration, settingsHealth.canRetry { group.addTask { @MainActor in await loadSettings() } }
+                if seesRegistration, bansHealth.canRetry { group.addTask { @MainActor in await loadBans() } }
             }
         }
     }
@@ -512,6 +520,24 @@ struct AdminTeamAreaView: View {
         bansHealth = AdminTeamLogic.seeded(bansHealth, hasData: !authVM.bannedPhones.isEmpty).beginning()
         await authVM.fetchBannedPhones()
         bansHealth = bansHealth.ending(success: NetworkMonitor.shared.isConnected)
+    }
+}
+
+// MARK: - «الاستخدام» في «الإحصاءات ← في التطبيق» (انتقل من «الفريق والأمان» ٢٠٢٦-١١-٢٨)
+
+/// بطاقة «الاستخدام» بجلبها (`AppUsageStats`) — تظهر لمن خانته `team.usage` (المالك والمدير) كما كانت
+struct AdminUsageSection: View {
+    @State private var usage: AppUsageStats? = AppUsageStats.cached
+    @State private var usageHealth: AdminStoreHealth = .idle
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+            AdminSectionLabel(title: L10n.t("الاستخدام", "Usage"),
+                              trailing: L10n.t("نشط = دخل خلال 3 أسابيع", "Active = signed in within 3 weeks"))
+            AdminTeamUsageCard(usage: usage, health: usageHealth, retry: { Task { await loadUsage() } })
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task { await loadUsage() }
     }
 
     /// `AppUsageStats.fetch` يرجع آخر قيمة عند الفشل — nil = لا شيء أبداً
@@ -536,13 +562,14 @@ struct AdminTeamAreaView: View {
 
 /// رأسها حبّة كلمة بحال مخازنها، وتحتها صفّ لكل بيت — الصفّ كله لمسة واحدة تفتح بيته (الحبّة جزء منه — spec A.7)
 struct AdminTeamStatusCard: View {
+    var title: String = L10n.t("الدخول والأمان", "Sign-in and security")
     let facts: AdminTeamLogic.Facts
     /// حبّة الرأس «تعذّر التحميل ↻» تعيد جلب ما فشل
     let retry: () -> Void
 
     var body: some View {
         let head = AdminTeamLogic.headWord(issues: AdminTeamLogic.issueCount(facts))
-        AdminSectionCard(title: L10n.t("الدخول والأمان", "Sign-in and security"), spacing: 0,
+        AdminSectionCard(title: title, spacing: 0,
                          status: AdminStatePill(health: AdminTeamLogic.headHealth(facts), title: head.text,
                                                 tone: head.tone.pill, icon: head.icon, retry: retry)) {
             AdminRowsCardBody {

@@ -41,15 +41,28 @@ nonisolated enum AdminStatsLogic {
         var isEmpty: Bool { !family && !approvals }
     }
 
-    /// أقسام الصفحة بترتيب «أ». `membersFailed` = فشل جلب الأعضاء بلا بيانات: يبقى «العائلة» وحده ببطاقة الخطأ وإعادة
-    /// المحاولة (لا ثماني بطاقات خطأ متتالية)
+    /// أقسام الصفحة بترتيب المالك ٢٠٢٦-١١-٢٨ (`AdminAreaLayout.groups("metrics")`): العائلة (العائلة · الراحلون) ← في
+    /// التطبيق (ومعه «الاستخدام» في الصفحة) ← الموافقات ← التفاصيل (جديد في الشجرة · الأعمار · الأدوار · الشجرة · خارج
+    /// العائلة). `membersFailed` = فشل جلب الأعضاء بلا بيانات: يبقى «العائلة» وحده ببطاقة الخطأ وإعادة المحاولة (لا ثماني
+    /// بطاقات خطأ متتالية)
     static func sections(_ access: Access, membersFailed: Bool = false) -> [AdminStatsAnchor] {
         var list: [AdminStatsAnchor] = []
         if access.family {
-            list += membersFailed ? [.family] : [.family, .departed, .inApp, .growth, .ages, .roles, .tree, .outside]
+            list += membersFailed ? [.family] : [.family, .departed, .inApp]
         }
         if access.approvals { list.append(.approvals) }
+        if access.family && !membersFailed {
+            list += details
+        }
         return list
+    }
+
+    /// أقسام مجموعة «التفاصيل» — عنوانها الصغير فوق أولها
+    static let details: [AdminStatsAnchor] = [.growth, .ages, .roles, .tree, .outside]
+
+    /// هذا القسم أول «التفاصيل» الظاهرة — عنوان المجموعة الصغير فوقه (`AdminAreaGroup.details`)
+    static func startsDetails(_ anchor: AdminStatsAnchor, in shown: [AdminStatsAnchor]) -> Bool {
+        anchor == details.first(where: shown.contains)
     }
 
     /// لماذا الصفحة فارغة

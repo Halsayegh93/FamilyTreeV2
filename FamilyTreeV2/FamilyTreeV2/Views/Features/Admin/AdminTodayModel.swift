@@ -23,7 +23,7 @@ struct AdminTodayCounts: Equatable {
 }
 
 /// بيوت إشارات «حالة النظام» السابقة (الصيانة · الرصيد · المجدول · بلا إشعارات). السطر ولوحته حُذفا (spec E.2 — حالها
-/// صار كلمتي مربّعي «الفريق والأمان» و«التطبيق»)، ويبقى البيت لمسار `AdminReviewDestination.status(_)` وحده (spec B.6)
+/// صار كلمة مربّع «التطبيق والنظام» — الدخول والأجهزة فيه منذ ٢٠٢٦-١١-٢٨)، ويبقى البيت لمسار `AdminReviewDestination.status(_)` وحده (spec B.6)
 struct AdminStatusPill {
     enum Home: Hashable { case maintenance, sms, scheduled, devices }
 }
@@ -36,9 +36,9 @@ extension AdminStatusPill.Home {
         let today = AdminArea.homeTitle
         switch self {
         case .maintenance: return AnyView(AdminAppAreaPage().adminArea(.app))
-        case .sms:         return AnyView(AdminSmsView(backTitle: today).adminArea(.team))
+        case .sms:         return AnyView(AdminSmsView(backTitle: today).adminArea(.app))
         case .scheduled:   return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(today))
-        case .devices:     return AnyView(AdminPushHealthView().adminArea(.team).adminBackTitle(today))
+        case .devices:     return AnyView(AdminPushHealthView().adminArea(.app).adminBackTitle(today))
         }
     }
 }

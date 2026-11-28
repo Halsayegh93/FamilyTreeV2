@@ -108,8 +108,8 @@ final class SmsPageActions: ObservableObject {
 // MARK: - الصفحة
 
 struct AdminSmsView: View {
-    /// نص الرجوع: «الفريق والأمان» من صفّها، و«اليوم» من تنبيهه أو نبضه
-    var backTitle: String = AdminArea.team.title
+    /// نص الرجوع: «التطبيق والنظام» من صفّها (بيتها منذ ٢٠٢٦-١١-٢٨)، و«اليوم» من تنبيهه أو نبضه
+    var backTitle: String = AdminArea.app.title
     @ObservedObject private var store = SmsBalanceStore.shared
     @StateObject private var actions = SmsPageActions()
     @EnvironmentObject private var authVM: AuthViewModel

@@ -7,21 +7,24 @@ import Foundation
 //     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminContracts.swift \
 //     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminOccasionsLogic.swift tests/admin-redesign/U14/main.swift && /tmp/u14-logic
 //
-//  ١) الأقسام بترتيب اتجاه المالك «أ — فرح وعزاء»: «أفراح العائلة» ← «عزاء وذكرى» ← «الإعلانات عند الفتح» ← «الإعلانات».
+//  ١) الأقسام بترتيب المالك ٢٠٢٦-١١-٢٨ (`admin-sections`): «القادم» (المجدول) ← «عزاء وذكرى» ← «أفراح العائلة» ←
+//     «الإعلانات عند الفتح» ← «المنشور» (المنشور ووصول الإشعارات). كان «أفراح» ← «عزاء» ← «عند الفتح» ← «الإعلانات».
 //  ٢) ما يراه الدور وما يعدّله: كل أمر = صلاحية الدور (`isAdmin`، `canSendNotifications`، خانات `occasions.*`) × «يعدّل»
 //     القسم في جدول السيرفر (`adminCanEdit(.occasions)`) — فالمراقب (المناسبات «للاطلاع») يرى الذكرى بلا أزرار.
 //  ٣) الهبوط (`AdminOccasionsAnchor` من «اليوم» أو سطر الرأس) ← القسم الذي يُمرَّر إليه.
 
 /// أقسام الصفحة بترتيبها
 nonisolated enum AdminOccasionsSection: String, CaseIterable, Hashable {
-    /// «أفراح العائلة» (زواج · مولود · تهنئة من الأخبار، و«بطاقة» على كل فرح)
-    case joys
+    /// «القادم»: الإشعارات المجدولة «تعديل»/«إلغاء الموعد» (كانت أول «الإعلانات»)
+    case upcoming
     /// «عزاء وذكرى» (وفاة لم تُعلن «إعلان»، ذكرى الراحلين، المتوفون بلا تاريخ كامل)
     case grief
+    /// «أفراح العائلة» (زواج · مولود · تهنئة من الأخبار، و«بطاقة» على كل فرح)
+    case joys
     /// «الإعلانات عند الفتح» («إيقاف»)
     case launch
-    /// «الإعلانات» (المجدول «تعديل»/«إلغاء الموعد»، «المنشور»، وصول الإشعارات)
-    case announcements
+    /// «المنشور»: المنشور N ‹ ووصول الإشعارات (كانا آخر «الإعلانات»)
+    case published
 }
 
 nonisolated enum AdminOccasionsLogic {
@@ -83,10 +86,11 @@ nonisolated enum AdminOccasionsLogic {
     /// الأقسام الظاهرة بترتيبها — «عزاء وذكرى» للجميع (المراقب والمشرف: الذكرى)
     static func sections(_ access: Access) -> [AdminOccasionsSection] {
         var list: [AdminOccasionsSection] = []
-        if access.joys { list.append(.joys) }
+        if access.announcements { list.append(.upcoming) }
         list.append(.grief)
+        if access.joys { list.append(.joys) }
         if access.launch { list.append(.launch) }
-        if access.announcements { list.append(.announcements) }
+        if access.announcements { list.append(.published) }
         return list
     }
 
@@ -95,7 +99,8 @@ nonisolated enum AdminOccasionsLogic {
         switch anchor {
         case .awaiting, .memorials: return .grief
         case .launch:               return .launch
-        case .scheduled, .doors:    return .announcements
+        case .scheduled:            return .upcoming
+        case .doors:                return .published
         }
     }
 

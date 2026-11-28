@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - صفحات الأقسام الستة (إعادة تصميم لوحة الإدارة — طلب المالك ٢٠٢٦-١٠-٢٠، «٦ أقسام»)
 //
 // كل قسم = رأس كحلي («‹ اليوم»، العنوان قائمة الأقسام، الوصف) + بطاقات صفوف تفتح الصفحات الموجودة كما هي (لا منطق
-// جديد). «المناسبات والإعلانات» صفحتها الخاصة (`AdminOccasionsPage`: إنشاء · القادم · المنشور)، و«الفريق
-// والأمان» تجمع «الفريق» و«من يدخل وكيف».
+// جديد). «المناسبات والإعلانات» صفحتها الخاصة (`AdminOccasionsPage`: القادم · عزاء وذكرى · أفراح العائلة · المنشور)،
+// و«الفريق والصلاحيات» تجمع «الفريق» و«الأعضاء» (ترتيب المالك ٢٠٢٦-١١-٢٨ — `AdminAreaLayout`).
 // فهرس الأدوات `AdminToolCatalog` هو المصدر الواحد: الأقسام والبحث الشامل وجدول الانتقال (REACHABILITY.md)
 // يقرؤون منه — كل ميزة لها صفّ واحد في قسم واحد، والصلاحيات كما كانت تماماً.
 // U19 (٢٠٢٦-١١-٢٦): المعرّف ← القسم والبيت والكلمات في `AdminCatalogTool` (AdminCatalogLogic.swift، مفحوص بـ
@@ -84,7 +84,8 @@ enum AdminToolCatalog {
             }
             if isAdmin {
                 add(.familyExport, group: family, title: L10n.t("تقرير PDF بالأعضاء", "Members PDF report"),
-                    subtitle: L10n.t("زرّ ⋯ في «العائلة» — بالتصفية الحالية", "The ⋯ button in Family — with the current filter"),
+                    subtitle: L10n.t("أيقونة «التقارير» في رأس «العائلة» — بالتصفية الحالية",
+                                     "The Reports icon in the Family header — with the current filter"),
                     icon: "doc.text.fill", tint: DS.Color.accent)
             }
         }
@@ -124,8 +125,17 @@ enum AdminToolCatalog {
                 place: L10n.t("اليوم ← الجرس", "Today ← bell"))
         }
 
-        // ٥ الفريق والأمان (`AdminTeamAreaView`): فريق الإدارة · رسائل رمز الدخول · التسجيل والمنع · الأجهزة والإشعارات ·
-        // الاستخدام. المالكان كل شي؛ المدير للاطلاع: فريق الإدارة و«الاستخدام» (الجدول من السيرفر — الباقي للمالك)
+        // ٤ب «الاستخدام» — في «الإحصاءات ← في التطبيق» منذ ٢٠٢٦-١١-٢٨ (كان في «الفريق والأمان»). الخانة نفسها `team.usage`
+        // (المالك والمدير؛ لا المراقب) — من كان يفتحها يفتحها
+        if authVM.adminSees(.teamUsage) {
+            add(.accessUsage, group: stats, title: L10n.t("الاستخدام", "Usage"),
+                subtitle: L10n.t("المستخدمون الآن، النشطون واتجاههم، الجلسات وأكثر الشاشات — التطبيق والموقع",
+                                 "Using now, active members and trend, sessions and top screens — app and web"),
+                icon: "waveform.path.ecg", tint: DS.Color.palm)
+        }
+
+        // ٥ الفريق والصلاحيات (`AdminTeamAreaView`، كان «الفريق والأمان»): «الفريق» (فريق الإدارة) ← «الأعضاء» (صلاحيات
+        // الأعضاء حسب الفئة · التسجيل والمنع). المالكان كل شي؛ المدير للاطلاع: فريق الإدارة (الجدول من السيرفر)
         let team = AdminArea.team.title
         if authVM.adminSees(.teamMembers) {
             add(.teamMembers, group: team, title: L10n.t("فريق الإدارة", "Admin team"),
@@ -135,32 +145,16 @@ enum AdminToolCatalog {
                     : L10n.t("الأعضاء حسب الدور، وصلاحيات الأدوار", "Members by role and role permissions"),
                 icon: "person.3.fill", tint: DS.Color.primary)
         }
-        if authVM.adminSees(.teamSms) {
-            add(.accessSms, group: team, title: L10n.t("رسائل رمز الدخول (KWT SMS)", "Sign-in code messages (KWT SMS)"),
-                subtitle: L10n.t("الرصيد، طلبات رمز الدخول، إعدادات الإرسال", "Balance, code requests, sending settings"),
-                icon: "ellipsis.message.fill", tint: DS.Hub.securityFill)
-        }
         if authVM.adminSees(.teamRegistration) {
             add(.accessRegistration, group: team, title: L10n.t("التسجيل والمنع", "Sign-up and blocking"),
                 subtitle: L10n.t("السماح بالتسجيل · الأرقام الممنوعة من التسجيل",
                                  "Allow sign-ups · numbers blocked from signing up"),
                 icon: "person.crop.circle.badge.checkmark", tint: DS.Color.palm)
         }
-        // «الأجهزة والإشعارات» و«الاستخدام» بيتان (spec C.13، B.7) — كانا صفّاً واحداً للمالك
-        if authVM.adminSees(.teamDevices) {
-            add(.accessDevices, group: team, title: L10n.t("الأجهزة والإشعارات", "Devices and notifications"),
-                subtitle: L10n.t("وصول الإشعارات، الأجهزة المرتبطة، إشعار تجريبي، عدد الأجهزة لكل عضو",
-                                 "Notification reach, linked devices, test notification, devices per member"),
-                icon: "iphone", tint: DS.Color.sea)
-        }
-        if authVM.adminSees(.teamUsage) {
-            add(.accessUsage, group: team, title: L10n.t("الاستخدام", "Usage"),
-                subtitle: L10n.t("المستخدمون الآن، النشطون واتجاههم، الجلسات وأكثر الشاشات — التطبيق والموقع",
-                                 "Using now, active members and trend, sessions and top screens — app and web"),
-                icon: "waveform.path.ecg", tint: DS.Color.palm)
-        }
 
-        // ٦ التطبيق — جذر القسم هو الإعدادات نفسها (`AdminAppAreaPage`)؛ القوائم وفرض التحديث والأخطاء صفحاتها. للمالك وحده
+        // ٦ التطبيق والنظام (كان «التطبيق») — جذر القسم هو الإعدادات نفسها (`AdminAppAreaPage`)؛ القوائم وفرض التحديث
+        // والأخطاء صفحاتها، و«النظام»: رسائل رمز الدخول والأجهزة والإشعارات (انتقلتا من «الفريق والأمان» ٢٠٢٦-١١-٢٨ — للمالك
+        // وحده كما كانتا: `team.sms`/`team.devices` تحت سقف المالك) ثم الأخطاء
         if authVM.adminSees(.appSettings) {
             let app = AdminArea.app.title
             add(.appSections, group: app, title: L10n.t("إعدادات التطبيق", "App settings"),
@@ -176,7 +170,21 @@ enum AdminToolCatalog {
             add(.appForceUpdate, group: app, title: L10n.t("فرض التحديث", "Force update"),
                 subtitle: L10n.t("أقل إصدار مسموح للآيفون والأندرويد", "Minimum allowed version for iPhone and Android"),
                 icon: "arrow.down.app.fill", tint: DS.Color.primary)
-            add(.appErrors, group: app, title: AdminErrorsText.pageTitle,
+        }
+        if authVM.adminSees(.teamSms) {
+            add(.accessSms, group: AdminArea.app.title,
+                title: L10n.t("رسائل رمز الدخول (KWT SMS)", "Sign-in code messages (KWT SMS)"),
+                subtitle: L10n.t("الرصيد، طلبات رمز الدخول، إعدادات الإرسال", "Balance, code requests, sending settings"),
+                icon: "ellipsis.message.fill", tint: DS.Hub.securityFill)
+        }
+        if authVM.adminSees(.teamDevices) {
+            add(.accessDevices, group: AdminArea.app.title, title: L10n.t("الأجهزة والإشعارات", "Devices and notifications"),
+                subtitle: L10n.t("وصول الإشعارات، الأجهزة المرتبطة، إشعار تجريبي، عدد الأجهزة لكل عضو",
+                                 "Notification reach, linked devices, test notification, devices per member"),
+                icon: "iphone", tint: DS.Color.sea)
+        }
+        if authVM.adminSees(.appSettings) {
+            add(.appErrors, group: AdminArea.app.title, title: AdminErrorsText.pageTitle,
                 subtitle: L10n.t("ما يصل Sentry من الآيفون والأندرويد والموقع، ووين صار",
                                  "What reaches Sentry from iPhone, Android and web, and where"),
                 icon: "exclamationmark.triangle.fill", tint: DS.Color.error)

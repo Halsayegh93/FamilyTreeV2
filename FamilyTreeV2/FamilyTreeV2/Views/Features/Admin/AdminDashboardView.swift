@@ -195,8 +195,9 @@ struct AdminDashboardView: View {
             return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView()) }.adminArea(.inbox))
         case .inboxItem(let id):
             return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView(focusId: id)) }.adminArea(.inbox))
-        case .sms:               return AnyView(AdminSmsView(backTitle: AdminArea.homeTitle).adminArea(.team))
-        case .smsAttempts:       return AnyView(SmsAttemptsListPage().adminArea(.team))
+        // رسائل رمز الدخول بيتها «التطبيق والنظام ← النظام» منذ ٢٠٢٦-١١-٢٨ (الصفحة نفسها تحرس نفسها للمالك)
+        case .sms:               return AnyView(AdminSmsView(backTitle: AdminArea.homeTitle).adminArea(.app))
+        case .smsAttempts:       return AnyView(SmsAttemptsListPage().adminArea(.app))
         case .errors:            return AnyView(AdminAreaGate(area: .app) { AnyView(AdminErrorsPage()) }.adminArea(.app))
         case .status(let home):  return home.page
         case .area(let area, let hop): return AnyView(AdminAreaView(area: area).adminAreaHop(hop))
@@ -841,27 +842,31 @@ struct AdminDashboardView: View {
             let word = AdminTodayBandLogic.departedWord(figures.totalDeceased)
             return TileModel(state: word?.state, health: censusHealth, retry: retryCensus, landing: word?.landing)
         case .team:
-            // `today.system_status` (المالك): حال الدخول والأمان بكلمة — المدير يرى «للاطلاع» وحدها
+            // `today.system_status` (المالك): حال «التسجيل» بكلمة (الدخول والأجهزة انتقلت إلى «التطبيق والنظام» ٢٠٢٦-١١-٢٨)
+            // — المدير يرى «للاطلاع» وحدها
             guard authVM.adminSees(.todaySystemStatus) else { return TileModel() }
-            let seesSms = authVM.adminSees(.teamSms)
-            let seesDevices = authVM.adminSees(.teamDevices)
             let seesRegistration = authVM.adminSees(.teamRegistration)
-            var stores: [AdminStoreHealth] = []
-            if seesSms { stores.append(sms.adminHealth) }
-            if seesDevices { stores.append(devices.adminHealth) }
-            if seesRegistration { stores.append(settingsHealth) }
             let settingsLoaded = appSettingsVM.settings.updatedAt != nil
             let word = AdminTodayLogic.teamWord(
-                suspicious: seesSms ? suspicious : 0,
-                smsLevel: seesSms ? sms.adminLevel.todayLevel : .unknown,
-                devicesFailed: seesDevices ? (devices.stats?.invalid ?? 0) : 0,
+                suspicious: 0, smsLevel: .unknown, devicesFailed: 0,
                 registrationOpen: seesRegistration && settingsLoaded ? appSettingsVM.settings.allowNewRegistrations : nil)
-            return TileModel(state: word.state, health: stores.isEmpty ? nil : .combined(stores), retry: retryTeam)
+            return TileModel(state: seesRegistration ? word.state : nil,
+                             health: seesRegistration ? settingsHealth : nil, retry: retrySettings)
         case .app:
+            // الصيانة والإشعارات، ومعها الدخول والأجهزة (رسائل رمز الدخول · محاولات مريبة · الأجهزة — في «النظام» هنا)
             guard authVM.adminSees(.todaySystemStatus) else { return TileModel() }
             let s = appSettingsVM.settings
-            let word = AdminTodayLogic.appWord(maintenance: s.maintenanceMode, notificationsPaused: s.notificationsPaused == true)
-            return TileModel(state: word.state, health: settingsHealth, retry: retrySettings)
+            let seesSms = authVM.adminSees(.teamSms)
+            let seesDevices = authVM.adminSees(.teamDevices)
+            var stores: [AdminStoreHealth] = [settingsHealth]
+            if seesSms { stores.append(sms.adminHealth) }
+            if seesDevices { stores.append(devices.adminHealth) }
+            let word = AdminTodayLogic.appWord(
+                maintenance: s.maintenanceMode, notificationsPaused: s.notificationsPaused == true,
+                suspicious: seesSms ? suspicious : 0,
+                smsLevel: seesSms ? sms.adminLevel.todayLevel : .unknown,
+                devicesFailed: seesDevices ? (devices.stats?.invalid ?? 0) : 0)
+            return TileModel(state: word.state, health: .combined(stores), retry: retryTeam)
         }
     }
 

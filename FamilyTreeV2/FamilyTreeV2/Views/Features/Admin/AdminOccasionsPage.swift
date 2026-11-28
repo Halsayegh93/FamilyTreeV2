@@ -7,12 +7,14 @@ import SwiftUI
 //     إشعار» و«تصميم إعلان» — spec E.15) يفتح المنشئ الواحد `AdminCreateWindow` على «ماذا تنشئ؟» بأنواع دورك وحدها
 //     (`AdminCreateKind.allowed`) · سطر أرقام الرأس للمالك والمدير: «1 وفاة لم تُعلن ‹» «3 مجدولة ‹» «2 ذكرى هذا الأسبوع ‹»
 //     — كلٌّ يمرّر الصفحة إلى قسمه.
-//   ١ «أفراح العائلة» (من الأخبار، خلال 30 يوماً): ثلاثة ثم «عرض الكل (N)»، و«بطاقة» على كل فرح ← المصمّم على قالبه.
+//   ترتيب المالك ٢٠٢٦-١١-٢٨ (`AdminAreaLayout.groups("occasions")`): القادم ← عزاء وذكرى ← أفراح العائلة ← المنشور.
+//   ١ «القادم» (المالك والمدير + `occasions.published`): «مجدول» بصفوفه («تعديل» · «إلغاء الموعد»).
 //   ٢ «عزاء وذكرى»: وفاة لم تُعلن (المالك والمدير) بـ«إعلان» ← `DeathAnnouncementBox`، ذكرى الراحلين خلال 30 يوماً بحبّة
 //     «اليوم»/«بعد 3 أيام»، ثم «متوفون بلا تاريخ وفاة كامل 134 ‹» ← `DeathDatesCampaignPage` (`canEditMembers`).
-//   ٣ «الإعلانات عند الفتح» (المالك والمدير): صفوف بـ«إيقاف» (تأكيد). الإنشاء من «＋ إنشاء» وحده (spec E.16).
-//   ٤ «الإعلانات» (المالك والمدير + `occasions.published`): «مجدول» بصفوفه («تعديل» · «إلغاء الموعد»)، ثم بطاقة الأبواب:
-//     «المنشور N ‹» و«تصل الإشعارات إلى N جهازاً 93٪ ‹» (المالك ← «الأجهزة ووصول الإشعارات»).
+//   ٣ «أفراح العائلة» (من الأخبار، خلال 30 يوماً): ثلاثة ثم «عرض الكل (N)»، و«بطاقة» على كل فرح ← المصمّم على قالبه.
+//   ٤ «الإعلانات عند الفتح» (المالك والمدير): صفوف بـ«إيقاف» (تأكيد). الإنشاء من «＋ إنشاء» وحده (spec E.16).
+//   ٥ «المنشور» (المالك والمدير + `occasions.published`): «المنشور N ‹» و«تصل الإشعارات إلى N جهازاً 93٪ ‹» (المالك ←
+//     «الأجهزة ووصول الإشعارات» في «التطبيق والنظام»).
 // كل أمر = صلاحية الدور × «يعدّل» القسم في جدول السيرفر (`adminCanEdit(.occasions)`): المراقب «للاطلاع» بلا أزرار
 // (`AdminOccasionsLogic.Access`). الحالات لكل قسم وحده (هيكل · خطأ بإعادة المحاولة · فارغ)، وآخر الصفحة «آخر تحديث».
 // الهبوط: `AdminOccasionsAnchor` — معامل `init` الصريح يغلب `AdminAreaRouter.take(.occasions, hop:)` («اليوم»).
@@ -234,9 +236,9 @@ struct AdminOccasionsPage: View {
         if access.announcements {
             let n = notificationVM.scheduledNotifications.count
             items.append(AdminHeaderItem(id: "scheduled", value: n, label: L10n.t("مجدولة", "scheduled"),
-                                         health: scheduledHealth, tap: .action({ jump(.announcements) }),
-                                         spoken: L10n.t("\(n) إشعارات مجدولة، ينقلك إلى الإعلانات",
-                                                        "\(n) scheduled pushes, moves to announcements")))
+                                         health: scheduledHealth, tap: .action({ jump(.upcoming) }),
+                                         spoken: L10n.t("\(n) إشعارات مجدولة، ينقلك إلى القادم",
+                                                        "\(n) scheduled pushes, moves to coming up")))
         }
         items.append(AdminHeaderItem(id: "memorials", value: f.memorialWeek,
                                      label: L10n.t("ذكرى هذا الأسبوع", "memorials this week"),
@@ -274,8 +276,14 @@ struct AdminOccasionsPage: View {
         case .launch:
             return AnyView(AdminLaunchAnnouncementsCard(canStop: access.stopLaunch, canCreate: access.create,
                                                         refreshToken: refreshToken))
-        case .announcements:
-            return AnyView(AdminOccasionsAnnouncementsCard(scheduledHealth: scheduledHealth, canEdit: access.editScheduled,
+        case .upcoming:
+            return AnyView(AdminOccasionsAnnouncementsCard(part: .upcoming, scheduledHealth: scheduledHealth,
+                                                           canEdit: access.editScheduled,
+                                                           showsReach: access.reach, publishedReady: publishedReady,
+                                                           retryScheduled: { Task { await reloadScheduled() } }))
+        case .published:
+            return AnyView(AdminOccasionsAnnouncementsCard(part: .published, scheduledHealth: scheduledHealth,
+                                                           canEdit: access.editScheduled,
                                                            showsReach: access.reach, publishedReady: publishedReady,
                                                            retryScheduled: { Task { await reloadScheduled() } }))
         }
@@ -515,7 +523,7 @@ struct AdminOccasionsJoysCard: View {
                                                      expanded: showsAll)
         let visible = Array(all.prefix(count))
         AdminOccasionsSectionStack(
-            title: L10n.t("أفراح العائلة", "Family joys"),
+            title: AdminAreaGroup.joys.title,
             note: L10n.t("من الأخبار", "From News"),
             link: AdminOccasionsLogic.needsToggle(total: all.count, limit: AdminOccasionsLogic.collapsedRows)
                 ? AnyView(AdminOccasionsToggleLink(total: all.count, expanded: $showsAll)) : nil
@@ -630,7 +638,7 @@ struct AdminOccasionsGriefCard: View {
     var body: some View {
         let total = feed.memorials.count
         AdminOccasionsSectionStack(
-            title: L10n.t("عزاء وذكرى", "Condolences & memorials"),
+            title: AdminAreaGroup.grief.title,
             link: AdminOccasionsLogic.needsToggle(total: total, limit: AdminOccasionsLogic.collapsedRows)
                 ? AnyView(AdminOccasionsToggleLink(total: total, expanded: $showsAll)) : nil
         ) {
@@ -745,6 +753,9 @@ private struct AdminOccasionsDatesRow: View {
 
 /// «مجدول» بصفوفه («تعديل» · «إلغاء الموعد») أو سطر هادئ، ثم بطاقة الأبواب: «المنشور N ‹» ووصول الإشعارات (للمالك)
 struct AdminOccasionsAnnouncementsCard: View {
+    /// «القادم» (المجدول) أو «المنشور» (المنشور ووصول الإشعارات) — قسمان منفصلان بترتيب المالك ٢٠٢٦-١١-٢٨
+    enum Part { case upcoming, published }
+    let part: Part
     let scheduledHealth: AdminStoreHealth
     /// «تعديل» · «إلغاء الموعد» (المالك والمدير × «يعدّل» القسم)
     let canEdit: Bool
@@ -762,9 +773,12 @@ struct AdminOccasionsAnnouncementsCard: View {
     @State private var cancelFailed = false
 
     var body: some View {
-        AdminOccasionsSectionStack(title: L10n.t("الإعلانات", "Announcements")) {
-            scheduledCard
-            doorsCard
+        AdminOccasionsSectionStack(title: part == .upcoming ? AdminAreaGroup.upcoming.title : AdminAreaGroup.published.title) {
+            if part == .upcoming {
+                scheduledCard
+            } else {
+                doorsCard
+            }
         }
         .dsAlert(L10n.t("إلغاء الموعد؟", "Cancel the schedule?"), isPresented: Binding(
             get: { cancelTarget != nil },
@@ -891,7 +905,7 @@ struct AdminOccasionsAnnouncementsCard: View {
             }
         } else {
             NavigationLink {
-                AdminLazyPage { AnyView(AdminPushHealthView().adminBackTitle(AdminArea.occasions.title).adminArea(.team)) }
+                AdminLazyPage { AnyView(AdminPushHealthView().adminBackTitle(AdminArea.occasions.title).adminArea(.app)) }
             } label: {
                 AdminOccasionsRow(title: stats.map { L10n.t("تصل الإشعارات إلى \(AdminNumberText.grouped($0.reach)) جهازاً",
                                                             "Notifications reach \(AdminNumberText.grouped($0.reach)) devices") }

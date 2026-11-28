@@ -3,18 +3,19 @@ import UIKit
 import Combine
 import Supabase
 
-// MARK: - «التطبيق» (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec C.14، اختيار المالك «ب»: الحالة أولاً، الوحدة U17)
+// MARK: - «التطبيق والنظام» (كان «التطبيق» — إعادة التصميم ٢٠٢٦-١١-٢٦ spec C.14 الوحدة U17، ثم ترتيب المالك ٢٠٢٦-١١-٢٨)
 //
-// للمالك وحده (`AdminAreaGate` كما هو). الرأس الكحلي: «‹ الإدارة» · «التطبيق ⌄» · «للمالك فقط. أي تغيير هنا يصل لكل
-// الأعضاء.» ثم خمس بطاقات تحت عناوين صغيرة — بلا تبويبات:
-//  ١) بطاقة الحالة «حالة التطبيق»: «الإصدار 1.0.1 (51)» بالذهبي الغامق + حبّة «يعمل للجميع ✓» / «متوقف للأعضاء»، وتحتها
-//     «وضع الصيانة» (حبّة «مطفأ»/«مفعّل» — الضغط يسأل عند التشغيل فقط) · «إشعارات الجوال» (= «إيقاف الإشعارات»، حبّة
-//     «تعمل»/«موقوفة» — يسأل عند الإيقاف فقط) · «فرض التحديث» (آخر إصدار في المتجر، «اختياري»/«إجباري» ‹ → صفحته).
-//  ٢) «ما يراه الأعضاء»: لغة التطبيق (قائمة) · الديوانيات · شجرة النساء · مشاريع العائلة · الاستطلاعات.
-//  ٣) «قواعد الأعضاء»: اعتماد الأخبار قبل نشرها · منع لقطة الشاشة في المكتبة (قائمة) · حدّ التعديلات الذاتية ·
-//     «إعادة ضبط العدّاد» (أحمر، يسأل).
-//  ٤) «القوائم»: تصنيفات الأخبار والمكتبة ‹ · أسماء العوائل والفروع ‹ · أسماء عن التطبيق ‹.
-//  ٥) «النظام»: «الأخطاء» (Sentry، بعددها) ‹ · آخر تعديل للإعدادات · «استعادة الإعدادات الافتراضية» (أحمر، يسأل).
+// للمالك وحده (`AdminAreaGate` كما هو). الرأس الكحلي: «‹ الإدارة» · «التطبيق والنظام ⌄» · «للمالك فقط. أي تغيير هنا يصل
+// لكل الأعضاء.» ثم بالترتيب المعتمد (`AdminAreaLayout.groups("app")`) — بلا تبويبات:
+//  ١) «الأقسام الظاهرة»: لغة التطبيق (قائمة) · الديوانيات · شجرة النساء · مشاريع العائلة · الاستطلاعات؛ وتحتها «قواعد
+//     الأعضاء»: اعتماد الأخبار قبل نشرها · منع لقطة الشاشة في المكتبة · حدّ التعديلات الذاتية · «إعادة ضبط العدّاد» ·
+//     تنبيه الصورة وتذكيرها.
+//  ٢) «القوائم»: تصنيفات الأخبار والمكتبة ‹ · أسماء العوائل والفروع ‹ · أسماء عن التطبيق ‹.
+//  ٣) «التشغيل» (كانت بطاقة «حالة التطبيق» أول الصفحة): الإصدار + حبّة «يعمل للجميع ✓» / «متوقف للأعضاء»، وتحتها
+//     «وضع الصيانة» · «إشعارات الجوال» · «فرض التحديث» ‹.
+//  ٤) «النظام»: بطاقة «الدخول والإشعارات» (رسائل رمز الدخول KWT SMS · محاولات مريبة · الأجهزة والإشعارات — انتقلت من
+//     «الفريق والأمان» بخاناتها `team.sms`/`team.devices`) ثم «الأخطاء» (Sentry) ‹ · آخر تعديل للإعدادات · «استعادة
+//     الإعدادات الافتراضية».
 // نفس المفاتيح والنداءات (`updateSetting`، `resetToDefaults`، `set_app_config`، `ProfileEditCooldown`). كل كتابة تمرّ أولاً
 // بـ`DebugAdminProbe.dryRun` (نجاح مصطنع محلي أثناء تجربة دور). الحالات (T1/T5): الحفظ = دوّارة صغيرة والباقي معطّل؛ الفشل
 // يُرجع القيمة القديمة + «لم يُحفظ. أعد المحاولة»؛ قبل وصول الإعدادات الحبّات «تعذّر التحميل» أو هيكل والمفاتيح معطّلة.
@@ -25,6 +26,8 @@ struct AdminAppAreaPage: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @StateObject private var model = AdminAppAreaModel()
+    /// سحب الصفحة يعيد جلب بطاقة «الدخول والإشعارات» في «النظام»
+    @State private var refreshToken = 0
 
     /// المالك (`canManageSettings`) × «يعدّل» القسم في جدول السيرفر
     private var canEdit: Bool { authVM.canManageSettings && authVM.adminCanEdit(.app) }
@@ -34,16 +37,21 @@ struct AdminAppAreaPage: View {
             AdminBandHeader(title: AdminArea.app.title, subtitle: AdminAppLogic.pageSubtitle,
                             badge: canEdit ? nil : AdminPageHeader.readOnlyText, isAreaRoot: true)
         } content: {
-            AnyView(AdminAppStatusCard(model: model, canEdit: canEdit))
+            // ترتيب المالك ٢٠٢٦-١١-٢٨ (`AdminAreaLayout.groups("app")`): الأقسام الظاهرة ← القوائم ← التشغيل ← النظام.
+            // «قواعد الأعضاء» (حقيقية، ليست في النموذج) تبقى تحت «الأقسام الظاهرة» — ما يراه الأعضاء وقواعدهم معاً
             AnyView(AdminAppMembersCard(model: model, canEdit: canEdit))
             AnyView(AdminAppRulesCard(model: model, canEdit: canEdit))
             AnyView(AdminAppListsCard())
-            AnyView(AdminAppSystemCard(model: model, canEdit: canEdit))
+            AnyView(AdminAppStatusCard(model: model, canEdit: canEdit))
+            AnyView(AdminAppSystemCard(model: model, canEdit: canEdit, refreshToken: refreshToken))
         }
         // ما يُدفع من الصفوف يرجع باسم القسم
         .environment(\.adminPageTitle, AdminArea.app.title)
         .onAppear { model.bind(settingsVM: appSettingsVM, authVM: authVM) }
-        .refreshable { await model.reload(canEdit: canEdit, force: true) }
+        .refreshable {
+            refreshToken += 1
+            await model.reload(canEdit: canEdit, force: true)
+        }
         .task {
             model.bind(settingsVM: appSettingsVM, authVM: authVM)
             await model.reload(canEdit: canEdit, force: false)
@@ -447,7 +455,8 @@ struct AdminAppStatusCard: View {
         let health = model.settingsHealth
         let head = AdminAppLogic.statusWord(maintenanceOn: s.maintenanceMode)
         let paused = s.notificationsPaused == true
-        AdminSectionCard(title: L10n.t("حالة التطبيق", "App status"), spacing: 0,
+        // «التشغيل» (ترتيب المالك ٢٠٢٦-١١-٢٨ — كانت «حالة التطبيق» أول الصفحة)
+        AdminSectionCard(title: AdminAreaGroup.operations.title, spacing: 0,
                          status: AdminStatePill(health: health, title: head.text, tone: head.tone.pill, icon: head.icon,
                                                 retry: { model.retrySettings() }),
                          subtitle: AdminAppLogic.versionLine(short: AppVersionText.short, build: nil)) {
@@ -587,7 +596,7 @@ struct AdminAppMembersCard: View {
         let s = appSettingsVM.settings
         let health = model.settingsHealth
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("ما يراه الأعضاء", "What members see"))
+            AdminSectionLabel(title: AdminAreaGroup.visible.title)
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
                 AdminAppMenuRow(model: model, setting: .language, icon: "globe", tint: DS.Color.navyFill,
                                 subtitle: L10n.t("لكل الأعضاء، ومن اختار لغته تبقى له",
@@ -798,7 +807,7 @@ struct AdminAppListsCard: View {
     var body: some View {
         let branches = AdminAppLogic.branchesValue(branchNamesCount)
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("القوائم", "Lists"))
+            AdminSectionLabel(title: AdminAreaGroup.lists.title)
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
                 AdminTapRow(icon: "tag.fill", tint: DS.Color.goldFill,
                             title: L10n.t("تصنيفات الأخبار والمكتبة", "News & library categories"),
@@ -840,12 +849,17 @@ struct AdminAppListsCard: View {
 struct AdminAppSystemCard: View {
     @ObservedObject var model: AdminAppAreaModel
     let canEdit: Bool
+    var refreshToken: Int = 0
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @ObservedObject private var errors = AdminErrorsStore.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
-            AdminSectionLabel(title: L10n.t("النظام", "System"))
+            AdminSectionLabel(title: AdminAreaGroup.system.title)
+            // رسائل رمز الدخول (KWT SMS) · محاولات مريبة · الأجهزة والإشعارات — انتقلت من «الفريق والأمان» (٢٠٢٦-١١-٢٨)
+            // بخاناتها نفسها (`team.sms`/`team.devices` — للمالك)
+            AdminAccessStatusSection(rows: [.sms, .devices], title: AdminAccessStatusSection.systemTitle,
+                                     refreshToken: refreshToken)
             AdminRowsCard(dividerInset: AdminRowDivider.iconInset) {
                 // «الأخطاء» (طلب المالك ٢٠٢٦-١١-٢٦): ما يصل Sentry من الآيفون والأندرويد والموقع — `AdminErrorsPage.swift`
                 AdminTapWrap(tap: .page { AnyView(AdminErrorsPage()) }, feel: .row, label: AnyView(

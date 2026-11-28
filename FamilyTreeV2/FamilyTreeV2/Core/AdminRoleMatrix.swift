@@ -51,7 +51,8 @@ enum AdminRoleItem: String, CaseIterable {
     // المؤشرات
     case metricsFamily    = "metrics.family"
     case metricsApprovals = "metrics.approvals"
-    // الفريق والأمان
+    // الفريق والأمان (المفاتيح ثابتة — جدول السيرفر). منذ ٢٠٢٦-١١-٢٨ القسم اسمه «الفريق والصلاحيات»، و`team.usage` بيته
+    // «الإحصاءات ← في التطبيق»، و`team.sms`/`team.devices` بيتهما «التطبيق والنظام ← النظام» — الخانات وقيمها كما هي
     case teamMembers      = "team.members"
     case teamUsage        = "team.usage"
     case teamSms          = "team.sms"

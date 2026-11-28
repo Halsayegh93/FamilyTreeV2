@@ -172,6 +172,21 @@ check(AdminTileLine.make(state: Logic.teamWord(suspicious: 0, smsLevel: .unknown
 check(Logic.appWord(maintenance: true, notificationsPaused: true).state, AdminTileState.urgent("الصيانة مفعّلة"), "maintenance")
 check(Logic.appWord(maintenance: false, notificationsPaused: true).state, AdminTileState.attention("الإشعارات موقوفة"), "paused")
 check(Logic.appWord(maintenance: false, notificationsPaused: false).state, AdminTileState.good("يعمل للجميع"), "open")
+// ٢٠٢٦-١١-٢٨: الدخول والأجهزة انتقلت إلى «التطبيق والنظام» — كلمتها على مربّعه
+check(Logic.appWord(maintenance: false, notificationsPaused: false, suspicious: 3).state,
+      AdminTileState.urgent("3 محاولات مريبة"), "app: suspicious attempts")
+check(Logic.appWord(maintenance: true, notificationsPaused: false, suspicious: 3).state,
+      AdminTileState.urgent("الصيانة مفعّلة"), "app: maintenance still first")
+check(Logic.appWord(maintenance: false, notificationsPaused: false, smsLevel: .urgent).state,
+      AdminTileState.urgent("الرصيد منخفض جداً"), "app: urgent balance")
+check(Logic.appWord(maintenance: false, notificationsPaused: true, smsLevel: .low).state,
+      AdminTileState.attention("الإشعارات موقوفة"), "app: paused before low balance")
+check(Logic.appWord(maintenance: false, notificationsPaused: false, smsLevel: .low).state,
+      AdminTileState.attention("الرصيد منخفض"), "app: low balance")
+check(Logic.appWord(maintenance: false, notificationsPaused: false, devicesFailed: 2).state.text,
+      "جهازان لا تصلهما الإشعارات", "app: failed devices")
+check(Logic.appWord(maintenance: false, notificationsPaused: false, smsLevel: .good, devicesFailed: 0).state,
+      AdminTileState.good("يعمل للجميع"), "app: all good")
 
 // MARK: «للاطلاع» على سطر القسم المقروء فقط (المدير على «الفريق والأمان») — F2: عين بعد الكلمة، لا ذيل يلفّ السطر
 

@@ -314,10 +314,11 @@ enum AdminNoticeRoutes {
             return AnyView(AdminAreaGate(area: .occasions) { AnyView(AdminOccasionsPage()) }
                 .adminArea(.occasions).adminBackTitle(back))
         case .sms:
-            return AnyView(AdminAreaGate(area: .team) { AnyView(AdminSmsView(backTitle: back)) }.adminArea(.team))
+            // بيتها «التطبيق والنظام ← النظام» منذ ٢٠٢٦-١١-٢٨ (المالك وحده كما كانت — الصفحة نفسها تحرس للمالك)
+            return AnyView(AdminAreaGate(area: .app) { AnyView(AdminSmsView(backTitle: back)) }.adminArea(.app))
         case .smsAttempts:
-            return AnyView(AdminAreaGate(area: .team) { AnyView(SmsAttemptsListPage()) }
-                .adminBackTitle(back).adminArea(.team))
+            return AnyView(AdminAreaGate(area: .app) { AnyView(SmsAttemptsListPage()) }
+                .adminBackTitle(back).adminArea(.app))
         case .treeProblems:
             return AnyView(AdminAreaGate(area: .family) { AnyView(AdminMembersPage(chip: .problems)) }
                 .adminArea(.family))

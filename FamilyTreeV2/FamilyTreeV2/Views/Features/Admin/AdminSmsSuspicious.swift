@@ -188,8 +188,8 @@ struct SmsSuspiciousBanner: View {
                     Task { await AdminNoticeWrites.markRead(unread, notificationVM) }
                 }
                 .padding(.top, DS.Spacing.xs)
-                .accessibilityHint(L10n.t("يقرأ كل تنبيهات المحاولات المريبة فيختفي التنبيه من «الفريق والأمان»",
-                                          "Marks every suspicious-attempt alert as read so the alert leaves Team and security"))
+                .accessibilityHint(L10n.t("يقرأ كل تنبيهات المحاولات المريبة فيختفي التنبيه من «التطبيق والنظام»",
+                                          "Marks every suspicious-attempt alert as read so the alert leaves App and system"))
             }
         }
     }

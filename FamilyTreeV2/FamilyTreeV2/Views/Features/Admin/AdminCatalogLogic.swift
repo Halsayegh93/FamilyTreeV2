@@ -7,7 +7,10 @@ import Foundation
 //    القديمة تجد البيت الجديد («المؤشرات» ← «الإحصاءات»، «الرسائل» ← صفحة «رسائل الأعضاء»…).
 //    الصفحة نفسها لكل بيت يرسمها `AdminToolCatalog.homePage(_:)` — المكان الواحد من المعرّف إلى الصفحة.
 // ٢) `AdminGateLogic`: رسالة `AdminAreaGate` حين يرفض قسماً — «هذا القسم للمالك فقط» للقسم المقصور على المالك بسقف جدول
-//    الأدوار وحده («التطبيق»: كل خاناته `isOwnerOnly`)، وغيره «هذا القسم ليس ضمن صلاحياتك» («الفريق والأمان» يراه المدير).
+//    الأدوار وحده («التطبيق والنظام»: كل خاناته `isOwnerOnly`)، وغيره «هذا القسم ليس ضمن صلاحياتك» («الفريق والصلاحيات»
+//    يراه المدير).
+// ٣) `AdminAreaNames` و`AdminAreaLayout` (٢٠٢٦-١١-٢٨، ترتيب المالك المعتمد `admin-ia`/`admin-sections`): أسماء الأقسام الستة،
+//    ومجموعات كل قسم بعناوينها الصغيرة وترتيبها — الصفحات ترسم عناوينها من هنا.
 //
 // يُفحص بلا محاكي:
 //   xcrun swiftc -D ADMIN_LOGIC_TEST -o /tmp/u19-logic \
@@ -47,9 +50,11 @@ nonisolated enum AdminCatalogTool: String, CaseIterable, Hashable {
         case .inboxRequests, .inboxMessages, .inboxSettings, .todayNotices: return "inbox"
         case .familyMembers, .familyRegister, .familyExport: return "family"
         case .occasionsCreate: return "occasions"
-        case .metricsFamily, .metricsApprovals: return "metrics"
-        case .teamMembers, .accessSms, .accessRegistration, .accessUsage, .accessDevices: return "team"
-        case .appSections, .appCategories, .appNames, .appForceUpdate, .appErrors: return "app"
+        // «الاستخدام» في «الإحصاءات» منذ ٢٠٢٦-١١-٢٨ (كان في «الفريق والأمان»)
+        case .metricsFamily, .metricsApprovals, .accessUsage: return "metrics"
+        case .teamMembers, .accessRegistration: return "team"
+        // رسائل رمز الدخول والأجهزة في «التطبيق والنظام» ← «النظام» منذ ٢٠٢٦-١١-٢٨ (للمالك وحده كما كانتا)
+        case .appSections, .appCategories, .appNames, .appForceUpdate, .appErrors, .accessSms, .accessDevices: return "app"
         }
     }
 
@@ -118,7 +123,9 @@ nonisolated enum AdminCatalogTool: String, CaseIterable, Hashable {
             return ["إشعارات", "تنبيهات", "جرس", "سجل", "سجل التعديلات", "سجل النشاط", "تعديلات",
                     "نشاط الفريق", "يحتاج إجراء", "النظام"]
         case .teamMembers:
-            return ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "الصلاحيات"]
+            // «الفريق والأمان» اسم القسم القديم (٢٠٢٦-١١-٢٨ ← «الفريق والصلاحيات»)
+            return ["فريق", "مدير", "مراقب", "مشرف", "أدوار", "صلاحيات", "نطاقي", "الصلاحيات",
+                    "الفريق والأمان", "الفريق والصلاحيات"]
         case .accessSms:
             return ["رسائل", "sms", "رصيد", "kwt", "محاولات", "مرسل", "طلبات رمز الدخول", "مريبة", "مشبوهة"]
         case .accessRegistration:
@@ -132,7 +139,7 @@ nonisolated enum AdminCatalogTool: String, CaseIterable, Hashable {
                     "تسجيل فاشل", "بدون جهاز", "ما دخلوا"]
         case .appSections:
             // «حالة النظام» صارت حالة مربّع «التطبيق» وبطاقة حالته (spec B.2)
-            return ["لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد", "شجرة النساء",
+            return ["التطبيق والنظام", "لغة", "ميزات", "ديوانيات", "مشاريع", "استطلاعات", "أخبار", "اعتماد", "شجرة النساء",
                     "الأقسام الظاهرة للأعضاء", "عداد", "تعديل", "حد", "حدّ التعديلات الذاتية",
                     "صيانة", "تشغيل", "وضع الصيانة", "النظام", "حالة النظام", "معلومات", "إعادة التعيين", "افتراضي",
                     "استعادة"]
@@ -241,5 +248,89 @@ nonisolated enum AdminGateLogic {
         let items = itemKeys(of: areaKey, in: allItemKeys)
         guard !items.isEmpty, items.allSatisfy({ ownerOnlyItemKeys.contains($0) }) else { return .notInRole }
         return .ownerOnly
+    }
+}
+
+// MARK: - ٣) أسماء الأقسام ومجموعاتها (ترتيب المالك ٢٠٢٦-١١-٢٨)
+
+/// أسماء الأقسام الستة — `AdminArea.title` يقرأ من هنا. «الفريق والأمان» ← «الفريق والصلاحيات»، و«التطبيق» ← «التطبيق
+/// والنظام» (رسائل رمز الدخول والأجهزة انتقلتا إليه). `rawValue` المفاتيح ثابتة (جدول السيرفر)
+nonisolated enum AdminAreaNames {
+    static func title(_ areaKey: String) -> String {
+        switch areaKey {
+        case "inbox":     return L10n.t("الوارد", "Inbox")
+        case "family":    return L10n.t("العائلة", "Family")
+        case "occasions": return L10n.t("المناسبات والإعلانات", "Occasions & announcements")
+        case "metrics":   return L10n.t("الإحصاءات", "Statistics")
+        case "team":      return L10n.t("الفريق والصلاحيات", "Team & permissions")
+        case "app":       return L10n.t("التطبيق والنظام", "App & system")
+        default:          return areaKey
+        }
+    }
+}
+
+/// مجموعة صغيرة بعنوانها داخل صفحة قسم — الترتيب في `AdminAreaLayout.groups(_:)`
+nonisolated enum AdminAreaGroup: String, CaseIterable, Hashable {
+    // العائلة
+    case review, members
+    // المناسبات والإعلانات
+    case upcoming, grief, joys, published
+    // الإحصاءات
+    case family, inApp, approvals, details
+    // الفريق والصلاحيات
+    case team, people
+    // التطبيق والنظام
+    case visible, lists, operations, system
+
+    var title: String {
+        switch self {
+        case .review:     return L10n.t("يحتاج مراجعتك", "Needs your review")
+        case .members:    return L10n.t("الأعضاء", "Members")
+        case .upcoming:   return L10n.t("القادم", "Coming up")
+        case .grief:      return L10n.t("عزاء وذكرى", "Condolences and memorials")
+        case .joys:       return L10n.t("أفراح العائلة", "Family joys")
+        case .published:  return L10n.t("المنشور", "Published")
+        case .family:     return L10n.t("العائلة", "Family")
+        case .inApp:      return L10n.t("في التطبيق", "In the app")
+        case .approvals:  return L10n.t("الموافقات", "Approvals")
+        case .details:    return L10n.t("التفاصيل", "Details")
+        case .team:       return L10n.t("الفريق", "Team")
+        case .people:     return L10n.t("الأعضاء", "Members")
+        case .visible:    return L10n.t("الأقسام الظاهرة", "Visible sections")
+        case .lists:      return L10n.t("القوائم", "Lists")
+        case .operations: return L10n.t("التشغيل", "Operations")
+        case .system:     return L10n.t("النظام", "System")
+        }
+    }
+}
+
+nonisolated enum AdminAreaLayout {
+    /// مجموعات القسم بترتيبها (`AdminArea.rawValue`) — «الوارد» كما هو بلا مجموعات
+    static func groups(_ areaKey: String) -> [AdminAreaGroup] {
+        switch areaKey {
+        case "family":    return [.review, .members]
+        case "occasions": return [.upcoming, .grief, .joys, .published]
+        case "metrics":   return [.family, .inApp, .approvals, .details]
+        case "team":      return [.team, .people]
+        case "app":       return [.visible, .lists, .operations, .system]
+        default:          return []
+        }
+    }
+
+    /// مجموعة الأداة داخل قسمها (nil = جذر القسم نفسه أو صفّ بحث فقط)
+    static func group(of tool: AdminCatalogTool) -> AdminAreaGroup? {
+        switch tool {
+        case .familyMembers, .familyRegister, .familyExport: return .members
+        case .metricsFamily:     return .family
+        case .accessUsage:       return .inApp
+        case .metricsApprovals:  return .approvals
+        case .teamMembers:       return .team
+        case .accessRegistration: return .people
+        case .appSections:       return .visible
+        case .appCategories, .appNames: return .lists
+        case .appForceUpdate:    return .operations
+        case .accessSms, .accessDevices, .appErrors: return .system
+        case .inboxRequests, .inboxMessages, .inboxSettings, .todayNotices, .occasionsCreate: return nil
+        }
     }
 }

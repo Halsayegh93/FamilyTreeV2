@@ -16,16 +16,9 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .inbox:     return L10n.t("الوارد", "Inbox")
-        case .family:    return L10n.t("العائلة", "Family")
-        case .occasions: return L10n.t("المناسبات والإعلانات", "Occasions & announcements")
-        case .metrics:   return L10n.t("الإحصاءات", "Statistics")
-        case .team:      return L10n.t("الفريق والأمان", "Team & security")
-        case .app:       return L10n.t("التطبيق", "App")
-        }
-    }
+    /// الاسم من المصدر الواحد `AdminAreaNames` (AdminCatalogLogic.swift — يُفحص بلا محاكي): «الفريق والصلاحيات» و«التطبيق
+    /// والنظام» منذ ٢٠٢٦-١١-٢٨ (كانا «الفريق والأمان» و«التطبيق»)
+    var title: String { AdminAreaNames.title(rawValue) }
 
     /// الاسم على مربّعه في «اليوم» — سطر واحد فتتساوى المربّعات (طلب المالك ٢٠٢٦-١١-٢٦ «نصغر المربعات»)؛ الاسم الكامل للعنوان والقارئ الصوتي
     var tileTitle: String {
@@ -41,9 +34,11 @@ enum AdminArea: String, CaseIterable, Identifiable, Hashable {
         case .family:    return L10n.t("الأعضاء وبياناتهم وحساباتهم", "Members, their details and accounts")
         case .occasions: return L10n.t("الوفيات والذكرى والمنشورات، والإعلان للأعضاء",
                                        "Deaths, memorials and posts, and announcing to members")
-        case .metrics:   return L10n.t("أرقام العائلة والموافقات — للاطلاع", "Family and approval numbers — read only")
-        case .team:      return L10n.t("من يدير، ومن يدخل التطبيق", "Who manages, and who signs in")
-        case .app:       return L10n.t("إعدادات التطبيق والتشغيل", "App settings and operations")
+        case .metrics:   return L10n.t("أرقام العائلة والتطبيق والموافقات — للاطلاع",
+                                       "Family, app and approval numbers — read only")
+        case .team:      return L10n.t("من يدير، وصلاحيات الأعضاء", "Who manages, and member permissions")
+        case .app:       return L10n.t("إعدادات التطبيق، والدخول والأجهزة والأخطاء",
+                                       "App settings, sign-in, devices and errors")
         }
     }
 
@@ -787,6 +782,27 @@ struct AdminSectionLabel: View {
                     .foregroundColor(DS.Color.textTertiary)
                     .multilineTextAlignment(.trailing)
             }
+        }
+        .padding(.horizontal, DS.Spacing.xxs)
+    }
+}
+
+/// عنوان مجموعة صغير فوق عدّة أقسام لها عناوينها («التفاصيل» في «الإحصاءات» — ترتيب المالك ٢٠٢٦-١١-٢٨): ١٣ رمادي شبه
+/// عريض وخطّ رفيع بعده، فيُقرأ فوق عناوين الأقسام لا مثلها
+struct AdminGroupHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: DS.Spacing.sm) {
+            Text(title)
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Rectangle()
+                .fill(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke))
+                .frame(height: DS.Border.width)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, DS.Spacing.xxs)
     }
