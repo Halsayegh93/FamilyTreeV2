@@ -389,7 +389,7 @@ final class LineageGateStore: ObservableObject {
         status = await DaughterSons.fetchStatus()
         if status?.pending == true {
             let open = await CompletionAsk.mine()
-            ask = open?.isLineage == true ? open : nil
+            ask = (open?.isLineage == true || open?.isSpouse == true) ? open : nil
         } else {
             ask = nil
         }
@@ -437,7 +437,8 @@ final class LineageGateStore: ObservableObject {
     }
 
     /// القفل يُخفى بلا رسالة (الفئة أطفأته) — لا «استكمال التسجيل»
-    var locksSilently: Bool { isLimited || !isRestricted }
+    /// العيّنة spouse2 (٢٠٢٦-١١-٢٨): «الأقسام المقفلة تختفي بلا رسالة» — لمن لم يستكمل أيضاً
+    var locksSilently: Bool { true }
 
     /// يفتح صفحة «أكمل حسابك» (أو حالة «قيد المراجعة»)
     func openPage() {
@@ -1011,7 +1012,10 @@ struct AdminLineageRequestCard: View {
 
     var body: some View {
         // «استكمال التسجيل» (R1): اسم الوالدة مكتوباً — المراجع يختارها من المقترحات، أو «الوالدة من خارج العائلة»
-        if SignupOriginRules.isTypedLineage(details: request.details) {
+        if SignupOriginRules.isSpouseLink(details: request.details) {
+            // «الزوج أو الزوجة من العائلة» (20261128150000): الاقتراحات والربط في البطاقة نفسها
+            AnyView(OutsideSpouseRequestCard(request: request, adminRequestVM: adminRequestVM))
+        } else if SignupOriginRules.isTypedLineage(details: request.details) {
             AnyView(OutsideLineageRequestCard(request: request, adminRequestVM: adminRequestVM))
         } else {
             AnyView(legacyBody)

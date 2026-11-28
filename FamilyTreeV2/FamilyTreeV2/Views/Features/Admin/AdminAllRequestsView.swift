@@ -724,7 +724,7 @@ struct AdminAllRequestsView: View {
 
     /// طلبات «استكمال التسجيل» (الوالدة من العائلة) — صفّ واحد تحت «من خارج العائلة» بعددها هي، وبيتها صفحة الطلبات الأخرى
     private var typedLineageCount: Int {
-        adminRequestVM.lineageRequests.filter { SignupOriginRules.isTypedLineage(details: $0.details) }.count
+        adminRequestVM.lineageRequests.filter { SignupOriginRules.isCompletionRequest(details: $0.details) }.count
     }
 
     /// شرائح المصدر بأعدادها — تظهر حين يوجد طلب انضمام أو «استكمال التسجيل»
