@@ -2398,7 +2398,7 @@ private struct ProfileWifeFamilyBox: View {
     var body: some View {
         DSWifeFlowBox(mode: .selfFamily, relation: relation, husbandId: me.id, personFatherId: personFatherId,
                       husbandName: me.firstName.isEmpty ? me.fullName : me.firstName,
-                      subtitle: relation == .mother ? L10n.t("أمك من العائلة", "Your mother from the family")
+                      subtitle: relation == .mother ? L10n.t("الوالدة من العائلة", "Your mother from the family")
                                                     : L10n.t("زوجتك من العائلة", "Your wife from the family"),
                       people: people, isLoading: isLoading, startsAtFather: true,
                       isBusy: busy, error: error,
@@ -2452,9 +2452,9 @@ private struct ProfileWifeFamilyBox: View {
         case "name_required":
             return L10n.t("اكتب الاسم.", "Enter the name.")
         case "mother_set_not_allowed":
-            return L10n.t("أمك محدّدة مسبقاً — تواصل مع الإدارة لتغييرها.", "Your mother is already set — contact the admins to change it.")
+            return L10n.t("الوالدة محدّدة مسبقاً — تواصل مع الإدارة لتغييرها.", "Your mother is already set — contact the admins to change it.")
         case "no_own_father":
-            return L10n.t("أبوك غير مسجّل في الشجرة بعد.", "Your father isn't in the tree yet.")
+            return L10n.t("الوالد غير مسجّل في الشجرة بعد.", "Your father isn't in the tree yet.")
         default:
             return WomenStore.failureMessage(error)
         }

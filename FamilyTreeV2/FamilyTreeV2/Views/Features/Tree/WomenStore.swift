@@ -450,7 +450,7 @@ enum WomenStore {
             case "family_links_protected": return pg.message
             // أخطاء «إضافة أخت» (add_or_link_self_relative)
             case "no_own_father", "no_father":
-                return L10n.t("أبوك غير مسجّل في الشجرة — اطلب ربطك من الإدارة.",
+                return L10n.t("الوالد غير مسجّل في الشجرة — اطلب ربطك من الإدارة.",
                               "Your father isn't in the tree — ask the administration to link you.")
             case "not_daughter":
                 return L10n.t("الأخت تُضاف تحت أبيك أنت فقط.", "A sister can only be added under your own father.")
