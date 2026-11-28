@@ -66,13 +66,13 @@ struct SignupBoxShell<Content: View>: View {
     private var header: some View {
         ZStack {
             VStack(spacing: DS.Spacing.xxs) {
-                // أكبر بطلب المالك ٢٠٢٦-١١-٢٨: اسم العائلة عنوان الشاشة، و«التسجيل» عنوان ثانٍ واضح
+                // أكبر بطلب المالك ٢٠٢٦-١١-٢٨: ثم «شوي زين ومناسب»: اسم العائلة ٢٢ و«التسجيل» ١٥
                 Text(L10n.t(SignupText.brand, "Al-Mohammad Ali family"))
-                    .dsFont(.heroTitle).foregroundColor(DS.Color.accentLight)
+                    .dsFont(.tabTitle).foregroundColor(DS.Color.accentLight)
                     .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.isHeader)
                 Text(subtitle)
-                    .dsFont(.headline).foregroundColor(DS.Color.textOnPrimary)
+                    .dsFont(.body).foregroundColor(DS.Color.textOnPrimary.opacity(0.9))
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, DS.Icon.tapTarget)
