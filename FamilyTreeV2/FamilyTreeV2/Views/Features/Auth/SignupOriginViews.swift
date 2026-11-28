@@ -17,6 +17,8 @@ struct SignupBoxShell<Content: View>: View {
     /// نقاط الخطوات داخل المربّع (`DSMotionRules.SignupStep`) — nil = بلا نقاط («استكمال التسجيل»)
     var step: Int? = nil
     var onSignOut: (() -> Void)? = nil
+    /// زرّ الرجوع في الرأس (طلب المالك ٢٠٢٦-١١-٢٨): من البيانات إلى الخيارين، ومن الخيارين إلى شاشة الدخول
+    var onBack: (() -> Void)? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -64,17 +66,26 @@ struct SignupBoxShell<Content: View>: View {
     private var header: some View {
         ZStack {
             VStack(spacing: DS.Spacing.xxs) {
+                // أكبر بطلب المالك ٢٠٢٦-١١-٢٨: اسم العائلة عنوان الشاشة، و«التسجيل» عنوان ثانٍ واضح
                 Text(L10n.t(SignupText.brand, "Al-Mohammad Ali family"))
-                    .dsFont(.headline).foregroundColor(DS.Color.accentLight)
+                    .dsFont(.heroTitle).foregroundColor(DS.Color.accentLight)
+                    .multilineTextAlignment(.center)
+                    .accessibilityAddTraits(.isHeader)
                 Text(subtitle)
-                    .dsFont(.caption).foregroundColor(DS.Color.textOnPrimary.opacity(0.85))
+                    .dsFont(.headline).foregroundColor(DS.Color.textOnPrimary)
             }
             .frame(maxWidth: .infinity)
-            if let onSignOut {
+            .padding(.horizontal, DS.Icon.tapTarget)
+            if onSignOut != nil || onBack != nil {
                 HStack {
+                    if let onBack {
+                        DSBackButton(context: .onColor, action: onBack)
+                    }
                     Spacer()
-                    DSHeaderButton(symbol: "rectangle.portrait.and.arrow.right",
-                                   label: L10n.t(SignupText.signOut, "Sign out"), action: onSignOut)
+                    if let onSignOut {
+                        DSHeaderButton(symbol: "rectangle.portrait.and.arrow.right",
+                                       label: L10n.t(SignupText.signOut, "Sign out"), action: onSignOut)
+                    }
                 }
             }
         }
@@ -162,7 +173,10 @@ struct SignupOriginFlow: View {
                                               rtl: LanguageManager.shared.layoutDirection == .rightToLeft,
                                               reduceMotion: reduceMotion)
         SignupBoxShell(subtitle: L10n.t(SignupText.chooseTitle, "Registration"), step: step(origin).rawValue,
-                       onSignOut: { Task { await authVM.signOut() } }) {
+                       onSignOut: { Task { await authVM.signOut() } },
+                       onBack: {
+                           if origin != nil { go(to: nil) } else { Task { await authVM.signOut() } }
+                       }) {
             // فوق بعض أثناء الانتقال (لا يتكدّسان عمودياً)
             ZStack(alignment: .top) {
                 if let origin {
