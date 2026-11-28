@@ -124,9 +124,9 @@ struct AdminDashboardView: View {
                     rootVisible = true
                     // «حي ✓» وما تغيّر في «العائلة» أثناء غيابها — كلمة مربّع «العائلة» (لا يُبنى شيء إن لم يتغيّر)
                     recalculateReview()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        if rootVisible && !navigationPath.isEmpty { navigationPath = NavigationPath() }
-                    }
+                    // لا يُصفَّر والإصبع ما زال يسحب للرجوع: «اليوم» يظهر من بداية السحب، فكان التصفير بعد ٠٫٤ ث يقطع
+                    // الانزلاق ويقفز (فيديو المالك ٢٠٢٦-١١-٢٨) — ننتظر حتى ينتهي الانتقال ثم نفحص
+                    clearStalePathWhenSettled(after: 0.4)
                 }
                 .onDisappear { rootVisible = false }
                 // أبناء البنات قد يصلون بعد الأعضاء — يُعاد الحساب فلا يُعدّون في «الرجال» (٢٠٢٦-١١-١٢)
@@ -171,6 +171,20 @@ struct AdminDashboardView: View {
     }
 
     // MARK: - المسار
+
+    /// المسار الباقي بعد الرجوع (بلاغ ٢٠٢٦-١١-٠٨) يُصفَّر فقط حين يستقرّ «اليوم» ظاهراً ولا انتقال جارٍ (سحب الرجوع
+    /// باليد أو انزلاق) — وإلا يُعاد الفحص بعد لحظة. سحبٌ أُلغي يُخفي «اليوم» فيتوقّف الفحص (`rootVisible`).
+    private func clearStalePathWhenSettled(after delay: Double, attempts: Int = 20) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard rootVisible, !navigationPath.isEmpty, attempts > 0 else { return }
+            if AdminNavTransition.inProgress {
+                clearStalePathWhenSettled(after: 0.25, attempts: attempts - 1)
+            } else {
+                navigationPath = NavigationPath()
+            }
+        }
+    }
+
 
     /// وجهات المسار — كل وجهة بقسمها؛ وجهات «الوارد» من الإشعارات خلف بوابته (جدول الأدوار)
     static func page(for destination: AdminReviewDestination) -> AnyView {
@@ -922,5 +936,24 @@ private extension AdminTeamLogic.SmsLevel {
         case .low:     return .low
         case .urgent:  return .urgent
         }
+    }
+}
+
+
+/// هل في انتقال تنقّل جارٍ الآن (سحب الرجوع باليد أو انزلاق دفع/رجوع)؟ من `transitionCoordinator` في UIKit.
+enum AdminNavTransition {
+    static var inProgress: Bool {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        for window in scenes.flatMap(\.windows) where window.isKeyWindow {
+            if let root = window.rootViewController, hasTransition(in: root) { return true }
+        }
+        return false
+    }
+
+    private static func hasTransition(in vc: UIViewController) -> Bool {
+        if let nav = vc as? UINavigationController, nav.transitionCoordinator != nil { return true }
+        for child in vc.children where hasTransition(in: child) { return true }
+        if let presented = vc.presentedViewController, hasTransition(in: presented) { return true }
+        return false
     }
 }
