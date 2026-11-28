@@ -189,12 +189,12 @@ nonisolated enum AdminTodayLogic {
         guard let first = shown.first else {
             return AdminTodayWord(state: .good(L10n.t("لا جديد", "Nothing new")))
         }
-        // «5 بانتظار قرارك» وحدها، و«2 عاجل · 5 بانتظارك» مع غيرها (Autoplan decision 19)
+        // «5 طلبات» (طلب المالك ٢٠٢٦-١١-٢٨: «سمّه طلبات» — كان «5 بانتظار قرارك»)، و«2 عاجل · 5 طلبات» مع غيرها
         let states = shown.map { fact -> AdminTileState in
             guard fact.state.text.isEmpty else { return fact.state }
-            let n = AdminNumberText.grouped(waiting)
-            return .attention(shown.count == 1 ? L10n.t("\(n) بانتظار قرارك", "\(n) awaiting your decision")
-                                               : L10n.t("\(n) بانتظارك", "\(n) waiting"))
+            return .attention(L10n.isArabic
+                ? counted(waiting, one: "طلب واحد", two: "طلبان", few: "طلبات", many: "طلباً", single: "طلب")
+                : (waiting == 1 ? "1 request" : "\(AdminNumberText.grouped(waiting)) requests"))
         }
         return AdminTodayWord(state: AdminTileState.joined(states) ?? states[0], landing: first.landing.map { .inbox($0) })
     }

@@ -75,12 +75,12 @@ check(Logic.smartLine(hidden)?.link, nil, "hidden home → no link")
 // MARK: «الوارد» — حقيقتان على الأكثر، والهبوط على فلتر الأولى
 
 let inboxTwo = Logic.inboxWord(urgent: 2, waiting: 5, late: 1, fourth: .messages, fourthCount: 7)
-check(inboxTwo.state.text, "2 عاجل · 5 بانتظارك", "two facts: urgent then waiting (short form)")
+check(inboxTwo.state.text, "2 عاجل · 5 طلبات", "two facts: urgent then requests")
 check(inboxTwo.state.tone, .urgent, "joined tone = strongest")
 check(inboxTwo.landing, .inbox(AdminInboxLanding(status: .urgent)), "lands on the first fact's filter")
 
 let inboxOne = Logic.inboxWord(urgent: 0, waiting: 5, late: 0, fourth: .messages, fourthCount: 0)
-check(inboxOne.state.text, "5 بانتظار قرارك", "one fact keeps the long form")
+check(inboxOne.state.text, "5 طلبات", "one fact: requests count")
 check(inboxOne.state.tone, .attention, "waiting tone")
 check(inboxOne.landing, .inbox(AdminInboxLanding(status: .waiting)), "waiting landing")
 
@@ -92,7 +92,7 @@ check(Logic.messagesText(2), "رسالتان جديدتان", "two messages")
 check(Logic.messagesText(11), "11 رسالة جديدة", "11 messages")
 
 let inboxReports = Logic.inboxWord(urgent: 0, waiting: 4, late: 0, fourth: .reports, fourthCount: 3)
-check(inboxReports.state.text, "4 بانتظارك · 3 بلاغات", "supervisor: waiting then reports")
+check(inboxReports.state.text, "4 طلبات · 3 بلاغات", "supervisor: waiting then reports")
 let reportsOnly = Logic.inboxWord(urgent: 0, waiting: 0, late: 0, fourth: .reports, fourthCount: 3)
 check(reportsOnly.landing, .inbox(AdminInboxLanding(kind: .reports)), "reports land on the reports kind")
 

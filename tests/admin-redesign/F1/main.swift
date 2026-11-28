@@ -62,7 +62,7 @@ check(privacyOnly.state, AdminTileState.attention("طلب خصوصية"), "tile:
 check(privacyOnly.landing, nil, "privacy opens «الوارد» unfiltered (its door row is there)")
 check(privacyOnly.state.text.contains("بانتظار قرارك"), false, "privacy never says «بانتظار قرارك»")
 let mixed = Logic.inboxWord(urgent: 0, waiting: 3, late: 0, policy: 2, fourth: .messages, fourthCount: 7)
-check(mixed.state.text, "3 بانتظارك · طلبا خصوصية", "waiting (inbox chip) then privacy; messages drop (two facts max)")
+check(mixed.state.text, "3 طلبات · طلبا خصوصية", "waiting (inbox chip) then privacy; messages drop (two facts max)")
 check(mixed.landing, .inbox(AdminInboxLanding(status: .waiting)), "lands on «بانتظار قرارك» = the same count")
 check(Logic.inboxWord(urgent: 0, waiting: 0, late: 0, fourth: .messages, fourthCount: 0).state, AdminTileState.good("لا جديد"),
       "no policy argument → unchanged (compat)")
