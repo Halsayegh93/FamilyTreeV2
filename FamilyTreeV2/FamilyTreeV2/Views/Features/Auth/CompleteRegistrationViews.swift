@@ -151,7 +151,8 @@ struct CompleteRegistrationPage: View {
         SignupBoxShell(subtitle: L10n.t(T.completeTitle, "Complete registration"),
                        step: showsSteps ? step.rawValue : nil,
                        onSignOut: { Task { await authVM.signOut() } },
-                       onBack: showsSteps && R.back(from: step) != nil ? { goBack() } as (() -> Void)? : nil) {
+                       onBack: showsSteps && R.back(from: step) != nil ? { goBack() } as (() -> Void)? : nil,
+                       lift: DSBox.signupBoxLift) {
             VStack(alignment: .leading, spacing: DS.Spacing.md) {
                 // الخطوات تنزلق في المربّع نفسه (A1)؛ «أُرسل» و«طلب استكمال البيانات» من الإدارة (R2)
                 ZStack(alignment: .top) {

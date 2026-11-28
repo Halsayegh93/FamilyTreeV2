@@ -19,6 +19,9 @@ struct SignupBoxShell<Content: View>: View {
     var onSignOut: (() -> Void)? = nil
     /// زرّ الرجوع في الرأس (طلب المالك ٢٠٢٦-١١-٢٨): من البيانات إلى الخيارين، ومن الخيارين إلى شاشة الدخول
     var onBack: (() -> Void)? = nil
+    /// يرفع المربّع عن المنتصف (طلب المالك ٢٠٢٦-١١-٢٨ «ارفع المربع شوي» في «استكمال التسجيل»):
+    /// مساحة فارغة تحت المربّع بهذا الارتفاع، فيصعد بنصفها
+    var lift: CGFloat = 0
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -52,6 +55,7 @@ struct SignupBoxShell<Content: View>: View {
                                         animation: DSMotion.panel, anchor: .center)
                             .padding(.horizontal, DS.Spacing.lg)
                         Spacer(minLength: DS.Spacing.xl)
+                        Color.clear.frame(height: lift)
                     }
                     .frame(minHeight: geo.size.height)
                 }

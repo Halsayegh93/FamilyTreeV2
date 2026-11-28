@@ -1504,6 +1504,8 @@ private struct DSToolbarConfirmButton: View {
 // هذه القيم في الشاشات. ما يختلف: الرأس (كامل في العمل، شريط رفيع في التنبيه) وحجم القرص.
 enum DSBox {
     // المربّع نفسه
+    /// رفع مربّع «استكمال التسجيل» عن المنتصف (المساحة تحته؛ يصعد بنصفها ≈ ٧٠ نقطة) — طلب المالك ٢٠٢٦-١١-٢٨
+    static let signupBoxLift: CGFloat = 140
     /// زوايا المربّع نفسه
     static let radius: CGFloat = DS.Radius.xxl
     /// رأس مربّع العمل (٨٦ ← ٨٠ ← ٦٤ «هيدر المربع شوي نقلله» ٢٠٢٦-١١-٠١، `DSComposerHeader`)
