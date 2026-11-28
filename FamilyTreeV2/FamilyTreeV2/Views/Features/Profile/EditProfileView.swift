@@ -94,7 +94,8 @@ struct EditProfileView: View {
     /// حساب المرأة: عقدتها في شجرة النساء (ظهورها هي)
     @State private var myWomanNode: FamilyMember?
 
-    private let cooldown = ProfileEditCooldown.shared
+    /// حدّ التعديلات الذاتية من السيرفر (`profile_edit_limits()`) — يُجلب عند الفتح وقبل الحفظ
+    @ObservedObject private var cooldown = ProfileEditCooldown.shared
 
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// الوضع الأفقي — النموذج يتوزع على عمودين
@@ -184,6 +185,7 @@ struct EditProfileView: View {
         // مربّع طويل من الأسفل: لا يُسحب وفيه تعديلات غير محفوظة («إلغاء» يسأل أولاً)
         .interactiveDismissDisabled(hasUnsavedChanges)
         .task { await familyNamesVM.fetch() }
+        .task { await cooldown.refresh() }
         .task {
             // زوجاته وبناته من شجرة النساء (نفس «الأسرة» في الملف)
             if isOwnMaleProfile {
@@ -792,6 +794,15 @@ struct EditProfileView: View {
 
     /// «حفظ»: إن كان فيه شيء سيذهب للإدارة يظهر تأكيد يعدّده أولاً (طلب المالك)
     private func saveChangesAction() {
+        guard !isSaving, !showAdminConfirm else { return }
+        // العدّاد من السيرفر قبل القرار (جهاز آخر أو إعادة ضبط المالك قد غيّراه منذ الفتح)
+        Task { @MainActor in
+            await cooldown.refresh()
+            decideSave()
+        }
+    }
+
+    private func decideSave() {
         let normalizedPhone = KuwaitPhone.normalizedForStorage(country: selectedPhoneCountry, rawLocalDigits: phoneNumber) ?? ""
         guard phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !normalizedPhone.isEmpty else { return }
         let message = adminConfirmText(changes: detectChangedFields(normalizedPhone: normalizedPhone))

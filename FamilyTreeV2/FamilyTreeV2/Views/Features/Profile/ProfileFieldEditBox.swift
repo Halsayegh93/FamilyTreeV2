@@ -18,7 +18,8 @@ struct ProfileFieldEditBox: View {
     @ObservedObject private var network = NetworkMonitor.shared
     @Environment(\.dismiss) private var dismiss
 
-    private let cooldown = ProfileEditCooldown.shared
+    /// حدّ التعديلات الذاتية من السيرفر — يُجلب عند فتح المربّع
+    @ObservedObject private var cooldown = ProfileEditCooldown.shared
 
     @State private var loaded = false
     @State private var birthDate = Date()
@@ -86,6 +87,7 @@ struct ProfileFieldEditBox: View {
             }
         }
         .onAppear(perform: load)
+        .task { await cooldown.refresh() }
         .dsAlert(L10n.t("تم", "Done"),
                  isPresented: Binding(get: { resultMessage != nil }, set: { if !$0 { resultMessage = nil } }),
                  moment: .success) {

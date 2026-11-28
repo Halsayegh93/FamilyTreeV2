@@ -95,8 +95,11 @@ final class AdminAppAreaModel: ObservableObject {
     @Published private(set) var save = AdminAppSaveState()
     /// تأكيد ينتظر «نعم» (spec A.14)
     @Published var pendingConfirm: AdminAppLogic.Confirm?
-    /// «حدّ التعديلات الذاتية» على هذا الجهاز (`ProfileEditCooldown` — محلي كما كان)
+    /// «حدّ التعديلات الذاتية» من السيرفر (`profile_edit_limits()` ← `ProfileEditCooldown`؛ كان على جهاز المالك فقط)
     @Published private(set) var cooldownDisabled = ProfileEditCooldown.shared.isDisabled
+    @Published private(set) var editLimitHealth: AdminStoreHealth = .idle
+    /// عدد التعديلات المباشرة لكل حقل (`profile_free_edits`)
+    @Published private(set) var freeEdits = ProfileEditCooldown.shared.state.freeEdits
     /// قيم `app_config` حُفظت من هنا (أو اصطُنعت في تجربة دور) — تغلب الذاكرة حتى يعيد الجلب نفس القيمة
     @Published private(set) var configOverride: [String: String] = [:]
     /// آخر قيمة طُلبت لكل إعداد — «أعد المحاولة» يعيدها
@@ -127,6 +130,7 @@ final class AdminAppAreaModel: ObservableObject {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in await self.loadSettings() }
             group.addTask { @MainActor in await self.loadConfig() }
+            group.addTask { @MainActor in await self.loadEditLimit() }
             // «فرض التحديث» الجديد للمالك فقط (`update_policy_admin`) — كصفحته
             if canEdit { group.addTask { @MainActor in await AdminUpdatePolicyStore.shared.load() } }
             // عدد «الأخطاء» (Sentry) — لا يتكرر خلال دقيقة إلا بالسحب
@@ -240,7 +244,7 @@ final class AdminAppAreaModel: ObservableObject {
         switch setting.store {
         case .settings: ok = await writeSettings(setting, value)
         case .config:   ok = await writeConfig(setting, value)
-        case .local:    ok = writeLocal(value)
+        case .editLimit: ok = await writeEditLimit(value)
         case .command:  ok = await runCommand(setting)
         }
         save.finish(setting, success: ok)
@@ -302,26 +306,37 @@ final class AdminAppAreaModel: ObservableObject {
         }
     }
 
-    /// «حدّ التعديلات الذاتية» (محلي كما كان)
-    private func writeLocal(_ value: AdminAppValue?) -> Bool {
+    /// «حدّ التعديلات الذاتية»: `profile_edit_limits()` — الحالة الحقيقية على السيرفر
+    func loadEditLimit() async {
+        let cooldown = ProfileEditCooldown.shared
+        editLimitHealth = AdminAppLogic.seeded(editLimitHealth, hasData: cooldown.state.loaded).beginning()
+        let ok = await cooldown.refresh()
+        cooldownDisabled = cooldown.isDisabled
+        freeEdits = cooldown.state.freeEdits
+        editLimitHealth = editLimitHealth.ending(success: ok)
+    }
+
+    /// «حدّ التعديلات الذاتية» لكل الأعضاء: `set_app_config('profile_edit_limit_enabled', bool)` (المالك) —
+    /// القيمة تظهر فوراً، والفشل يعيد القديمة
+    private func writeEditLimit(_ value: AdminAppValue?) async -> Bool {
         guard let limitOn = value?.flag else { return false }
-        if DebugAdminProbe.dryRun("ProfileEditCooldown isDisabled=\(!limitOn)") {
-            cooldownDisabled = !limitOn
-            return true
-        }
-        ProfileEditCooldown.shared.isDisabled = !limitOn
-        cooldownDisabled = ProfileEditCooldown.shared.isDisabled
-        return cooldownDisabled == !limitOn
+        let old = cooldownDisabled
+        cooldownDisabled = !limitOn
+        if DebugAdminProbe.dryRun("set_app_config profile_edit_limit_enabled=\(limitOn)") { return true }
+        let ok = await ProfileEditCooldown.shared.setLimitEnabled(limitOn)
+        cooldownDisabled = ok ? ProfileEditCooldown.shared.isDisabled : old
+        return ok
     }
 
     /// الأمران الأحمران بعد «نعم»
     private func runCommand(_ setting: AdminAppSetting) async -> Bool {
         switch setting {
         case .resetCounter:
-            if !DebugAdminProbe.dryRun("ProfileEditCooldown resetAllCooldowns") {
-                ProfileEditCooldown.shared.resetAllCooldowns()
+            // عدّاد كل الأعضاء على السيرفر (`reset_profile_edit_counts()`، المالك)
+            if !DebugAdminProbe.dryRun("reset_profile_edit_counts()") {
+                guard await ProfileEditCooldown.shared.resetAllMembers() != nil else { return false }
             }
-            DSMomentToast.show(L10n.t("صُفّر العدّاد", "Counter reset"), moment: .success)
+            DSMomentToast.show(L10n.t("صُفّر عدّاد كل الأعضاء", "Every member's counter reset"), moment: .success)
             return true
         case .restoreDefaults:
             guard let vm = settingsVM else { return false }
@@ -618,13 +633,14 @@ struct AdminAppRulesCard: View {
                                 subtitle: L10n.t("الملفات تظهر فارغة في اللقطة", "Files show blank in screenshots"),
                                 options: AdminAppLogic.shieldOptions, current: model.shield(config),
                                 health: model.configHealth, canEdit: canEdit)
-                // العدّاد على الجهاز (`ProfileEditCooldown`) — قيمته حاضرة دائماً
+                // الحدّ والعدّاد على السيرفر لكل الأعضاء (`profile_edit_limits()` / `set_app_config`)
                 AdminAppToggleRow(model: model, setting: .selfEditLimit, icon: "timer", tint: DS.Color.slateFill,
-                                  subtitle: L10n.t("3 تعديلات ثم بموافقة الإدارة", "3 edits, then admin approval"),
-                                  isOn: !model.cooldownDisabled, health: .loaded(at: .distantPast), canEdit: canEdit)
+                                  subtitle: L10n.t("\(model.freeEdits) تعديلات لكل حقل ثم بموافقة الإدارة — للأعضاء والمشرفين",
+                                                   "\(model.freeEdits) edits per field, then admin approval — members and supervisors"),
+                                  isOn: !model.cooldownDisabled, health: model.editLimitHealth, canEdit: canEdit)
                 if canEdit {
                     AdminAppCommandRow(model: model, setting: .resetCounter, icon: "arrow.counterclockwise",
-                                       subtitle: L10n.t("تصفير فترات الانتظار", "Clear the waiting periods"))
+                                       subtitle: L10n.t("يصفّر عدّاد كل الأعضاء", "Resets every member's counter"))
                 }
                 // «تنبيه الصورة» + تذكير طلب الصورة (P1، ٢٠٢٦-١١-٢٦) — `app_config` عبر `set_app_config` (المالك)
                 AdminPhotoReminderRow(kind: .popupDays, health: model.configHealth, canEdit: canEdit)

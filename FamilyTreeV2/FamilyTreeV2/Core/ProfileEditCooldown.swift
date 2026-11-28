@@ -1,4 +1,6 @@
 import Foundation
+import Supabase
+import Combine
 
 /// الحقول القابلة للتعديل في الملف الشخصي
 enum EditableField: String, CaseIterable {
@@ -14,97 +16,104 @@ enum EditableField: String, CaseIterable {
     case gallery
 }
 
-/// حدّ تعديلات الملف الشخصي (طلب المالك):
-/// - أول 3 تعديلات لكل حقل: تُحفظ مباشرة
-/// - بعدها: لا قفل زمني — كل تعديل يُرسَل للإدارة ولا يُطبَّق إلا بموافقتها
-/// - كل حقل مستقل عن الآخر، والعدّاد لا يُصفَّر تلقائياً
-final class ProfileEditCooldown {
+/// حدّ تعديلات الملف الشخصي (طلب المالك) — **على السيرفر** منذ ٢٠٢٦-١١-٢٨ (ترحيل 20261128160000):
+/// - أول N تعديلات لكل حقل (`app_config.profile_free_edits`، ٣) تُحفظ مباشرة، وبعدها كل تعديل يُرسل للإدارة
+/// - كل حقل مستقل، والعدّاد لا يُصفَّر تلقائياً — لكل عضو في `profile_edit_counts` يعدّه المشغّل `trg_profiles_self_edit_limit`
+/// - المفتاح (`profile_edit_limit_enabled`) وإعادة الضبط من «الإدارة ← التطبيق» تصل كل الأعضاء (كانا على جهاز المالك فقط)
+/// - العضو والمشرف فقط؛ المالك والمدير والمراقب معفون (`exempt`)
+/// هذه الطبقة تجلب `profile_edit_limits()` وتقرّر في الشاشة (`ProfileEditLimitState`).
+@MainActor
+final class ProfileEditCooldown: ObservableObject {
     static let shared = ProfileEditCooldown()
 
-    private let defaults = UserDefaults.standard
-    private let useKeychain = true
-
-    /// عدد التعديلات المسموحة قبل القفل — ٣ تعديلات ثم يُقفل الحقل (طلب المالك)
-    private let maxFreeEdits = 3
-
-    /// مفتاح إيقاف العداد
-    private let disabledKey = "editCooldown_disabled"
+    @Published private(set) var state = ProfileEditLimitState()
 
     private init() {
-        migrateMaritalCounterIfNeeded()
+        clearOldDeviceCounters()
     }
 
-    /// مرة واحدة: كان الضغط على «أعزب/متزوج» يُحسب تعديلاً قبل ربطها بـ«حفظ»
-    /// (٢٠٢٦-٠٩-٢٣)، ثم استُهلك الحد بتجارب الحفظ (٢٠٢٦-٠٩-٢٤) — نصفّر عدّادها
-    /// ليبدأ العدّ من جديد: أول ٣ حفظات مباشرة، والرابعة فما بعد للإدارة
-    private func migrateMaritalCounterIfNeeded() {
-        let flag = "editCooldown_isMarried_resetOnSaveV3"
+    /// مرة واحدة: عدّادات الجهاز القديمة (UserDefaults/Keychain) لم تعد تُقرأ
+    private func clearOldDeviceCounters() {
+        let defaults = UserDefaults.standard
+        let flag = "editCooldown_serverV1"
         guard !defaults.bool(forKey: flag) else { return }
-        resetCooldown(for: .isMarried)
+        for field in EditableField.allCases {
+            for key in ["editCooldown_\(field.rawValue)_count", "editCooldown_\(field.rawValue)_lockDate"] {
+                defaults.removeObject(forKey: key)
+                KeychainHelper.delete(forKey: key)
+            }
+        }
+        defaults.removeObject(forKey: "editCooldown_disabled")
         defaults.set(true, forKey: flag)
     }
 
-    // MARK: - Admin Controls
+    // MARK: - السيرفر
 
-    /// هل العداد متوقف؟
-    var isDisabled: Bool {
-        get { defaults.bool(forKey: disabledKey) }
-        set { defaults.set(newValue, forKey: disabledKey) }
-    }
-
-    /// تصفير جميع العدادات
-    func resetAllCooldowns() {
-        for field in EditableField.allCases {
-            defaults.removeObject(forKey: editCountKey(field))
-            defaults.removeObject(forKey: lockDateKey(field))
-            KeychainHelper.delete(forKey: editCountKey(field))
-            KeychainHelper.delete(forKey: lockDateKey(field))
+    /// يجلب حالة المتصل (`profile_edit_limits()`) — يبقي آخر حالة إن فشل؛ true = وصل ردّ مفهوم
+    @discardableResult
+    func refresh() async -> Bool {
+        do {
+            let data = try await SupabaseConfig.client.rpc("profile_edit_limits").execute().data
+            guard let fresh = ProfileEditLimitState.parse(data) else { return false }
+            state = fresh
+            return true
+        } catch {
+            if !ErrorHelper.isCancellation(error) {
+                Log.warning("[EditLimit] profile_edit_limits: \(error.localizedDescription)")
+            }
+            return false
         }
-        Log.info("[Cooldown] تم تصفير جميع العدادات")
     }
 
-    /// تصفير عداد حقل معين
-    func resetCooldown(for field: EditableField) {
-        defaults.removeObject(forKey: editCountKey(field))
-        defaults.removeObject(forKey: lockDateKey(field))
-        KeychainHelper.delete(forKey: editCountKey(field))
-        KeychainHelper.delete(forKey: lockDateKey(field))
-        Log.info("[Cooldown] تم تصفير عداد \(field.rawValue)")
+    /// هل الحدّ مطفأ؟ (`profile_edit_limit_enabled`)
+    var isDisabled: Bool { !state.enabled }
+
+    /// المالك: يشغّل/يطفئ الحدّ لكل الأعضاء (`set_app_config`)
+    func setLimitEnabled(_ on: Bool) async -> Bool {
+        struct Params: Encodable { let p_key: String; let p_value: Bool }
+        do {
+            _ = try await SupabaseConfig.client
+                .rpc("set_app_config", params: Params(p_key: "profile_edit_limit_enabled", p_value: on)).execute()
+            state.enabled = on
+            await refresh()
+            return state.enabled == on
+        } catch {
+            if !ErrorHelper.isCancellation(error) { Log.warning("[EditLimit] set_app_config: \(error.localizedDescription)") }
+            return false
+        }
     }
 
-    // MARK: - Keys
-
-    private func editCountKey(_ field: EditableField) -> String {
-        "editCooldown_\(field.rawValue)_count"
-    }
-
-    private func lockDateKey(_ field: EditableField) -> String {
-        "editCooldown_\(field.rawValue)_lockDate"
+    /// المالك: يصفّر عدّاد كل الأعضاء (`reset_profile_edit_counts()`) — يرجع عدد الصفوف المحذوفة، nil عند الفشل
+    func resetAllMembers() async -> Int? {
+        do {
+            let data = try await SupabaseConfig.client.rpc("reset_profile_edit_counts").execute().data
+            let n = Int(String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
+            Log.info("[EditLimit] صُفّر عدّاد كل الأعضاء (\(n) صف)")
+            await refresh()
+            return n
+        } catch {
+            if !ErrorHelper.isCancellation(error) {
+                Log.warning("[EditLimit] reset_profile_edit_counts: \(error.localizedDescription)")
+            }
+            return nil
+        }
     }
 
     // MARK: - Public API
 
     /// هل التعديل يُحفظ مباشرة؟ (false = تجاوز الحد → يحتاج موافقة الإدارة)
-    func canEdit(_ field: EditableField) -> Bool {
-        if isDisabled { return true }
-        return loadCount(forKey: editCountKey(field)) < maxFreeEdits
-    }
+    func canEdit(_ field: EditableField) -> Bool { state.canEdit(field.rawValue) }
 
     /// لا قفل زمني بعد الآن — يبقى للتوافق مع الاستدعاءات القديمة
     func remainingTime(_ field: EditableField) -> TimeInterval { 0 }
 
     /// عدد التعديلات المباشرة المتبقية
-    func remainingEdits(_ field: EditableField) -> Int {
-        let count = loadCount(forKey: editCountKey(field))
-        return max(0, maxFreeEdits - count)
-    }
+    func remainingEdits(_ field: EditableField) -> Int { state.remaining(field.rawValue) }
 
-    /// تسجيل تعديل مباشر على حقل
+    /// بعد حفظ مباشر ناجح — السيرفر عدّه بالمشغّل، والنسخة المحلية تتبعه حتى الجلب التالي
     func recordEdit(_ field: EditableField) {
-        if isDisabled { return }
-        let count = loadCount(forKey: editCountKey(field)) + 1
-        saveCount(count, forKey: editCountKey(field))
-        Log.info("[EditLimit] تعديل \(count)/\(maxFreeEdits) على \(field.rawValue)")
+        state.record(field.rawValue)
+        Log.info("[EditLimit] تعديل على \(field.rawValue) — متبقٍ \(state.remaining(field.rawValue))")
     }
 
     /// نص الوقت المتبقي مثل "٣ ساعات و ١٥ دقيقة"
@@ -140,19 +149,5 @@ final class ProfileEditCooldown {
         return isArabic
             ? "\(remaining) تعديلات متبقية"
             : "\(remaining) edits remaining"
-    }
-
-    // MARK: - Private Storage
-
-    private func saveCount(_ count: Int, forKey key: String) {
-        defaults.set(count, forKey: key)
-        KeychainHelper.save(String(count), forKey: key)
-    }
-
-    private func loadCount(forKey key: String) -> Int {
-        if let stored = KeychainHelper.load(forKey: key), let val = Int(stored) {
-            return val
-        }
-        return defaults.integer(forKey: key)
     }
 }

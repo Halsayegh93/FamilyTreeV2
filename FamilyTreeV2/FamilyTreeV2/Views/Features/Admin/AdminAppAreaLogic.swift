@@ -31,7 +31,7 @@ nonisolated enum AdminAppSetting: String, CaseIterable, Hashable {
     case newsApproval
     /// «منع لقطة الشاشة في المكتبة» (`app_config.library_screen_protection`)
     case libraryShield
-    /// «حدّ التعديلات الذاتية» — على هذا الجهاز (`ProfileEditCooldown`)
+    /// «حدّ التعديلات الذاتية» — على السيرفر (`app_config.profile_edit_limit_enabled`، ترحيل 20261128160000)
     case selfEditLimit
     /// «إعادة ضبط العدّاد»
     case resetCounter
@@ -45,8 +45,8 @@ nonisolated enum AdminAppSetting: String, CaseIterable, Hashable {
         case settings
         /// `app_config` (`set_app_config`)
         case config
-        /// على الجهاز (`ProfileEditCooldown`)
-        case local
+        /// «حدّ التعديلات الذاتية»: `set_app_config` بقيمة bool (`ProfileEditCooldown.setLimitEnabled`)
+        case editLimit
         /// أمر لا قيمة له (يسأل أولاً دائماً)
         case command
     }
@@ -58,7 +58,7 @@ nonisolated enum AdminAppSetting: String, CaseIterable, Hashable {
         case .libraryShield:
             return .config
         case .selfEditLimit:
-            return .local
+            return .editLimit
         case .resetCounter, .restoreDefaults:
             return .command
         }
@@ -76,7 +76,8 @@ nonisolated enum AdminAppSetting: String, CaseIterable, Hashable {
         case .polls:         return "polls_enabled"
         case .newsApproval:  return "news_requires_approval"
         case .libraryShield: return "library_screen_protection"
-        case .selfEditLimit, .resetCounter, .restoreDefaults: return nil
+        case .selfEditLimit: return "profile_edit_limit_enabled"
+        case .resetCounter, .restoreDefaults: return nil
         }
     }
 }
@@ -229,8 +230,8 @@ nonisolated enum AdminAppLogic {
                 return L10n.t("لن تصل إشعارات الجوال لأي عضو حتى تعيدها. تبقى داخل التطبيق، ورسائل رمز الدخول لا تتأثر.",
                               "No member gets phone notifications until you turn them back on. They stay inside the app; sign-in code messages aren't affected.")
             case .resetCounter:
-                return L10n.t("تُصفَّر فترات الانتظار، ويستطيع العضو تعديل ملفه فوراً.",
-                              "Waiting periods are cleared and members can edit their profile right away.")
+                return L10n.t("يُصفَّر عدّاد التعديلات الذاتية لكل الأعضاء على السيرفر، فيعود لكل عضو عدد التعديلات المباشرة كاملاً في كل حقل. لا يمكن التراجع.",
+                              "Every member's self-edit counter is reset on the server, so each gets the full number of direct edits for every field again. This can't be undone.")
             case .restoreDefaults:
                 return L10n.t("تظهر الأقسام كلها، وتُطفأ الصيانة، وتعمل الإشعارات، وتُعتمد الأخبار قبل نشرها، ويُفتح التسجيل، و3 أجهزة لكل عضو. لا يمكن التراجع.",
                               "Every section shows, maintenance turns off, notifications run, news needs approval, sign-up opens and each member gets 3 devices. This can't be undone.")

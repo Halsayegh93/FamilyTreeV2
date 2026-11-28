@@ -25,6 +25,7 @@ enum ProfileAvatarChange {
                     memberVM: MemberViewModel, adminRequestVM: AdminRequestViewModel) async -> Result {
         let failed = Result(outcome: .failed, message: L10n.t("تعذّر رفع الصورة. يرجى المحاولة مرة أخرى.", "Couldn't upload the photo. Try again."))
         let cooldown = ProfileEditCooldown.shared
+        await cooldown.refresh()
         if cooldown.canEdit(.avatar) {
             guard await memberVM.uploadAvatar(image: image, for: member.id) else { return failed }
             cooldown.recordEdit(.avatar)
