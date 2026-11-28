@@ -18,6 +18,14 @@ struct FamilyTreeV2App: App {
 
     // Deep link handling is done via NotificationCenter → TreeView
 
+    init() {
+        // بلاغات الأعطال أولاً — قبل أي شيء آخر ليُلتقط أي عطل عند الإقلاع
+        CrashReporting.start()
+        #if DEBUG
+        DebugPerfBench.runIfRequested()
+        #endif
+    }
+
     private var preferredScheme: ColorScheme? {
         switch appearanceMode {
         case "light":
@@ -49,7 +57,14 @@ struct FamilyTreeV2App: App {
             }
             return
         }
-        guard AdminNotices.smsKinds.contains(kind) else { return }
+        // «طلب تغيير الصورة الشخصية» ← مربّع تغيير الصورة (`PhotoReminderGate`، ما دام الطلب مفتوحاً)
+        if kind == NotificationKind.photoChangeRequest.rawValue {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                NotificationCenter.default.post(name: .openPhotoChangeRequest, object: nil)
+            }
+            return
+        }
+        guard AdminNotices.ownerSystemKinds.contains(kind) else { return }
         NotificationCenter.default.post(name: .openAdminRequests, object: nil)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil, userInfo: ["kind": kind])
@@ -80,6 +95,9 @@ struct FamilyTreeV2App: App {
                 // — خط واحد في التطبيق كله (طلب المالك ٢٠٢٦-١٠-٠٧)
                 .font(DS.Font.body)
                 .preferredColorScheme(preferredScheme)
+                #if DEBUG
+                .debugAdminProbeRoot()   // أعلام -tmp* لفحص لوحة الإدارة (Core/DebugAdminProbe.swift): سطر الإقلاع والشارة ومقياس المكدس
+                #endif
                 // preferredColorScheme وحده لا يصل للشيتات والتنبيهات المقدَّمة من UIKit،
                 // فنفرض النمط على النافذة نفسها ليشمل كل ما يُعرض فوقها.
                 .onChange(of: appearanceMode) { _ in applyWindowStyle() }
@@ -224,7 +242,7 @@ struct FamilyTreeV2App: App {
                     Log.info("[DeepLink] فتح عضو: \(member.firstName)")
 
                     // حساب صلة القرابة
-                    let result = KinshipCalculator.calculate(
+                    let result = await KinshipCalculator.familyTree(
                         from: currentUser,
                         to: member,
                         lookup: appState.memberVM._memberById
@@ -241,7 +259,8 @@ struct FamilyTreeV2App: App {
                         userInfo: [
                             "memberId": member.id,
                             "relationship": result.relationship,
-                            "pathIds": pathIds
+                            "pathIds": pathIds,
+                            "viaMother": result.viaMother
                         ]
                     )
                     }

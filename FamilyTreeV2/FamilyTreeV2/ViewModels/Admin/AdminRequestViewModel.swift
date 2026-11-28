@@ -28,6 +28,10 @@ class AdminRequestViewModel: ObservableObject {
     @Published var privacyRequests: [AdminRequest] = []
     /// «إضافة قريبة» المعلّقة (`relative_add`) — المالك/المدير/المراقب
     @Published var relativeAddRequests: [AdminRequest] = []
+    /// «طلب النسب» المعلّق (`lineage_request`، أبناء البنات من خارج العائلة) — المالك/المدير/المراقب
+    @Published var lineageRequests: [AdminRequest] = []
+    /// «طلب حذف من الشجرة» المعلّقة (`relative_remove`) — المالك/المدير
+    @Published var relativeRemoveRequests: [AdminRequest] = []
     /// طلبات العضو الحالي المعلّقة — يتابعها ويلغيها من «حسابي» (طلباتي).
     @Published var myPendingRequests: [AdminRequest] = []
     /// «مسار الموافقات»: صفوف طلبات الانضمام/الربط المعلّقة (مرحلتها) — تُجلب والمفتاح شغّال فقط
@@ -46,6 +50,8 @@ class AdminRequestViewModel: ObservableObject {
     @Published private(set) var approvalsWorkflowOn: Bool = false
     private var approvalsFlagSink: AnyCancellable?
     @Published var isLoading: Bool = false
+    /// سبب رفض آخر طلب تعديل شجرة (رسالة رسمية معروفة، مثل «تغيير الرقم متاح لصاحب الحساب فقط.») — nil = عامة
+    @Published var lastTreeEditError: String?
     @Published var mergeResult: MergeResult? = nil
     @Published var errorMessage: String? = nil
 
@@ -181,7 +187,7 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Private Helpers
 
-    private var currentUser: FamilyMember? { authVM?.currentUser }
+    var currentUser: FamilyMember? { authVM?.currentUser }
     private var canModerate: Bool { authVM?.canModerate ?? false }
     private var isAdmin: Bool { authVM?.isAdmin ?? false }
     /// قبول/رفض الطلبات: owner+admin+monitor (المشرف يقدر يقبل بس لا يرفض).
@@ -322,9 +328,9 @@ class AdminRequestViewModel: ObservableObject {
         case "approval_needs_manager":
             return L10n.t("الطلب يحتاج اعتماد المدير قبل التنفيذ", "The request needs the manager's approval before it's carried out")
         case "workflow_off":
-            return L10n.t("مسار الموافقات مطفأ الحين — حدّث الصفحة.", "The approvals path is off now — refresh the page.")
+            return L10n.t("مسار الموافقات متوقف حالياً، يرجى تحديث الصفحة.", "The approvals path is off now — refresh the page.")
         case "wrong_stage":
-            return L10n.t("الطلب انتقل لمرحلة ثانية — حدّث الصفحة وشوف وين وصل.",
+            return L10n.t("انتقل الطلب إلى مرحلة أخرى، يرجى تحديث الصفحة لمعرفة حالته.",
                           "The request has moved to another stage — refresh to see where it is.")
         case "note_required":
             return L10n.t("اكتب الملاحظة أولاً.", "Write the note first.")
@@ -400,6 +406,19 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Tree Edit Requests
 
+    /// المسار الافتراضي لطلب الشجرة (حين لا تمرّره الشاشة): الملف الشخصي لتعديل العضو ملفّه بعد الحد،
+    /// وإلا «الشجرة ← العضو ← طلب …»
+    static func treeEditSource(_ payload: TreeEditPayload) -> RequestSource {
+        let action = payload.resolvedAction
+        if let reason = payload.reason, reason.hasPrefix("profile_") {
+            return RequestSource(.profile, RequestSourceStep("pencil", "تعديل البيانات"))
+        }
+        let label = action.map { "طلب " + $0.arabicLabel } ?? "طلب تعديل"
+        return RequestSource(.tree,
+                             .member(payload.targetMemberName ?? payload.parentMemberName),
+                             RequestSourceStep(action?.iconName ?? "square.and.pencil", label))
+    }
+
     /// إرسال طلب تعديل الشجرة (إضافة / تعديل اسم / حذف) — v2 structured payload
     /// رفع صورة مقترحة لطلب «إضافة صورة» — تُخزَّن باسم
     /// photo_suggestion_<callerUid>_<uuid>.jpg في bucket الأفاتار (عام). الاسم
@@ -427,10 +446,18 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
-    func submitTreeEditRequest(payload: TreeEditPayload) async -> Bool {
+    /// - source: مسار الإرسال (الشاشة التي أرسلته — طلب المالك ٢٠٢٦-١١-١١)؛ nil = مسار «الشجرة» المستنتج من الحمولة
+    func submitTreeEditRequest(from source: RequestSource, payload: TreeEditPayload) async -> Bool {
+        await submitTreeEditRequest(payload: payload, source: source)
+    }
+
+    /// - aboutRequester: `member_id` = مقدّم الطلب والمستهدف في `targetMemberId` وحده — لعقدة في شجرة النساء بلا ملف
+    ///   (صورة زوج البنت من خارج العائلة بلا حساب؛ الحارس يقبلها لزوجته أو ابنه فقط، 20261127260000)
+    func submitTreeEditRequest(payload: TreeEditPayload, source: RequestSource? = nil, aboutRequester: Bool = false) async -> Bool {
         guard NetworkMonitor.shared.requireOnline() else { return false }
         guard let user = currentUser else { return false }
         self.isLoading = true
+        self.lastTreeEditError = nil
         defer { self.isLoading = false }
 
         do {
@@ -439,7 +466,7 @@ class AdminRequestViewModel: ObservableObject {
 
             // member_id: دايماً يكون العضو المعني — للإضافة = الطالب نفسه (لأن الابن مو موجود بعد)
             let targetId: String
-            if let tid = payload.targetMemberId, !tid.isEmpty {
+            if !aboutRequester, let tid = payload.targetMemberId, !tid.isEmpty {
                 targetId = tid
             } else {
                 targetId = user.id.uuidString
@@ -455,31 +482,37 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable(jsonString)
             ]
 
-            do {
-                var dbPayload = basePayload
-                dbPayload["new_value"] = AnyEncodable(payload.action)
-                try await supabase.from("admin_requests").insert(dbPayload).execute()
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    try await supabase.from("admin_requests").insert(basePayload).execute()
-                } else {
-                    throw error
+            let path = source ?? Self.treeEditSource(payload)
+            try await AdminRequestSource.send(path) { path in
+                do {
+                    var dbPayload = AdminRequestSource.payload(basePayload, path)
+                    dbPayload["new_value"] = AnyEncodable(payload.action)
+                    try await supabase.from("admin_requests").insert(dbPayload).execute()
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        try await supabase.from("admin_requests").insert(AdminRequestSource.payload(basePayload, path)).execute()
+                    } else {
+                        throw error
+                    }
                 }
             }
 
             let memberName = payload.targetMemberName ?? payload.newMemberName ?? ""
             let actionLabelAr = payload.resolvedAction?.arabicLabel ?? payload.action
             let actionLabelEn = payload.resolvedAction?.englishLabel ?? payload.action
-            let requesterFirstName = user.firstName
+            // الاسم الأول قد يكون فارغاً — لا يبدأ النص بمسافة
+            let firstName = user.firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let requesterAr = firstName.isEmpty ? "عضو" : firstName
+            let requesterEn = firstName.isEmpty ? "A member" : firstName
             let bodyAr: String = memberName.isEmpty
-                ? "\(requesterFirstName) قدّم طلب \(actionLabelAr)"
-                : "\(requesterFirstName) قدّم طلب \(actionLabelAr) لـ «\(memberName)»"
+                ? "\(requesterAr) قدّم طلب \(actionLabelAr)"
+                : "\(requesterAr) قدّم طلب \(actionLabelAr) لـ «\(memberName)»"
             let bodyEn: String = memberName.isEmpty
-                ? "\(requesterFirstName) submitted a \(actionLabelEn) request"
-                : "\(requesterFirstName) submitted a \(actionLabelEn) request for «\(memberName)»"
+                ? "\(requesterEn) submitted a \(actionLabelEn) request"
+                : "\(requesterEn) submitted a \(actionLabelEn) request for «\(memberName)»"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
-                body: L10n.t(bodyAr, bodyEn),
+                title: L10n.stored("طلب تعديل شجرة العائلة", "Family Tree Edit Request"),
+                body: L10n.stored(bodyAr, bodyEn),
                 kind: NotificationKind.treeEdit.rawValue,
                 requestId: requestId,
                 requestType: RequestType.treeEdit.rawValue
@@ -489,6 +522,7 @@ class AdminRequestViewModel: ObservableObject {
             return true
         } catch {
             Log.error("[TreeEdit] Submit failed: \(error.localizedDescription)")
+            lastTreeEditError = ErrorHelper.adminRequestMessage(error)
             return false
         }
     }
@@ -502,7 +536,9 @@ class AdminRequestViewModel: ObservableObject {
         RequestType.nameChange.rawValue,
         RequestType.phoneChange.rawValue,
         RequestType.deceasedReport.rawValue,
-        RequestType.childAdd.rawValue
+        RequestType.childAdd.rawValue,
+        // «طلب حذف من الشجرة» من «عائلتي» (٢٠٢٦-١١-١٣) — يُسحب كغيره
+        RequestType.relativeRemove.rawValue
     ]
 
     /// ما يُضاف لـ«طلباتي» والمسار شغّال: باقي أنواع المسار التي يرسلها عضو مفعّل
@@ -541,7 +577,7 @@ class AdminRequestViewModel: ObservableObject {
                 Self.myTrackedRequestTypes.contains($0.requestType) || workflowOn || $0.stage != nil
             }
         } catch {
-            Log.fetchError("فشل جلب طلباتي المعلّقة", error)
+            Log.fetchError("فشل جلب الطلبات المعلّقة", error)
         }
     }
 
@@ -575,6 +611,16 @@ class AdminRequestViewModel: ObservableObject {
             myPendingRequests.removeAll { $0.id == request.id }
         }
         nonisolated struct DeletedRow: Decodable { let id: UUID }
+        // سحب «إضافة ابن» = إلغاء الإضافة (٢٠٢٦-١١-١٣): الحذف أولاً والطلب ما زال معلّقاً — السيرفر يحذف الابن مباشرة
+        // ومعه الطلب نفسه (`remove_self_child`). كان الطلب يُحذف قبله فيصير الحذف «طلب حذف من الشجرة» لغير الإدارة
+        if request.requestType == RequestType.childAdd.rawValue,
+           let raw = request.newValue, let childId = UUID(uuidString: raw), let memberVM,
+           await memberVM.removeSelfChild(id: childId) == .deleted {
+            memberVM.errorMessage = nil
+            Log.info("[MyRequests] سُحب طلب إضافة الابن وحُذف الابن: \(request.id)")
+            return
+        }
+        memberVM?.errorMessage = nil
         do {
             // المعلّق فقط، ونطلب الصفوف المحذوفة: صفر صفوف (عُولج الطلب أو منعته السياسة) لا يعطي خطأ
             // فكان الطلب «يرجع» بعد اختفائه بلا تفسير
@@ -600,24 +646,9 @@ class AdminRequestViewModel: ObservableObject {
                 return
             }
             Log.info("[MyRequests] تم إلغاء الطلب: \(request.id)")
-            // سحب «إضافة ابن» = إلغاء الإضافة: الابن المضاف يُحذف معه — لكل عضو عبر remove_self_child
-            // (أبناؤه هو فقط، بلا حساب دخول)؛ قبل رفع الدالة للسيرفر: المالك والمدير بالحذف المباشر.
-            // فشل الحذف لا يُعرض (الطلب نفسه سُحب) — يُسجَّل فقط
-            if request.requestType == RequestType.childAdd.rawValue,
-               let raw = request.newValue, let childId = UUID(uuidString: raw), let memberVM {
-                switch await memberVM.removeSelfChild(id: childId) {
-                case .deleted:
-                    break   // removeSelfChild يُنعش الأبناء وعائلة شجرة النساء
-                case .serverMissing where authVM?.canDeleteMembers == true:
-                    if await memberVM.deleteMember(memberId: childId) {
-                        await memberVM.fetchChildren(for: uid)   // يُنعش شجرة النساء معه
-                    } else {
-                        Log.warning("[MyRequests] تعذّر حذف الابن بعد سحب طلب إضافته: \(memberVM.errorMessage ?? "")")
-                    }
-                case .serverMissing, .failed:
-                    Log.warning("[MyRequests] لم يُحذف الابن بعد سحب طلب إضافته: \(memberVM.errorMessage ?? "")")
-                }
-                memberVM.errorMessage = nil
+            // «إضافة ابن» لم يُحذف ابنه أعلاه (حساب دخول، سجل متوفى…): سُحب الطلب وحده — يُسجَّل فقط
+            if request.requestType == RequestType.childAdd.rawValue {
+                Log.warning("[MyRequests] سُحب طلب إضافة الابن وبقي الابن")
             }
         } catch {
             Log.error("[MyRequests] فشل إلغاء الطلب: \(error.localizedDescription)")
@@ -787,7 +818,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// تسجيل تعديل أدمن مباشر في admin_requests كسجل audit (status='approved' فوراً).
     /// لا يطلق إشعارات للمستخدمين — فقط للسجل.
-    func logAdminDirectEdit(payload: TreeEditPayload) async {
+    func logAdminDirectEdit(payload: TreeEditPayload, source: RequestSource? = nil) async {
         guard let user = currentUser else { return }
         do {
             var directPayload = payload
@@ -828,15 +859,23 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable(jsonString)
             ]
 
-            do {
-                try await supabase.from("admin_requests").insert(logEntry).execute()
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    var fallback = logEntry
-                    fallback.removeValue(forKey: "new_value")
-                    try await supabase.from("admin_requests").insert(fallback).execute()
-                } else {
-                    throw error
+            let action = directPayload.resolvedAction
+            let path = source ?? RequestSource(.tree,
+                                               .member(directPayload.targetMemberName ?? directPayload.parentMemberName),
+                                               RequestSourceStep(action?.iconName ?? "square.and.pencil",
+                                                                 "تعديل مباشر: " + (action?.arabicLabel ?? directPayload.action)))
+            try await AdminRequestSource.send(path) { path in
+                let entry = AdminRequestSource.payload(logEntry, path)
+                do {
+                    try await supabase.from("admin_requests").insert(entry).execute()
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        var fallback = entry
+                        fallback.removeValue(forKey: "new_value")
+                        try await supabase.from("admin_requests").insert(fallback).execute()
+                    } else {
+                        throw error
+                    }
                 }
             }
 
@@ -863,7 +902,7 @@ class AdminRequestViewModel: ObservableObject {
 
     // MARK: - Deceased Status Requests
 
-    func requestDeceasedStatus(memberId: UUID, deathDate: Date?) async {
+    func requestDeceasedStatus(memberId: UUID, deathDate: Date?, source: RequestSource? = nil) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
         self.isLoading = true
         do {
@@ -879,16 +918,20 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("طلب تأكيد وفاة بتاريخ: \(dateString)")
             ]
 
-            try await supabase
-                .from("admin_requests")
-                .insert(requestData)
-                .execute()
+            let path = source ?? RequestSource(.tree, .member(memberById(memberId)?.displayFullName),
+                                               RequestSourceStep("leaf.fill", "تسجيل وفاة"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(requestData, path))
+                    .execute()
+            }
 
             let deceasedMemberName = memberById(memberId)?.firstName ?? "عضو"
             let requesterDeceasedName = currentUser?.firstName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تأكيد وفاة", "Deceased Status Request"),
-                body: L10n.t(
+                title: L10n.stored("طلب تأكيد وفاة", "Deceased Status Request"),
+                body: L10n.stored(
                     "\(requesterDeceasedName) يطلب تأكيد وفاة \(deceasedMemberName)",
                     "\(requesterDeceasedName) requests deceased confirmation for \(deceasedMemberName)"
                 ),
@@ -1077,12 +1120,12 @@ class AdminRequestViewModel: ObservableObject {
 
             // إشعار للمدراء بإضافة الابن
             let parentFullName = parent?.fullName ?? ""
-            let notifBody = L10n.t(
+            let notifBody = L10n.stored(
                 "تم إضافة الابن: «\(firstName)» لـ: «\(parentFullName)»",
                 "Son added: «\(firstName)» to: «\(parentFullName)»"
             )
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تعديل الشجرة", "Tree Update"),
+                title: L10n.stored("تعديل الشجرة", "Tree Update"),
                 body: notifBody,
                 kind: NotificationKind.treeEdit.rawValue
             )
@@ -1273,7 +1316,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
     @discardableResult
-    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String) async -> Bool {
+    func requestPhoneNumberChange(memberId: UUID, newPhoneNumber: String, source: RequestSource? = nil) async -> Bool {
         self.isLoading = true
         guard let normalizedPhone = KuwaitPhone.normalizeForStorageFromInput(newPhoneNumber) else {
             Log.error("رقم طلب التغيير غير صالح.")
@@ -1292,15 +1335,18 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("طلب تغيير رقم الجوال")
             ]
 
-            try await supabase
-                .from("admin_requests")
-                .insert(requestData)
-                .execute()
+            let path = source ?? RequestSource(.profile, RequestSourceStep("phone.fill", "تغيير الرقم"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(requestData, path))
+                    .execute()
+            }
 
             let phoneRequesterName = currentUser?.firstName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تغيير رقم الهاتف", "Phone Change Request"),
-                body: L10n.t(
+                title: L10n.stored("طلب تغيير رقم الهاتف", "Phone Change Request"),
+                body: L10n.stored(
                     "\(phoneRequesterName) يطلب تغيير رقم هاتفه",
                     "\(phoneRequesterName) requests a phone number change"
                 ),
@@ -1322,7 +1368,7 @@ class AdminRequestViewModel: ObservableObject {
     // MARK: - Family Change Requests (العائلة بطلب فقط — طلب المالك)
 
     @discardableResult
-    func requestFamilyChange(memberId: UUID, newFamily: String) async -> Bool {
+    func requestFamilyChange(memberId: UUID, newFamily: String, source: RequestSource? = nil) async -> Bool {
         let requestId = UUID()
         do {
             let requestData: [String: AnyEncodable] = [
@@ -1334,12 +1380,16 @@ class AdminRequestViewModel: ObservableObject {
                 "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable("طلب تغيير العائلة إلى: \(newFamily)")
             ]
-            try await supabase.from("admin_requests").insert(requestData).execute()
+            let path = source ?? RequestSource(.profile, RequestSourceStep("pencil", "تعديل البيانات"),
+                                               RequestSourceStep("person.3.fill", "تغيير العائلة"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase.from("admin_requests").insert(AdminRequestSource.payload(requestData, path)).execute()
+            }
 
             let requesterFullName = currentUser?.displayFullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تغيير العائلة", "Family Change Request"),
-                body: L10n.t("طلب تغيير عائلة: \(requesterFullName) إلى \(newFamily)",
+                title: L10n.stored("طلب تغيير العائلة", "Family Change Request"),
+                body: L10n.stored("طلب تغيير عائلة: \(requesterFullName) إلى \(newFamily)",
                              "Family change request: \(requesterFullName) to \(newFamily)"),
                 kind: RequestType.familyChange.rawValue,
                 requestId: requestId,
@@ -1356,7 +1406,7 @@ class AdminRequestViewModel: ObservableObject {
 
     /// يرجع نجاح إرسال الطلب — كان يُسجَّل الخطأ فقط فتقول الشاشة «أُرسل»
     @discardableResult
-    func requestNameChange(memberId: UUID, newName: String) async -> Bool {
+    func requestNameChange(memberId: UUID, newName: String, source: RequestSource? = nil) async -> Bool {
         self.isLoading = true
         do {
             let nameRequestId = UUID()
@@ -1370,15 +1420,19 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("طلب تغيير الاسم إلى: \(newName)")
             ]
 
-            try await supabase
-                .from("admin_requests")
-                .insert(requestData)
-                .execute()
+            let path = source ?? RequestSource(.profile, RequestSourceStep("pencil", "تعديل البيانات"),
+                                               RequestSourceStep("character.cursor.ibeam", "تغيير الاسم"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(requestData, path))
+                    .execute()
+            }
 
             let requesterFullName = currentUser?.fullName ?? "عضو"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("طلب تغيير الاسم", "Name Change Request"),
-                body: L10n.t(
+                title: L10n.stored("طلب تغيير الاسم", "Name Change Request"),
+                body: L10n.stored(
                     "طلب تغيير اسم: \(requesterFullName) إلى \(newName)",
                     "Name change request: \(requesterFullName) to \(newName)"
                 ),
@@ -1625,8 +1679,8 @@ class AdminRequestViewModel: ObservableObject {
             let memberName = getSafeMemberName(for: memberId)
 
             // إشعار المستخدم بالتفعيل
-            let userTitle = L10n.t("مرحباً بك في العائلة", "Welcome to the Family")
-            let userBody = L10n.t("تم تفعيل حسابك بنجاح — يمكنك الآن استخدام التطبيق", "Your account is now active — you can start using the app")
+            let userTitle = L10n.stored("مرحباً بك في العائلة", "Welcome to the Family")
+            let userBody = L10n.stored("تم تفعيل حسابك بنجاح — يمكنك الآن استخدام التطبيق", "Your account is now active — you can start using the app")
             if let creator = currentUser?.id {
                 let payload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(memberId.uuidString),
@@ -1646,8 +1700,8 @@ class AdminRequestViewModel: ObservableObject {
 
             // إشعار المدراء
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("تفعيل حساب", "Account Activated"),
-                body: L10n.t(
+                title: L10n.stored("تفعيل حساب", "Account Activated"),
+                body: L10n.stored(
                     "تم تفعيل حساب \(memberName)",
                     "\(memberName)'s account was activated"
                 ),
@@ -1921,23 +1975,44 @@ class AdminRequestViewModel: ObservableObject {
         }
     }
 
+    /// «حوّل للمدير» (مقترح «أدوار الإدارة» البند ١١): المراقب يقبل طلب الانضمام ولا يرفضه (الرفض = حذف الملف،
+    /// `canDeleteMembers`) — فيحوّله للمالك/المدير بإشعار الإدارة الموجود (داخلي + push) بملاحظته.
+    /// `request_id` = معرّف العضو المعلّق (كما يعرّف «الوارد» طلب الانضمام) فيبقى الإشعار «يحتاج إجراء» حتى يُبتّ فيه.
+    func forwardJoinToManager(member: FamilyMember, note: String) async -> Bool {
+        guard canModerate, member.role == .pending else { return false }
+        guard NetworkMonitor.shared.requireOnline() else { return false }
+        let who = currentUser?.shortFullName ?? L10n.stored("المراقب", "The monitor")
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        var body = L10n.stored("\(who) حوّل لك طلب انضمام \(member.fullName) للقرار",
+                               "\(who) forwarded \(member.fullName)'s join request to you for a decision")
+        if !trimmed.isEmpty { body += "\n" + L10n.stored("ملاحظته: \(trimmed)", "Note: \(trimmed)") }
+        await notificationVM?.notifyAdminsWithPush(
+            title: L10n.stored("طلب انضمام محوَّل للمدير", "Join request forwarded to the manager"),
+            body: body,
+            kind: NotificationKind.adminRequest.rawValue,
+            requestId: member.id,
+            requestType: RequestType.joinRequest.rawValue)
+        Log.info("[Join] حُوّل طلب الانضمام \(member.id) للمدير")
+        return true
+    }
+
     private func notifyJoinApproval(memberId: UUID, fatherName: String?) async {
         guard let creator = currentUser?.id else { return }
 
         let body: String
         if let fatherName, !fatherName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            body = L10n.t(
+            body = L10n.stored(
                 "تم اعتماد انضمامك وربطك بالشجرة مع: \(fatherName)",
                 "Your membership was approved and linked to: \(fatherName)"
             )
         } else {
-            body = L10n.t(
+            body = L10n.stored(
                 "تم اعتماد انضمامك للعائلة بنجاح",
                 "Your family membership was approved successfully"
             )
         }
 
-        let title = L10n.t("مرحباً بك في العائلة", "Welcome to the Family")
+        let title = L10n.stored("مرحباً بك في العائلة", "Welcome to the Family")
 
         let payload: [String: AnyEncodable] = [
             "target_member_id": AnyEncodable(memberId.uuidString),
@@ -1954,8 +2029,8 @@ class AdminRequestViewModel: ObservableObject {
             // Notify admins and supervisors about the new member (خارجي + داخلي)
             let memberName = getSafeMemberName(for: memberId)
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("انضمام عضو جديد", "New Member Joined"),
-                body: L10n.t(
+                title: L10n.stored("انضمام عضو جديد", "New Member Joined"),
+                body: L10n.stored(
                     "\(memberName) انضم لشجرة العائلة",
                     "\(memberName) joined the family tree"
                 ),
@@ -2115,8 +2190,8 @@ class AdminRequestViewModel: ObservableObject {
                 .execute()
 
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("حذف عضو", "Member Removed"),
-                body: L10n.t(
+                title: L10n.stored("حذف عضو", "Member Removed"),
+                body: L10n.stored(
                     "تم حذف عضو من شجرة العائلة\n\(deletedName)",
                     "Removed from the family tree\n\(deletedName)"
                 ),
@@ -2247,7 +2322,7 @@ class AdminRequestViewModel: ObservableObject {
     @Published var photoSuggestionRequests: [AdminRequest] = []
 
     /// إرسال اقتراح صورة لعضو — يرفع الصورة كملف مؤقت ويسجل طلب إداري
-    func submitPhotoSuggestion(image: UIImage, for memberId: UUID) async -> Bool {
+    func submitPhotoSuggestion(image: UIImage, for memberId: UUID, source: RequestSource? = nil) async -> Bool {
         guard let user = currentUser else { return false }
         self.isLoading = true
         defer { self.isLoading = false }
@@ -2285,23 +2360,27 @@ class AdminRequestViewModel: ObservableObject {
                 "details": AnyEncodable("اقتراح صورة لـ \(memberName)")
             ]
 
-            // محاولة إرسال مع new_value
-            do {
-                var payload = basePayload
-                payload["new_value"] = AnyEncodable(urlString)
-                try await supabase.from("admin_requests").insert(payload).execute()
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    try await supabase.from("admin_requests").insert(basePayload).execute()
-                } else {
-                    throw error
+            // محاولة إرسال مع new_value (ومسار الإرسال إن قبله السيرفر)
+            let path = source ?? RequestSource(.tree, .member(memberById(memberId)?.displayFullName),
+                                               RequestSourceStep("photo.badge.plus", "اقتراح صورة"))
+            try await AdminRequestSource.send(path) { path in
+                do {
+                    var payload = AdminRequestSource.payload(basePayload, path)
+                    payload["new_value"] = AnyEncodable(urlString)
+                    try await supabase.from("admin_requests").insert(payload).execute()
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        try await supabase.from("admin_requests").insert(AdminRequestSource.payload(basePayload, path)).execute()
+                    } else {
+                        throw error
+                    }
                 }
             }
 
             // 3. إشعار المدراء
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("اقتراح صورة جديدة", "New Photo Suggestion"),
-                body: L10n.t(
+                title: L10n.stored("اقتراح صورة جديدة", "New Photo Suggestion"),
+                body: L10n.stored(
                     "اقتراح صورة جديدة لـ: \(memberName) تحتاج موافقتكم",
                     "New photo suggestion for: \(memberName) — needs approval"
                 ),

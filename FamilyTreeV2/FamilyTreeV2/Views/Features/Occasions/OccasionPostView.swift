@@ -46,7 +46,11 @@ struct OccasionPostView: View {
 
     @ViewBuilder
     private var content: some View {
-        if template.effectiveModel(model) == .m3 {
+        if template.effectiveModel(model) == .m4, let layout = template.model4Layout(size) {
+            // نموذج ٤: تصميم السيرفر
+            OccasionModel4View(layout: layout, values: values, photo: photo, showsPhoto: template.showsPhoto(withPhoto),
+                               kit: kit, canvas: canvas)
+        } else if template.effectiveModel(model) == .m3 {
             m3Post
         } else if template.effectiveModel(model) == .m1 {
             switch template.kind {

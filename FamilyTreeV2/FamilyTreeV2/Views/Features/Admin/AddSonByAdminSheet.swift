@@ -31,6 +31,11 @@ struct AddSonByAdminSheet: View {
     @State private var showOfflineAlert = false
     @State private var showSaveError = false
     @State private var saveErrorText = ""
+    @State private var showCompoundNameCheck = false
+    /// «أنثى» في الإضافة — شجرة العائلة للرجال فقط (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧)
+    @State private var showMenOnly = false
+    /// «إضافة» → فحص الاسم: اسم بنت ينتقل تلقائياً لشجرة النساء (`FamilyTreeMenOnly.namesToMove`)
+    @State private var nameCheck: FamilyTreeNameCheck? = nil
 
     // MARK: - تغييرات لم تُحفظ (توصية أبل)
 
@@ -130,10 +135,11 @@ struct AddSonByAdminSheet: View {
             tint: DS.Color.actionNavy,
             actionTitle: isEditMode ? L10n.t("حفظ", "Save") : L10n.t("إضافة", "Add"),
             actionIcon: isEditMode ? "checkmark" : "plus",
-            canSubmit: !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            canSubmit: !firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && (isEditMode || FamilyTreeMenOnly.genderChosen(selectedGender)),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
-            onSubmit: saveAction,
+            onSubmit: submitAction,
             onCancel: { dismiss() }
         ) {
             contextSection.dsStaggerIn(0)
@@ -157,6 +163,16 @@ struct AddSonByAdminSheet: View {
         } message: {
             Text(saveErrorText)
         }
+        .dsAlert(L10n.t("تأكد قبل الحفظ", "Check before saving"), isPresented: $showCompoundNameCheck, icon: "exclamationmark.triangle.fill") {
+            Button(L10n.t("متابعة", "Continue")) { saveAction() }
+            Button(L10n.t("تعديل", "Edit"), role: .cancel) {}
+        } message: {
+            Text(AddChildChecks.compoundNameWarning(firstName) ?? "")
+        }
+        // الإضافة فقط: «إضافة بنت في شجرة النساء» تحت الأب نفسه، وبعد إغلاقها يُغلق هذا المربّع
+        // واسم بنت عند «إضافة» ينتقل تلقائياً هناك («هو ولد؟ ارجع» يرجع لهذا المربّع كما هو)
+        .familyTreeMenOnly(isPresented: $showMenOnly, father: parent, typedName: firstName,
+                           nameCheck: $nameCheck, onSon: continueAsSon) { dismiss() }
         .onAppear {
             if editingChild == nil, !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -191,35 +207,29 @@ struct AddSonByAdminSheet: View {
 
     // MARK: - البيانات الأساسية: الاسم، الجنس، الرقم
     private var basicsCard: some View {
-        DSFormCard(L10n.t("البيانات الأساسية", "Basic Info"),
-                   icon: "person.text.rectangle.fill", color: chromeInk) {
-            DSFieldBox(L10n.t("الاسم الأول", "First Name")) {
-                TextField(L10n.t("اسم الابن الأول", "Child's first name"), text: $firstName)
-                    .onChange(of: firstName) { _ in
-                        if firstName.count > 50 { firstName = String(firstName.prefix(50)) }
-                    }
-            }
+        // قسم وحقول المربّعات الموحّدة (طلب المالك ٢٠٢٦-١١-١١)
+        DSComposerSection(title: L10n.t("البيانات الأساسية", "Basic Info"),
+                          icon: "person.text.rectangle.fill", tint: chromeInk, index: 1) {
+            DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
+                            placeholder: L10n.t("الاسم الأول فقط", "First name only"),
+                            text: $firstName, limit: 50)
 
-            DSGenderPicker(selection: $selectedGender)
+            // الإضافة: شجرة العائلة للرجال فقط — «أنثى» تنبيه وانتقال لشجرة النساء (طلب المالك ٢٠٢٦-١١-٢٧).
+            // التعديل: تغيير الجنس نقلٌ بين الشجرتين (`moveChildGender`) كما كان
+            DSGenderPicker(selection: isEditMode ? $selectedGender : $selectedGender.menOnly(alert: $showMenOnly))
 
             if !isDeceased {
-                DSFieldBox(L10n.t("رقم الهاتف (اختياري)", "Phone (optional)")) {
-                    DSPhoneField(
-                        country: $selectedPhoneCountry,
-                        digits: $phoneNumber,
-                        placeholder: L10n.t("اختياري", "Optional"),
-                        compact: true,
-                        bordered: false
-                    )
-                }
+                DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
+                                title: L10n.t("رقم الهاتف", "Phone number"),
+                                placeholder: L10n.t("اختياري", "Optional"))
             }
         }
     }
 
     // MARK: - التواريخ والحالة (طلب المالك)
     private var datesCard: some View {
-        DSFormCard(L10n.t("التواريخ والحالة", "Dates & Status"),
-                   icon: "calendar", color: DS.Color.palm) {
+        DSComposerSection(title: L10n.t("التواريخ والحالة", "Dates & Status"),
+                          icon: "calendar", tint: DS.Color.palm, index: 2) {
             DSLifeDatesBox(hasBirthDate: $hasBirthDate, birthDate: $birthDate,
                            isDeceased: $isDeceased,
                            hasDeathDate: $hasDeathDate, deathDate: $deathDate,
@@ -230,6 +240,31 @@ struct AddSonByAdminSheet: View {
 
 
     // MARK: - Save Action
+    /// الإضافة: الاسم الأول فقط، والكلمتان بتأكيد. التعديل لا يُفحص (أسماء قائمة)
+    private func submitAction() {
+        guard !isEditMode else { return saveAction() }
+        guard FamilyTreeMenOnly.mayWriteToFamilyTree(gender: selectedGender) else {
+            showMenOnly = true
+            return
+        }
+        guard FamilyTreeMenOnly.genderChosen(selectedGender) else { return }
+        if AddChildChecks.isMoreThanFirstName(firstName) {
+            saveErrorText = AddChildChecks.firstNameOnlyMessage
+            showSaveError = true
+        } else {
+            // اسم بنت → شجرة النساء تلقائياً؛ غيره يكمل هنا (`continueAsSon`)
+            nameCheck = FamilyTreeNameCheck(names: [firstName])
+        }
+    }
+
+    private func continueAsSon() {
+        if AddChildChecks.compoundNameWarning(firstName) != nil {
+            showCompoundNameCheck = true
+        } else {
+            saveAction()
+        }
+    }
+
     /// الحفظ ينتظر النتيجة: المربّع يُغلق وإشعار الإدارة يخرج بعد النجاح فقط، والفشل يُعرض.
     /// الأنثى لا تُكتب في `profiles` أبداً: الإضافة عبر `addFamilyChild` (شجرة النساء) وتغيير الجنس
     /// عبر `moveChildGender` — نفس مسار «حسابي» (AddChildSheet / EditChildSheet)

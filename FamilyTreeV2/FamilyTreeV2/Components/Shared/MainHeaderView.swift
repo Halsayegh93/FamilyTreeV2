@@ -93,7 +93,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                                             .foregroundColor(DS.Color.headerTitle)
                                             .lineLimit(1)
                                             .padding(.horizontal, DS.Spacing.sm)
-                                            .padding(.vertical, 2)
+                                            .padding(.vertical, DS.Spacing.xxs)
                                             .background(DS.Color.headerChipFill, in: Capsule())
                                             .overlay(Capsule().stroke(DS.Color.headerChipStroke, lineWidth: 1))
                                     } else {
@@ -125,11 +125,11 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     Text(customSubtitle)
                                         .dsFont(.chip)
                                         .foregroundColor(DS.Color.headerTitle)
-                                        .padding(.horizontal, DS.Spacing.sm + 2)
-                                        .padding(.vertical, 3)
+                                        .padding(.horizontal, DS.Spacing.smd)
+                                        .padding(.vertical, DS.Spacing.xs)
                                         .background(DS.Color.headerChipFill, in: Capsule())
                                         .overlay(Capsule().stroke(DS.Color.headerChipStroke, lineWidth: 1))
-                                        .padding(.top, 2)
+                                        .padding(.top, DS.Spacing.xxs)
                                 } else {
                                     // الوصف أصغر درجة من قبل (كان callout) — لا يزاحم العنوان
                                     Text(customSubtitle)
@@ -191,8 +191,8 @@ struct MainHeaderView<TrailingContent: View>: View {
                                     Text(notificationVM.unreadNotificationsCount > 99 ? "99+" : "\(notificationVM.unreadNotificationsCount)")
                                         .dsFont(.badge)
                                         .foregroundColor(.white)
-                                        .padding(.horizontal, 5)
-                                        .padding(.vertical, 2)
+                                        .padding(.horizontal, DS.Spacing.xs)
+                                        .padding(.vertical, DS.Spacing.xxs)
                                         .background(DS.Color.errorFill)
                                         .clipShape(Capsule())
                                         .offset(x: 6, y: -4)
@@ -208,7 +208,7 @@ struct MainHeaderView<TrailingContent: View>: View {
                 .scaleEffect(isAnimating ? 1.0 : 0.5)
                 .opacity(isAnimating ? 1.0 : 0.0)
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.horizontal, physicallyLandscape ? DS.Spacing.xxl : 0)
             .padding(.bottom, isLandscape ? DS.Spacing.xs : DS.Spacing.sm)
             .padding(.top, isLandscape ? DS.Spacing.xs : 0)

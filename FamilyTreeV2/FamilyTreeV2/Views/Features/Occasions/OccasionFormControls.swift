@@ -93,10 +93,10 @@ struct OccasionOptionTile: View {
                     Circle().fill(disc.fill)
                     Circle().strokeBorder(disc.ring, lineWidth: 1.5)
                     Image(systemName: icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .dsGlyph(DS.Glyph.lg, weight: .semibold)
                         .foregroundColor(disc.symbol)
                 }
-                .frame(width: 36, height: 36)
+                .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
                 .accessibilityHidden(true)
                 Text(title)
                     .dsFont(.chip)
@@ -135,10 +135,10 @@ struct OccasionChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: DS.Spacing.xsm) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 13, weight: .semibold))
+                        .dsGlyph(DS.Glyph.sm, weight: .semibold)
                         .accessibilityHidden(true)
                 }
                 Text(title)
@@ -147,14 +147,14 @@ struct OccasionChip: View {
                 .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textPrimary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .padding(.horizontal, DS.Spacing.md)
+                .padding(.vertical, DS.Spacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                         .fill(isOn ? AnyShapeStyle(DS.Color.primaryFill) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                         .stroke(isOn ? Color.clear : DS.Color.cardBorderStrong, lineWidth: 1)
                 )
         }
@@ -181,7 +181,7 @@ struct OccasionChips: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            OccasionFlowLayout(spacing: 8) {
+            OccasionFlowLayout(spacing: DS.Spacing.sm) {
                 ForEach(Array(options.enumerated()), id: \.offset) { i, option in
                     OccasionChip(title: option, isOn: selected == i) { onSelect(i) }
                 }
@@ -254,7 +254,7 @@ struct OccasionMenuField: View {
                 }
                 .foregroundColor(DS.Color.textPrimary)
                 .padding(.horizontal, DS.Spacing.md)
-                .padding(.vertical, DS.Spacing.sm + 2)
+                .padding(.vertical, DS.Spacing.smd)
                 .frame(minHeight: DS.Icon.tapTarget)
                 .background(
                     RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
@@ -305,7 +305,7 @@ struct OccasionTextCards: View {
                         .lineSpacing(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, DS.Spacing.md)
-                        .padding(.vertical, DS.Spacing.sm + 2)
+                        .padding(.vertical, DS.Spacing.smd)
                         .background(
                             RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                                 .fill(isOn ? DS.Color.primary.opacity(0.10) : DS.Color.cardBackgroundSoft)
@@ -318,7 +318,7 @@ struct OccasionTextCards: View {
                 .buttonStyle(DSScaleButtonStyle())
                 .accessibilityAddTraits(isOn ? .isSelected : [])
             }
-            OccasionFlowLayout(spacing: 8) {
+            OccasionFlowLayout(spacing: DS.Spacing.sm) {
                 if let noneLabel {
                     OccasionChip(title: noneLabel, isOn: selected == options.count) { onSelect(options.count) }
                 }
@@ -345,7 +345,7 @@ struct OccasionTextInput: View {
             .font(DS.Font.body)
             .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm + 2)
+            .padding(.vertical, DS.Spacing.smd)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(DS.Color.cardBackgroundSoft)
@@ -369,7 +369,7 @@ struct OccasionQuickText: View {
         }
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             if !unique.isEmpty {
-                OccasionFlowLayout(spacing: 8) {
+                OccasionFlowLayout(spacing: DS.Spacing.sm) {
                     ForEach(unique, id: \.self) { s in
                         OccasionChip(title: s, isOn: text.wrappedValue == s) {
                             text.wrappedValue = text.wrappedValue == s ? "" : s
@@ -401,7 +401,7 @@ struct OccasionAreaField: View {
                 Image(systemName: "mappin.and.ellipse")
                     .font(DS.Font.icon(17, weight: .semibold))
                     .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
                     .background(Circle().fill(DS.Color.primary))
             }
             .accessibilityLabel(L10n.t("اختيار المنطقة", "Choose area"))
@@ -443,7 +443,7 @@ struct OccasionHusseiniyaMenu: View {
             HStack(spacing: DS.Spacing.sm) {
                 Image(systemName: "building.columns")
                     .font(DS.Font.icon(15, weight: .semibold))
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(picked?.name ?? L10n.t("اختر حسينية من القائمة", "Choose a husseiniya from the list"))
                         .dsFont(.rowTitle)
                         .lineLimit(1)
@@ -460,7 +460,7 @@ struct OccasionHusseiniyaMenu: View {
             }
             .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.sm + 2)
+            .padding(.vertical, DS.Spacing.smd)
             .background(
                 RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
                     .fill(picked == nil ? DS.Color.cardBackgroundSoft : DS.Color.primary.opacity(0.08))
@@ -501,7 +501,7 @@ struct OccasionNameFormatPicker: View {
         let r = resolution
         if r.autoShortened && r.shrunk { return L10n.t("اختُصر وصغُر الخط ليدخل بسطر واحد", "Shortened and slightly smaller to fit one line") }
         if r.autoShortened { return L10n.t("اختُصر تلقائياً ليدخل بسطر واحد", "Shortened to fit one line") }
-        if r.shrunk { return L10n.t("الخط أصغر شوي ليدخل بسطر واحد", "Slightly smaller to fit one line") }
+        if r.shrunk { return L10n.t("الخط أصغر قليلاً ليتّسع في سطر واحد", "Slightly smaller to fit one line") }
         return ""
     }
 
@@ -513,7 +513,7 @@ struct OccasionNameFormatPicker: View {
                 + Text(note.isEmpty ? "" : "  · " + note).foregroundColor(DS.Color.textTertiary))
                 .font(DS.Font.caption1)
             if r.options.count > 1 {
-                OccasionFlowLayout(spacing: 8) {
+                OccasionFlowLayout(spacing: DS.Spacing.sm) {
                     ForEach(r.options, id: \.count) { o in
                         OccasionFormatChip(
                             title: "\(o.label) — \(o.name)",
@@ -543,7 +543,7 @@ struct OccasionFormatChip: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(title)
                     .dsFont(.rowTitle)
                     .multilineTextAlignment(.leading)
@@ -555,21 +555,21 @@ struct OccasionFormatChip: View {
                 }
             }
             .foregroundColor(isOn ? DS.Color.textOnPrimary : DS.Color.textPrimary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .padding(.horizontal, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     // النص أبيض فوق المختار ← primaryFill (قاعدة الهوية؛ primary يفتح في الداكن)
                     .fill(isOn ? AnyShapeStyle(DS.Color.primaryFill) : AnyShapeStyle(DS.Color.cardBackgroundSoft))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(isOn ? Color.clear : DS.Color.cardBorderStrong, lineWidth: 1)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
+                    .stroke(isOn ? Color.clear : DS.Color.cardBorderStrong, lineWidth: DS.Border.width)
             )
         }
         .buttonStyle(DSScaleButtonStyle())
         .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.5)
+        .opacity(enabled ? 1 : DS.Opacity.disabled)
         .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
@@ -582,31 +582,26 @@ struct OccasionFormCard<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        DSCard(padding: DS.Spacing.md) {
-            VStack(alignment: .leading, spacing: DS.Spacing.md) {
-                HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.sm) {
-                    Text(title)
-                        .font(DS.Font.headline)
-                        .foregroundColor(DS.Color.textPrimary)
-                    if let hint {
-                        Text(hint)
-                            .font(DS.Font.caption2)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .lineLimit(2)
-                    }
-                    Spacer(minLength: 0)
-                    if let toggle {
-                        Toggle(L10n.t("إظهار", "Show"), isOn: toggle)
-                            .labelsHidden()
-                            .tint(DS.Color.primary)
-                            .accessibilityLabel(L10n.t("إظهار \(title)", "Show \(title)"))
-                    }
-                }
-                if toggle?.wrappedValue ?? true {
-                    content()
-                }
+        // قسم المربّعات الموحّد (`DSComposerSection`، طلب المالك ٢٠٢٦-١١-١١): العنوان الموحّد، والتلميح سطراً تحته،
+        // و«إظهار» = «ظاهر في البطاقة / مخفي» بالاختيار الموحّد بدل المفتاح — نفس القيمة المحفوظة
+        DSComposerSection(title: title, icon: "square.text.square", index: 0) {
+            if let hint {
+                Text(hint)
+                    .dsFont(.footnote)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if let toggle {
+                DSVisibilityPicker(hidden: Binding(get: { !toggle.wrappedValue }, set: { toggle.wrappedValue = !$0 }),
+                                   shownLine: L10n.t("يظهر هذا القسم في البطاقة.", "This section is shown on the card."),
+                                   hiddenLine: L10n.t("لا يظهر هذا القسم في البطاقة.", "This section is hidden from the card."),
+                                   rowTitle: L10n.t("الظهور في البطاقة", "Shown on the card"),
+                                   shownState: L10n.t("يظهر في البطاقة", "Shown on the card"),
+                                   hiddenState: L10n.t("مخفي عن البطاقة", "Hidden from the card"))
+            }
+            if toggle?.wrappedValue ?? true {
+                content()
+            }
         }
     }
 }
@@ -617,9 +612,10 @@ struct OccasionFieldLabel: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
+        // عنوان الحقل الموحّد (`label` / `fieldLabel`)
         Text(text)
-            .dsFont(.caption)
-            .foregroundColor(DS.Color.textSecondary)
+            .dsFieldFont(.label)
+            .foregroundColor(DS.Color.fieldLabel)
     }
 }
 
@@ -656,65 +652,3 @@ struct OccasionMemberAvatar: View {
     }
 }
 
-struct OccasionMemberPickerSheet: View {
-    let family: OccasionFamilyIndex
-    let preferDeceased: Bool
-    let onPick: (FamilyMember) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
-
-    var body: some View {
-        NavigationStack {
-            let results = family.search(query, preferDeceased: preferDeceased)
-            List {
-                ForEach(results) { m in
-                    Button {
-                        onPick(m)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: DS.Spacing.md) {
-                            OccasionMemberAvatar(member: m)
-                            Text(m.nameWordsWithFamily.joined(separator: " "))
-                                .font(DS.Font.callout)
-                                .foregroundColor(DS.Color.textPrimary)
-                                .multilineTextAlignment(.leading)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            if m.isDeceased == true {
-                                Text(L10n.t("متوفى", "Deceased"))
-                                    .font(DS.Font.caption2)
-                                    .foregroundColor(DS.Color.textSecondary)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Capsule().fill(DS.Color.cardBackgroundSoft))
-                            }
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .listStyle(.plain)
-            .overlay {
-                if results.isEmpty {
-                    Text(query.trimmingCharacters(in: .whitespaces).isEmpty
-                         ? L10n.t("اكتب الاسم للبحث في شجرة العائلة", "Type a name to search the family tree")
-                         : L10n.t("ما لقينا أحد بهالاسم — تقدر تكتبه بنفسك.", "No match — you can type the name yourself."))
-                        .font(DS.Font.callout)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .multilineTextAlignment(.center)
-                        .padding(DS.Spacing.xxl)
-                }
-            }
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: L10n.t("ابحث بالاسم", "Search by name"))
-            .navigationTitle(L10n.t("اختيار من الشجرة", "Pick from the tree"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: DSToolbar.cancelPlacement) {
-                    Button(L10n.t("إلغاء", "Cancel")) { dismiss() }
-                }
-            }
-        }
-    }
-}

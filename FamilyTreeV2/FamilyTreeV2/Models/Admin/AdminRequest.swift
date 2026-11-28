@@ -47,9 +47,9 @@ nonisolated enum TreeEditAction: String, Codable, CaseIterable, Identifiable {
         case .add: return "person.badge.plus"
         case .editName: return "pencil.line"
         case .editPhone: return "phone.arrow.up.right"
-        case .editBirth: return "birthday.cake"
-        case .deceased: return "heart.slash"
-        case .addDeathDate: return "calendar.badge.exclamationmark"
+        case .editBirth: return "calendar"
+        case .deceased: return "leaf.fill"
+        case .addDeathDate: return "calendar.badge.minus"
         case .addPhoto: return "photo.badge.plus"
         case .delete: return "person.badge.minus"
         case .other: return "square.and.pencil"
@@ -87,10 +87,28 @@ nonisolated struct TreeEditPayload: Codable {
     let reason: String?
     let notes: String?
     let isAdminDirectEdit: Bool?
+    /// طلب شجرة النساء المنظّم — يُنفَّذ تلقائياً عند القبول (`private.apply_women_request`، ٢٠٢٦-١١-١٧)
+    var women: WomenRequestData? = nil
 
     var resolvedAction: TreeEditAction? {
         TreeEditAction.from(rawValue: action)
     }
+
+    /// الإجراء كما يُعرض للإدارة وللعضو. طلب شجرة النساء المنظّم يُرسَل بـ`add` (لحارس السيرفر) ونوعه الحقيقي في
+    /// `women.kind` — فتعديل الاسم والميلاد والوفاة والحذف كانت تظهر «إضافة» (تصحيح ٢٠٢٦-١١-١٨). للعرض فقط:
+    /// التنفيذ ومكانه في الشجرة يبقيان على `resolvedAction`.
+    var displayAction: TreeEditAction? {
+        switch women?.kind {
+        case "edit_name": return .editName
+        case "edit_birth": return .editBirth
+        case "deceased": return .deceased
+        case "delete": return .delete
+        default: return resolvedAction
+        }
+    }
+
+    /// عقدة شجرة النساء المعنيّة بالطلب (المرأة نفسها أو أبوها/أمها للإضافة) — nil لغير طلبات شجرة النساء
+    var womenNodeId: UUID? { women.flatMap { UUID(uuidString: $0.nodeId) } }
 
     static func make(
         action: TreeEditAction,
@@ -106,7 +124,8 @@ nonisolated struct TreeEditPayload: Codable {
         newMemberName: String? = nil,
         reason: String? = nil,
         notes: String? = nil,
-        isAdminDirectEdit: Bool? = nil
+        isAdminDirectEdit: Bool? = nil,
+        women: WomenRequestData? = nil
     ) -> TreeEditPayload {
         TreeEditPayload(
             v: 3,
@@ -123,9 +142,25 @@ nonisolated struct TreeEditPayload: Codable {
             newMemberName: newMemberName,
             reason: reason,
             notes: notes,
-            isAdminDirectEdit: isAdminDirectEdit
+            isAdminDirectEdit: isAdminDirectEdit,
+            women: women
         )
     }
+}
+
+/// بيانات طلب شجرة النساء كما ينفّذها السيرفر عند القبول:
+/// `kind` child/sister/edit_name/edit_birth/deceased/delete، و`nodeId` عقدة شجرة النساء
+/// (الأب أو الأم للإضافة، المستهدفة للتعديل)، والاسم الأول، والجنس، والتواريخ YYYY-MM-DD
+nonisolated struct WomenRequestData: Codable, Sendable {
+    var kind: String
+    var nodeId: String
+    var name: String? = nil
+    var gender: String? = nil
+    var birth: String? = nil
+    var deceased: Bool? = nil
+    var death: String? = nil
+    /// «set_mother»: الأم المختارة من زوجات الأب
+    var motherId: String? = nil
 }
 
 nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
@@ -162,6 +197,15 @@ nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
     var remindedAt: String? = nil
     var escalatedAt: String? = nil
     var fastTrack: Bool? = nil
+    /// «من أين أُرسل» (٢٠٢٦-١١-١١، 20261111150000): مسار الإرسال من التطبيق والجهاز من السيرفر — اختياريان
+    /// (الطلبات القديمة والسيرفر قبل الترحيل بلا قيمة)، ويُقرآن بتسامح فلا يكسران فكّ الطلب
+    var sentFrom: RequestSource? = nil
+    var sentVia: RequestSentVia? = nil
+    /// «مراجعة بعد الموافقة» (طلب المالك ٢٠٢٦-١١-٢٥، 20261125130000): nil = لا يخضع · pending · ok · flagged — يكتبها السيرفر
+    var reviewStatus: String? = nil
+    var reviewedBy: UUID? = nil
+    var reviewedAt: String? = nil
+    var reviewNote: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, status, details, member, stage, recommendation
@@ -189,6 +233,12 @@ nonisolated struct AdminRequest: Identifiable, Codable, Sendable {
         case remindedAt = "reminded_at"
         case escalatedAt = "escalated_at"
         case fastTrack = "fast_track"
+        case sentFrom = "sent_from"
+        case sentVia = "sent_via"
+        case reviewStatus = "review_status"
+        case reviewedBy = "reviewed_by"
+        case reviewedAt = "reviewed_at"
+        case reviewNote = "review_note"
     }
 
     /// Parses structured JSON payload (v2 or v3) from details column for tree_edit requests.

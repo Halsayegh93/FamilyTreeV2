@@ -47,6 +47,9 @@ struct HomeNewsPreviewCard: View {
             }
             .buttonStyle(DSPressStyle())
             content
+                // بعد السحب للتحديث: الصفوف الجديدة تذوب في مكانها بدل القفز (تلاشٍ ٠٫٢ ث — مسموح مع «تقليل الحركة»)
+                .animation(DSMotion.fade, value: previewPosts.map(\.id))
+                .animation(DSMotion.fade, value: latestOccasion?.id)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // البطاقة الواحدة (`.dsCard`) — بحشوة أضيق من قبل (كانت ١٦)
@@ -240,12 +243,14 @@ struct HomeNewsPreviewRow: View {
                             .dsFont(.caption)
                             .foregroundColor(DS.Color.textSecondary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         ReviewVerifiedMark(news.author_id)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                // نص الخبر أصغر درجة (١٥ ← ١٣) — طلب المالك ٢٠٢٦-١١-٢٥ «خط الخبر جنه شوي كبير بالرئيسية»
                 Text(previewText)
-                    .dsFont(.callout)
+                    .dsFont(.footnote)
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
@@ -309,6 +314,7 @@ struct HomeNewsMetaLine: View {
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             // بانتظار موافقة الإدارة
             if news.approval_status == "pending" {
@@ -351,9 +357,10 @@ struct HomeOccasionRow: View {
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Text(news.content)
-                    .dsFont(.calloutMedium)
+                    .dsFont(.chip)   // بنفس درجة نص الخبر تحته في المربّع نفسه
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)

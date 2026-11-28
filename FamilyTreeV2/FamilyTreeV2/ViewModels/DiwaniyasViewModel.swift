@@ -11,6 +11,8 @@ class DiwaniyasViewModel: ObservableObject {
     @Published var pendingDiwaniyas: [Diwaniya] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// ما يعيده زرّ «إعادة المحاولة» في تنبيه الخطأ — الحذف/الاعتماد/الرفض الذي فشل (nil = إعادة تحميل القائمة)
+    var retryAction: (() async -> Void)?
     
     let supabase = SupabaseConfig.client
 
@@ -60,7 +62,8 @@ class DiwaniyasViewModel: ObservableObject {
     func fetchDiwaniyas() async {
         // تحميل من الكاش أولاً
         if diwaniyas.isEmpty,
-           let cached = CacheManager.shared.load([Diwaniya].self, for: .diwaniyas, in: cacheSession) {
+           let cached = await CacheManager.shared.loadAsync([Diwaniya].self, for: .diwaniyas, in: cacheSession),
+           diwaniyas.isEmpty {
             self.diwaniyas = cached
             Log.info("[Diwaniyas] تم تحميل \(cached.count) ديوانية من الكاش")
         }
@@ -193,8 +196,8 @@ class DiwaniyasViewModel: ObservableObject {
             // إشعار المدراء فقط لو تحتاج موافقة
             if !autoApprove {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("ديوانية جديدة تحتاج موافقة", "New Diwaniya Needs Approval"),
-                    body: L10n.t(
+                    title: L10n.stored("ديوانية جديدة تحتاج موافقة", "New Diwaniya Needs Approval"),
+                    body: L10n.stored(
                         "«\(trimmedOwner)» قدّم ديوانية: «\(trimmedTitle)»",
                         "«\(trimmedOwner)» submitted a diwaniya: «\(trimmedTitle)»"
                     ),
@@ -217,7 +220,10 @@ class DiwaniyasViewModel: ObservableObject {
     
     func deleteDiwaniya(id: UUID) async {
         guard NetworkMonitor.shared.requireOnline() else { return }
-        guard authVM?.canDeleteDiwaniyas == true else {
+        // صاحب الديوانية يحذفها مثل الإدارة (سياسة السيرفر diwaniyas_delete: صاحبها أو المالك/المدير)
+        let myId = authVM?.currentUser?.id
+        let isMine = myId != nil && diwaniyas.first(where: { $0.id == id })?.ownerId == myId
+        guard authVM?.canDeleteDiwaniyas == true || isMine else {
             self.errorMessage = L10n.t("ليس لديك صلاحية لحذف الديوانية.", "You don't have permission to delete diwaniyas.")
             Log.warning("[AUTH] Unauthorized deleteDiwaniya attempt")
             return
@@ -232,6 +238,7 @@ class DiwaniyasViewModel: ObservableObject {
             await fetchDiwaniyas()
         } catch {
             self.errorMessage = L10n.t("فشل حذف الديوانية. حاول مرة أخرى.", "Failed to delete diwaniya. Please try again.")
+            self.retryAction = { [weak self] in await self?.deleteDiwaniya(id: id) }
             Log.error("خطأ حذف ديوانية: \(error.localizedDescription)")
             isLoading = false
         }
@@ -264,8 +271,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                 if let ownerId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم اعتماد ديوانيتك", "Your Diwaniya Was Approved"),
-                        body: L10n.t("ديوانيتك أصبحت مرئية للجميع", "Your diwaniya is now visible to everyone"),
+                        title: L10n.stored("تم اعتماد ديوانيتك", "Your Diwaniya Was Approved"),
+                        body: L10n.stored("ديوانيتك أصبحت مرئية للجميع", "Your diwaniya is now visible to everyone"),
                         targetMemberIds: [ownerId],
                         kind: NotificationKind.diwaniyaApproved.rawValue
                     )
@@ -273,8 +280,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                 // إشعار للإدارة في "المستجدات"
                 await self?.notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("تم اعتماد ديوانية", "Diwaniya Approved"),
-                    body: L10n.t(
+                    title: L10n.stored("تم اعتماد ديوانية", "Diwaniya Approved"),
+                    body: L10n.stored(
                         "تم اعتماد ديوانية «\(approvedTitle)» لـ «\(ownerName)»",
                         "Diwaniya «\(approvedTitle)» for «\(ownerName)» was approved"
                     ),
@@ -284,6 +291,7 @@ class DiwaniyasViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.errorMessage = L10n.t("فشل اعتماد الديوانية. حاول مرة أخرى.", "Failed to approve diwaniya. Please try again.")
+                    self?.retryAction = { [weak self] in await self?.approveDiwaniya(id: id, adminId: adminId) }
                 }
                 Log.error("خطأ اعتماد ديوانية: \(error.localizedDescription)")
             }
@@ -395,8 +403,8 @@ class DiwaniyasViewModel: ObservableObject {
                 // إشعار للمالك بالرفض
                 if let info = diwaniyaInfo {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("لم يتم اعتماد ديوانيتك", "Your Diwaniya Was Not Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("لم يتم اعتماد ديوانيتك", "Your Diwaniya Was Not Approved"),
+                        body: L10n.stored(
                             "ديوانية «\(info.title)» لم يتم اعتمادها. تواصل مع الإدارة لمعرفة السبب.",
                             "«\(info.title)» was not approved. Contact admin for details."
                         ),
@@ -406,8 +414,8 @@ class DiwaniyasViewModel: ObservableObject {
 
                     // إشعار للإدارة في "المستجدات"
                     await self?.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تم رفض ديوانية", "Diwaniya Rejected"),
-                        body: L10n.t(
+                        title: L10n.stored("تم رفض ديوانية", "Diwaniya Rejected"),
+                        body: L10n.stored(
                             "تم رفض ديوانية «\(info.title)» لـ «\(info.ownerName)»",
                             "Diwaniya «\(info.title)» for «\(info.ownerName)» was rejected"
                         ),
@@ -418,6 +426,7 @@ class DiwaniyasViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.errorMessage = L10n.t("فشل رفض الديوانية. حاول مرة أخرى.", "Failed to reject diwaniya. Please try again.")
+                    self?.retryAction = { [weak self] in await self?.rejectDiwaniya(id: id) }
                 }
                 Log.error("خطأ رفض ديوانية: \(error.localizedDescription)")
             }

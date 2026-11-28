@@ -156,11 +156,11 @@ struct AddNewsView: View {
             trailing: postAsAdmin ? L10n.t("منشور رسمي", "Official") : L10n.t("منشور شخصي", "Personal"),
             index: 1
         ) {
-            // المبدّل الموحّد (`DSSegmentedSwitch`) بدل الكبسولة المرسومة باليد
-            DSSegmentedSwitch(options: [
-                DSSegmentOption(id: false, title: authVM.currentUser?.firstName ?? L10n.t("باسمي", "Me"),
-                                icon: "person.fill"),
-                DSSegmentOption(id: true, title: L10n.t("إدارة العائلة", "Family Admin"), icon: "megaphone.fill")
+            // خياران = الاختيار الموحّد (طلب المالك ٢٠٢٦-١١-١١)
+            DSChoiceTiles(options: [
+                DSChoiceOption(id: false, title: authVM.currentUser?.firstName ?? L10n.t("بالاسم الشخصي", "Me"),
+                               icon: "person.fill"),
+                DSChoiceOption(id: true, title: L10n.t("إدارة العائلة", "Family Admin"), icon: "megaphone.fill")
             ], selection: $postAsAdmin)
         }
     }
@@ -242,8 +242,9 @@ struct AddNewsView: View {
             onCancel: { dsCloseExtra { activeExtra = nil } }
         ) {
             VStack(spacing: DS.Spacing.sm) {
-                TextField(L10n.t("سؤال التصويت (اختياري)", "Poll question (optional)"), text: $draftQuestion)
-                    .dsAlertField()
+                // حقول المربّعات الموحّدة (بدل حقول التنبيه)
+                DSComposerField(icon: "questionmark.bubble.fill", label: L10n.t("سؤال التصويت", "Poll question"),
+                                placeholder: L10n.t("اختياري", "Optional"), text: $draftQuestion, tint: DS.Color.newsVote)
                 ForEach(Array(draftOptions.enumerated()), id: \.element.id) { idx, option in
                     HStack(spacing: DS.Spacing.sm) {
                         NewsPollNumber(number: idx + 1, size: DS.Spacing.xxl)
@@ -256,7 +257,9 @@ struct AddNewsView: View {
                                             draftOptions[i].text = v
                                         }
                                     }))
-                            .dsAlertField()
+                            .dsFieldFont(.fieldValue)
+                            .frame(minHeight: DSBox.fieldMinHeight)
+                            .dsRowBox()
                         if draftOptions.count > 2 {
                             NewsPollRemoveOptionButton(label: L10n.t("حذف الخيار \(idx + 1)", "Remove option \(idx + 1)")) {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
@@ -341,7 +344,7 @@ struct AddNewsView: View {
         var uploadedURLs: [String] = []
         let finalContent: String
         if isPoll {
-            finalContent = L10n.t("تصويت", "Poll")
+            finalContent = L10n.stored("تصويت", "Poll")
         } else {
             finalContent = content.trimmingCharacters(in: .whitespacesAndNewlines)
             for image in selectedImages {
@@ -364,6 +367,12 @@ struct AddNewsView: View {
             pollOptions: isPoll ? normalizedPollOptions : [],
             asAdminIdentity: postAsAdmin
         )
-        if isPosted { dismiss() } else { showPostErrorAlert = true }
+        if isPosted {
+            dismiss()
+            // لحظة نجاح بعد الإغلاق (كان يُغلق بلا كلمة): «تم النشر» لمن ينشر مباشرة، و«أُرسل للمراجعة» لغيره
+            let published = newsVM.canAutoPublishNews
+            DSMomentToast.show(published ? L10n.t("تم النشر", "Posted") : L10n.t("أُرسل للمراجعة", "Sent for review"),
+                               moment: published ? .success : .sentForApproval, section: .news)
+        } else { showPostErrorAlert = true }
     }
 }

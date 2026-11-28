@@ -220,20 +220,8 @@ nonisolated enum ApprovalWorkflow {
     /// تاريخ ISO من السيرفر (بكسور الثواني أو بدونها)
     static func date(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return isoFraction.date(from: raw) ?? isoPlain.date(from: raw)
+        return DateParsing.iso(raw)
     }
-
-    private static let isoFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
 
     /// اللقطة من حقول الصف — nil للمغلق ولما هو خارج المسار
     static func snapshot(id: UUID, requestType: String, status: String, requesterId: UUID?, memberId: UUID,

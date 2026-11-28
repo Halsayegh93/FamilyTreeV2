@@ -5,6 +5,42 @@ import Foundation
 /// المفتاح = رقم البناء (CFBundleVersion). أضف مدخلاً جديداً مع كل إصدار.
 enum AppReleaseNotes {
     static let byBuild: [String: (ar: String, en: String)] = [
+        "51": (
+            ar: """
+            • تصميم موحّد وأوضح في كل الشاشات، والإعدادات مرتّبة في مجموعات.
+            • خصوصية أبسط: مفتاح واحد لكل معلومة.
+            • إضافة الزوجة والأم من مربّع واحد، واختيار الزوج من العائلة أو من خارجها.
+            • إظهار الزوجة أو إخفاؤها في شجرة النساء من «تعديل الملف الشخصي».
+            • إعلانات العائلة تظهر عند فتح التطبيق، وشاشة «ما الجديد» بعد كل تحديث.
+            • تحميل أسرع لبيانات العائلة، وإصلاحات عامة.
+            """,
+            en: """
+            • A clearer, unified design across all screens, with settings in groups.
+            • Simpler privacy: one switch per detail.
+            • Add a wife or mother from one box, and choose a husband from the family or outside it.
+            • Show or hide your wife in the women's tree from «Edit profile».
+            • Family announcements appear when you open the app, and «What's new» after each update.
+            • Faster loading of family data, and general fixes.
+            """
+        ),
+        "50": (
+            ar: """
+            • إضافة الأبناء أسهل، وتذكير لطيف بإضافة صورتك.
+            • ربط حسابك بالشجرة أوضح، مع إصلاح ظهور الاقتراحات.
+            • رمز الدخول: تركيز تلقائي ورسائل أوضح عند ضعف الاتصال.
+            • «ذكرى الراحلين» ومجلدات في مكتبة العائلة.
+            • تصميم إعلانات المناسبات أسهل، بنماذج تتحدّث من السيرفر.
+            • تحسينات وإصلاحات في الإشعارات والشاشات.
+            """,
+            en: """
+            • Adding children is easier, with a gentle reminder to add your photo.
+            • Linking your account to the tree is clearer, and suggestions show again.
+            • Login code: automatic focus and clearer messages on weak connections.
+            • «In memory» and folders in the Family Library.
+            • Designing occasion announcements is easier, with templates updated from the server.
+            • Improvements and fixes in notifications and screens.
+            """
+        ),
         "43": (
             ar: """
             • هوية ألوان جديدة رسمية (كحلي وذهبي) وأزرار بتصميم iOS 27.

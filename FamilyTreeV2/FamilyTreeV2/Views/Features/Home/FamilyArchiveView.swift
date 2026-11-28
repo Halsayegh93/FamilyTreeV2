@@ -7,14 +7,16 @@ import UniformTypeIdentifiers
 /// الرفع/الحذف للمدراء فقط (owner + admin).
 struct FamilyArchiveView: View {
     @EnvironmentObject private var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`) — يُعاد الرسم حين تتغيّر الفئة أو الجدول
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject private var memberVM: MemberViewModel
     @EnvironmentObject private var notificationVM: NotificationViewModel
     @StateObject private var archiveVM = FamilyArchiveViewModel()
     /// يعيد رسم الصفحة لمّا تصل التصنيفات المحدّثة (أسماء «التصنيفات» في الإدارة بدل الافتراضية)
     @ObservedObject private var categoryStore = CategoryStore.shared
 
-    /// nil = الكل
-    @State private var selectedCategory: ArchiveItem.Category? = nil
+    /// المجلد المفتوح (مفتاح التصنيف)، nil = المجلدات — الرأس في الرئيسية يقرؤه للعنوان والرجوع
+    @Binding var openFolder: String?
     @State private var showingUpload = false
     @State private var selectedItem: ArchiveItem? = nil
     @State private var itemToDelete: ArchiveItem? = nil
@@ -24,6 +26,7 @@ struct FamilyArchiveView: View {
     @State private var itemToReject: ArchiveItem? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
 
     // وضع التحديد المتعدّد (للمدراء فقط)
     @State private var selectionMode = false
@@ -56,6 +59,12 @@ struct FamilyArchiveView: View {
         ]
     }
 
+    /// عناصر المجلد المفتوح. بلا مجلد: الكل (التحديد المتعدّد من الجذر يعرض الكل)
+    private var visibleItems: [ArchiveItem] {
+        guard let openFolder else { return archiveVM.items }
+        return archiveVM.items.filter { $0.effectiveCategoryKey == openFolder }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             DS.Color.background.ignoresSafeArea()
@@ -64,7 +73,7 @@ struct FamilyArchiveView: View {
                 // شريط التحديد العلوي يحلّ محل صف الفئات في وضع التحديد
                 if selectionMode {
                     selectionTopBar
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                         .transition(.opacity)
@@ -75,13 +84,15 @@ struct FamilyArchiveView: View {
                 if archiveVM.isLoading && archiveVM.items.isEmpty {
                     // التحميل الموحّد: مجسّم المكتبة يتنفّس
                     DSPageLoader(section: .library)
-                } else if archiveVM.items(in: selectedCategory).isEmpty {
+                } else if visibleItems.isEmpty {
                     emptyState
                         .dsStaggerIn(0)   // الحالة الفارغة تصعد وتظهر (تلاشٍ فقط مع «تقليل الحركة»)
+                } else if openFolder == nil && !selectionMode {
+                    AnyView(folderGrid)   // حارس المكدس: نوع الصفحة يبقى ضحلاً
                 } else {
                     ScrollView(showsIndicators: false) {
                         LazyVGrid(columns: gridColumns, spacing: DS.Spacing.sm) {
-                            ForEach(Array(archiveVM.items(in: selectedCategory).enumerated()),
+                            ForEach(Array(visibleItems.enumerated()),
                                     id: \.element.id) { index, item in
                                 Button {
                                     if selectionMode {
@@ -120,7 +131,7 @@ struct FamilyArchiveView: View {
                                 .dsCardCascade(index, appeared: appeared)
                             }
                         }
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.md)
                         .padding(.bottom, DS.Spacing.xxxxl)
                         .onAppear { appeared = true }
@@ -129,8 +140,8 @@ struct FamilyArchiveView: View {
                 }
             }
 
-            // زر رفع — متاح للجميع، يختفي فقط في وضع التحديد
-            if !selectionMode {
+            // زر رفع — متاح للجميع، يختفي في وضع التحديد (و«إضافة للمكتبة» مطفأة لفئته — `MemberAccess`)
+            if !selectionMode && authVM.memberSees(.libraryAdd) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {
@@ -149,6 +160,12 @@ struct FamilyArchiveView: View {
             }
         }
         .animation(DS.Anim.snappy, value: selectionMode)
+        .onChange(of: archiveVM.items) { items in
+            // المجلد الفاضي لا يظهر: آخر عنصر فيه حُذف أو انتقل ← نرجع للمجلدات
+            if let openFolder, !items.contains(where: { $0.effectiveCategoryKey == openFolder }) {
+                self.openFolder = nil
+            }
+        }
         .onAppear { NewContentTracker.shared.markSeen(.library) }   // «النقاط الصفراء»: فُتح القسم
         .task {
             archiveVM.configure(authVM: authVM, notificationVM: notificationVM)
@@ -165,15 +182,9 @@ struct FamilyArchiveView: View {
             }
         }
         // «إضافة إلى المكتبة» مربّع بمنتصف الشاشة (طلب المالك)
-        .fullScreenCover(isPresented: $showingUpload) {
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: selectedCategory ?? .documents)
-                    .dsSectionPage(.library)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
-            }
-            .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            if showingUpload { t.disablesAnimations = true }
+        .dsCenterBox(isPresented: $showingUpload) {
+            ArchiveUploadSheet(archiveVM: archiveVM, defaultCategory: .documents, defaultKey: openFolder)
+                .dsSectionPage(.library)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
         }
         // تفاصيل العنصر — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
         // يُغلق بـ× أو بالضغط خارجه
@@ -183,14 +194,10 @@ struct FamilyArchiveView: View {
             // العارض بملء الشاشة يقلّب بين صور القائمة المعروضة (نفس التصنيف المختار)
             ArchiveItemViewer(item: item, uploaderName: uploaderName(for: item), isAdmin: authVM.isAdmin)
         }
-        .fullScreenCover(item: $itemToEdit) { item in
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                ArchiveEditSheet(archiveVM: archiveVM, item: item)
-                    .dsSectionPage(.library)
-            }
-            .background(ClearPresentationBackground())
+        .dsCenterBox(item: $itemToEdit) { item in
+            ArchiveEditSheet(archiveVM: archiveVM, item: item)
+                .dsSectionPage(.library)
         }
-        .transaction { t in if itemToEdit != nil { t.disablesAnimations = true } }
         .dsAlert(L10n.t("إبلاغ عن عنصر", "Report Item"), isPresented: Binding(
             get: { itemToReport != nil },
             set: { if !$0 { itemToReport = nil } }
@@ -208,9 +215,12 @@ struct FamilyArchiveView: View {
                             contentKind: L10n.t("عنصر أرشيف", "archive item"),
                             contentLabel: target.title,
                             contentId: target.id,
-                            reason: reason
+                            reason: reason,
+                            source: RequestSource(RequestSourceStep("books.vertical.fill", "مكتبة العائلة"),
+                                                  RequestSourceStep("doc.fill", target.title),
+                                                  RequestSourceStep("flag.fill", "بلاغ عن محتوى"))
                         )
-                        if ok { await MainActor.run { reportSent = true } }
+                        if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                     }
                 }
             }
@@ -218,6 +228,11 @@ struct FamilyArchiveView: View {
         } message: {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا العنصر.",
                        "Enter a reason; it will be sent to the admins to review this item."))
+        }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}
@@ -364,7 +379,7 @@ struct FamilyArchiveView: View {
             }
             .disabled(isEmpty)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .dsGlass(Rectangle())
         .overlay(
@@ -384,7 +399,7 @@ struct FamilyArchiveView: View {
     // MARK: - Selection Helpers
 
     private var allInCategorySelected: Bool {
-        let inCat = archiveVM.items(in: selectedCategory)
+        let inCat = visibleItems
         guard !inCat.isEmpty else { return false }
         return inCat.allSatisfy { selectedIDs.contains($0.id) }
     }
@@ -398,7 +413,7 @@ struct FamilyArchiveView: View {
     }
 
     private func toggleSelectAllInCategory() {
-        let inCat = archiveVM.items(in: selectedCategory).map(\.id)
+        let inCat = visibleItems.map(\.id)
         if allInCategorySelected {
             for id in inCat { selectedIDs.remove(id) }
         } else {
@@ -411,6 +426,80 @@ struct FamilyArchiveView: View {
             selectionMode = false
             selectedIDs = []
         }
+    }
+
+    // MARK: - Folders
+
+    /// طلب المالك ٢٠٢٦-١١-٠٥: شكل بين «أ» و«ج»: واجهة العنصر الأحدث فوق، وتحتها المجلدات بلسانها.
+    /// بدون بحث، والتصنيف بلا عناصر لا يظهر لأي أحد.
+    private var folderGrid: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                if let spotlight = ArchiveFolder.spotlight(in: archiveVM.items) {
+                    Button { selectedItem = spotlight } label: { spotlightCard(spotlight) }
+                        .buttonStyle(DSScaleButtonStyle())
+                        .dsCardCascade(0, appeared: appeared)
+                }
+                LazyVGrid(columns: gridColumns, spacing: DS.Spacing.md) {
+                    ForEach(Array(ArchiveFolder.all(from: archiveVM.items).enumerated()), id: \.element.id) { index, folder in
+                        Button {
+                            withAnimation(DS.Anim.snappy) { openFolder = folder.key }
+                        } label: {
+                            ArchiveFolderCard(folder: folder, showsPending: authVM.isAdmin)
+                        }
+                        .buttonStyle(DSScaleButtonStyle())
+                        .dsCardCascade(index + 1, appeared: appeared)
+                    }
+                }
+            }
+            .dsPageMargin()
+            .padding(.top, DS.Spacing.md)
+            .padding(.bottom, DS.Spacing.xxxxl)
+            .onAppear { appeared = true }
+        }
+        .refreshable { await archiveVM.fetchItems() }
+    }
+
+    /// واجهة المكتبة: المثبَّت إن وُجد، وإلا الأحدث. الضغط يفتح العنصر مثل بطاقته
+    private func spotlightCard(_ item: ArchiveItem) -> some View {
+        HStack(spacing: DS.Spacing.md) {
+            preview(for: item, accent: DS.Color.textOnPrimary)
+                .frame(width: DS.Folder.coverWidth, height: DS.Folder.coverHeight)
+                .clipped()
+                // لا تظهر الوثيقة في لقطة الشاشة (`LibraryProtection`) — مثل بطاقة العنصر
+                .screenCaptureShielded(LibraryProtection.shieldsCapture(isAdmin: authVM.isAdmin, allowShare: item.allowShare))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous)
+                        .strokeBorder(DS.Color.accentLight, lineWidth: DS.Border.widthBold)
+                )
+            VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+                Label {
+                    Text(item.isPinned ? L10n.t("مثبّت في المكتبة", "Pinned in the library")
+                                       : L10n.t("الأحدث في المكتبة", "Latest in the library"))
+                } icon: {
+                    Image(systemName: item.isPinned ? "pin.fill" : "star.fill").dsGlyph(DS.Glyph.xs)
+                }
+                .dsFont(.caption)
+                .foregroundColor(AppSection.library.headerSubtitle)   // كريمي مقروء على أزرق المكتبة
+                Text(item.title)
+                    .dsFont(.headline)
+                    .foregroundColor(DS.Color.textOnPrimary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text(item.isPDF ? L10n.t("اقرأ الآن", "Read now") : L10n.t("افتح", "Open"))
+                    .dsFont(.chip)
+                    .foregroundColor(AppSection.library.fill)
+                    .padding(.horizontal, DS.Spacing.md)
+                    .padding(.vertical, DS.Spacing.xs)
+                    .background(Capsule().fill(DS.Color.textOnPrimary))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DS.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(AppSection.library.fill))
+        .contentShape(Rectangle())
     }
 
     // MARK: - Archive Card
@@ -729,6 +818,102 @@ struct FamilyArchiveView: View {
     }
 }
 
+// MARK: - Folder
+
+/// مجلد في المكتبة = تصنيف فيه عناصر. التصنيف بلا عناصر لا يظهر لأي أحد.
+struct ArchiveFolder: Identifiable, Equatable {
+    let key: String
+    let count: Int
+    let pending: Int
+    let firstYear: Int?
+    let lastYear: Int?
+
+    var id: String { key }
+
+    /// بترتيب «التصنيفات»، وأي تصنيف خارجها (مخفي مثلاً) بعدها حتى لا يختفي عنصر
+    static func all(from items: [ArchiveItem], orderedKeys: [String] = ArchiveItem.selectableCategoryKeys) -> [ArchiveFolder] {
+        let groups = Dictionary(grouping: items, by: \.effectiveCategoryKey)
+        let extra = groups.keys.filter { !orderedKeys.contains($0) }.sorted()
+        return (orderedKeys + extra).compactMap { key in
+            guard let list = groups[key], !list.isEmpty else { return nil }
+            let years = list.compactMap(\.year)
+            return ArchiveFolder(key: key, count: list.count,
+                                 pending: list.filter { $0.approvalStatus == .pending }.count,
+                                 firstYear: years.min(), lastYear: years.max())
+        }
+    }
+
+    /// واجهة المكتبة: أول عنصر معتمد وظاهر. القائمة مرتّبة: المثبَّت أولاً ثم الأحدث (`pinnedFirst`)
+    static func spotlight(in items: [ArchiveItem]) -> ArchiveItem? {
+        items.first { $0.approvalStatus == .approved && !$0.isHidden }
+    }
+
+    /// عدد العناصر بالكلام — للقارئ الصوتي (الشارة تعرض الرقم)
+    var countText: String {
+        guard L10n.isArabic else { return count == 1 ? "1 item" : "\(count) items" }
+        switch count {
+        case 1: return "عنصر واحد"
+        case 2: return "عنصران"
+        case 3...10: return "\(count) عناصر"
+        default: return "\(count) عنصر"
+        }
+    }
+
+    /// «1881–1897» بعزل اتجاه حتى لا تنقلب في العربية، وnil بلا سنوات
+    var yearsText: String? {
+        guard let firstYear, let lastYear else { return nil }
+        return firstYear == lastYear ? "\(firstYear)" : "\u{2066}\(firstYear)–\(lastYear)\u{2069}"
+    }
+}
+
+private struct ArchiveFolderCard: View {
+    let folder: ArchiveFolder
+    let showsPending: Bool
+
+    var body: some View {
+        let name = ArchiveItem.categoryName(folder.key)
+        let fill = CategoryPalette.folderFill(CategoryStore.lookup(.archive, folder.key)?.colorKey ?? "navy")
+        VStack(alignment: .leading, spacing: -DS.Folder.tabOverlap) {
+            RoundedRectangle(cornerRadius: DS.Radius.sm)
+                .fill(fill)
+                .frame(width: DS.Folder.tabWidth, height: DS.Folder.tabHeight)
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                HStack {
+                    Image(dsSymbol: ArchiveItem.categoryIcon(folder.key))
+                        .dsGlyph(DS.Glyph.xl)
+                    Spacer(minLength: DS.Spacing.sm)
+                    Text(verbatim: "\(folder.count)")
+                        .dsFont(.badge)
+                        .padding(.horizontal, DS.Spacing.sm)
+                        .padding(.vertical, DS.Spacing.xxs)
+                        .background(Capsule().fill(DS.Color.textOnPrimary.opacity(DS.Opacity.tintStroke)))
+                }
+                Text(verbatim: name)
+                    .dsFont(.headline)
+                    .lineLimit(2)
+                // السنوات، وبلاها العدد: كل المجلدات بنفس الأسطر فتتساوى
+                Text(verbatim: folder.yearsText ?? folder.countText)
+                    .dsFont(.caption)
+                if showsPending && folder.pending > 0 {
+                    Text(L10n.t("\(folder.pending) بانتظار الموافقة", "\(folder.pending) awaiting approval"))
+                        .dsFont(.caption)
+                }
+            }
+            .foregroundColor(DS.Color.textOnPrimary)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, minHeight: DS.Folder.minHeight, alignment: .topLeading)
+            .padding(DS.Spacing.md)
+            .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(fill))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: ([name, folder.countText, folder.yearsText] as [String?]).compactMap { $0 }.joined(separator: "، ")))
+        .accessibilityHint(L10n.t("يفتح المجلد", "Opens the folder"))
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 // MARK: - Upload Sheet
 
 /// شيت رفع عنصر للأرشيف — PDF أو صورة.
@@ -749,13 +934,14 @@ struct ArchiveUploadSheet: View {
     @State private var photoItem: PhotosPickerItem? = nil
     @State private var errorBanner: String? = nil
 
-    init(archiveVM: FamilyArchiveViewModel, defaultCategory: ArchiveItem.Category) {
+    init(archiveVM: FamilyArchiveViewModel, defaultCategory: ArchiveItem.Category, defaultKey: String? = nil) {
         self.archiveVM = archiveVM
         self.defaultCategory = defaultCategory
-        // التصنيف الافتراضي إن كان ظاهراً، وإلا أول تصنيف ظاهر
+        // تصنيف المجلد المفتوح، ثم الافتراضي إن كان ظاهراً، وإلا أول تصنيف ظاهر
         let keys = ArchiveItem.selectableCategoryKeys
-        self._categoryKey = State(initialValue: keys.contains(defaultCategory.rawValue)
-                                  ? defaultCategory.rawValue : (keys.first ?? defaultCategory.rawValue))
+        let preferred = defaultKey.flatMap { keys.contains($0) ? $0 : nil }
+        self._categoryKey = State(initialValue: preferred ?? (keys.contains(defaultCategory.rawValue)
+                                  ? defaultCategory.rawValue : (keys.first ?? defaultCategory.rawValue)))
     }
 
     private var canSubmit: Bool {
@@ -852,7 +1038,8 @@ struct ArchiveUploadSheet: View {
         .onChange(of: photoItem) { newItem in handlePhotoPick(newItem) }
         .onAppear {
             guard !reduceMotion else { return }   // أيقونات ثابتة مع «تقليل الحركة»
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { floatIcons = true }
+            // طفوة واحدة عند الظهور ثم تستقرّ — لا `repeatForever` (قاعدة المشروع: الحركة المستمرة على الساعة المشتركة فقط)
+            withAnimation(.easeOut(duration: 0.8)) { floatIcons = true }   // صعود واحد ثم تبقى
         }
     }
 
@@ -1033,8 +1220,12 @@ struct ArchiveUploadSheet: View {
                 fileName: pickedFileName,
                 mimeType: pickedMimeType
             )
-            if item != nil {
+            if let item {
                 dismiss()
+                // لحظة نجاح بعد الإغلاق (كانت تُغلق بلا كلمة) — «أُرسل للمراجعة» إن بقي العنصر معلّقاً
+                let published = item.approvalStatus == .approved
+                DSMomentToast.show(published ? L10n.t("تمت الإضافة", "Added") : L10n.t("أُرسل للمراجعة", "Sent for review"),
+                                   moment: published ? .success : .sentForApproval, section: .library)
             } else if let err = archiveVM.errorMessage {
                 errorBanner = err
             }
@@ -1174,9 +1365,20 @@ struct ArchiveItemViewer: View {
     @State private var viewerOpened = false
     /// ارتفاع الرأس — المربّع بالمنتصف على قدر محتواه (`dsPanelContentHeight`)
     @State private var headerH: CGFloat = 0
+    /// نسبة الصفحة بعد وصولها وعرض مكانها: المربّع الداخلي يأخذ شكل الصفحة (طلب المالك ٢٠٢٦-١١-٠٥)
+    @State private var pageAspect: CGFloat? = nil
+    @State private var sheetWidth: CGFloat = 0
     @Environment(\.verticalSizeClass) private var vSizeClass
     /// ارتفاع المعاينة — أصغر (طلب المالك ٢٠٢٦-١٠-٢٣: ٢٣٠ ← ١٧٠، والأفقي ١٥٠ ← ١١٠)
     private var previewHeight: CGFloat { vSizeClass == .compact ? 110 : 170 }
+
+    /// الصفحة تملأ المربّع الداخلي بنسبتها، بحدّ من طول الشاشة. nil قبل وصولها (الارتفاع `previewHeight`)
+    private var sheetSize: CGSize? {
+        guard let pageAspect, pageAspect > 0, sheetWidth > 0 else { return nil }
+        let height = min(sheetWidth * DS.Folder.itemPageWidthShare / pageAspect,
+                         UIScreen.main.bounds.height * DS.Folder.itemPageScreenShare)
+        return CGSize(width: height * pageAspect, height: height)
+    }
 
     private var accent: Color { item.categoryColor }
     /// الحفظ والمشاركة على هذا العنصر وحده — تفتحه الإدارة من قائمة العنصر
@@ -1207,13 +1409,18 @@ struct ArchiveItemViewer: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: DS.Spacing.md) {
                     documentSheet
+                        .frame(width: sheetSize?.width, height: sheetSize?.height ?? previewHeight)
                         .frame(maxWidth: .infinity)
-                        .frame(height: previewHeight)
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .background(GeometryReader { geo in
+                            Color.clear
+                                .onAppear { sheetWidth = geo.size.width }
+                                .onChange(of: geo.size.width) { sheetWidth = $0 }
+                        })
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.md)
 
                     indexCard
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.bottom, DS.Spacing.md)
                 }
                 .dsPanelContentHeight(extra: headerH)
@@ -1246,13 +1453,13 @@ struct ArchiveItemViewer: View {
             if item.isPDF, let url = URL(string: item.fileUrl) {
                 // الغلاف (الصفحة الأولى) — الضغط يفتح القارئ بملء الشاشة
                 Button { showReader = true; viewerOpened = true } label: {
-                    PDFThumbnailView(url: url, fit: true)
+                    PDFThumbnailView(url: url, fit: true, onAspect: { pageAspect = $0 })
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay { ZoomHintBadge(dismissed: viewerOpened) }
+                        .overlay(alignment: .bottomTrailing) { ZoomHintBadge(fixed: true) }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(DSScaleButtonStyle())
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
                 .accessibilityLabel(L10n.t("فتح الملف", "Open file"))
                 .accessibilityHint(L10n.t("اسحب لتقليب الصفحات", "Swipe to turn pages"))
             } else if item.isImage, let url = URL(string: item.fileUrl) {
@@ -1262,8 +1469,15 @@ struct ArchiveItemViewer: View {
                         switch phase {
                         case .success(let image):
                             image.resizable().scaledToFit()
-                                // شارة «تكبير» في الوسط — بعد وصول الصورة فقط، ثم تختفي
-                                .overlay { ZoomHintBadge(dismissed: viewerOpened) }
+                                // زرّ «تكبير» ثابت على ركن الصورة — بعد وصولها فقط (طلب المالك ٢٠٢٦-١١-٠٦)
+                                .overlay(alignment: .bottomTrailing) { ZoomHintBadge(fixed: true) }
+                                .background(GeometryReader { geo in
+                                    Color.clear.onAppear {
+                                        if pageAspect == nil, geo.size.height > 0 {
+                                            pageAspect = geo.size.width / geo.size.height
+                                        }
+                                    }
+                                })
                         case .failure:
                             Image(dsSymbol: item.categoryIcon)
                                 .dsGlyph(DS.Icon.sizeSm, weight: .light)
@@ -1275,7 +1489,7 @@ struct ArchiveItemViewer: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(DSScaleButtonStyle())
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.sm, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
                 .accessibilityLabel(L10n.t("تكبير الصورة", "Enlarge image"))
                 .accessibilityHint(L10n.t("اضغط للتكبير", "Tap to enlarge"))
             } else {
@@ -1296,8 +1510,8 @@ struct ArchiveItemViewer: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // لا تظهر الوثيقة في لقطة الشاشة (`LibraryProtection`)
         .screenCaptureShielded(shieldsCapture)
-        // الورقة = البطاقة الواحدة (`.dsCard`)
-        .dsCard()
+        // الورقة = البطاقة الواحدة (`.dsCard`)، والصفحة تملؤها بلا حشوة
+        .dsCard(padding: item.isPDF || item.isImage ? 0 : DS.Spacing.sm)
     }
 
     /// بطاقة فهرسة: تصنيف + ختم سنة + عنوان + وصف + من أضافها ومتى
@@ -1417,6 +1631,8 @@ private struct PDFThumbnailView: View {
     let url: URL
     /// الغلاف كاملاً بلا قصّ (مربّع العنصر) — البطاقة تملأ إطارها
     var fit: Bool = false
+    /// نسبة الصفحة (العرض ÷ الارتفاع) عند وصولها
+    var onAspect: ((CGFloat) -> Void)? = nil
     @State private var image: UIImage? = nil
     @State private var failed = false
 
@@ -1439,30 +1655,39 @@ private struct PDFThumbnailView: View {
     }
 
     private func load() async {
-        if let cached = PDFThumbCache.shared.object(forKey: url as NSURL) {
-            image = cached
+        // مربّع العنصر يعرض الصفحة كبيرة: نسخة أوضح بمفتاح مستقل عن مصغّرة البطاقة
+        let target: CGFloat = fit ? 1400 : 500
+        let key = (fit ? url.appendingPathExtension("large") : url) as NSURL
+        if let cached = PDFThumbCache.shared.object(forKey: key) {
+            show(cached)
             return
         }
-        // الصور الخاصة: رابط موقَّع إن أمكن (وإلا الأصلي) — المصغّرة تبقى مخزّنة بالرابط المحفوظ
-        let fetchURL = await StorageURLResolver.shared.displayURL(for: url)
+        // نفس ملف القارئ على الجهاز: الغلاف لا ينزّل المجلة مرة ثانية، ويبقى بعد إغلاق التطبيق
+        guard let file = await ArchivePDFLoader.localFile(for: url) else {
+            failed = true
+            return
+        }
         let rendered = await Task.detached(priority: .utility) { () -> UIImage? in
-            guard let data = try? Data(contentsOf: fetchURL),
-                  let doc = PDFDocument(data: data),
+            guard let doc = PDFDocument(url: file),
                   let page = doc.page(at: 0) else { return nil }
             let box = page.bounds(for: .mediaBox)
             guard box.width > 0, box.height > 0 else { return nil }
-            let target: CGFloat = 500
             let scale = target / max(box.width, box.height)
             let size = CGSize(width: box.width * scale, height: box.height * scale)
             return page.thumbnail(of: size, for: .mediaBox)
         }.value
 
         if let rendered {
-            PDFThumbCache.shared.setObject(rendered, forKey: url as NSURL)
-            image = rendered
+            PDFThumbCache.shared.setObject(rendered, forKey: key)
+            show(rendered)
         } else {
             failed = true
         }
+    }
+
+    private func show(_ rendered: UIImage) {
+        image = rendered
+        if rendered.size.height > 0 { onAspect?(rendered.size.width / rendered.size.height) }
     }
 }
 
@@ -1511,10 +1736,17 @@ struct ArchiveCategoryChips: View {
     var tint: Color = DS.Color.tileLibrary
 
     var body: some View {
-        DSFilterChips(options: ArchiveItem.selectableCategoryKeys.map {
-                          DSFilterOption(id: $0, title: ArchiveItem.categoryName($0), icon: ArchiveItem.categoryIcon($0))
-                      },
-                      selection: $key, tint: tint)
+        // اختيار داخل مربّع (طلب المالك ٢٠٢٦-١١-١٠): ٣ أقسام أو أقل = الاختيار الموحّد، وأكثر = مربّعات الاختيار
+        let keys = ArchiveItem.selectableCategoryKeys
+        if keys.count <= 3 {
+            DSChoiceTiles(options: keys.map { DSChoiceOption(id: $0, title: ArchiveItem.categoryName($0),
+                                                              icon: ArchiveItem.categoryIcon($0)) },
+                          selection: $key)
+        } else {
+            DSOptionTiles(keys.map { DSOptionTile($0, title: ArchiveItem.categoryName($0),
+                                                  icon: ArchiveItem.categoryIcon($0), tint: tint) },
+                          selection: $key, columns: 2)
+        }
     }
 }
 

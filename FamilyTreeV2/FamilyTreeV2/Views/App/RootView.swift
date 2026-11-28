@@ -5,6 +5,8 @@ struct RootView: View {
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @ObservedObject private var network = NetworkMonitor.shared
+    /// حالة التحديث من السيرفر («فرض التحديث»)
+    @ObservedObject private var updateStore = AppUpdateStore.shared
     /// شاشة «جاري التحقق» تبقى ١٫٢ ث على الأقل عند الفتح (طلب المالك ٢٠٢٦-١٠-٢٥ «وين راحت؟») — نسخة الإصدار
     /// تتحقق من الجلسة في لحظة فكانت الشاشة تومض وتختفي
     @State private var splashMinDone = false
@@ -24,7 +26,8 @@ struct RootView: View {
                 AnyView(SplashScreenView())
 
             case .authenticatedNoProfile:
-                AnyView(RegistrationView())
+                // «التسجيل»: «من العائلة» (RegistrationView كما هو) أو «من خارج العائلة» (R1)
+                AnyView(SignupOriginFlow())
 
             case .pendingApproval:
                 AnyView(WaitingForApprovalView())
@@ -47,16 +50,17 @@ struct RootView: View {
                     .environmentObject(appSettingsVM))
 
             case .fullyAuthenticated:
-                // التحديث الإجباري — النسخة أقل من الحد الأدنى. المالك مستثنى حتى
-                // لا يقفل نفسه خارج التطبيق لو رفع الحد قبل ما يحدّث جهازه.
-                if AppBuild.current < (appSettingsVM.settings.iosMinBuild ?? 0)
-                    && authVM.currentUser?.role != .owner {
+                // التحديث الإجباري — السيرفر يقرّر (`app_update_policy`: بعد الموعد، «إجباري الحين»، تحت الحد)،
+                // وقبل الترحيل الحد الأدنى من app_settings كما كان. المالك مستثنى حتى لا يقفل نفسه خارج التطبيق.
+                if updateStore.isForced(minBuildSetting: appSettingsVM.settings.iosMinBuild ?? 0,
+                                        isOwner: authVM.currentUser?.role == .owner) {
                     AnyView(ForceUpdateView())
-                } else if appSettingsVM.settings.maintenanceMode && !authVM.canModerate {
+                } else if MaintenanceLogic.showsScreen(maintenanceOn: appSettingsVM.settings.maintenanceMode,
+                                                       canModerate: authVM.canModerate) {
                     AnyView(MaintenanceModeView())
                 } else {
                     // قبول «الخصوصية والاستخدام» مرة لكل إصدار (app_config.terms_version)
-                    AnyView(MainTabView().termsAcceptanceGate())
+                    AnyView(MainTabView().termsAcceptanceGate().lineageGate().appUpdateGate())
                 }
             }
             }
@@ -88,53 +92,118 @@ struct RootView: View {
 struct MaintenanceModeView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var refreshing = false
 
+    /// بهوية الشعار (طلب المالك ٢٠٢٦-١١-٢٧ «باللون الأزرق ثيمة الشعار»): أرضية كحلية (`gradientBand`)، الشعار الكريمي،
+    /// العنوان أبيض، الفاصل والسطر ذهبيان، «تحديث» ذهبي ممتلئ و«تسجيل الخروج» نصّ فاتح هادئ. الظهور مرة (`dsEntrance`).
+    /// ٢٠٢٦-١١-٢٨ (طلب المالك): شارة صيانة حمراء بين الشعار والعنوان (قفزة مرة `DSIconPop`)، وسبب المالك
+    /// (`maintenance_message`) بدل السطر الافتراضي، ورجوع تلقائي: جلب كل ٦٠ ث ما دامت الشاشة ظاهرة وعند الرجوع للتطبيق —
+    /// حين تُطفأ الصيانة يبدّل `RootView` الشاشة وحده. المنطق في `MaintenanceLogic.swift` (الوحدة MT1).
     var body: some View {
-        VStack(spacing: DS.Spacing.xxl) {
-            Spacer()
+        ZStack {
+            Rectangle().fill(DS.Color.gradientBand).ignoresSafeArea()
 
-            Image(systemName: "wrench.and.screwdriver")
-                .font(DS.Font.scaled(80, weight: .regular))
-                .foregroundStyle(DS.Color.primary)
+            VStack(spacing: 0) {
+                Spacer()
 
-            Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))
-                .font(DS.Font.title1)
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.center)
+                Image("FamilyLogoCream")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: DS.Icon.splashLogo)
+                    .padding(DS.Icon.appLogo / 4)
+                    .accessibilityLabel(L10n.t("شعار عائلة المحمدعلي", "Al-Mohammad Ali family logo"))
+                    .dsEntrance(delay: 0, scale: DSMotion.panelScale, animation: DSMotion.panel, anchor: .center)
 
-            Text(L10n.t(
-                "نقوم حالياً بتحديث التطبيق. يرجى المحاولة لاحقاً.",
-                "We're currently updating the app. Please try again later."
-            ))
-            .font(DS.Font.body)
-            .foregroundColor(DS.Color.textSecondary)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, DS.Spacing.xxxl)
-
-            Spacer()
-
-            DSSecondaryButton(
-                L10n.t("تحديث", "Refresh"),
-                icon: "arrow.clockwise"
-            ) {
-                Task {
-                    await appSettingsVM.fetchSettings()
-                    await CategoryStore.shared.fetch()
+                // شارة الصيانة: دائرة حمراء ممتلئة ورمز أبيض — قفزة مرة («تقليل الحركة» = تلاشٍ فقط)
+                ZStack {
+                    Circle().fill(DS.Color.errorFill)
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .dsGlyph(DS.Glyph.xxl, weight: .semibold)
+                        .foregroundColor(DS.Color.textOnPrimary)
                 }
+                .frame(width: DS.Icon.floatingButton, height: DS.Icon.floatingButton)
+                .modifier(DSIconPop(delay: DSMotion.iconDelay))
+                .padding(.bottom, DS.Spacing.lg)
+                .accessibilityHidden(true)
+
+                VStack(spacing: DS.Spacing.sm) {
+                    Text(L10n.t("التطبيق تحت الصيانة", "App Under Maintenance"))
+                        .dsFont(.heroTitle)
+                        .foregroundColor(DS.Color.textOnPrimary)
+                        .multilineTextAlignment(.center)
+
+                    HStack(spacing: DS.Spacing.xsm) {
+                        Rectangle()
+                            .fill(LinearGradient(colors: [DS.Color.accentLight.opacity(0), DS.Color.accentLight.opacity(0.7)],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
+                        Image(systemName: "circle.fill")
+                            .dsGlyph(DS.Glyph.micro)
+                            .foregroundColor(DS.Color.accentLight)
+                            .accessibilityHidden(true)
+                        Rectangle()
+                            .fill(LinearGradient(colors: [DS.Color.accentLight.opacity(0.7), DS.Color.accentLight.opacity(0)],
+                                                 startPoint: .leading, endPoint: .trailing))
+                            .frame(width: DS.Spacing.xxxxl, height: DS.Border.width)
+                    }
+
+                    Text(verbatim: MaintenanceLogic.bodyLine(appSettingsVM.settings.maintenanceMessage))
+                        .dsFont(.callout)
+                        .foregroundColor(DS.Color.accentLight)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, DS.Spacing.xl)
+                .dsEntrance(delay: DSMotion.iconDelay, scale: 1, animation: DSMotion.panel, anchor: .center)
+
+                DSButton(L10n.t("تحديث", "Refresh"), icon: "arrow.clockwise", tint: DS.Color.goldFill,
+                         isLoading: refreshing, fullWidth: false) {
+                    guard !refreshing else { return }
+                    refreshing = true
+                    Task {
+                        await refetch(always: true)
+                        refreshing = false
+                    }
+                }
+                .padding(.top, DS.Spacing.xl)
+
+                Spacer()
+
+                Button {
+                    Task { await authVM.signOut() }
+                } label: {
+                    Label(L10n.t("تسجيل الخروج", "Sign Out"), systemImage: "rectangle.portrait.and.arrow.right")
+                        .dsFont(.button)
+                        .foregroundColor(DS.Color.textOnPrimary.opacity(0.8))
+                        .frame(minHeight: DS.Icon.tapTarget)
+                }
+                .buttonStyle(.plain)
             }
-
-            DSSecondaryButton(
-                L10n.t("تسجيل الخروج", "Sign Out"),
-                icon: "rectangle.portrait.and.arrow.right"
-            ) {
-                Task {
-                    await authVM.signOut()
-                }
+            .padding(DS.Spacing.xxl)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .dsLightStatusBar()
+        // الرجوع التلقائي: حلقة واحدة تُلغى حين تختفي الشاشة (لا `Timer.publish`)
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: MaintenanceLogic.refreshSeconds * 1_000_000_000)
+                guard !Task.isCancelled else { break }
+                await refetch()
             }
         }
-        .padding(DS.Spacing.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(DS.Color.background)
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await refetch() } }
+        }
+    }
+
+    /// الإعدادات (والتصنيفات بـ«تحديث» أو حين تُطفأ) — إن أُطفئت الصيانة يكمل التطبيق وحده
+    private func refetch(always: Bool = false) async {
+        await appSettingsVM.fetchSettings()
+        if always || !appSettingsVM.settings.maintenanceMode {
+            await CategoryStore.shared.fetch()
+        }
     }
 }
 
@@ -156,7 +225,7 @@ struct DeviceRevokedView: View {
                 ZStack {
                     Circle()
                         .fill(DS.Color.warning.opacity(0.12))
-                        .frame(width: 100, height: 100)
+                        .frame(width: DS.Icon.appLogo, height: DS.Icon.appLogo)
                     Image(systemName: "iphone.slash")
                         .font(DS.Font.scaled(42, weight: .bold))
                         .foregroundColor(DS.Color.warning)

@@ -28,7 +28,12 @@ struct EditChildSheet: View {
     @State private var errorMessage = ""
     /// حذف الابن من «عائلتي» — لكل عضو يعدّل ابنه هو (طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»)
     @State private var showDeleteConfirm = false
+    /// أم الابن من زوجاتي (طلب المالك ٢٠٢٦-١١-٠٥) — nil = غير محدّدة
+    @State private var selectedMotherId: UUID? = nil
+    @State private var originalMotherId: UUID? = nil
     @State private var isDeleting = false
+    /// غير الإدارة: أُرسل «طلب حذف من الشجرة» (٢٠٢٦-١١-١٣) — الابن يبقى حتى الموافقة
+    @State private var removalRequested = false
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
@@ -45,12 +50,14 @@ struct EditChildSheet: View {
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
             extraActions: deleteActions,
+            extraInline: true,
             onSubmit: saveChanges,
             onCancel: { dismiss() }
         ) {
             // الصورة للذكر فقط — الأنثى بلا خيار صورة
             if selectedGender != "female" { photoSection }
             basicInfoSection
+            if isOwnSon && !wives.isEmpty { motherSection }
         }
         .onAppear(perform: setupData)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -67,12 +74,24 @@ struct EditChildSheet: View {
         } message: {
             Text(errorMessage)
         }
-        .dsAlert(L10n.t("حذف الابن؟", "Delete this son?"), isPresented: $showDeleteConfirm) {
-            Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) { deleteChild() }
+        .dsAlert(removalAsksAdmin ? SelfRemovalText.confirmTitle : L10n.t("حذف الابن؟", "Delete this son?"),
+                 isPresented: $showDeleteConfirm) {
+            if removalAsksAdmin {
+                Button(SelfRemovalText.sendButton) { deleteChild() }
+            } else {
+                Button(L10n.t("حذف نهائي", "Delete permanently"), role: .destructive) { deleteChild() }
+            }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.t("يُحذف «\(member.firstName)» من الشجرة ومن عائلتك، ويُلغى طلب إضافته إن كان معلّقاً. لا يمكن التراجع.",
-                        "«\(member.firstName)» is removed from the tree and your family, and a pending add request is cancelled. This can't be undone."))
+            Text(removalAsksAdmin
+                 ? SelfRemovalText.confirmMessage(member.firstName)
+                 : L10n.t("يُحذف «\(member.firstName)» من الشجرة ومن عائلتك، ويُلغى طلب إضافته إن كان معلّقاً. لا يمكن التراجع.",
+                          "«\(member.firstName)» is removed from the tree and your family, and a pending add request is cancelled. This can't be undone."))
+        }
+        .dsAlert(SelfRemovalText.sentTitle, isPresented: $removalRequested, moment: .sentForApproval) {
+            Button(L10n.t("حسناً", "OK")) { dismiss() }
+        } message: {
+            Text(SelfRemovalText.sentMessage)
         }
     }
 
@@ -80,6 +99,28 @@ struct EditChildSheet: View {
 
     /// ابنه هو (أبوه = المستخدم) — يحذفه أي عضو مفعّل عبر remove_self_child (أبناؤه فقط، بلا حساب دخول،
     /// والمتوفى للمالك والمدير — السيرفر يرفض غير ذلك برسالة عربية)
+    /// زوجاتي — خيارات «الأم»
+    private var wives: [WomenFamilyEntry] {
+        memberVM.currentMemberWomenFamily.filter { $0.role == .wife }
+    }
+
+    /// «الأم» من زوجاتي — قائمة قصيرة، والحفظ مع بقية التعديلات
+    private var motherSection: some View {
+        DSComposerSection(title: L10n.t("الأم", "Mother"), icon: "person.fill",
+                          tint: DS.Color.female, index: 2) {
+            ChildMotherPicker(wives: wives, selection: $selectedMotherId)
+        }
+    }
+
+    /// حذف ابنه لغير الإدارة = طلب للمالك والمدير — إلا ابناً أضافه وطلب إضافته معلّق (يُحذف مباشرة كما كان)
+    private var removalAsksAdmin: Bool {
+        guard isOwnSon, !authVM.canModerate else { return false }
+        let id = member.id.uuidString.lowercased()
+        return !adminRequestVM.myPendingRequests.contains {
+            $0.requestType == RequestType.childAdd.rawValue && $0.newValue?.lowercased() == id
+        }
+    }
+
     private var isOwnSon: Bool {
         guard let me = authVM.currentUser?.id else { return false }
         return member.fatherId == me
@@ -88,8 +129,8 @@ struct EditChildSheet: View {
     /// زرّ الحذف بأسفل المربّع — لكل من يعدّل ابنه هو، وللمالك والمدير كما كان
     private var deleteActions: [DSComposerAction] {
         guard isOwnSon || authVM.canDeleteMembers else { return [] }
-        return [DSComposerAction(id: "delete-child", title: L10n.t("حذف الابن", "Delete son"), icon: "trash",
-                                 role: .destructive, isEnabled: !isDeleting && !isSaving, fullRow: true) {
+        return [DSComposerAction(id: "delete-child", title: L10n.t("حذف", "Delete"), icon: "trash",
+                                 role: .destructive, isEnabled: !isDeleting && !isSaving) {
             showDeleteConfirm = true
         }]
     }
@@ -102,6 +143,11 @@ struct EditChildSheet: View {
                 switch await memberVM.removeSelfChild(id: member.id) {
                 case .deleted:
                     ok = true
+                case .requested:
+                    await adminRequestVM.fetchMyPendingRequests(force: true)
+                    isDeleting = false
+                    removalRequested = true
+                    return
                 case .serverMissing where authVM.canDeleteMembers:
                     // الدالة لم تُرفع للسيرفر بعد — المالك والمدير بالمسار المباشر القديم
                     ok = await deleteDirectly()
@@ -165,7 +211,7 @@ struct EditChildSheet: View {
     /// صورة جديدة أو أي حقل يختلف عمّا فُتح عليه — «إلغاء» يسأل قبل التجاهل
     private var hasUnsavedChanges: Bool {
         guard let startDraft else { return false }
-        return selectedUIImage != nil || currentDraft != startDraft
+        return selectedUIImage != nil || currentDraft != startDraft || selectedMotherId != originalMotherId
     }
 
     /// الصورة — قسم مثل أقسام مربّعات الإضافة (للذكر فقط)
@@ -192,87 +238,66 @@ struct EditChildSheet: View {
 
     /// البيانات — نفس أقسام وحقول مربّعات الإضافة («أسلوب واحد»): الاسم، الجنس، الهاتف، التواريخ
     private var basicInfoSection: some View {
-        DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+        DSComposerSection(title: L10n.t("البيانات الشخصية", "Personal Info"),
                           icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
             DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
                             placeholder: L10n.t("اسم الابن", "Child's name"),
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
+            // خلايا البيانات المتجاورة (`DSTileGrid`، قرار المالك ٢٠٢٦-١١-١١)
             // الجنس — تغييره ينقل الابن بين الشجرة العامة وشجرة النساء (`move_child_gender`)،
             // فهو لمن يعدّل الشجرة فقط (`canEditMembers`، مثل أندرويد)؛ لغيرهم للقراءة
-            if authVM.canEditMembers {
-                DSGenderPicker(selection: $selectedGender)
-            } else {
+            if !authVM.canEditMembers {
                 DSGenderReadOnlyRow(gender: originalGender)
+            } else {
+                // الجنس زرّان، ثم الميلاد والحالة متجاوران — نفس «إضافة فرد» (قرار المالك ٢٠٢٦-١١-١١)
+                DSGenderPicker(selection: $selectedGender, buttons: true)
             }
+            DSTileGrid(dataTiles)
 
             // الهاتف — للذكر فقط
             if selectedGender == "male" {
-                DSFieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
-                    DSPhoneField(
-                        country: $selectedPhoneCountry,
-                        digits: $phoneNumber,
-                        placeholder: L10n.t("اختياري", "Optional"),
-                        compact: true,
-                        bordered: false
-                    )
-                }
+                DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"))
             }
 
-            // تاريخ الميلاد (يُرسل فقط إذا كان معروفاً/حدّده المستخدم)
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
-                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    value: birthDateProvided ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
-                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                                    initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
-                    guard let picked else { return }
-                    birthDate = picked
-                    birthDateProvided = true
-                }
-            }
-
-            // متوفى — صفّ بإطار حقول المربّعات
-            DSRow(icon: "leaf.fill", tint: DS.Color.error, title: L10n.t("متوفى", "Deceased")) {
-                Toggle("", isOn: $isDeceased.animation(DS.Anim.snappy))
-                    .labelsHidden()
-                    .tint(DS.Color.error)
-                    // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
-                    .accessibilityLabel(L10n.t("متوفى", "Deceased"))
-            }
-
-            if isDeceased {
-                dateRow(icon: "calendar", tint: DS.Color.error,
-                        title: L10n.t("تاريخ الوفاة", "Death Date"),
-                        value: deathDateProvided ? DSDateText.display(deathDate) : L10n.t("بدون تاريخ", "No date")) {
-                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                                        initial: deathDateProvided ? deathDate : nil, allowClear: false) { picked in
-                        guard let picked else { return }
-                        deathDate = picked
-                        deathDateProvided = true
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-
-                // الوفاة من غير الإدارة تُرسل طلباً لتأكيدها
-                if !(member.isDeceased ?? false), !authVM.canEditMembers {
-                    DSNoteCard(L10n.t("تُرسل للإدارة لتأكيدها قبل ظهورها في الشجرة",
-                                      "Sent to the administration to confirm first"))
-                }
+            // الوفاة من غير الإدارة تُرسل طلباً لتأكيدها
+            if isDeceased, !(member.isDeceased ?? false), !authVM.canEditMembers {
+                DSNoteCard(L10n.t("تُرسل للإدارة لتأكيدها قبل ظهورها في الشجرة",
+                                  "Sent to the administration to confirm first"))
             }
         }
     }
 
-    /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف
-    private func dateRow(icon: String, tint: Color, title: String, value: String,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: value) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
+    private var dataTiles: [DSTileItem] {
+        var items: [DSTileItem] = []
+        // تاريخ الميلاد (يُرسل فقط إذا كان معروفاً/حدّده المستخدم)
+        items.append(.half(DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                          hasDate: birthDateProvided, dateText: DSDateText.display(birthDate)) {
+            dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
+                guard let picked else { return }
+                birthDate = picked
+                birthDateProvided = true
             }
-            .contentShape(Rectangle())
+        }))
+        items.append(.half(DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+            DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+            DSChoiceOption(id: true, title: selectedGender == "female" ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
+                           icon: "leaf.fill")
+        ], selection: $isDeceased.animation(DS.Anim.snappy))))
+        if isDeceased {
+            items.append(.half(DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                              hasDate: deathDateProvided, dateText: DSDateText.display(deathDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                    initial: deathDateProvided ? deathDate : nil, allowClear: false) { picked in
+                    guard let picked else { return }
+                    deathDate = picked
+                    deathDateProvided = true
+                }
+            }))
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
+        return items
     }
 
     /// الجنس كما فُتح عليه المربّع (بلا قيمة = ذكر)
@@ -283,6 +308,10 @@ struct EditChildSheet: View {
     private func setupData() {
         firstName = member.firstName
         selectedGender = originalGender
+        // أم الابن: من نسخته في شجرة النساء (تحفظ الأم من خارج الملفات)، وإلا من ملفه
+        let mother = memberVM.currentMemberWomenFamily.first { $0.member.id == member.id }?.member.motherId ?? member.motherId
+        selectedMotherId = mother
+        originalMotherId = mother
         let detectedPhone = KuwaitPhone.detectCountryAndLocal(member.phoneNumber)
         selectedPhoneCountry = detectedPhone.country
         phoneNumber = detectedPhone.localDigits
@@ -400,7 +429,7 @@ struct EditChildSheet: View {
 
             var requestFailed = false
             if success, deathNeedsApproval {
-                let sent = await adminRequestVM.submitTreeEditRequest(payload: TreeEditPayload.make(
+                let sent = await adminRequestVM.submitTreeEditRequest(from: .profileChildEdit, payload: TreeEditPayload.make(
                     action: .deceased,
                     targetMemberId: member.id.uuidString,
                     targetMemberName: finalFullName,
@@ -414,9 +443,21 @@ struct EditChildSheet: View {
                 await memberVM.uploadAvatar(image: image, for: targetId)
             }
 
+            // الأم من زوجاتي — بعد حفظ بقية الحقول
+            if success, isOwnSon, selectedMotherId != originalMotherId {
+                if await memberVM.setChildMother(childId: targetId, motherId: selectedMotherId) {
+                    originalMotherId = selectedMotherId
+                } else {
+                    isSaving = false
+                    errorMessage = memberVM.errorMessage ?? L10n.t("تعذّر تحديد الأم.", "Couldn't set the mother.")
+                    showErrorAlert = true
+                    return
+                }
+            }
+
             isSaving = false
             if success, requestFailed {
-                errorMessage = L10n.t("حُفظت التعديلات، لكن تعذّر إرسال طلب الوفاة للإدارة. حاول مرة ثانية.",
+                errorMessage = L10n.t("حُفظت التعديلات، لكن تعذّر إرسال طلب الوفاة للإدارة. يرجى المحاولة مرة أخرى.",
                                       "Changes saved, but the death request couldn't be sent. Try again.")
                 showErrorAlert = true
             } else if success {
@@ -431,9 +472,96 @@ struct EditChildSheet: View {
                     Task { await DeathAnnouncementPresenter.offer(target, canAnnounce: canAnnounce) }
                 }
             } else {
-                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+                errorMessage = memberVM.errorMessage ?? L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
                 showErrorAlert = true
             }
         }
+    }
+}
+
+/// «الأم» من زوجات الأب — صفّ يفتح قائمة قصيرة (طلب المالك ٢٠٢٦-١١-٠٥ «اختار اسم الام للابناء»)
+struct ChildMotherPicker: View {
+    let wives: [WomenFamilyEntry]
+    @Binding var selection: UUID?
+
+    private var current: String {
+        guard let selection, let wife = wives.first(where: { $0.member.id == selection }) else {
+            return L10n.t("غير محدّدة", "Not set")
+        }
+        return wife.member.firstName
+    }
+
+    var body: some View {
+        // خلية بيانات بقائمة (قرار المالك ٢٠٢٦-١١-١١) — لأي عدد من الزوجات
+        DSMenuTile(icon: "person.fill", label: L10n.t("الأم", "Mother"),
+                   options: [DSChoiceOption<UUID?>(id: nil, title: L10n.t("غير محدّدة", "Not set"))]
+                   + wives.map { DSChoiceOption<UUID?>(id: $0.member.id, title: $0.member.firstName, icon: "person.fill") },
+                   selection: $selection)
+    }
+}
+
+// MARK: - حذف من «عائلتي» لغير الإدارة = طلب (§9، السيرفر ٢٠٢٦-١١-١٣)
+
+/// نصوص «طلب حذف من الشجرة» من «عائلتي» — الابن والبنت والزوجة (الإدارة تحذف كما كانت)
+enum SelfRemovalText {
+    static let confirmTitle = L10n.t("طلب حذف من الشجرة", "Request to remove from the tree")
+    static let sendButton = L10n.t("إرسال الطلب", "Send request")
+    static let sentTitle = L10n.t("تم الإرسال", "Request Sent")
+    static let sentMessage = L10n.t("أُرسل طلب الحذف إلى الإدارة، ويُحذف بعد الموافقة.",
+                                    "The removal request was sent to the administration; it's removed after approval.")
+    static let pendingChip = L10n.t("بانتظار الحذف", "Removal pending")
+
+    static func confirmMessage(_ name: String) -> String {
+        L10n.t("إرسال طلب حذف «\(name)» إلى الإدارة؟ يُحذف بعد الموافقة.",
+               "Send a request to remove «\(name)» to the administration? It's removed after approval.")
+    }
+
+    /// طلب «حذف من الشجرة» معلّق للعضو على هذا الشخص (`new_value` = معرّفه)
+    static func isPending(_ id: UUID, in requests: [AdminRequest]) -> Bool {
+        let key = id.uuidString.lowercased()
+        return requests.contains {
+            $0.requestType == RequestType.relativeRemove.rawValue && $0.newValue?.lowercased() == key
+        }
+    }
+}
+
+extension SelfRemovalText {
+    static let requestButton = L10n.t("طلب حذف", "Request removal")
+    static let sentButton = L10n.t("أُرسل طلب الحذف", "Removal requested")
+
+    /// طلب حذف معلّق للمشاهد على هذا الشخص (§11): «طلب حذف من الشجرة» أو «تعديل الشجرة — حذف»
+    static func isPendingAny(_ id: UUID, in requests: [AdminRequest]) -> Bool {
+        let key = id.uuidString.lowercased()
+        return isPending(id, in: requests) || requests.contains {
+            $0.requestType == RequestType.treeEdit.rawValue && $0.treeEditPayload?.resolvedAction == .delete
+                && $0.treeEditPayload?.targetMemberId?.lowercased() == key
+        }
+    }
+}
+
+/// «طلب حذف» ظاهر في تفاصيل العضو (§11): إطار أحمر بارتفاع الزرّ الواحد ورمز السلة؛ بعد الإرسال «أُرسل طلب الحذف» معطّلاً
+struct DSDeleteRequestButton: View {
+    let pending: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let tint = pending ? DS.Color.textTertiary : DS.Color.error
+        Button(action: action) {
+            HStack(spacing: DSBox.buttonSpacing) {
+                Image(systemName: pending ? "clock.fill" : "trash")
+                    .dsGlyph(DS.Glyph.md)
+                    .accessibilityHidden(true)
+                Text(pending ? SelfRemovalText.sentButton : SelfRemovalText.requestButton)
+            }
+            .font(DSBox.buttonFont)
+            .foregroundColor(tint)
+            .dsButtonLabelFit()
+            .frame(maxWidth: .infinity, minHeight: DSBox.buttonHeight)
+            .background(DSBox.buttonShape.fill(tint.opacity(DS.Opacity.tintFillSoft)))
+            .overlay(DSBox.buttonShape.strokeBorder(tint, lineWidth: DS.Border.widthBold))
+            .contentShape(DSBox.buttonShape)
+        }
+        .buttonStyle(DSScaleButtonStyle())
+        .disabled(pending)
     }
 }

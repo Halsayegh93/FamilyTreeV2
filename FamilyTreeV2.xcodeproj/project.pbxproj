@@ -7,14 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		90E54203AAC04F4C70BC3C90 /* NotificationService.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E9EDCC3925F487043661EA1B /* NotificationService.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		18E891693DDB87FBB02A1204 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 229E11562521039F32CA6D55 /* ShareExtension.appex */; };
 		784AF27E6A61431278C08D89 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4C38DDD4B2FAA669DB70856 /* Foundation.framework */; };
 		9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 9A8DF3012F406AED000B2DD7 /* Supabase */; };
+		5E1A5E022FC5000100A11CE0 /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 5E1A5E012FC5000100A11CE0 /* Sentry */; };
 		9FCEA5582F870E6F00799C85 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9FCEA5532F870E6F00799C85 /* InfoPlist.strings */; };
 		9FCEA5592F870E6F00799C85 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9FCEA5562F870E6F00799C85 /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		B89B77A9E5E9EAAE95F4414B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9F71E69C2F0B04F70001F8B7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = CD4AE49D2D08DA8C8D2F7815;
+			remoteInfo = NotificationService;
+		};
 		ADDC5A0FAA0CE43BA5407CEF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9F71E69C2F0B04F70001F8B7 /* Project object */;
@@ -32,6 +41,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				18E891693DDB87FBB02A1204 /* ShareExtension.appex in Embed Foundation Extensions */,
+				90E54203AAC04F4C70BC3C90 /* NotificationService.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -39,6 +49,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E9EDCC3925F487043661EA1B /* NotificationService.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NotificationService.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		229E11562521039F32CA6D55 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FamilyTreeV2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9F71E7492F0D83E20001F8B7 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -61,6 +72,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		3DED476979EFD3A7F19947A7 /* NotificationService */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = NotificationService;
+			sourceTree = "<group>";
+		};
 		9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -77,6 +93,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		9CFA1BC4374976BDFAA2D266 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		0EBBEAD117B15AA650382B65 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -90,6 +113,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9A8DF3002F406AED000B2DD7 /* Supabase in Frameworks */,
+				5E1A5E022FC5000100A11CE0 /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,8 +145,10 @@
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
 				9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */,
 				229E11562521039F32CA6D55 /* ShareExtension.appex */,
+				E9EDCC3925F487043661EA1B /* NotificationService.appex */,
 				726936D1BD9AC8C9F277DE1B /* Frameworks */,
 				C9E8CF112E0C9D20CF5D72B5 /* ShareExtension */,
+				3DED476979EFD3A7F19947A7 /* NotificationService */,
 			);
 			sourceTree = "<group>";
 		};
@@ -145,6 +171,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		CD4AE49D2D08DA8C8D2F7815 /* NotificationService */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DAA2B6FC9B89EDD1E5C5032E /* Build configuration list for PBXNativeTarget "NotificationService" */;
+			buildPhases = (
+				712E8BC7146FAF75A00CAC12 /* Sources */,
+				9CFA1BC4374976BDFAA2D266 /* Frameworks */,
+				CDF8504845052DBB46A5E73D /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3DED476979EFD3A7F19947A7 /* NotificationService */,
+			);
+			name = NotificationService;
+			productName = NotificationService;
+			productReference = E9EDCC3925F487043661EA1B /* NotificationService.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		996F75BB2A873739B64ADF65 /* ShareExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0A0F2DB8B2F8CB0389631BD4 /* Build configuration list for PBXNativeTarget "ShareExtension" */;
@@ -178,6 +224,7 @@
 			);
 			dependencies = (
 				8BF9724D2AADC7892AA52C15 /* PBXTargetDependency */,
+				0376B14F3789B3F57D4E5CB0 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9F71E6A62F0B04F70001F8B7 /* FamilyTreeV2 */,
@@ -185,6 +232,7 @@
 			name = FamilyTreeV2;
 			packageProductDependencies = (
 				9A8DF3012F406AED000B2DD7 /* Supabase */,
+				5E1A5E012FC5000100A11CE0 /* Sentry */,
 			);
 			productName = FamilyTreeV2;
 			productReference = 9A8DF20B2F406AEB000B2DD7 /* FamilyTreeV2.app */;
@@ -217,6 +265,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				9F71E6F02F0B077E0001F8B7 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				5E1A5E002FC5000100A11CE0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9F71E69B2F0B04F70001F8B7;
@@ -225,11 +274,19 @@
 			targets = (
 				9A8DF20A2F406AEB000B2DD7 /* FamilyTreeV2 */,
 				996F75BB2A873739B64ADF65 /* ShareExtension */,
+				CD4AE49D2D08DA8C8D2F7815 /* NotificationService */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		CDF8504845052DBB46A5E73D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		9A8DF2092F406AEB000B2DD7 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -249,6 +306,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		712E8BC7146FAF75A00CAC12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		97C16A910F443710A8E4B89D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -266,6 +330,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0376B14F3789B3F57D4E5CB0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = NotificationService;
+			target = CD4AE49D2D08DA8C8D2F7815 /* NotificationService */;
+			targetProxy = B89B77A9E5E9EAAE95F4414B /* PBXContainerItemProxy */;
+		};
 		8BF9724D2AADC7892AA52C15 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ShareExtension;
@@ -294,19 +364,60 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		D67BF5EF5C76F267D47CEF01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 51;
+				DEVELOPMENT_TEAM = G8GVN83P97;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "NotificationServiceConfig/NotificationService-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2.NotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		3CEE4A90ECE21B74AAF8DAB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 51;
+				DEVELOPMENT_TEAM = G8GVN83P97;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "NotificationServiceConfig/NotificationService-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2.NotificationService;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		8D83884B12C8BB683DCF7721 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = ShareExtensionConfig/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "ShareExtensionConfig/ShareExtension-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2.Share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -322,13 +433,13 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_ENTITLEMENTS = ShareExtensionConfig/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "ShareExtensionConfig/ShareExtension-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2.Share;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -348,7 +459,7 @@
 				CODE_SIGN_ENTITLEMENTS = FamilyTreeV2/FamilyTreeV2.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -365,10 +476,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SENTRY_DSN = "https://974ea663e8240325e90cb5c72c133dfc@o4512495122644992.ingest.us.sentry.io/4512495138045952";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -388,7 +500,7 @@
 				CODE_SIGN_ENTITLEMENTS = FamilyTreeV2/FamilyTreeV2.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 51;
 				DEVELOPMENT_TEAM = G8GVN83P97;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -405,10 +517,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = Hasan.FamilyTreeV2;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SENTRY_DSN = "https://974ea663e8240325e90cb5c72c133dfc@o4512495122644992.ingest.us.sentry.io/4512495138045952";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -549,6 +662,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		DAA2B6FC9B89EDD1E5C5032E /* Build configuration list for PBXNativeTarget "NotificationService" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CEE4A90ECE21B74AAF8DAB0 /* Release */,
+				D67BF5EF5C76F267D47CEF01 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		0A0F2DB8B2F8CB0389631BD4 /* Build configuration list for PBXNativeTarget "ShareExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -587,6 +709,14 @@
 				minimumVersion = 2.5.1;
 			};
 		};
+		5E1A5E002FC5000100A11CE0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.35.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -594,6 +724,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9F71E6F02F0B077E0001F8B7 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		5E1A5E012FC5000100A11CE0 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5E1A5E002FC5000100A11CE0 /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -27,8 +27,8 @@ struct QRCodeSheet: View {
 
     var body: some View {
         DSComposer(
-            title: L10n.t("رمز QR", "QR Code"),
-            subtitle: L10n.t("رمزك التعريفي في شجرة العائلة", "Your ID code in the family tree"),
+            title: L10n.t("رمز العضو", "Member code"),
+            subtitle: L10n.t("رمز التعريف في شجرة العائلة", "Your ID code in the family tree"),
             icon: "qrcode",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("مشاركة الرمز", "Share Code"),
@@ -82,7 +82,7 @@ struct QRCodeSheet: View {
                             .resizable()
                             .scaledToFit()
                             // القارئ الصوتي: صورة الرمز بلا اسم كانت تُقرأ «صورة» فقط
-                            .accessibilityLabel(L10n.t("رمز QR الخاص بك", "Your QR code"))
+                            .accessibilityLabel(L10n.t("رمز العضو", "Member code"))
                     } else {
                         // التحميل الواحد: المجسّم يتنفّس
                         DSPageLoader(section: .profile, size: DS.Icon.state, fillsSpace: false)
@@ -114,7 +114,7 @@ struct QRCodeSheet: View {
             HStack(spacing: DS.Spacing.sm) {
                 DSFieldIcon(name: "camera.viewfinder", tint: DS.Color.primary)
                     .accessibilityHidden(true)   // زخرفة
-                Text(L10n.t("امسح رمز QR لمعرفة صلة القرابة", "Scan QR to discover kinship"))
+                Text(L10n.t("امسح رمز العضو لمعرفة صلة القرابة", "Scan a member code to see the kinship"))
                     .dsFieldFont(.rowTitle)
                     .foregroundColor(DS.Color.fieldLabel)
                     .multilineTextAlignment(.leading)

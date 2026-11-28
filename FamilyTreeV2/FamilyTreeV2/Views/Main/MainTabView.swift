@@ -4,6 +4,14 @@ import UserNotifications
 struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    /// «صلاحيات محدودة» (R1): تبويب الديوانيات مخفي إن كان مقفولاً عليه
+    @ObservedObject private var lineageGate = LineageGateStore.shared
+    private var diwaniyasTabShown: Bool {
+        (appSettingsVM.settings.diwaniyasEnabled ?? true) && !lineageGate.hides(.diwaniyas)
+    }
+    /// «صلاحيات الأعضاء حسب الفئة»: تبويب الشجرة يغيب إن أُطفئت «شجرة العائلة» لفئته
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
+    private var treeTabShown: Bool { authVM.memberSees(.tree) }
     @ObservedObject private var langManager = LanguageManager.shared
     /// آخر تبويب يُحفظ مع حالة النافذة: إن سكّر النظام التطبيق بالخلفية (امتلاء الذاكرة) يرجع لنفس التبويب
     /// بدل الرئيسية (طلب المالك ٢٠٢٦-١٠-٣١). الإغلاق اليدوي بالسحب يمسحها فيبدأ من الرئيسية كالعادة.
@@ -11,6 +19,12 @@ struct MainTabView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var showNotificationAlert = false
     @AppStorage("notificationAlertDismissCount") private var dismissCount = 0
+    /// انتهى فحص إذن الإشعارات بعد الفتح — تذكير الصورة ينتظره ولا يسبقه
+    @State private var notificationFlowDone = false
+    /// «ما الجديد» معروض — «كمّل ملفك بصورة» ينتظره
+    @ObservedObject private var whatsNew = WhatsNewStore.shared
+    /// «إعلانات عند فتح التطبيق» قيد الفحص أو معروضة — كل ما بعدها ينتظرها
+    @ObservedObject private var launchAnnouncements = LaunchAnnouncementsStore.shared
 
     private var tabSelection: Binding<Int> {
         Binding(
@@ -24,7 +38,8 @@ struct MainTabView: View {
                 if newValue == selectedTab {
                     selectedTab = newValue
                 } else {
-                    DSScreenCrossfade.run { selectedTab = newValue }
+                    // ضغطة الشريط: ذوبان أقصر (`DSMotion.tabFade`) — تنقّل متكرّر يبقى سريعاً
+                    DSScreenCrossfade.run(duration: DSMotion.tabFade) { selectedTab = newValue }
                 }
                 // جلسات الاستخدام: التبويب الجديد قبل ظهور صفحاته (`AppUsageTracker`)
                 AppUsageTracker.shared.setTab(newValue)
@@ -72,14 +87,16 @@ struct MainTabView: View {
                     Label(tabTitle("الرئيسية", "Home"), systemImage: AppSection.home.symbol)
                 }
 
-                Tab(value: 1) {
-                    AnyView(TreeTabContainer(selectedTab: crossfadingTab))
-                        .dsSection(.tree)
-                } label: {
-                    Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
+                if treeTabShown {
+                    Tab(value: 1) {
+                        AnyView(TreeTabContainer(selectedTab: crossfadingTab))
+                            .dsSection(.tree)
+                    } label: {
+                        Label(tabTitle("الشجرة", "Tree"), systemImage: AppSection.tree.symbol)
+                    }
                 }
 
-                if appSettingsVM.settings.diwaniyasEnabled ?? true {
+                if diwaniyasTabShown {
                     Tab(value: 2) {
                         AnyView(DiwaniyasView(selectedTab: crossfadingTab))
                             .dsSection(.diwaniyas)
@@ -92,7 +109,7 @@ struct MainTabView: View {
                     AnyView(ProfileView(selectedTab: crossfadingTab))
                         .dsSection(.profile)
                 } label: {
-                    Label(tabTitle("حسابي", "Profile"), systemImage: AppSection.profile.symbol)
+                    Label(tabTitle("الملف الشخصي", "Profile"), systemImage: AppSection.profile.symbol)
                 }
 
                 if authVM.canModerate {
@@ -115,15 +132,17 @@ struct MainTabView: View {
                 .tag(0)
 
             // مغلّف يسمح بالتبديل بين الواجهة الكلاسيكية والتجربة الجديدة
-            AnyView(TreeTabContainer(selectedTab: crossfadingTab))
-                .dsSection(.tree)
-                .tabItem {
-                    Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
-                    Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
-                }
-                .tag(1)
+            if treeTabShown {
+                AnyView(TreeTabContainer(selectedTab: crossfadingTab))
+                    .dsSection(.tree)
+                    .tabItem {
+                        Image(systemName: selectedTab == 1 ? AppSection.tree.symbol : AppSection.tree.symbolOutline)
+                        Text(verticalSizeClass == .compact ? "" : L10n.t("الشجرة", "Tree"))
+                    }
+                    .tag(1)
+            }
 
-            if appSettingsVM.settings.diwaniyasEnabled ?? true {
+            if diwaniyasTabShown {
                 AnyView(DiwaniyasView(selectedTab: crossfadingTab))
                     .dsSection(.diwaniyas)
                     .tabItem {
@@ -137,7 +156,7 @@ struct MainTabView: View {
                 .dsSection(.profile)
                 .tabItem {
                     Image(systemName: selectedTab == 3 ? AppSection.profile.symbol : AppSection.profile.symbolOutline)
-                    Text(verticalSizeClass == .compact ? "" : L10n.t("حسابي", "Profile"))
+                    Text(verticalSizeClass == .compact ? "" : L10n.t("الملف الشخصي", "Profile"))
                 }
                 .tag(3)
 
@@ -152,6 +171,33 @@ struct MainTabView: View {
             }
         }
         }
+    }
+
+    /// تبويب محفوظ أو مفتوح لم يعد متاحاً (الإدارة بلا صلاحية، الديوانيات أو الشجرة مطفأة) → الرئيسية
+    private func leaveHiddenTab() {
+        if (selectedTab == 4 && !authVM.canModerate)
+            || (selectedTab == 2 && !diwaniyasTabShown)
+            || (selectedTab == 1 && !treeTabShown)
+            || !(0...4).contains(selectedTab) {
+            selectedTab = 0
+        }
+    }
+
+    /// احتياط قبل ترحيل `my_member_category`: نفس القاعدة من حقائق التطبيق
+    private func applyLocalMemberCategory() {
+        guard let me = authVM.currentUser else { return }
+        let status = lineageGate.status
+        MemberAccessStore.shared.applyLocal(MemberAccess.Facts(
+            isStaff: authVM.canModerate,
+            isActive: me.role == .member && (me.status ?? .active) == .active,
+            isLimited: status?.limited == true,
+            hasLineageRow: status?.flagged == true,
+            isCompleted: status?.completed != false,
+            // حساب مراجعة أبل يبقى في فئته ولو لم يستكمل — نفس `my_member_category()` على السيرفر
+            isReviewAccount: AppConfigValues.shared.reviewAccountIds.contains(me.id),
+            isDaughterChildNode: false,
+            isOutsideNode: false,
+            isFemale: me.isFemale))
     }
 
     var body: some View {
@@ -171,6 +217,19 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             DSScreenCrossfade.run { selectedTab = 0 }
         }
+        // قسم مخفي عن هذا الحساب (رابط أو إشعار): الرئيسية بهدوء — بلا صفحة فارغة ولا رسالة عن الصلاحيات
+        .onReceive(NotificationCenter.default.publisher(for: .leaveHiddenSection)) { _ in
+            guard selectedTab != 0 else { return }
+            DSScreenCrossfade.run { selectedTab = 0 }
+        }
+        // «افتح الأخبار» من إعلان الفتح: الرئيسية ← صفحة الأخبار (من تبويب آخر: حتى تُبنى الرئيسية)
+        .onReceive(NotificationCenter.default.publisher(for: .openNewsList)) { _ in
+            let alreadyHome = selectedTab == 0
+            if !alreadyHome { DSScreenCrossfade.run { selectedTab = 0 } }
+            DispatchQueue.main.asyncAfter(deadline: .now() + (alreadyHome ? 0 : 0.4)) {
+                NotificationCenter.default.post(name: .showNewsList, object: nil)
+            }
+        }
         // «شجرة النساء» من «العائلة» في لوحة الإدارة — تبويب الشجرة يفتح على النساء
         .onReceive(NotificationCenter.default.publisher(for: .openWomenTree)) { _ in
             DSScreenCrossfade.run { selectedTab = 1 }
@@ -186,6 +245,18 @@ struct MainTabView: View {
                 NotificationCenter.default.post(name: .showKinshipPath, object: nil, userInfo: info)
             }
         }
+        // «في الشجرة» من ورقة العضو في الإدارة (V2-3): تاب الشجرة ← شجرة العائلة ← العضو في الوسط بمساره
+        // (`.openMemberInTree` الذي تعالجه `TreeView` — نفس اختيار عضو من بحث الشجرة)
+        // F4 (V36): الطلب ينتظر في `TreeFocusRequest` و`TreeView` تنفّذه حين تجهز (بعد إعداد البداية) — لا مهلة ثابتة؛
+        // و`TreeTabContainer` يفتح شجرة العائلة ولو كانت النساء ستُفتح أولاً
+        .onReceive(NotificationCenter.default.publisher(for: .requestMemberInTree)) { note in
+            let info = note.userInfo
+            if let id = info?["memberId"] as? UUID { TreeFocusRequest.pending = id }
+            DSScreenCrossfade.run { selectedTab = 1 }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .openMemberInTree, object: nil, userInfo: info)
+            }
+        }
         }
         // القسم المختار لما يُعرض في نافذة مستقلّة (الرسائل، مربّع التاريخ، النعي) — ولا قسم خارج
         // التبويبات: عند الخروج (الدخول، الانتظار، التجميد) يرجع كحلي العلامة. لا نصفّره إن اختفت
@@ -194,11 +265,7 @@ struct MainTabView: View {
         // وتُترك بلا إرسال عند الخروج منها
         .onAppear {
             // تبويب محفوظ لم يعد متاحاً (الإدارة بلا صلاحية، الديوانيات مطفأة) → الرئيسية
-            if (selectedTab == 4 && !authVM.canModerate)
-                || (selectedTab == 2 && !(appSettingsVM.settings.diwaniyasEnabled ?? true))
-                || !(0...4).contains(selectedTab) {
-                selectedTab = 0
-            }
+            leaveHiddenTab()
             AppSection.current = selectedSection
             AppUsageTracker.shared.start(tab: selectedTab)
         }
@@ -206,6 +273,15 @@ struct MainTabView: View {
             AppSection.current = selectedSection
             AppUsageTracker.shared.setTab(tab)
         }
+        // الفئة من السيرفر (`my_member_category`) — وقبل الترحيل من حقائق التطبيق؛ تبويب غاب ← الرئيسية
+        .task(id: authVM.currentUser?.id) {
+            applyLocalMemberCategory()
+            await MemberAccessStore.shared.refresh(userId: authVM.currentUser?.id)
+        }
+        .onReceive(lineageGate.$status) { _ in applyLocalMemberCategory() }
+        .onChange(of: memberAccess.category) { _ in leaveHiddenTab() }
+        .onChange(of: treeTabShown) { _ in leaveHiddenTab() }
+        .onChange(of: diwaniyasTabShown) { _ in leaveHiddenTab() }
         .onDisappear {
             if authVM.status != .fullyAuthenticated {
                 AppSection.current = nil
@@ -216,6 +292,7 @@ struct MainTabView: View {
         .onAppear { refreshUserSafetyState() }
         .onChange(of: authVM.currentUser?.id) { _ in refreshUserSafetyState() }
         .task {
+            defer { notificationFlowDone = true }
             // تتبع أول شاشة عند الفتح
             MemberActivityTracker.report("home")
             // كتالوج العوائل — ليعرض كل اسم بآخره العائلة المختارة
@@ -223,6 +300,12 @@ struct MainTabView: View {
             // أول مرة: النظام يطلب تلقائي من PushNotificationDelegate
             // ننتظر 3 ثواني عشان المستخدم يرد على طلب النظام أول
             try? await Task.sleep(nanoseconds: 3_000_000_000)
+
+            // إعلانات الفتح أولاً — مربّع الإشعارات بعدها
+            while LaunchAnnouncementsStore.shared.busy {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if Task.isCancelled { return }
+            }
 
             // تحقق إذا رفض — أقصى مرتين بعد طلب النظام
             guard dismissCount < 2 else { return }
@@ -246,10 +329,17 @@ struct MainTabView: View {
             }
         } message: {
             Text(L10n.t(
-                "فعّل الإشعارات عشان توصلك أخبار العائلة والتحديثات المهمة",
+                "يرجى تفعيل الإشعارات لتصلك أخبار العائلة والتحديثات المهمة",
                 "Enable notifications to receive family news and important updates"
             ))
         }
+        // «إعلانات عند فتح التطبيق» — أول ما يظهر عند الفتح (وعند الرجوع من الخلفية بعد ٣٠ دقيقة)
+        .modifier(LaunchAnnouncementsGate())
+        // «ما الجديد» بعد التحديث (القرار ٨) — مرة لكل نسخة، بعد الإعلانات وفحص الإشعارات ومربّعه
+        .modifier(WhatsNewGate(blocked: !notificationFlowDone || showNotificationAlert || launchAnnouncements.busy))
+        // «كمّل ملفك بصورة» — بعد فحص الإشعارات ومربّعه و«ما الجديد» (نوع مستقل: حارس المكدس)
+        .modifier(PhotoReminderGate(blocked: !notificationFlowDone || showNotificationAlert || whatsNew.showing
+                                    || launchAnnouncements.busy))
     }
 
     /// يربط قائمة المحظورين بالحساب الحالي
@@ -262,6 +352,8 @@ extension Notification.Name {
     static let didReselectTab       = Notification.Name("didReselectTab")
     /// يعرض صلة القرابة في الشجرة من أي مكان — نفس userInfo لـ `showKinshipPath`
     static let requestKinshipPath   = Notification.Name("requestKinshipPath")
+    /// يفتح الشجرة على عضو من أي مكان (ورقة العضو في الإدارة) — userInfo: ["memberId": UUID]
+    static let requestMemberInTree  = Notification.Name("requestMemberInTree")
     /// زر التحديد في هيدر الصفحة الفرعية — userInfo: ["page": "archive" | "projects"]
     static let subPageStartSelection = Notification.Name("subPageStartSelection")
     static let openAdminRequests    = Notification.Name("openAdminRequests")
@@ -269,4 +361,6 @@ extension Notification.Name {
     static let openAdminReviewForKind = Notification.Name("openAdminReviewForKind")
     /// يفتح تاب الرئيسية ويدفع مركز الإشعارات + يفتح شيت تفاصيل الطلب لو فيه deep-link
     static let openHomeNotificationsCenter = Notification.Name("openHomeNotificationsCenter")
+    /// قسم مخفي عن الحساب وصل إليه برابط/إشعار — يرجع للرئيسية ويُغلق الصفحة الفرعية (`LineageLockedView`)
+    static let leaveHiddenSection = Notification.Name("leaveHiddenSection")
 }

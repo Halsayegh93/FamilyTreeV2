@@ -23,6 +23,8 @@ class MemberViewModel: ObservableObject {
             _memberByIdDirty = true
             // سلسلة الشجرة لتقسيم الأسماء المركّبة (PersonName القاعدة ٢) — تسجيل بلا كلفة، البناء عند القراءة
             PersonNameTree.update(allMembers)
+            // آباء «من العائلة» في مربّع الزوجة/الأم = رجال شجرة العائلة فقط (طلب المالك ٢٠٢٦-١١-١٢)
+            WifeCandidateRules.familyMemberIds = Set(allMembers.lazy.map(\.id))
         }
     }
 
@@ -45,9 +47,14 @@ class MemberViewModel: ObservableObject {
     @Published var currentMemberChildren: [FamilyMember] = []
     /// عائلة العضو من شجرة النساء (الأم + الزوجة + الأبناء) — عرض فقط.
     @Published var currentMemberWomenFamily: [WomenFamilyEntry] = []
+    /// عقدة العضو في شجرة النساء حين يكون مكانه هناك لا في شجرة العائلة (ابن البنت، M1): أبوه `parentId` وأمّه
+    /// `motherId` منها — `profiles.mother_id` لا يحمل أمّاً من شجرة النساء. nil = نسخته العادية أو لا عقدة
+    @Published var currentMemberWomenPlace: WomanMember?
     @Published var activePath: [UUID] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    /// سبب فشل آخر `deleteMember` من السيرفر (hint، وإلا code) — لمن يحتاج رسالة خاصة (مربّع حذف المكرر)
+    private(set) var lastDeleteFailure: String?
     /// آخر «إضافة ابن» من العضو دخلت الشجرة مباشرة (لا طلب) — قرار المالك ٢٠٢٦-١٠-٢٧
     var lastChildAddWasDirect = false
 
@@ -91,11 +98,9 @@ class MemberViewModel: ObservableObject {
     /// يُرجع حقول التتبع الإداري (updated_by + updated_at) إذا كان المدير يعدل بيانات عضو آخر
     private func adminAuditFields(for memberId: UUID) -> [String: AnyEncodable] {
         guard canModerate, let adminId = currentUser?.id, adminId != memberId else { return [:] }
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime]
         return [
             "updated_by": AnyEncodable(adminId.uuidString),
-            "updated_at": AnyEncodable(isoFormatter.string(from: Date()))
+            "updated_at": AnyEncodable(DateParsing.isoString(Date()))
         ]
     }
 
@@ -225,7 +230,72 @@ class MemberViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Live Changes
+
+    /// تحديث حيّ (طلب المالك ٢٠٢٦-١١-١٢ «سرّع السيرفر»): يجلب من تغيّروا فقط من `members_masked` (لا القائمة كلها)،
+    /// ويدمج ما تغيّر فعلاً (`FamilyMember ==` لا يشمل «آخر نشاط» — فتنقّل الأعضاء بين الشاشات لا يحرّك شيئاً)
+    func applyLiveMemberChanges(updated: Set<UUID>, deleted: Set<UUID>) async {
+        // القائمة لم تُحمَّل بعد، أو دفعة كبيرة جداً (تعديل جماعي) — جلب القائمة كلها أبسط
+        guard !allMembers.isEmpty, updated.count <= 200 else {
+            await fetchAllMembers(force: false)
+            return
+        }
+        var list = allMembers
+        var changed = false
+        if !deleted.isEmpty {
+            let before = list.count
+            list.removeAll { deleted.contains($0.id) }
+            changed = list.count != before
+        }
+        let ids = updated.subtracting(deleted)
+        if !ids.isEmpty, NetworkMonitor.shared.isConnected {
+            do {
+                let response = try await supabase
+                    .from("members_masked")   // الإخفاء من السيرفر كما في جلب القائمة
+                    .select()
+                    .in("id", values: ids.map(\.uuidString))
+                    .execute()
+                let rows = try JSONDecoder().decode([FamilyMember].self, from: response.data)
+                guard CacheManager.shared.isCurrent(cacheSession), !Task.isCancelled else { return }
+                // القائمة قد تتغيّر أثناء الجلب (جلب كامل مثلاً) — الدمج على آخر نسخة
+                list = allMembers.filter { !deleted.contains($0.id) }
+                changed = list.count != allMembers.count
+                var position = Dictionary(list.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { a, _ in a })
+                for member in rows {
+                    if let i = position[member.id] {
+                        if list[i] != member { list[i] = member; changed = true }
+                    } else {
+                        list.append(member)
+                        position[member.id] = list.count - 1
+                        changed = true
+                    }
+                }
+                if let userId = currentUser?.id, let me = rows.first(where: { $0.id == userId }), me != currentUser {
+                    authVM?.currentUser = me
+                }
+            } catch {
+                if ErrorHelper.isCancellation(error) { return }
+                Log.fetchError("[Members] خطأ جلب الأعضاء المتغيّرين (\(ids.count))", error)
+                // الحذف يُطبَّق ولو فشل الجلب؛ المتغيّرون يصلون مع الجلب الكامل التالي
+                list = allMembers.filter { !deleted.contains($0.id) }
+                changed = list.count != allMembers.count
+            }
+        }
+        Log.info("[Members] تحديث حيّ: \(ids.count) متغيّر · \(deleted.count) محذوف · تغيّر في القائمة: \(changed)")
+        guard changed else { return }
+        allMembers = list
+        membersVersion += 1
+        scheduleMembersCacheSave()
+    }
+
     // MARK: - Fetch Members
+
+    /// فكّ ردّ الأعضاء على خيط خلفي
+    nonisolated private static func decodeMembers(_ data: Data) async throws -> [FamilyMember] {
+        try await Task.detached(priority: .userInitiated) {
+            try JSONDecoder().decode([FamilyMember].self, from: data)
+        }.value
+    }
 
     func fetchAllMembers(force: Bool = false) async {
         // تحميل من الكاش أولاً إذا لا توجد بيانات (في background لتجنب تجميد الواجهة)
@@ -257,7 +327,8 @@ class MemberViewModel: ObservableObject {
                 .limit(10000)
                 .execute()
 
-            let members = try JSONDecoder().decode([FamilyMember].self, from: response.data)
+            // فكّ ~٣ ميغابايت خارج الخيط الرئيسي (فحص التعليق عند الفتح ٢٠٢٦-١١-٢٨)
+            let members = try await Self.decodeMembers(response.data)
 
             guard CacheManager.shared.isCurrent(cacheSession), !Task.isCancelled else { return }
             self.allMembers = members
@@ -316,8 +387,10 @@ class MemberViewModel: ObservableObject {
         let uid = userId.uuidString
         do {
             // العقدة والأقارب يُجلبان معاً — كانا متسلسلين فيتضاعف الانتظار
+            // عقدته: بنفس معرّف ملفه، أو — لابن البنت — عقدة جديدة مربوطة بحسابه (`linked_user_id`)؛
+            // كانت تُطلب بالمعرّف وحده فلا تظهر أمّه المعتمدة ويُسأل عنها مرة ثانية (٢٠٢٦-١١-٢٥)
             async let selfTask: [WomanMember] = supabase.from("women_members")
-                .select().eq("id", value: uid).limit(1).execute().value
+                .select().or("id.eq.\(uid),linked_user_id.eq.\(uid)").limit(2).execute().value
             // بلا استبعاد المخفيّين: الإخفاء يخصّ الشجرة العامة فقط — «عائلتي»
             // هي سجلّ صاحبها، والزوجة المخفية لازم تبقى ظاهرة له ليعدّلها.
             async let relatedTask: [WomanMember] = supabase.from("women_members")
@@ -327,9 +400,32 @@ class MemberViewModel: ObservableObject {
                 .order("sort_order", ascending: true)
                 .execute().value
 
-            let selfRows = try await selfTask
-            let related = try await relatedTask
-            let motherId = selfRows.first?.motherId
+            var selfRows = try await selfTask
+            var related = try await relatedTask
+            // بلا أي عقدة (ابن بنت لم تُربط عقدته بحسابه): عقدته من صفّه في `daughter_son_lineage` (يقرأ صفّه هو،
+            // والإدارة الكل) — نداء إضافي لهذه الحالة وحدها، لا لكل رجل
+            if selfRows.isEmpty,
+               let lineageNode = await Self.lineageWomenNodeId(for: userId),
+               let rows: [WomanMember] = try? await supabase.from("women_members")
+                   .select().eq("id", value: lineageNode.uuidString).limit(1).execute().value {
+                selfRows += rows
+            }
+            // مكانه في شجرة النساء (ابن البنت): عقدة غير نسخته بمعرّفه — أمّه وأبوه منها
+            let place = selfRows.first { $0.id != userId }
+            let node = selfRows.first { $0.id == userId } ?? selfRows.first
+            var nodeIds: Set<UUID> = [userId]
+            if let node, node.id != userId {
+                nodeIds.insert(node.id)
+                let more: [WomanMember] = try await supabase.from("women_members")
+                    .select()
+                    .or("parent_id.eq.\(node.id.uuidString),husband_id.eq.\(node.id.uuidString)")
+                    .eq("is_web_only", value: false)
+                    .order("sort_order", ascending: true)
+                    .execute().value
+                let known = Set(related.map(\.id))
+                related += more.filter { !known.contains($0.id) }
+            }
+            let motherId = node?.motherId ?? place?.motherId
 
             func named(_ m: WomanMember) -> Bool {
                 !m.firstName.trimmingCharacters(in: .whitespaces).isEmpty
@@ -346,19 +442,35 @@ class MemberViewModel: ObservableObject {
                 }
             }
             // 4) الزوجة/الزوجات
-            for w in related where w.husbandId == userId && named(w) {
+            for w in related where w.husbandId.map(nodeIds.contains) == true && named(w) {
                 entries.append(WomenFamilyEntry(member: w, role: .wife))
             }
             // 5) الأبناء
-            for c in related where c.parentId == userId && named(c) {
+            for c in related where c.parentId.map(nodeIds.contains) == true && named(c) {
                 entries.append(WomenFamilyEntry(member: c, role: .child))
             }
             self.currentMemberWomenFamily = entries
+            if userId == currentUser?.id {
+                // عقدة ابن/بنت البنت بمعرّف ملفه (منذ B1): نسختها بمعرّفه لها أب وملفه بلا أب
+                let spot = place ?? node
+                let placed = MotherPickRules.isPlacedInWomenTree(accountId: userId, nodeId: spot?.id,
+                                                                 nodeParentId: spot?.parentId,
+                                                                 profileFatherId: currentUser?.fatherId)
+                self.currentMemberWomenPlace = placed ? spot : nil
+            }
         } catch {
             // تعثّر الجلب (شبكة، إلغاء أثناء السحب للتحديث) لا يمسح ما يظهر — كان يُفرّغ «عائلتي»
             // فتختفي الأم والزوجة والبنات (بلاغ المالك ٢٠٢٦-١٠-٣١)
             Log.warning("[Women] تعذّر جلب عائلة شجرة النساء: \(error.localizedDescription)")
         }
+    }
+
+    /// عقدة ابن البنت من صفّه في `daughter_son_lineage` — nil = ليس ابن بنت أو تعذّرت القراءة
+    private static func lineageWomenNodeId(for profileId: UUID) async -> UUID? {
+        struct Row: Decodable { let women_node_id: UUID? }
+        let rows: [Row]? = try? await SupabaseConfig.client.from("daughter_son_lineage")
+            .select("women_node_id").eq("profile_id", value: profileId.uuidString).limit(1).execute().value
+        return rows?.first?.women_node_id ?? nil
     }
 
     /// إضافة ابن/ابنة للعائلة عبر RPC add_family_child مع توجيه حسب الجنس:
@@ -445,6 +557,26 @@ class MemberViewModel: ObservableObject {
     }
 
     /// إخفاء/إظهار زوجة العضو في الشجرة — الإخفاء يمنع ظهورها لأي أحد.
+    /// إخفاء زوجته أو ابنته من شجرة النساء أو إظهارها (طلب المالك ٢٠٢٦-١١-١٢، «تعديل الملف الشخصي») —
+    /// `set_self_woman_hidden`: السيرفر يتحقق أنها زوجته أو ابنته، ويختم من أخفاها، ويُشعر الإدارة
+    func setSelfWomanHidden(womanId: UUID, hidden: Bool) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        struct P: Encodable { let p_woman_id: String; let p_hidden: Bool }
+        do {
+            _ = try await supabase.rpc("set_self_woman_hidden",
+                                       params: P(p_woman_id: womanId.uuidString, p_hidden: hidden)).execute()
+            await fetchWomenFamily(for: uid)
+            return true
+        } catch {
+            let raw = "\(error)"
+            self.errorMessage = raw.contains("has_account") || raw.contains("hidden_by_herself")
+                ? L10n.t("لزوجتك حساب، وهي تقرر ظهورها من حسابها.", "Your wife has her own account and decides her visibility.")
+                : L10n.t("تعذّر تغيير الظهور، حاول مرة أخرى.", "Couldn't change visibility. Try again.")
+            Log.error("[Women] setSelfWomanHidden: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func setSelfWifeHidden(wifeId: UUID, hidden: Bool) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         struct P: Encodable { let p_wife_id: String; let p_hidden: Bool }
@@ -475,17 +607,26 @@ class MemberViewModel: ObservableObject {
 
     /// حذف/فكّ زوجة المستخدم نفسه (RPC remove_self_wife) — يعمل لأي دور.
     /// يفكّ الارتباط، ويحذف الصف فقط إذا كانت زوجة بالاسم بلا روابط أخرى.
+    /// غير الإدارة (٢٠٢٦-١١-١٣): لا حذف — طلب «طلب حذف من الشجرة» للمالك والمدير (`requested`)
     @discardableResult
-    func removeSelfWife(wifeId: UUID) async -> Bool {
-        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+    func removeSelfWife(wifeId: UUID) async -> SelfChildRemoval {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return .failed }
         struct P: Encodable { let p_wife_id: String }
         do {
-            _ = try await supabase.rpc("remove_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute()
-            await fetchWomenFamily(for: uid); return true
+            let data = try await supabase.rpc("remove_self_wife", params: P(p_wife_id: wifeId.uuidString)).execute().data
+            if Self.removalRequested(data) { return .requested }
+            await fetchWomenFamily(for: uid); return .deleted
         } catch {
-            self.errorMessage = L10n.t("تعذّر حذف الزوجة.", "Failed to remove wife.")
-            Log.error("[Women] removeSelfWife: \(error.localizedDescription)"); return false
+            self.errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر حذف الزوجة.", "Failed to remove wife."))
+            Log.error("[Women] removeSelfWife: \(error.localizedDescription)"); return .failed
         }
+    }
+
+    /// ردّ `remove_self_*` (jsonb منذ ٢٠٢٦-١١-١٣): `{requested: true}` = أُرسل طلباً للإدارة ولم يُحذف شيء
+    nonisolated private struct SelfRemoveResponse: Decodable { let requested: Bool? }
+
+    nonisolated private static func removalRequested(_ data: Data) -> Bool {
+        (try? JSONDecoder().decode(SelfRemoveResponse.self, from: data))?.requested == true
     }
 
     /// تحديث عائلة العضو — تسري على أبنائه وأحفاده لأن العائلة صفة نسب
@@ -517,7 +658,8 @@ class MemberViewModel: ObservableObject {
 
     /// تعديل بيانات ابنة للمستخدم نفسه (RPC update_self_woman_child).
     @discardableResult
-    func updateSelfWomanChild(id: UUID, firstName: String, birthDate: Date?, isDeceased: Bool, deathDate: Date?) async -> Bool {
+    func updateSelfWomanChild(id: UUID, firstName: String, fullName: String? = nil, birthDate: Date?,
+                              isDeceased: Bool, deathDate: Date?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         // ترميز صريح: Swift يحذف المفاتيح الاختيارية الفارغة (encodeIfPresent)،
         // فيصل الطلب بأربعة معاملات وتفشل PostgREST في إيجاد الدالة.
@@ -542,7 +684,8 @@ class MemberViewModel: ObservableObject {
         let params = P(
             p_child_id: id.uuidString,
             p_first_name: firstName,
-            p_full_name: firstName,
+            // الاسم الكامل «اسمها + اسم أبيها» — كان يُرسل الاسم الأول وحده فيقصّ اسم البنت (أفنان، ٢٠٢٦-١١-٢٨)
+            p_full_name: (fullName?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 } ?? firstName,
             p_birth: birthDate.map { DateHelper.format($0) },
             p_deceased: isDeceased,
             p_death: (isDeceased ? deathDate : nil).map { DateHelper.format($0) }
@@ -553,29 +696,32 @@ class MemberViewModel: ObservableObject {
         } catch {
             // نعرض سبب الخادم الحقيقي — النص العام كان يخفي علّة الفشل
             let detail = error.localizedDescription
-            self.errorMessage = L10n.t("تعذّر تعديل الابنة. \(detail)",
-                                       "Failed to update daughter. \(detail)")
+            self.errorMessage = "\(error)".contains("has_account")
+                ? Self.childHasAccountMessage(female: true)
+                : L10n.t("تعذّر تعديل الابنة. \(detail)", "Failed to update daughter. \(detail)")
             Log.error("[Women] updateSelfWomanChild: \(detail)"); return false
         }
     }
 
-    /// حذف ابنة للمستخدم نفسه (RPC remove_self_woman_child).
+    /// حذف ابنة للمستخدم نفسه (RPC remove_self_woman_child) — لغير الإدارة طلب (`requested`)
     @discardableResult
-    func removeSelfWomanChild(id: UUID) async -> Bool {
-        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+    func removeSelfWomanChild(id: UUID) async -> SelfChildRemoval {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return .failed }
         struct P: Encodable { let p_child_id: String }
         do {
-            _ = try await supabase.rpc("remove_self_woman_child", params: P(p_child_id: id.uuidString)).execute()
-            await fetchWomenFamily(for: uid); return true
+            let data = try await supabase.rpc("remove_self_woman_child", params: P(p_child_id: id.uuidString)).execute().data
+            if Self.removalRequested(data) { return .requested }
+            await fetchWomenFamily(for: uid); return .deleted
         } catch {
-            self.errorMessage = L10n.t("تعذّر حذف الابنة.", "Failed to remove daughter.")
-            Log.error("[Women] removeSelfWomanChild: \(error.localizedDescription)"); return false
+            self.errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر حذف الابنة.", "Failed to remove daughter."))
+            Log.error("[Women] removeSelfWomanChild: \(error.localizedDescription)"); return .failed
         }
     }
 
     /// نتيجة حذف ابن المستخدم نفسه — `serverMissing` = الدالة لم تُرفع للسيرفر بعد
     /// (المالك والمدير يرجعان لمسار الحذف المباشر القديم، والعضو يرى «تحتاج تحديث السيرفر»)
-    enum SelfChildRemoval { case deleted, failed, serverMissing }
+    /// `requested` = غير الإدارة: أُرسل «طلب حذف من الشجرة» ولم يُحذف شيء (٢٠٢٦-١١-١٣)
+    enum SelfChildRemoval { case deleted, requested, failed, serverMissing }
 
     /// حذف ابن أضافه المستخدم بالخطأ (RPC remove_self_child — طلب المالك ٢٠٢٦-١٠-١٦ «حط زر حذف للكل»).
     /// لكل عضو مفعّل، لأبنائه هو فقط، بلا حساب دخول، والمتوفى للمالك والمدير. السيرفر يحذف معه طلب
@@ -586,7 +732,12 @@ class MemberViewModel: ObservableObject {
         struct P: Encodable { let p_child_id: String }
         errorMessage = nil
         do {
-            _ = try await supabase.rpc("remove_self_child", params: P(p_child_id: id.uuidString)).execute()
+            let data = try await supabase.rpc("remove_self_child", params: P(p_child_id: id.uuidString)).execute().data
+            // غير الإدارة: طلب للمالك والمدير — الابن يبقى حتى الموافقة
+            if Self.removalRequested(data) {
+                Log.info("[Family] أُرسل طلب حذف ابن من «عائلتي»: \(id)")
+                return .requested
+            }
             // إزالة الابن محلياً من الشجرة العامة (مثل deleteMember)
             allMembers.removeAll { $0.id == id }
             membersVersion += 1
@@ -607,6 +758,27 @@ class MemberViewModel: ObservableObject {
                                                        canDeleteMembers: authVM?.canDeleteMembers == true)
             return .failed
         }
+    }
+
+    /// رسائل رفض add_family_child لابن العضو حسب `hint` (`20261105110000_self_child_checks`)
+    private static func selfChildAddMessage(hint: String?) -> String {
+        switch hint {
+        case "child_duplicate":
+            return L10n.t("هذا الاسم مسجّل لديك", "This name is already registered under you")
+        case "child_birth_future":
+            return L10n.t("تاريخ الميلاد في المستقبل", "The birth date is in the future")
+        default:
+            return L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.", "Couldn't add the son. Try again.")
+        }
+    }
+
+    /// الابن/الابنة لها حساب في التطبيق — لا يعدّلها الأب من «عائلتي» (طلب المالك ٢٠٢٦-١١-١٧ «نطوّر صيغة الجملة»)
+    static func childHasAccountMessage(female: Bool) -> String {
+        female
+            ? L10n.t("لابنتك حساب خاص في التطبيق، لذلك تُعدَّل بياناتها من حسابها هي، أو بإرسال «طلب تعديل» إلى الإدارة من صفحتها في الشجرة.",
+                     "Your daughter has her own account, so her details are edited from her account, or by sending an edit request to the administration from her page in the tree.")
+            : L10n.t("لابنك حساب خاص في التطبيق، لذلك تُعدَّل بياناته من حسابه هو، أو بإرسال «طلب تعديل» إلى الإدارة من صفحته في الشجرة.",
+                     "Your son has his own account, so his details are edited from his account, or by sending an edit request to the administration from his page in the tree.")
     }
 
     /// رسائل رفض remove_self_child بالعربي حسب `hint` — حماية الروابط برسالة السيرفر نفسها (تسمّي الابن والعدد)
@@ -667,6 +839,26 @@ class MemberViewModel: ObservableObject {
 
     /// اختيار أمّ موجودة من زوجات الأب (RPC set_self_mother؛ nil لإزالة الاختيار).
     @discardableResult
+    /// أم ابني/ابنتي (أو أختي) من زوجات أبيه — `set_self_relative_mother` (nil = بلا أم محدّدة)
+    func setChildMother(childId: UUID, motherId: UUID?) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
+        do {
+            _ = try await supabase.rpc("set_self_relative_mother",
+                                       params: ["p_child_id": AnyEncodable(childId.uuidString),
+                                                "p_mother_id": AnyEncodable(motherId?.uuidString)]).execute()
+            await fetchWomenFamily(for: uid)
+            await fetchChildren(for: uid)
+            return true
+        } catch {
+            let hint = (error as? PostgrestError)?.hint
+            self.errorMessage = hint == "has_account"
+                ? L10n.t("له حساب دخول — تحدّد أمه الإدارة.", "Has a login account — an admin sets the mother.")
+                : L10n.t("تعذّر تحديد الأم.", "Couldn't set the mother.")
+            Log.error("[Women] setChildMother: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     func setSelfMother(motherId: UUID?) async -> Bool {
         guard NetworkMonitor.shared.requireOnline(), let uid = currentUser?.id else { return false }
         do {
@@ -685,9 +877,10 @@ class MemberViewModel: ObservableObject {
     func fetchFatherWives() async -> [WomanMember] {
         guard let uid = currentUser?.id else { return [] }
         do {
+            // عقدته بمعرّفه أو مربوطة بحسابه (ابن البنت) — نفس `fetchWomenFamily`
             let selfRows: [WomanMember] = try await supabase.from("women_members")
-                .select().eq("id", value: uid.uuidString).limit(1).execute().value
-            guard let fatherNodeId = selfRows.first?.parentId else { return [] }
+                .select().or("id.eq.\(uid.uuidString),linked_user_id.eq.\(uid.uuidString)").limit(2).execute().value
+            guard let fatherNodeId = (selfRows.first { $0.id == uid } ?? selfRows.first)?.parentId else { return [] }
             let wives: [WomanMember] = try await supabase.from("women_members")
                 .select().eq("husband_id", value: fatherNodeId.uuidString)
                 .eq("is_web_only", value: false).execute().value
@@ -892,8 +1085,8 @@ class MemberViewModel: ObservableObject {
 
             let adminName = currentUser?.firstName ?? "مدير"
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("إضافة عضو جديد", "New Member Added"),
-                body: L10n.t(
+                title: L10n.stored("إضافة عضو جديد", "New Member Added"),
+                body: L10n.stored(
                     "\(adminName) أضاف «\(fullName)» للشجرة العائلية",
                     "\(adminName) added «\(fullName)» to the family tree"
                 ),
@@ -919,7 +1112,8 @@ class MemberViewModel: ObservableObject {
         isDeceased: Bool,
         deathDate: String?,
         gender: String?,
-        silent: Bool = false
+        silent: Bool = false,
+        requestSource: RequestSource? = nil
     ) async -> UUID? {
         guard NetworkMonitor.shared.requireOnline() else { return nil }
         self.isLoading = true
@@ -983,7 +1177,7 @@ class MemberViewModel: ObservableObject {
                 Log.info("[Family] حدّ اليوم — الابن يُرسل طلباً")
             } catch {
                 Log.error("[Family] ابن مباشر: \(error)")
-                self.errorMessage = L10n.t("تعذّرت إضافة الابن. حاول مرة أخرى.", "Couldn't add the son. Try again.")
+                self.errorMessage = Self.selfChildAddMessage(hint: (error as? PostgrestError)?.hint)
                 self.isLoading = false
                 return nil
             }
@@ -1023,10 +1217,8 @@ class MemberViewModel: ObservableObject {
 
         // تتبع المدير الذي أضاف العضو (إذا كان المدير يضيف)
         if canModerate, let adminId = currentUser?.id {
-            let isoFormatter = ISO8601DateFormatter()
-            isoFormatter.formatOptions = [.withInternetDateTime]
             newChild["updated_by"] = AnyEncodable(adminId.uuidString)
-            newChild["updated_at"] = AnyEncodable(isoFormatter.string(from: Date()))
+            newChild["updated_at"] = AnyEncodable(DateParsing.isoString(Date()))
         }
 
         do {
@@ -1073,10 +1265,14 @@ class MemberViewModel: ObservableObject {
                 ]
                 var requestSent = false
                 do {
-                    try await supabase
-                        .from("admin_requests")
-                        .insert(requestData)
-                        .execute()
+                    let path = requestSource ?? RequestSource(.profile, .profileFamily,
+                                                              RequestSourceStep("plus", "إضافة الأبناء"))
+                    try await AdminRequestSource.send(path) { path in
+                        try await supabase
+                            .from("admin_requests")
+                            .insert(AdminRequestSource.payload(requestData, path))
+                            .execute()
+                    }
                     requestSent = true
                 } catch {
                     Log.warning("لم يتم إدراج طلب child_add في admin_requests: \(error.localizedDescription)")
@@ -1100,10 +1296,10 @@ class MemberViewModel: ObservableObject {
                 }
                 if requestSent {
                     await notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("طلب إضافة ابن", "Child Add Request"),
-                        body: L10n.t(
-                            "\(firstNameOnly) لـ: \(father.fullName)",
-                            "\(firstNameOnly) to: \(father.fullName)"
+                        title: L10n.stored("طلب إضافة ابن", "Child Add Request"),
+                        body: L10n.stored(
+                            "\(father.shortFullName) أضاف ابنه \(firstNameOnly)",
+                            "\(father.shortFullName) added his son \(firstNameOnly)"
                         ),
                         kind: RequestType.childAdd.rawValue,
                         requestId: childRequestId,
@@ -1193,8 +1389,8 @@ class MemberViewModel: ObservableObject {
             // إشعار العضو بتغيير صورته (إذا المدير غيّرها وليس العضو نفسه)
             if memberId != currentUser?.id {
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تم تحديث صورتك", "Your Photo Was Updated"),
-                    body: L10n.t(
+                    title: L10n.stored("تم تحديث صورتك", "Your Photo Was Updated"),
+                    body: L10n.stored(
                         "قام المشرف بتحديث صورتك الشخصية",
                         "An admin updated your profile photo"
                     ),
@@ -1216,7 +1412,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEditAvatar.rawValue,
-                    title: L10n.t("تحديث صورة", "Photo Update"),
+                    title: L10n.stored("تحديث صورة", "Photo Update"),
                     body: adminEditBody(verb: L10n.t("تم تحديث الصورة الشخصية", "Profile photo updated"), memberId: memberId),
                     changes: [
                         .init(field: "avatar_url", before: oldAvatarUrl, after: urlString)
@@ -1225,10 +1421,10 @@ class MemberViewModel: ObservableObject {
             } else {
                 // العضو غيّر صورته بنفسه → إشعار للمدراء في تاب "المستجدات"
                 // (نتجاوز guard الـ notifyAdminsOfMemberEdit بالاستدعاء المباشر لأن العضو هنا = العامل)
-                let memberName = _memberById[memberId]?.firstName ?? L10n.t("عضو", "member")
+                let memberName = _memberById[memberId]?.firstName ?? L10n.stored("عضو", "member")
                 await notificationVM?.notifyAdminsWithChangesAndPush(
-                    title: L10n.t("تحديث صورة", "Photo Update"),
-                    body: L10n.t(
+                    title: L10n.stored("تحديث صورة", "Photo Update"),
+                    body: L10n.stored(
                         "حدّث «\(memberName)» صورته الشخصية",
                         "«\(memberName)» updated their profile photo"
                     ),
@@ -1552,7 +1748,7 @@ class MemberViewModel: ObservableObject {
             await notifyAdminsOfMemberEdit(
                 memberId: memberId,
                 kind: NotificationKind.adminEdit.rawValue,
-                title: L10n.t("تعديل بيانات عضو", "Member Edit"),
+                title: L10n.stored("تعديل بيانات عضو", "Member Edit"),
                 body: adminEditBody(verb: L10n.t("تم تعديل البيانات", "Profile data updated"), memberId: memberId),
                 changes: changes
             )
@@ -1786,8 +1982,8 @@ class MemberViewModel: ObservableObject {
             // إشعار العضو بتغيير اسمه (إذا المدير غيّره وليس العضو نفسه)
             if memberId != currentUser?.id {
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تم تحديث اسمك", "Your Name Was Updated"),
-                    body: L10n.t(
+                    title: L10n.stored("تم تحديث اسمك", "Your Name Was Updated"),
+                    body: L10n.stored(
                         "تم تحديث اسمك إلى: \(fullName)",
                         "Your name was updated to: \(fullName)"
                     ),
@@ -1810,7 +2006,7 @@ class MemberViewModel: ObservableObject {
                     await notifyAdminsOfMemberEdit(
                         memberId: memberId,
                         kind: NotificationKind.adminEditName.rawValue,
-                        title: L10n.t("تعديل الاسم", "Name Edit"),
+                        title: L10n.stored("تعديل الاسم", "Name Edit"),
                         body: adminEditBody(verb: L10n.t("تم تعديل الاسم", "Name was updated"), memberId: memberId),
                         changes: [
                             .init(field: "full_name", before: oldFullName, after: fullName)
@@ -1919,6 +2115,7 @@ class MemberViewModel: ObservableObject {
 
         isLoading = true
         errorMessage = nil
+        lastDeleteFailure = nil
         do {
             // حذف السجل أولاً: قاعدة البيانات تحذف معه إشعاراته وأجهزته وصوره (CASCADE)،
             // وترفض حذف من له أبناء أو بنات أو زوجة مرتبطون (حماية روابط العائلة) فلا يُمسّ
@@ -1937,6 +2134,7 @@ class MemberViewModel: ObservableObject {
             return true
         } catch {
             Log.error("فشل حذف العضو: \(error.localizedDescription)")
+            if let pg = error as? PostgrestError { lastDeleteFailure = pg.hint ?? pg.code }
             if let pgError = error as? PostgrestError, pgError.hint == "family_links_protected" {
                 errorMessage = pgError.message
             } else {
@@ -1982,7 +2180,7 @@ class MemberViewModel: ObservableObject {
             await fetchSingleMember(id: memberId)
 
             // الاسم الرباعي في الإشعار — أوضح من الاسم الأول، أقصر من الكامل
-            let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
+            let memberName = _memberById[memberId]?.fourPartName ?? L10n.stored("عضو", "member")
             let roleName: String = {
                 switch newRole {
                 case .admin, .owner: return L10n.t("مدير", "Admin")
@@ -2010,8 +2208,8 @@ class MemberViewModel: ObservableObject {
                 do {
                     try await supabase.from("notifications").insert(personalPayload).execute()
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("تغيير الصلاحية", "Role Change"),
-                        body: L10n.t(
+                        title: L10n.stored("تغيير الصلاحية", "Role Change"),
+                        body: L10n.stored(
                             "صلاحيتك الآن: «\(roleName)»",
                             "Your role is now: «\(roleName)»"
                         ),
@@ -2083,7 +2281,7 @@ class MemberViewModel: ObservableObject {
             return false
         }
         let oldStatus = _memberById[memberId]?.status
-        let memberName = _memberById[memberId]?.fourPartName ?? L10n.t("عضو", "member")
+        let memberName = _memberById[memberId]?.fourPartName ?? L10n.stored("عضو", "member")
         let memberEmail = _memberById[memberId]?.email
 
         do {
@@ -2138,8 +2336,11 @@ class MemberViewModel: ObservableObject {
     // MARK: - Update Children Order
     
     // دالة لتحديث ترتيب الأبناء بناءً على القائمة الجديدة
-    func updateChildrenOrder(for fatherId: UUID, newOrder: [FamilyMember]) async {
+    /// false = فشل حفظ ترتيب واحد على الأقل (السبب في `errorMessage`) — كرت العضو يعرضه بدل اهتزاز النجاح (نقد V3 ح٣)
+    @discardableResult
+    func updateChildrenOrder(for fatherId: UUID, newOrder: [FamilyMember]) async -> Bool {
         self.isLoading = true
+        var failed: Error?
         
         // 1) تحديث الترتيب في الذاكرة مباشرة لظهور أسرع
         for (index, child) in newOrder.enumerated() {
@@ -2166,15 +2367,21 @@ class MemberViewModel: ObservableObject {
                     .execute()
             } catch {
                 Log.error("فشل تحديث ترتيب \(child.firstName) إلى \(index): \(error)")
+                failed = failed ?? error
             }
         }
+        if let failed {
+            errorMessage = AuthViewModel.serverMessage(failed, fallback: L10n.t("تعذّر حفظ ترتيب الأبناء كاملاً. حاول مرة أخرى.",
+                                                                                 "Couldn't save the whole order. Try again."))
+        }
         
-        // 3) مزامنة نهائية مع الشجرة بعد الحفظ
-        await fetchAllMembers(force: false)
+        // 3) مزامنة نهائية مع الشجرة بعد الحفظ (الفشل يرجع الترتيب كما هو على السيرفر)
+        await fetchAllMembers(force: failed != nil)
         if fatherId == self.currentUser?.id {
             await fetchChildren(for: fatherId)
         }
         self.isLoading = false
+        return failed == nil
     }
     
     // MARK: - Update Member Phone
@@ -2253,7 +2460,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEditPhone.rawValue,
-                    title: L10n.t("تعديل رقم الهاتف", "Phone Update"),
+                    title: L10n.stored("تعديل رقم الهاتف", "Phone Update"),
                     body: adminEditBody(verb: L10n.t("تم تعديل رقم الهاتف", "Phone number updated"), memberId: memberId),
                     changes: [
                         .init(field: "phone_number", before: oldPhone, after: normalizedPhone)
@@ -2360,9 +2567,16 @@ class MemberViewModel: ObservableObject {
         }
     }
 
-    func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    /// يرجّع نجاح الحفظ — الفشل يضع `errorMessage` (رسالة السيرفر العربية، مثل رفض «شجرة العائلة للرجال فقط»
+    /// hint `family_tree_men_only` حين يصير من له أب أنثى) ليعرضها المربّع، لا تسجيلاً فقط (K1)
+    @discardableResult
+    func updateMemberGender(memberId: UUID, gender: String, silent: Bool = false) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else {
+            errorMessage = L10n.t("لا يوجد اتصال بالإنترنت.", "No internet connection.")
+            return false
+        }
         self.isLoading = true
+        defer { self.isLoading = false }
         let oldGender = _memberById[memberId]?.gender
 
         var genderUpdate: [String: AnyEncodable] = [
@@ -2383,7 +2597,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEdit.rawValue,
-                    title: L10n.t("تعديل الجنس", "Gender Update"),
+                    title: L10n.stored("تعديل الجنس", "Gender Update"),
                     body: adminEditBody(verb: L10n.t("تم تعديل الجنس", "Gender updated"), memberId: memberId),
                     changes: [
                         .init(field: "gender", before: oldGender, after: gender)
@@ -2392,10 +2606,14 @@ class MemberViewModel: ObservableObject {
             }
 
             Log.info("تم تحديث الجنس")
+            return true
         } catch {
-            Log.error("خطأ تحديث الجنس: \(error.localizedDescription)")
+            let pg = error as? PostgrestError
+            Log.error("خطأ تحديث الجنس: \(error.localizedDescription) hint=\(pg?.hint ?? "-")")
+            errorMessage = FamilyTreeMenOnly.genderFailureMessage(
+                serverMessage: AuthViewModel.serverMessage(error, fallback: ""))
+            return false
         }
-        self.isLoading = false
     }
 
     // MARK: - Update Member Birth Date (simple string)
@@ -2422,7 +2640,7 @@ class MemberViewModel: ObservableObject {
             await notifyAdminsOfMemberEdit(
                 memberId: memberId,
                 kind: NotificationKind.adminEditDates.rawValue,
-                title: L10n.t("تعديل تاريخ الميلاد", "Birth Date Update"),
+                title: L10n.stored("تعديل تاريخ الميلاد", "Birth Date Update"),
                 body: adminEditBody(verb: L10n.t("تم تعديل تاريخ الميلاد", "Birth date updated"), memberId: memberId),
                 changes: [
                     .init(field: "birth_date", before: oldBirth, after: birthDate)
@@ -2436,10 +2654,32 @@ class MemberViewModel: ObservableObject {
         self.isLoading = false
     }
 
+    // MARK: - له حساب دخول؟ (نقد V3 م-ج٢)
+
+    /// `profile_has_login` على السيرفر (مسموح للمسجّلين — `20261024120000_descendant_edit_guard`): يقرأ `auth.users` نفسه،
+    /// فلا يعدّ الحساب المحذوف (منصة التسجيل تبقى بعد الحذف) ولا يفوته من لا رقم له أو المتوفى أو ابن البنت.
+    /// nil = تعذّر السؤال (لا اتصال أو خطأ) — المربّع يقول «تعذّر التحقق» ولا يسمح بالنقل
+    func profileHasLogin(_ id: UUID) async -> Bool? {
+        do {
+            let has: Bool = try await supabase
+                .rpc("profile_has_login", params: ["p_id": id.uuidString])
+                .execute()
+                .value
+            return has
+        } catch {
+            Log.warning("[Members] تعذّر فحص حساب الدخول: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     // MARK: - Update Member Father
     
-    func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async {
-        guard NetworkMonitor.shared.requireOnline() else { return }
+    /// false = لم يُحفظ (السبب في `errorMessage`، ورسالة السيرفر العربية إن وُجدت — حارس روابط العائلة…). كان الخطأ يُبتلع
+    /// فيظهر رفض السيرفر في كرت العضو نجاحاً (نقد V3 ح٣)
+    /// بلا اتصال: `requireOnline()` يعرض تنبيهه العام وحده — لا `errorMessage` (كانت الرسالة تظهر مرتين، نقد V3 ت-ج٦)
+    @discardableResult
+    func updateMemberFather(memberId: UUID, fatherId: UUID?, silent: Bool = false) async -> Bool {
+        guard NetworkMonitor.shared.requireOnline() else { return false }
         self.isLoading = true
         // التقط الأب القديم قبل التحديث (نستخدم اسمه لا UUID للعرض)
         let oldFatherName = _memberById[memberId]?.fatherId.flatMap { _memberById[$0]?.firstName }
@@ -2478,7 +2718,7 @@ class MemberViewModel: ObservableObject {
                 await notifyAdminsOfMemberEdit(
                     memberId: memberId,
                     kind: NotificationKind.adminEditFather.rawValue,
-                    title: L10n.t("تعديل ولي الأمر", "Father Update"),
+                    title: L10n.stored("تعديل ولي الأمر", "Father Update"),
                     body: adminEditBody(verb: L10n.t("تم تعديل ولي الأمر", "Father reference updated"), memberId: memberId),
                     changes: [
                         .init(field: "father_id", before: oldFatherName, after: newFatherName)
@@ -2489,8 +2729,13 @@ class MemberViewModel: ObservableObject {
             Log.info("تم تحديث ربط الأب + إعادة بناء full_name → cascade للذرّية")
         } catch {
             Log.error("خطأ في ربط الأب: \(error.localizedDescription)")
+            errorMessage = AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر حفظ ربط الأب. حاول مرة أخرى.",
+                                                                                "Couldn't save the father link. Try again."))
+            self.isLoading = false
+            return false
         }
         self.isLoading = false
+        return true
     }
     
     // MARK: - Update Member Health And Birth
@@ -2620,6 +2865,9 @@ class MemberViewModel: ObservableObject {
                 .execute()
         } catch {
             Log.error("خطأ تعديل بيانات الابن: \(error.localizedDescription)")
+            // له حساب دخول (`descendant_has_account`) — الرسالة الموحّدة، وغيره الرسالة العامة في المربّع
+            self.errorMessage = "\(error)".contains("descendant_has_account")
+                ? Self.childHasAccountMessage(female: false) : nil
             self.isLoading = false
             return false
         }
@@ -2684,7 +2932,9 @@ class MemberViewModel: ObservableObject {
             if let pg = error as? PostgrestError, pg.hint == "family_links_protected" {
                 errorMessage = pg.message
             } else {
-                errorMessage = L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again.")
+                // رفض السيرفر برسالة عربية (مثل «شجرة العائلة للرجال فقط») يُعرض كما هو — K1
+                errorMessage = AuthViewModel.serverMessage(
+                    error, fallback: L10n.t("فشل حفظ التعديلات. حاول مرة أخرى.", "Save failed. Try again."))
             }
             return nil
         }

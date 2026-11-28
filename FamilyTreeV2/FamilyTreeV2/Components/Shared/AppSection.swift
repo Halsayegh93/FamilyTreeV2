@@ -415,12 +415,12 @@ extension DS.Color {
     /// عنوان الرأس (رأس التبويب، الصفحة الفرعية، المربّع): أبيض فوق التدرّج — «الهادئ» نص داكن
     static let headerTitle: SwiftUI.Color = DS.Theme.isCalm ? textPrimary : textOnPrimary
     /// وصف رأس التبويب/الصفحة الفرعية — الهوية (main): النص الثانوي على band ذهبي `accentLight`
-    static let headerSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : accentLight
+    static let headerSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : accentOnBand
     /// وصف رأس القسم الملوّن بلون مربّعه (المشاريع، المكتبة): كريمي العلامة #F2EBDD — ≥ ٤٫٥:١ فوق
     /// الذهبي #806631 و٧٫٨:١ فوق العنّابي #693940. «الهادئ»: كما هو.
     static let headerSubtitleOnTile: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : SwiftUI.Color(hex: "#F2EBDD")
     /// وصف رأس المربّع
-    static let boxHeaderSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : SwiftUI.Color.white.opacity(0.86)
+    static let boxHeaderSubtitle: SwiftUI.Color = DS.Theme.isCalm ? calmHeaderSubtitle : accentOnBand
     /// رموز أزرار الرأس (رجوع، إغلاق، جرس، إعدادات…)
     static let headerGlyph: SwiftUI.Color = DS.Theme.isCalm ? textPrimary : textOnPrimary
     /// كبسولة/دائرة زجاجية فوق الرأس (عدد الأفراد، أيقونة الرأس)

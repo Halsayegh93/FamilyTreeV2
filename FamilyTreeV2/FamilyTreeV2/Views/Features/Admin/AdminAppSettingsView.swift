@@ -90,7 +90,7 @@ struct AdminAppSettingsView: View {
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
     }
 
     /// «الاعتماد المباشر»: شرائح الأنواع (اختيار متعدد) — المختار يبدأ عند المدير مباشرة
@@ -195,7 +195,7 @@ struct AdminAppSettingsView: View {
         key: String
     ) -> some View {
         AdminControlRow(icon: icon, tint: color, title: title, subtitle: subtitle, control: AnyView(
-            Toggle("", isOn: Binding(
+            Toggle(title, isOn: Binding(
                 get: { isOn },
                 set: { newVal in
                     Task {

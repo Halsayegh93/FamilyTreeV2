@@ -13,10 +13,15 @@ struct DiwaniyasView: View {
     @State private var diwaniyaToReport: Diwaniya? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
     @State private var appeared = false
+    /// دخول الحالة الفارغة لُعب مرة — لا يُعاد مع كل ظهور
+    @State private var emptyEntrancePlayed = false
     /// الظاهرة للمستخدم (المعتمدة + طلباته/المعلّقة للإدارة) — كلها في قائمة واحدة: شريط «الديوانيات/الحسينيات»
     /// شيل (طلب المالك ٢٠٢٦-١٠-٢٤)، والنوع علامة على البطاقة
     @State private var cachedVisibleDiwaniyas: [Diwaniya] = []
+    /// الحساب المقيّد («أكمل حسابك») — القسم مقفول تحت رأسه
+    @ObservedObject private var lineage = LineageGateStore.shared
 
     var body: some View {
         NavigationStack {
@@ -35,7 +40,10 @@ struct DiwaniyasView: View {
                         section: .diwaniyas
                     )
 
-                    if viewModel.isLoading && filteredDiwaniyas.isEmpty {
+                    if lineage.isLocked(.diwaniyas) {
+                        LineageLockedView(section: .diwaniyas)
+                            .frame(maxHeight: .infinity)
+                    } else if viewModel.isLoading && filteredDiwaniyas.isEmpty {
                         // التحميل الموحّد: مجسّم «المجلس» يتنفّس (بدل الدوّارة)
                         DSPageLoader(section: .diwaniyas)
                     } else if filteredDiwaniyas.isEmpty {
@@ -44,13 +52,13 @@ struct DiwaniyasView: View {
                         ScrollView(showsIndicators: false) {
                             // عمودياً قائمة واحدة؛ أفقياً عمودان (`DS.Landscape.columnMinWidth`) — من المكان الواحد
                             // نفس الدخول المتتالي — ويحترم «تقليل الحركة» (تلاشٍ فقط)
-                            AdaptiveLazyStack(spacing: DS.Spacing.md) {
+                            AdaptiveLazyStack(spacing: DS.Page.cardGap) {
                                 ForEach(Array(filteredDiwaniyas.enumerated()), id: \.element.id) { index, diwaniya in
                                     diwaniyaCard(for: diwaniya)
                                         .dsCardCascade(index, appeared: appeared)
                                 }
                             }
-                            .padding(DS.Spacing.lg)
+                            .dsPagePadding()
                             .padding(.bottom, DS.Spacing.xxxl)
                             .dsTabBarClearance()   // أفقياً: آخر بطاقة لا تختفي تحت شريط التبويبات العائم
                             .onAppear {
@@ -64,7 +72,8 @@ struct DiwaniyasView: View {
                     }
                 }
 
-                // زر الإضافة السفلي (FAB) — مثل بقية الصفحات
+                // زر الإضافة السفلي (FAB) — مثل بقية الصفحات (لا يظهر والقسم مقفول)
+                if !lineage.isLocked(.diwaniyas) && authVM.memberSees(.diwaniyasAdd) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {
@@ -75,30 +84,21 @@ struct DiwaniyasView: View {
                     .padding(.bottom, DS.Spacing.lg)
                 }
                 .frame(maxHeight: .infinity, alignment: .bottom)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-            .fullScreenCover(isPresented: $showingAddRequest) {
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    AddDiwaniyaRequestView()
-                        .environmentObject(viewModel)
-                        .environmentObject(authVM)
-                }
-                .background(ClearPresentationBackground())
-            }
-            .transaction { t in
-                if showingAddRequest { t.disablesAnimations = true }
+            .dsCenterBox(isPresented: $showingAddRequest) {
+                AddDiwaniyaRequestView()
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
             }
             // التعديل بنفس مربّع الإضافة بمنتصف الشاشة (طلب المالك)
-            .fullScreenCover(item: $diwaniyaToEdit) { diwaniya in
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    EditDiwaniyaView(diwaniya: diwaniya)
-                        .environmentObject(viewModel)
-                        .environmentObject(authVM)
-                }
-                .background(ClearPresentationBackground())
+            .dsCenterBox(item: $diwaniyaToEdit) { diwaniya in
+                EditDiwaniyaView(diwaniya: diwaniya)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
             }
-            .transaction { t in if diwaniyaToEdit != nil { t.disablesAnimations = true } }
             .dsAlert(L10n.t("إبلاغ عن ديوانية", "Report Diwaniya"), isPresented: .init(
                 get: { diwaniyaToReport != nil },
                 set: { if !$0 { diwaniyaToReport = nil } }
@@ -116,9 +116,12 @@ struct DiwaniyasView: View {
                                 contentKind: L10n.t("ديوانية", "diwaniya"),
                                 contentLabel: target.title,
                                 contentId: target.id,
-                                reason: reason
+                                reason: reason,
+                                source: RequestSource(RequestSourceStep("cup.and.saucer.fill", "الديوانيات"),
+                                                      RequestSourceStep("house.fill", target.title),
+                                                      RequestSourceStep("flag.fill", "بلاغ عن ديوانية"))
                             )
-                            if ok { await MainActor.run { reportSent = true } }
+                            if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                         }
                     }
                 }
@@ -126,6 +129,11 @@ struct DiwaniyasView: View {
             } message: {
                 Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذه الديوانية.",
                            "Enter a reason; it will be sent to the admins to review this diwaniya."))
+            }
+            .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+                Button(L10n.t("حسناً", "OK")) {}
+            } message: {
+                Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
             }
             .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
                 Button(L10n.t("حسناً", "OK")) {}
@@ -164,17 +172,23 @@ struct DiwaniyasView: View {
                 viewModel.notificationVM = notificationVM
                 rebuildFilteredDiwaniyas()
             }
-            .onChange(of: viewModel.diwaniyas.count) { _ in rebuildFilteredDiwaniyas() }
+            // كل تبدّل في القائمة (تعديل، اعتماد، تحديث بنفس العدد) — لا العدد وحده
+            .onReceive(viewModel.$diwaniyas) { rebuildFilteredDiwaniyas($0) }
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .dsAlert(L10n.t("خطأ", "Error"), isPresented: .init(
                 get: { viewModel.errorMessage != nil },
-                set: { if !$0 { viewModel.errorMessage = nil } }
+                set: { if !$0 { viewModel.errorMessage = nil; viewModel.retryAction = nil } }
             )) {
+                // يعيد العملية التي فشلت (حذف/اعتماد/رفض) — وإلا إعادة تحميل القائمة
                 Button(L10n.t("إعادة المحاولة", "Retry")) {
+                    let retry = viewModel.retryAction
+                    viewModel.retryAction = nil
                     viewModel.errorMessage = nil
-                    Task { await viewModel.fetchDiwaniyas() }
+                    Task {
+                        if let retry { await retry() } else { await viewModel.fetchDiwaniyas() }
+                    }
                 }
-                Button(L10n.t("إغلاق", "Dismiss"), role: .cancel) { viewModel.errorMessage = nil }
+                Button(L10n.t("إغلاق", "Dismiss"), role: .cancel) { viewModel.errorMessage = nil; viewModel.retryAction = nil }
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
@@ -186,10 +200,11 @@ struct DiwaniyasView: View {
     // MARK: - Filtered Diwaniyas
     private var filteredDiwaniyas: [Diwaniya] { cachedVisibleDiwaniyas }
 
-    private func rebuildFilteredDiwaniyas() {
+    /// `list`: القيمة الجديدة من الناشر (يصل قبل أن تتغيّر `viewModel.diwaniyas`)
+    private func rebuildFilteredDiwaniyas(_ list: [Diwaniya]? = nil) {
         let userId = authVM.currentUser?.id
         let canModerate = authVM.canModerate
-        cachedVisibleDiwaniyas = viewModel.diwaniyas.filter { diwaniya in
+        cachedVisibleDiwaniyas = (list ?? viewModel.diwaniyas).filter { diwaniya in
             if diwaniya.approvalStatus == "approved" { return true }
             if diwaniya.approvalStatus == "pending" {
                 return canModerate || diwaniya.ownerId == userId
@@ -205,6 +220,11 @@ struct DiwaniyasView: View {
                     message: L10n.t("اضغط + لإضافة ديوانيتك.\nتُعرض بعد موافقة الإدارة.",
                                     "Tap + to add your diwaniya.\nIt appears after admin approval."),
                     section: .diwaniyas)
+            // تصعد وتظهر مثل المكتبة والمشاريع — مرة واحدة طوال عمر الصفحة (عودتها بعدها مباشرة بلا حركة)؛
+            // «تقليل الحركة»: تلاشٍ فقط
+            .dsEntrance(delay: DSMotion.staggerDelay(0, base: DSMotion.sectionsOnPage),
+                        y: DSMotion.rise, scale: DSMotion.riseScale, active: !emptyEntrancePlayed)
+            .onDisappear { emptyEntrancePlayed = true }
     }
 
     // MARK: - Diwaniya Card
@@ -296,9 +316,10 @@ struct DiwaniyasView: View {
                                      bottom: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2,
                                      trailing: (DS.Icon.tapTarget - DS.Icon.sizeSm) / 2)
                     }
+                    .accessibilityLabel(L10n.t("خيارات الديوانية", "Diwaniya options"))
                 }
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.vertical, DS.Spacing.md)
 
             // ═══ شرائح المعلومات — كل شريحة بسطر تحت الأخرى: الأيام ثم العنوان (طلب المالك ٢٠٢٦-١٠-٢٥؛ كانت أفقية
@@ -326,7 +347,7 @@ struct DiwaniyasView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.bottom, DS.Spacing.md)
             }
 
@@ -349,7 +370,7 @@ struct DiwaniyasView: View {
 
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 // الشريحة تحمل مساحة ضغطها (٥ فوق وتحت) — الهامش الظاهر يبقى ≈ ١٢
                 .padding(.bottom, DS.Spacing.xsm)
             }
@@ -483,9 +504,9 @@ private struct DiwaniyaComposerForm: View {
         ) {
             // ── النوع ──
             DSComposerSection(title: L10n.t("النوع", "Type"), icon: "square.grid.2x2.fill", tint: kind.tint, index: 0) {
-                // مربّعات الاختيار الموحّدة (`DSOptionTiles`) برمز كل نوع: «مجلس» / «راية»
-                DSOptionTiles(DiwaniyaKind.allCases.map { DSOptionTile($0, title: $0.title, icon: $0.icon, tint: $0.tint) },
-                              selection: $kind, columns: 2)
+                // خياران = الاختيار الموحّد (`DSChoiceTiles`) برمز كل نوع
+                DSChoiceTiles(options: DiwaniyaKind.allCases.map { DSChoiceOption(id: $0, title: $0.title, icon: $0.icon) },
+                              selection: $kind)
             }
 
             // ── البيانات ──
@@ -531,31 +552,14 @@ private struct DiwaniyaComposerForm: View {
 
             // ── الحالة (التعديل فقط) ──
             if let isClosed {
+                // «مفتوحة / مغلقة» = الاختيار الموحّد (كان مفتاحاً أخضر بقفل — القفل للخصوصية)
                 DSComposerSection(title: L10n.t("الحالة", "Status"), icon: "power", tint: kind.tint, index: 4) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        // قرص «مجسّمات» الموحّد بمقاس أيقونة الحقل داخل المربّع (لون المعنى: أحمر/أخضر)
-                        DSStateIcon(isClosed.wrappedValue ? "lock.fill" : "lock.open.fill",
-                                    tint: isClosed.wrappedValue ? DS.Color.error : DS.Color.success,
-                                    size: DSBox.fieldIcon)
-                        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                            Text(isClosed.wrappedValue ? L10n.t("متوقفة حالياً", "Currently closed")
-                                                       : L10n.t("مفتوحة ونشطة", "Open and active"))
-                                .dsFont(.rowTitle)
-                                .foregroundColor(DS.Color.textPrimary)
-                            Text(L10n.t("إيقافها يُظهرها «مغلقة» في القائمة", "Closing shows it as closed"))
-                                .dsFont(.footnoteCompact)
-                                .foregroundColor(DS.Color.textTertiary)
-                        }
-                        Spacer(minLength: 0)
-                        Toggle("", isOn: Binding(get: { !isClosed.wrappedValue },
-                                                 set: { isClosed.wrappedValue = !$0 }))
-                            .labelsHidden()
-                            .tint(DS.Color.success)
-                            // المفتاح بلا نص ظاهر — القارئ الصوتي يسمّيه (القيمة: تشغيل/إيقاف)
-                            .accessibilityLabel(L10n.t("مفتوحة", "Open"))
-                    }
-                    // صفّ بإطار حقول المربّع الموحّد
-                    .dsRowBox()
+                    // خلية بيانات بقائمة (قرار المالك ٢٠٢٦-١١-١١)
+                    DSMenuTile(icon: "door.left.hand.open", label: L10n.t("حالة الديوانية", "Status"), options: [
+                        DSChoiceOption(id: false, title: L10n.t("مفتوحة", "Open"), icon: "door.left.hand.open"),
+                        DSChoiceOption(id: true, title: L10n.t("مغلقة — تظهر «مغلقة» في القائمة", "Closed — shown as closed in the list"),
+                                       icon: "door.left.hand.closed")
+                    ], selection: isClosed)
                 }
             }
         }
@@ -654,7 +658,7 @@ private struct DiwaniyaComposerForm: View {
                          placeholder: L10n.t("رقم الهاتف", "Phone number"), compact: true, bordered: true)
             if !phoneNumber.isEmpty {
                 // الشريحة الموحّدة (`DSChipButton`) — مثل «إزالة» في مربّع المكتبة، بمساحة ضغط ٤٤
-                DSChipButton(L10n.t("إزالة الرقم", "Remove"), icon: "trash", tint: DS.Color.error, size: .mini) {
+                DSChipButton(L10n.t("إزالة الرقم", "Remove"), icon: "trash", tint: DS.Color.error, size: .small) {
                     phoneNumber = ""
                 }
                 .frame(maxWidth: .infinity)
@@ -810,7 +814,12 @@ private struct AddDiwaniyaRequestView: View {
             kind: kind,
             autoApprove: canAutoApprove
         )
-        if success { dismiss() } else { showError = true }
+        if success {
+            dismiss()
+            // لحظة نجاح بعد الإغلاق (كانت تُغلق بلا كلمة): «تمت الإضافة» للإدارة، و«أُرسلت للمراجعة» لغيرهم
+            DSMomentToast.show(canAutoApprove ? L10n.t("تمت الإضافة", "Added") : L10n.t("أُرسلت للمراجعة", "Sent for review"),
+                               moment: canAutoApprove ? .success : .sentForApproval, section: .diwaniyas)
+        } else { showError = true }
     }
 }
 

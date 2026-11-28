@@ -30,6 +30,12 @@ struct DSProfilePhotoPicker: View {
     var useOverlayActionsOnly: Bool = false
     /// قطر الصورة الدائرية/المربعة — الافتراضي 110 (يمكن تصغيره للعرض المدمج بصف واحد)
     var avatarSize: CGFloat = DS.Icon.profileAvatarRing
+    /// ظهور الصورة للأعضاء (صورة صاحب الحساب فقط) — nil = بلا قسم «الخصوصية» في مربّع خيارات الصورة
+    var photoHidden: Bool? = nil
+    /// حفظ ظهور الصورة (نفس نداء الإعدادات `updatePhotoHidden`) — يرجع true عند النجاح
+    var onSavePhotoHidden: ((Bool) async -> Bool)? = nil
+    /// زرّ الحالة الفارغة («اختر صورة»، أو «إضافة صورة» في التسجيل)
+    var emptyActionTitle: String = L10n.t("اختر صورة", "Choose Photo")
 
     @State private var pickerItem: PhotosPickerItem? = nil
     @State private var isLoading = false
@@ -63,6 +69,10 @@ struct DSProfilePhotoPicker: View {
             loadImage(from: newItem)
         }
         .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
+        // «خيارات الصورة» — مربّع أوامر موحّد بدل قائمة النظام (طلب المالك ٢٠٢٦-١١-١٠ «التصاميم مو موحدة»)
+        .dsCenterBox(isPresented: $showChangeOptions, onBackgroundTap: { showChangeOptions = false }) {
+            photoOptionsBox
+        }
         .fullScreenCover(isPresented: $showCropper) {
             if let rawImage = rawPickedImage {
                 ImageCropperView(
@@ -166,35 +176,52 @@ struct DSProfilePhotoPicker: View {
             } // إغلاق if !useOverlayActionsOnly
         }
         .frame(maxWidth: .infinity)
-        .confirmationDialog(
-            L10n.t("خيارات الصورة", "Photo Options"),
-            isPresented: $showChangeOptions,
-            titleVisibility: .visible
-        ) {
-            Button(L10n.t("تعديل الصورة", "Edit Photo")) {
-                if let raw = lastRawImage {
-                    rawPickedImage = raw
-                    showCropper = true
-                }
-            }
-            .disabled(lastRawImage == nil)
-            
-            Button(L10n.t("تغيير الصورة", "Change Photo")) {
-                showPicker = true
-            }
+    }
 
-            Button(L10n.t("حذف الصورة", "Delete Photo"), role: .destructive) {
-                let generator = UIImpactFeedbackGenerator(style: .light)
-                generator.impactOccurred()
-                withAnimation(DS.Anim.bouncy) {
-                    selectedImage = nil
-                    pickerItem = nil
-                    lastRawImage = nil
-                }
-            }
+    // MARK: - مربّع «خيارات الصورة»
 
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        }
+    /// الأوامر نفسها التي كانت في قائمة النظام: تعديل (قصّ) · تغيير · حذف — و«الخصوصية» لصورة صاحب الحساب
+    private var photoOptionsBox: some View {
+        let local = selectedImage != nil
+        let existing = !local ? existingURL.flatMap(URL.init(string:)) : nil
+        let canEdit = local ? lastRawImage != nil : (existing != nil && enableCrop)
+        let canDelete = local || (existing != nil && onDeleteExisting != nil)
+        return DSPhotoOptionsBox(
+            canEdit: canEdit,
+            deleteAction: canDelete ? {
+                afterClose {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    if local {
+                        withAnimation(DS.Anim.bouncy) {
+                            selectedImage = nil
+                            pickerItem = nil
+                            lastRawImage = nil
+                        }
+                    } else {
+                        onDeleteExisting?()
+                    }
+                }
+            } : nil,
+            photoHidden: photoHidden,
+            onSavePhotoHidden: onSavePhotoHidden,
+            onEdit: {
+                afterClose {
+                    if local {
+                        if let raw = lastRawImage { rawPickedImage = raw; showCropper = true }
+                    } else if let existing {
+                        downloadAndEdit(from: existing)
+                    }
+                }
+            },
+            onChange: { afterClose { showPicker = true } },
+            onClose: { showChangeOptions = false }
+        )
+    }
+
+    /// يغلق المربّع ثم ينفّذ الأمر بعد خروجه — نافذة واحدة في كل مرّة (المنتقي والقصّ نوافذ أخرى)
+    private func afterClose(_ action: @escaping () -> Void) {
+        showChangeOptions = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.panelOutDuration + 0.15, execute: action)
     }
 
     // MARK: - Existing Image Preview
@@ -264,31 +291,6 @@ struct DSProfilePhotoPicker: View {
             } // إغلاق if !useOverlayActionsOnly
         }
         .frame(maxWidth: .infinity)
-        .confirmationDialog(
-            L10n.t("خيارات الصورة", "Photo Options"),
-            isPresented: $showChangeOptions,
-            titleVisibility: .visible
-        ) {
-            if enableCrop {
-                Button(L10n.t("تعديل الصورة", "Edit Photo")) {
-                    downloadAndEdit(from: url)
-                }
-            }
-            
-            Button(L10n.t("تغيير الصورة", "Change Photo")) {
-                showPicker = true
-            }
-            
-            if onDeleteExisting != nil {
-                Button(L10n.t("حذف الصورة", "Delete Photo"), role: .destructive) {
-                    let generator = UIImpactFeedbackGenerator(style: .light)
-                    generator.impactOccurred()
-                    onDeleteExisting?()
-                }
-            }
-            
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        }
     }
 
     /// تحميل الصورة من URL ثم فتح محرر القص
@@ -352,7 +354,7 @@ struct DSProfilePhotoPicker: View {
                 // الوضع العادي: دائرة + زر اختيار تحتها
                 emptyCirclePlaceholder
 
-                DSChipButton(L10n.t("اختر صورة", "Choose Photo"), icon: "arrow.triangle.2.circlepath.camera") {
+                DSChipButton(emptyActionTitle, icon: "arrow.triangle.2.circlepath.camera") {
                     showPicker = true
                 }
 
@@ -427,3 +429,97 @@ struct DSProfilePhotoPicker: View {
 }
 
 // MARK: - Multi-Photo Picker for News
+
+
+/// مربّع «خيارات الصورة» — نفس مربّعات الأوامر في الملف (الأم، الزوجة): صفوف أوامر (`DSCommandRow`)،
+/// و«حذف الصورة» سطراً أحمر هادئاً أسفل المربّع، و(لصورة صاحب الحساب) قسم «الخصوصية» بـ«حفظ» / «إلغاء»
+struct DSPhotoOptionsBox: View {
+    let canEdit: Bool
+    let deleteAction: (() -> Void)?
+    let photoHidden: Bool?
+    let onSavePhotoHidden: ((Bool) async -> Bool)?
+    let onEdit: () -> Void
+    let onChange: () -> Void
+    let onClose: () -> Void
+
+    @ObservedObject private var network = NetworkMonitor.shared
+    @State private var hidden = false
+    @State private var loaded = false
+    @State private var isSaving = false
+    @State private var failed = false
+
+    private var hasPrivacy: Bool { photoHidden != nil && onSavePhotoHidden != nil }
+    private var privacyChanged: Bool { hasPrivacy && hidden != (photoHidden ?? false) }
+
+    var body: some View {
+        DSComposer(
+            title: L10n.t("خيارات الصورة", "Photo Options"),
+            subtitle: hasPrivacy ? L10n.t("الصورة وظهورها للأعضاء", "The photo and who sees it")
+                                 : L10n.t("الصورة الشخصية", "Profile photo"),
+            icon: "camera.fill",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("حفظ", "Save"),
+            actionIcon: "checkmark",
+            showsAction: hasPrivacy,
+            canSubmit: privacyChanged && !isSaving && network.isConnected,
+            isBusy: isSaving,
+            note: hasPrivacy && !network.isConnected ? L10n.t("لا يمكن الحفظ بدون اتصال", "Can't save while offline") : nil,
+            hasUnsavedChanges: privacyChanged,
+            extraActions: deleteAction.map { action in
+                [DSComposerAction(id: "delete-photo", title: L10n.t("حذف", "Delete"), icon: "trash",
+                                  role: .destructive, action: action)]
+            } ?? [],
+            extraInline: true,
+            onSubmit: save,
+            onCancel: onClose
+        ) {
+            VStack(spacing: DSBox.sectionSpacing) {
+                if hasPrivacy {
+                    // مربّع بقسمين: كل قسم بعنوانه الموحّد
+                    DSComposerSection(title: L10n.t("الصورة", "Photo"), icon: "camera.fill",
+                                      tint: DS.Color.primary, index: 0) { commands }
+                } else {
+                    commands
+                }
+                if hasPrivacy {
+                    DSComposerSection(title: L10n.t("الخصوصية", "Privacy"), icon: "lock.fill",
+                                      tint: DS.Color.primary, index: 1) {
+                        DSVisibilityPicker(
+                            hidden: $hidden,
+                            shownLine: L10n.t("تظهر صورتك لأعضاء العائلة.", "Your photo is shown to family members."),
+                            hiddenLine: L10n.t("لا تظهر صورتك للأعضاء، وتبقى ظاهرة لك وللإدارة.",
+                                               "Members won't see your photo; you and the admins still do."),
+                            rowTitle: L10n.t("الصورة الشخصية", "Profile photo"), feminine: true)
+                    }
+                }
+                if failed {
+                    DSNoteCard(L10n.t("تعذّر الحفظ، يرجى المحاولة مرة أخرى.", "Couldn't save, please try again."),
+                               icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                }
+            }
+        }
+        .onAppear { if !loaded { loaded = true; hidden = photoHidden ?? false } }
+    }
+
+    private var commands: some View {
+        VStack(spacing: DS.Spacing.sm) {
+            if canEdit {
+                DSCommandRow(title: L10n.t("تعديل الصورة", "Edit Photo"), icon: "crop",
+                             hint: L10n.t("قص الصورة الحالية", "Crop the current photo"), action: onEdit)
+            }
+            DSCommandRow(title: L10n.t("تغيير الصورة", "Change Photo"), icon: "photo.on.rectangle",
+                         hint: L10n.t("اختيار صورة من الجهاز", "Pick a photo from the device"), action: onChange)
+        }
+    }
+
+    private func save() {
+        guard let onSavePhotoHidden, !isSaving, NetworkMonitor.shared.requireOnline() else { return }
+        isSaving = true
+        failed = false
+        Task {
+            let ok = await onSavePhotoHidden(hidden)
+            isSaving = false
+            if ok { onClose() } else { failed = true }
+        }
+    }
+}

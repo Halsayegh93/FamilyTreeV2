@@ -59,7 +59,7 @@ struct CategoriesManagerView: View {
                     }
                 }
             } message: {
-                Text(L10n.t("«\(pendingDelete?.nameAr ?? "")» ينحذف نهائياً من التصنيفات.",
+                Text(L10n.t("«\(pendingDelete?.nameAr ?? "")» يُحذف نهائياً من التصنيفات.",
                             "«\(pendingDelete?.nameAr ?? "")» will be permanently deleted."))
             }
             .dsAlert(L10n.t("تعذّر الحذف", "Couldn't delete"),
@@ -211,18 +211,21 @@ struct CategoriesManagerView: View {
     // MARK: - التصنيفات
 
     private func categoriesRows(_ items: [ContentCategory]) -> some View {
+        // صفوف بطاقة واحدة متّصلة (التصميم الموحّد ٢٠٢٦-١١-١١) بدل بطاقة لكل تصنيف
         ForEach(Array(items.enumerated()), id: \.element.id) { index, category in
             Button {
                 if canEdit { editing = category }
             } label: {
                 row(category)
+                    .dsGroupedRow(DSGroupPosition(index: index, count: items.count),
+                                  dividerInset: DS.Hub.cardPadding + DS.Icon.row + DS.Spacing.md)
             }
             .buttonStyle(.plain)
             .accessibilityHint(canEdit ? L10n.t("يفتح تعديل التصنيف", "Opens category editing") : "")
             .moveDisabled(!canEdit)
             // نمط الأخبار والديوانيات: أول ٧ تصعد تباعاً، وما يُبنى بالتمرير يظهر مباشرة
             .dsCardCascade(index, appeared: appeared)
-            .adminPageRow()
+            .adminPageRow(top: 0, bottom: 0)
         }
         .onMove { source, destination in
             if canEdit { move(from: source, to: destination) }
@@ -281,27 +284,22 @@ struct CategoriesManagerView: View {
             }
             // حذف من برّا — للتصنيف الفارغ غير الأساسي فقط
             if canEdit && count == 0 && !store.isProtected(category) {
+                // دائرة الحذف الحمراء الموحّدة (`DSDeleteCircleFace`) — نفس «مشكلات في الشجرة»
                 Button {
                     pendingDelete = category
                 } label: {
-                    Image(systemName: "trash")
-                        .dsGlyph(DS.Glyph.mdCompact)
-                        .foregroundColor(DS.Color.error)
-                        .frame(width: DS.Icon.discSmall, height: DS.Icon.discSmall)
-                        .background(Circle().fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
-                        // مساحة ضغط ٤٤ نقطة والشكل كما هو
-                        .frame(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
-                        .contentShape(Rectangle())
-                        .padding(.vertical, -DS.Spacing.xsm)
+                    Image(systemName: "trash.fill")
+                        .dsGlyph(DSButtonSize.compact.glyph)
+                        .modifier(DSDeleteCircleFace(size: .compact))
+                        .padding(.vertical, -DSButtonSize.compact.hitInset)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(DSPressStyle())
                 .accessibilityLabel(L10n.t("حذف التصنيف", "Delete category"))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, DS.Hub.cardPadding)
         .padding(.vertical, DS.Spacing.md)
-        .adminCard(padding: nil)
         .contentShape(Rectangle())
     }
 
@@ -496,27 +494,16 @@ struct CategoryEditSheet: View {
     }
 
     private var visibilitySection: some View {
+        // قسم «الخصوصية» الموحّد (`DSVisibilityPicker`) بدل المفتاح — المخزّن «ظاهر»، والمخفي عكسه
         DSComposerSection(title: L10n.t("الظهور", "Visibility"), icon: "eye.fill",
-                          tint: DS.Color.success, index: 4) {
-            HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: isActive ? "eye.fill" : "eye.slash.fill",
-                            tint: isActive ? DS.Color.success : DS.Color.textTertiary)
-                    .accessibilityHidden(true)
-                Toggle(isOn: $isActive) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                        Text(L10n.t("ظاهر للأعضاء", "Visible to members"))
-                            .dsFieldFont(.rowTitle)
-                            .foregroundColor(DS.Color.fieldLabel)
-                        Text(L10n.t("الإخفاء يشيله من الاختيارات، والمحتوى القديم يبقى بتصنيفه",
-                                    "Hiding removes it from choices; existing content keeps it"))
-                            .dsFont(.footnote)
-                            .foregroundColor(DS.Color.textTertiary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .tint(AppSection.admin.ink)
-            }
-            .dsRowBox()
+                          tint: DS.Color.primary, index: 4) {
+            DSVisibilityPicker(hidden: Binding(get: { !isActive }, set: { isActive = !$0 }),
+                               shownLine: L10n.t("يظهر في الاختيارات للأعضاء.", "Shown in members' choices."),
+                               hiddenLine: L10n.t("لا يظهر في الاختيارات، والمحتوى السابق يبقى بتصنيفه.",
+                                                  "Removed from choices; existing content keeps it."),
+                               rowTitle: L10n.t("الظهور في الاختيارات", "Shown in choices"),
+                               shownState: L10n.t("يظهر للأعضاء", "Shown to members"),
+                               hiddenState: L10n.t("مخفي عن الأعضاء", "Hidden from members"))
         }
     }
 
@@ -551,7 +538,7 @@ struct CategoryEditSheet: View {
             }
             .disabled(count > 0)
             if count > 0 {
-                Text(L10n.t("فيه \(count) عنصر — ما ينحذف إلا وهو فاضي. تقدر تخفيه بدل الحذف.",
+                Text(L10n.t("يحتوي على \(count) عنصر، ولا يُحذف إلا إذا كان فارغاً. يمكن إخفاؤه بدلاً من الحذف.",
                             "It has \(count) items — only empty categories can be deleted. You can hide it instead."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textSecondary)
@@ -566,7 +553,7 @@ struct CategoryEditSheet: View {
                 }
             }
         } message: {
-            Text(L10n.t("«\(category.nameAr)» ينحذف نهائياً من التصنيفات.",
+            Text(L10n.t("«\(category.nameAr)» يُحذف نهائياً من التصنيفات.",
                         "«\(category.nameAr)» will be permanently deleted."))
         }
     }

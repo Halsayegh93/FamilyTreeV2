@@ -143,8 +143,8 @@ struct ProjectPhotosCarousel: View {
         let photos = photos
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             // عنوان القسم الموحّد (قرص مجسّم + عنوان + العدد)
-            DSSectionTitle(title: L10n.t("الصور", "Photos"), icon: "photo.on.rectangle.angled",
-                           tint: AppSection.projects.ink, trailing: "\(photos.count)", iconSize: DS.Icon.inline)
+            DSBoxSectionTitle(title: L10n.t("الصور", "Photos"), icon: "photo.on.rectangle.angled",
+                              tint: AppSection.projects.ink, trailing: "\(photos.count)")
 
             Group {
                 if photos.count == 1 {
@@ -228,22 +228,35 @@ struct ProjectPhotoIndex: Identifiable { let id: Int }
 struct ZoomHintBadge: View {
     /// فُتح العارض من هذا المربّع — لا حاجة للتلميح بعدها
     var dismissed: Bool = false
+    /// ثابت على ركن الصورة لا يختفي (المكتبة — طلب المالك ٢٠٢٦-١١-٠٦)
+    var fixed: Bool = false
     @State private var expired = false
 
     var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
-            .frame(width: 36, height: 36)
-            .background(Circle().fill(Color.black.opacity(0.4)))
-            .opacity(dismissed || expired ? 0 : 1)
-            .animation(.easeOut(duration: 0.4), value: dismissed || expired)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .task {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                expired = true
-            }
+        if fixed {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                .foregroundColor(.white)
+                .frame(width: DS.Folder.zoomButton, height: DS.Folder.zoomButton)
+                .background(Circle().fill(Color.black.opacity(0.45)))
+                .padding(DS.Folder.zoomButtonInset)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .dsGlyph(DS.Glyph.md, weight: .semibold)
+                .foregroundColor(.white)
+                .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
+                .background(Circle().fill(Color.black.opacity(0.4)))
+                .opacity(dismissed || expired ? 0 : 1)
+                .animation(.easeOut(duration: 0.4), value: dismissed || expired)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .task {
+                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    expired = true
+                }
+        }
     }
 }
 
@@ -256,17 +269,28 @@ struct ProjectPhotoViewer: View {
     var section: AppSection = .projects
     /// تُحجب الصور عن لقطة الشاشة (المكتبة — `LibraryProtection`)
     var shielded: Bool = false
+    /// عنوان صغير لكل صورة مكان العدّاد («قبل»/«بعد» في تغيّر الصورة الشخصية) — nil = «2 من 5»
+    var captions: [String]? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.layoutDirection) private var layoutDirection
     @State private var index: Int
     @State private var loaded: Set<Int> = []
 
-    init(urls: [String], startIndex: Int, section: AppSection = .projects, shielded: Bool = false) {
+    init(urls: [String], startIndex: Int, section: AppSection = .projects, shielded: Bool = false,
+         captions: [String]? = nil) {
         self.urls = urls
         self.startIndex = startIndex
         self.section = section
         self.shielded = shielded
+        self.captions = captions
         _index = State(initialValue: startIndex)
+    }
+
+    /// نصّ الكبسولة أعلى العارض: عنوان الصورة الحالية إن وُجد، وإلا «2 من 5» (صورة واحدة بلا عدّاد)
+    private var counterText: String? {
+        if let captions, captions.indices.contains(index), !captions[index].isEmpty { return captions[index] }
+        guard urls.count > 1 else { return nil }
+        return L10n.t("\(index + 1) من \(urls.count)", "\(index + 1) of \(urls.count)")
     }
 
     var body: some View {
@@ -292,9 +316,9 @@ struct ProjectPhotoViewer: View {
             }
 
             HStack {
-                // «2 من 5» — صورة واحدة بلا عدّاد
-                if urls.count > 1 {
-                    Text(verbatim: L10n.t("\(index + 1) من \(urls.count)", "\(index + 1) of \(urls.count)"))
+                // «2 من 5» أو عنوان الصورة («قبل»/«بعد») — صورة واحدة بلا عنوان بلا عدّاد
+                if let counterText {
+                    Text(verbatim: counterText)
                         .dsFont(.rowTitleCompact)
                         .foregroundColor(DS.Color.overlayText)
                         .padding(.horizontal, DS.Spacing.md)

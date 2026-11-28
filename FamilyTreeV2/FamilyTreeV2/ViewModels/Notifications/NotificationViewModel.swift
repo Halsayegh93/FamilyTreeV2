@@ -338,6 +338,8 @@ class NotificationViewModel: ObservableObject {
             } else {
                 // ✅ نخزّن محلياً أن الجهاز مسجّل — يُستخدم للكشف إذا حُذف لاحقاً
                 NotificationViewModel.markDeviceAsRegistered(memberId: memberId.uuidString, deviceId: deviceId)
+                // رقم نسخة التطبيق على هذا الجهاز («النسخ عند الأعضاء») — دالة منفصلة لا تكسر التسجيل قبل الترحيل
+                await AppUpdateStore.reportBuild(deviceId: deviceId)
                 Log.info("[DEVICE] ✅ تم تسجيل الجهاز بنجاح: \(deviceModelName), platform=\(platform)/\(apnsEnvironment), tokenLen=\(pushToken?.count ?? 0), token=\(tokenPreview)..., rowsAffected=\(response.count)")
             }
         } catch {
@@ -565,8 +567,8 @@ class NotificationViewModel: ObservableObject {
     
     // MARK: - Admin Device Management
     
-    /// جلب أجهزة عضو محدد (للمدير)
-    func fetchDevicesForMember(_ memberId: UUID) async -> [LinkedDevice] {
+    /// جلب أجهزة عضو محدد (للمدير) — nil = تعذّر التحميل (لا يُعرض كأنه «لا أجهزة»)
+    func fetchDevicesForMember(_ memberId: UUID) async -> [LinkedDevice]? {
         guard canModerate else {
             Log.warning("[AUTH] Unauthorized fetchDevicesForMember attempt")
             return []
@@ -582,7 +584,7 @@ class NotificationViewModel: ObservableObject {
             return devices
         } catch {
             Log.fetchError("[ADMIN-DEVICE] خطأ جلب أجهزة العضو", error)
-            return []
+            return nil
         }
     }
     
@@ -1076,8 +1078,12 @@ class NotificationViewModel: ObservableObject {
 
     /// - targetMemberIds: `nil` = إعلان للجميع. قائمة فارغة = لا أحد — لا يُرسل شيء أبداً
     ///   (فحص الثغرات ب-٩: شريحة فاضية، مثل دولة بلا أعضاء، كانت تتحوّل إرسالاً للجميع).
+    /// - imagePath: «صورة الإشعار» (موافقة المالك ٢٠٢٦-١١-٢٥، الخيار ب) — مسار داخل مستودع `news` (`push/<uuid>.jpg`)
+    ///   يُحفظ في `details.image_path`، ومشغّل الدفع يمرّره لـ`push-on-notification` فتظهر الصورة على شاشة القفل.
+    ///   nil = الإدراج كما كان حرفياً (بلا `details`).
     @discardableResult
-    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin") async -> Bool {
+    func sendNotification(title: String, body: String, targetMemberIds: [UUID]?, sendPush: Bool = true, kind: String = "admin",
+                          imagePath: String? = nil) async -> Bool {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
         guard notificationsFeatureAvailable else { return false }
         if let ids = targetMemberIds, ids.isEmpty {
@@ -1094,26 +1100,32 @@ class NotificationViewModel: ObservableObject {
         self.isLoading = true
         var ok = false
 
+        // صورة الإشعار — تُضاف فقط حين توجد، فالإشعار بلا صورة يُدرج بالحقول نفسها كما كان
+        let imageDetails: [String: String]? = imagePath.map { ["image_path": $0] }
+
         do {
             if let ids = targetMemberIds, !ids.isEmpty {
                 let payloads = ids.map { memberId in
-                    [
+                    var row: [String: AnyEncodable] = [
                         "target_member_id": AnyEncodable(memberId.uuidString),
                         "title": AnyEncodable(title),
                         "body": AnyEncodable(body),
                         "kind": AnyEncodable(kind),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
+                    if let imageDetails { row["details"] = AnyEncodable(imageDetails) }
+                    return row
                 }
                 try await supabase.from("notifications").insert(payloads).execute()
             } else {
-                let payload: [String: AnyEncodable] = [
+                var payload: [String: AnyEncodable] = [
                     "target_member_id": AnyEncodable(Optional<String>.none),
                     "title": AnyEncodable(title),
                     "body": AnyEncodable(body),
                     "kind": AnyEncodable(kind),
                     "created_by": AnyEncodable(creator.uuidString)
                 ]
+                if let imageDetails { payload["details"] = AnyEncodable(imageDetails) }
                 try await supabase.from("notifications").insert(payload).execute()
             }
 
@@ -1151,7 +1163,8 @@ class NotificationViewModel: ObservableObject {
         contentKind: String,
         contentLabel: String,
         contentId: UUID?,
-        reason: String = ""
+        reason: String = "",
+        source: RequestSource? = nil
     ) async -> Bool {
         guard let userId = currentUser?.id else { return false }
         let reporterName = currentUser?.fullName ?? ""
@@ -1170,18 +1183,21 @@ class NotificationViewModel: ObservableObject {
             ]
             if let contentId { payload["new_value"] = AnyEncodable(contentId.uuidString) }
 
-            let inserted: AdminRequest = try await supabase
-                .from("admin_requests")
-                .insert(payload)
-                .select()
-                .single()
-                .execute()
-                .value
+            let path = source ?? RequestSource(RequestSourceStep("flag.fill", "بلاغ عن \(contentKind)"))
+            let inserted: AdminRequest = try await AdminRequestSource.send(path) { [payload] path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(payload, path))
+                    .select()
+                    .single()
+                    .execute()
+                    .value
+            }
 
             let reasonSuffix = trimmedReason.isEmpty ? "" : " — \(trimmedReason)"
             await notifyAdminsWithPush(
-                title: L10n.t("بلاغ على محتوى", "Content Report"),
-                body: L10n.t(
+                title: L10n.stored("بلاغ على محتوى", "Content Report"),
+                body: L10n.stored(
                     "\(reporterName) أبلغ عن \(contentKind): \(contentLabel)\(reasonSuffix)",
                     "\(reporterName) reported a \(contentKind): \(contentLabel)\(reasonSuffix)"
                 ),
@@ -1206,7 +1222,8 @@ class NotificationViewModel: ObservableObject {
         body: String,
         targetMemberIds: [UUID]?,
         scheduledFor: Date,
-        kind: String = "admin_broadcast"
+        kind: String = "admin_broadcast",
+        imagePath: String? = nil
     ) async -> Bool {
         guard authVM?.isAdmin == true, let creator = currentUser?.id else { return false }
         // قائمة فارغة = لا أحد، لا «الجميع» (ب-٩) — NULL في الجدول يعني إعلاناً عاماً
@@ -1217,7 +1234,7 @@ class NotificationViewModel: ObservableObject {
         self.isLoading = true
         defer { self.isLoading = false }
 
-        let iso = ISO8601DateFormatter().string(from: scheduledFor)
+        let iso = DateParsing.isoString(scheduledFor)
         var payload: [String: AnyEncodable] = [
             "title":         AnyEncodable(title),
             "body":          AnyEncodable(body),
@@ -1230,12 +1247,28 @@ class NotificationViewModel: ObservableObject {
         if let ids = targetMemberIds, !ids.isEmpty {
             payload["target_member_ids"] = AnyEncodable(ids.map { $0.uuidString })
         }
+        // صورة الإشعار — `details` تُنسخ لصفوف الإشعارات عند موعدها (`dispatch_due_scheduled_notifications`)
+        if let imagePath {
+            payload["details"] = AnyEncodable(["image_path": imagePath])
+        }
 
         do {
             try await supabase.from("scheduled_notifications").insert(payload).execute()
             Log.info("[SCHEDULE] تمت جدولة إشعار لـ \(iso)")
             return true
         } catch {
+            if imagePath != nil, ErrorHelper.isMissingColumn(error, column: "details") {
+                // ترحيل صورة الإشعار لم يُطبَّق بعد — يُجدول الإشعار بلا صورة بدل أن يفشل
+                Log.warning("[SCHEDULE] عمود details غير موجود في scheduled_notifications — جدولة بلا صورة")
+                payload.removeValue(forKey: "details")
+                do {
+                    try await supabase.from("scheduled_notifications").insert(payload).execute()
+                    return true
+                } catch {
+                    Log.error("[SCHEDULE] تعذّر جدولة الإشعار: \(error.localizedDescription)")
+                    return false
+                }
+            }
             if ErrorHelper.isMissingTable(error, table: "scheduled_notifications") {
                 Log.warning("[SCHEDULE] جدول scheduled_notifications غير موجود — تجاهُل")
             } else {
@@ -1263,16 +1296,9 @@ class NotificationViewModel: ObservableObject {
             case scheduledFor = "scheduled_for"
         }
 
-        private static let isoFrac: ISO8601DateFormatter = {
-            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
-        }()
-        private static let isoPlain: ISO8601DateFormatter = {
-            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]; return f
-        }()
-
         /// وقت الإرسال المجدول كـ Date (يحاول صيغتين: مع/بدون أجزاء الثانية).
         var scheduledDate: Date? {
-            Self.isoFrac.date(from: scheduledFor) ?? Self.isoPlain.date(from: scheduledFor)
+            DateParsing.iso(scheduledFor)
         }
 
         /// nil/فارغ = إشعار عام للجميع.
@@ -1340,7 +1366,7 @@ class NotificationViewModel: ObservableObject {
         let payload: [String: AnyEncodable] = [
             "title":             AnyEncodable(title),
             "body":              AnyEncodable(body),
-            "scheduled_for":     AnyEncodable(ISO8601DateFormatter().string(from: scheduledFor)),
+            "scheduled_for":     AnyEncodable(DateParsing.isoString(scheduledFor)),
             "target_member_ids": AnyEncodable(targetMemberIds?.map(\.uuidString))
         ]
         do {
@@ -1524,8 +1550,8 @@ class NotificationViewModel: ObservableObject {
                 ]
                 _ = try? await supabase.from("notifications").insert(approvedPayload).execute()
                 await sendPushToMembers(
-                    title: L10n.t("تم قبول طلبك", "Your Request Was Approved"),
-                    body: L10n.t("مرحباً في عائلة المحمدعلي", "Welcome to the Al-Mohammad Ali family"),
+                    title: L10n.stored("تم قبول طلبك", "Your Request Was Approved"),
+                    body: L10n.stored("مرحباً في عائلة المحمدعلي", "Welcome to the Al-Mohammad Ali family"),
                     kind: "join_approved",
                     targetMemberIds: [requestId]
                 )

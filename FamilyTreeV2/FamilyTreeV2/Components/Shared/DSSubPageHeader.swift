@@ -124,7 +124,7 @@ struct DSSubPageHeader<Trailing: View>: View {
                     DSCloseButton(context: .onColor, compact: compact, action: goBack)
                 }
             }
-            .padding(.horizontal, compact ? DS.Spacing.xxl : DS.Spacing.lg)
+            .padding(.horizontal, compact ? DS.Spacing.xxl : DS.Page.margin)
             .padding(.bottom, compact ? DS.Spacing.xs : DS.Spacing.sm)
             .padding(.top, compact ? DS.Spacing.xs : 0)
             .frame(minHeight: compact ? DSBox.pageHeaderHeightCompact : DSBox.pageHeaderHeight, alignment: .bottom)

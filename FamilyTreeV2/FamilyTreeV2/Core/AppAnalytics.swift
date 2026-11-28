@@ -13,10 +13,9 @@ enum AppAnalytics {
 
     /// تسجيل حدث
     static func track(_ name: String, params: [String: String]? = nil) {
-        let formatter = ISO8601DateFormatter()
         let event = Event(
             name: name,
-            date: formatter.string(from: Date()),
+            date: DateParsing.isoString(Date()),
             params: params
         )
 

@@ -43,6 +43,10 @@ struct HomeNewsCardView: View {
     var onBlockTap: () -> Void = {}
     /// فتح صورة الخبر بملء الشاشة — رقم الصورة
     var onMediaTap: (Int) -> Void = { _ in }
+    /// «صلاحيات الأعضاء حسب الفئة»: الإعجاب والتعليق والاستطلاع لفئة المشاهد (`MemberAccess` — المخفي غائب)
+    var showsLike: Bool = true
+    var showsComment: Bool = true
+    var showsPoll: Bool = true
     /// دخول الصفحة (نفس `dsCardCascade`): الختم يُطبع على البطاقة بعد وصولها، وما يُبنى بالتمرير يظهر مباشرة
     var appeared: Bool = true
     var cascadeIndex: Int = 0
@@ -120,10 +124,10 @@ struct HomeNewsCardView: View {
             }
 
             if !media.isEmpty {
-                NewsCardMedia(urls: media, isLiked: isLiked, onLike: onLikeTap, onOpen: onMediaTap)
+                NewsCardMedia(urls: media, isLiked: isLiked, onLike: showsLike ? onLikeTap : {}, onOpen: onMediaTap)
             }
 
-            if !pollOptions.isEmpty {
+            if showsPoll && !pollOptions.isEmpty {
                 NewsCardPoll(question: pollQuestion, options: pollOptions, votes: pollVotes,
                              selected: selectedPollOption, tint: typeColor, onVote: onVoteTap)
             }
@@ -131,6 +135,7 @@ struct HomeNewsCardView: View {
             NewsCardFooter(
                 likeCount: likeCount, isLiked: isLiked, commentCount: commentCount,
                 onLike: onLikeTap, onComment: onCommentTap,
+                showsLike: showsLike, showsComment: showsComment,
                 byline: NewsBylineView(
                     names: bylineNames,
                     avatarUrl: authorMember?.avatarUrl,
@@ -195,6 +200,7 @@ struct NewsCardKicker: View {
                 .dsFont(.newsKicker)
                 .foregroundColor(NewsTypeHelper.color(for: type))
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
 
             if isPending {
                 DSStatusChip(text: L10n.t("بانتظار المراجعة", "Pending review"), icon: "hourglass",
@@ -237,8 +243,11 @@ struct NewsCardMenu: View {
                 .dsGlyph(DS.Glyph.md, weight: .semibold)
                 .foregroundColor(tint)
                 .frame(width: DS.Icon.rowLarge, height: DS.Icon.rowLarge)
+                // مساحة لمس ٤٤ والشكل والرأس بحجمهما (٣٦)
+                .padding((DS.Icon.tapTarget - DS.Icon.rowLarge) / 2)
                 .contentShape(Rectangle())
         }
+        .padding(-(DS.Icon.tapTarget - DS.Icon.rowLarge) / 2)
         .accessibilityLabel(L10n.t("خيارات الخبر", "Post options"))
     }
 }
@@ -327,7 +336,10 @@ struct NewsCardMedia: View {
     }
 
     private func likeBurst() {
-        if !isLiked { onLike() }
+        if !isLiked {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onLike()
+        }
         withAnimation(reduceMotion ? .easeOut(duration: 0.15) : DS.Anim.bouncy) {
             showHeart = true
         }
@@ -486,12 +498,14 @@ struct NewsCardFooter: View {
     let commentCount: Int
     let onLike: () -> Void
     let onComment: () -> Void
+    var showsLike: Bool = true
+    var showsComment: Bool = true
     let byline: NewsBylineView
 
     var body: some View {
         HStack(spacing: DS.Spacing.xxs) {
-            NewsLikeButton(count: likeCount, isLiked: isLiked, action: onLike)
-            NewsCommentButton(count: commentCount, action: onComment)
+            if showsLike { NewsLikeButton(count: likeCount, isLiked: isLiked, action: onLike) }
+            if showsComment { NewsCommentButton(count: commentCount, action: onComment) }
             Spacer(minLength: DS.Spacing.sm)
             byline
         }
@@ -505,7 +519,11 @@ struct NewsLikeButton: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            // نقرة اهتزاز خفيفة مع الإعجاب فقط (الإلغاء بلا اهتزاز) — في نفس إطار قفزة القلب
+            if !isLiked { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+            action()
+        } label: {
             HStack(spacing: DS.Spacing.xs) {
                 Group {
                     if reduceMotion {
@@ -516,7 +534,7 @@ struct NewsLikeButton: View {
                     } else {
                         Image(systemName: isLiked ? "heart.fill" : "heart")
                             .scaleEffect(isLiked ? 1.15 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isLiked)
+                            .animation(DSMotion.selectPop, value: isLiked)
                     }
                 }
                 .dsGlyph(DS.Glyph.lg, weight: .medium)
@@ -619,6 +637,7 @@ struct NewsBylineView: View {
                 .dsFont(.newsByline)
                 .foregroundColor(isAdmin ? DS.Color.accent : DS.Color.textSecondary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
             ReviewVerifiedMark(authorId)
             Text("·")
                 .dsFont(.footnote)

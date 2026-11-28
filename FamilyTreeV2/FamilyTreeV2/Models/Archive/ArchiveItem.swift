@@ -142,6 +142,25 @@ struct ArchiveItem: Identifiable, Codable, Equatable {
         fileType == "application/pdf"
     }
 
+    /// نوع الملف بالكلمات — يظهر للإدارة قبل الموافقة (طلب المالك ٢٠٢٦-١١-٢٤ «ما يبين شنو نوع المحتوى»)
+    var fileKindName: String {
+        if isPDF { return L10n.t("ملف PDF", "PDF file") }
+        if isImage { return L10n.t("صورة", "Image") }
+        return L10n.t("ملف", "File")
+    }
+
+    /// رمز نوع الملف
+    var fileKindIcon: String {
+        if isPDF { return "doc.richtext.fill" }
+        if isImage { return "photo.fill" }
+        return "doc.fill"
+    }
+
+    /// «ملف PDF · 2.3 MB» — النوع والحجم في سطر واحد
+    var fileKindLine: String {
+        [fileKindName, formattedSize].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     /// نص مقروء لحجم الملف ("12.4 MB", "550 KB").
     var formattedSize: String {
         guard let bytes = fileSize, bytes > 0 else { return "" }

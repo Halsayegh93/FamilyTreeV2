@@ -65,29 +65,33 @@ struct DSMemberPickerBox: View {
     private static let maxShown = 50
     /// القوائم الطويلة (مئات الأعضاء) كسولة؛ القصيرة عادية حتى يُقاس ارتفاع المربّع كاملاً
     private static let lazyThreshold = 40
-    private static let specificWords = 2
-    private static let specificLength = 8
 
     private var ink: Color { tint ?? DS.Color.primary.dsChrome(in: section) }
 
     var body: some View {
         let query = settledSearch.trimmingCharacters(in: .whitespaces)
-        let queryWords = query.split(whereSeparator: \.isWhitespace).count
-        let queryIsSpecific = queryWords >= Self.specificWords || query.count >= Self.specificLength
-        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب، والاسم الأول التام أولاً
+        // العضو العادي (`NamePrivacy`): لا أسماء قبل اسمين متتاليين على الأقل، وأول ١٠ فقط — طلب المالك ٢٠٢٦-١١-١٤
+        let strict = requiresSpecificQuery || NamePrivacy.isStrict
+        let queryIsSpecific = NamePrivacy.isSpecific(query)
+        // البحث الدقيق الواحد (`NameSearch.filter`): سلسلة الاسم متتالية (تضيق مع كل كلمة)، والسلسلة التامة أولاً
         let matched: [FamilyMember] = {
-            if requiresSpecificQuery {
-                return queryIsSpecific ? NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName } : []
+            if strict {
+                guard queryIsSpecific else { return [] }
+                let found = NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) {
+                    $0.fullName.isEmpty ? $0.firstName : $0.fullName
+                }
+                return Array(found.prefix(NamePrivacy.maxResults))
             }
             guard !query.isEmpty else { return listsAllWhenEmpty ? candidates : [] }
             return NameSearch.filter(candidates, query: query, fromFirstName: matchesFromFirstName) { $0.fullName.isEmpty ? $0.firstName : $0.fullName }
         }()
-        // بعد الكتابة: أول ٥٠ فقط وسطر «اكتب أكثر» — القائمة الكاملة بلا بحث (المنتقيات التي تعرض الكل) كما هي
-        let capped = !query.isEmpty && matched.count > Self.maxShown
+        // أول ٥٠ فقط وسطر «اكتب أكثر» — بعد الكتابة، وقبلها أيضاً (طلب المالك ٢٠٢٦-١١-٠٧ «قائمة الزوج بطيئة»: ٢٥٠٠ ذكر
+        // كانت تُرسم كلها عند الفتح لأن المربّع يقيس ارتفاع محتواه). الاختيار المتعدّد (مستلمو الإعلان) يبقى كاملاً
+        let capped = !strict && matched.count > Self.maxShown && (!query.isEmpty || selectedIds == nil)
         let list = capped ? Array(matched.prefix(Self.maxShown)) : matched
         var extras: [DSComposerAction] = []
         if let removeTitle, let onRemove {
-            extras.append(DSComposerAction(id: "remove", title: removeTitle, role: .destructive, action: onRemove))
+            extras.append(DSComposerAction(id: "remove", title: removeTitle, icon: "trash", role: .destructive, action: onRemove))
         }
         return DSComposer(
             title: title,
@@ -98,7 +102,9 @@ struct DSMemberPickerBox: View {
             actionIcon: "checkmark",
             showsAction: onDone != nil,
             canSubmit: onDone != nil,
+            // «إزالة» سطراً أحمر هادئاً تحت «حفظ/إلغاء» (نمط تذييل المربّعات الموحّد) بدل صفّ فوقها
             extraActions: extras,
+            extraInline: true,
             onSubmit: { onDone?() },
             onCancel: onCancel
         ) {
@@ -111,19 +117,21 @@ struct DSMemberPickerBox: View {
             }
             DSComposerSection(title: L10n.t("النتيجة", "Result"), icon: "person.crop.circle",
                               tint: DS.Color.accent,
-                              trailing: requiresSpecificQuery || isLoading || matched.isEmpty ? nil : "\(matched.count)",
+                              trailing: strict || isLoading || matched.isEmpty ? nil : "\(matched.count)",
                               index: 1) {
                 if isLoading {
                     // التحميل الواحد: المجسّم يتنفّس
                     DSPageLoader(L10n.t("جارٍ التحميل…", "Loading…"), fillsSpace: false)
                         .padding(.vertical, DS.Spacing.md)
-                } else if (requiresSpecificQuery && !queryIsSpecific) || (!listsAllWhenEmpty && query.isEmpty) {
+                } else if (strict && !queryIsSpecific) || (!listsAllWhenEmpty && query.isEmpty) {
                     // الحالة الافتراضية: إرشاد بلا أي أسماء
-                    DSEmptyView(hintTitle, message: hintMessage, icon: "magnifyingglass", style: .inline)
+                    DSEmptyView(hintTitle.isEmpty ? NamePrivacy.hint : hintTitle, message: hintMessage,
+                                icon: "magnifyingglass", style: .inline)
                 } else if list.isEmpty {
                     // الحالة الفاضية الواحدة (مضغوطة) + زرّها بالمواصفة الواحدة
-                    let addAction: (() -> Void)? = onAddByName.map { add in { add(query) } }
-                    DSEmptyView(candidates.isEmpty && !requiresSpecificQuery ? emptyTitle : noMatchTitle,
+                    // النص المكتوب نفسه (لا المؤجّل) — الضغط السريع بعد الكتابة لا يضيّع آخر الحروف
+                    let addAction: (() -> Void)? = onAddByName.map { add in { add(search.trimmingCharacters(in: .whitespaces)) } }
+                    DSEmptyView(candidates.isEmpty && !strict ? emptyTitle : noMatchTitle,
                                 message: emptyMessage,
                                 icon: "person.fill.questionmark",
                                 actionTitle: addAction == nil ? nil : L10n.t("إضافة بالاسم", "Add by name"),
@@ -140,8 +148,11 @@ struct DSMemberPickerBox: View {
                     }
                 }
                 if capped {
-                    Text(L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب أكثر لتضييق النتائج",
-                                "Showing the first \(Self.maxShown) of \(matched.count) — type more to narrow"))
+                    Text(query.isEmpty
+                         ? L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب الاسم للبحث",
+                                  "Showing the first \(Self.maxShown) of \(matched.count) — type a name to search")
+                         : L10n.t("تظهر أول \(Self.maxShown) من \(matched.count) — اكتب أكثر لتضييق النتائج",
+                                  "Showing the first \(Self.maxShown) of \(matched.count) — type more to narrow"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .frame(maxWidth: .infinity)
@@ -150,7 +161,7 @@ struct DSMemberPickerBox: View {
             }
             if let missingTitle, let onMissing, !isLoading {   // ظاهر من البداية (طلب المالك) — قبل الكتابة وبعدها
                 // رابط نصّي بسيط بلا إطار (طلب المالك ٢٠٢٦-١٠-٢٥ «خل الزر أبسط») — مساحة لمس ٤٤
-                Button { onMissing(query) } label: {
+                Button { onMissing(search.trimmingCharacters(in: .whitespaces)) } label: {
                     Text(missingTitle)
                         .dsFont(.footnote)
                         .underline()

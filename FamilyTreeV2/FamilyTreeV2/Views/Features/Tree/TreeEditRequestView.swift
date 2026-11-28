@@ -6,6 +6,8 @@ import SwiftUI
 /// (طلب المالك ٢٠٢٦-١٠-٢٥ «اي شي يخص الاناث يكون بشجرة النساء»)
 struct TreeEditRequestView: View {
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    /// «مكانه في الشجرة» في «طلب حذف» (§11)
+    @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
     // لون القسم الذي فُتح منه الطلب (الشجرة، الرئيسية، الإدارة…) — الكحلي «إطار» يتبعه
     @Environment(\.dsSection) private var section
@@ -13,10 +15,16 @@ struct TreeEditRequestView: View {
 
     let member: FamilyMember
     let action: TreeEditAction
+    /// المستهدف عقدة في شجرة النساء بلا ملف (صورة زوج البنت من خارج العائلة بلا حساب، 20261127260000):
+    /// الطلب باسم مقدّمه (`member_id`) والمستهدف في `targetMemberId`
+    var targetIsWomenNode: Bool = false
 
     /// مع `.add`: ابن أو أكثر، لكل ابن «متوفّى» — طلب لكل ابن (طلب المالك ٢٠٢٦-١٠-٢٥)
     @State private var sons: [DSAddEntry] = [DSAddEntry()]
     @State private var isSendingSons = false
+    /// «إرسال» → فحص الأسماء: اسم بنت ينتقل تلقائياً لـ«أبناء» في شجرة النساء (`FamilyTreeMenOnly.namesToMove`،
+    /// طلب المالك ٢٠٢٦-١١-٢٧)، و«هو ولد؟ ارجع» يرجع لهذا المربّع كما هو
+    @State private var nameCheck: FamilyTreeNameCheck? = nil
     /// كم طلباً أُرسل — لرسالة النجاح
     @State private var sentCount = 0
     @State private var primaryText: String = ""
@@ -110,6 +118,12 @@ struct TreeEditRequestView: View {
             onSubmit: { submit() },
             onCancel: { dismiss() }
         ) {
+            // «طلب حذف» (§11): «مكانه في الشجرة» أولاً — «يُحذف» بإطار أحمر متقطّع وتنبيه الأبناء، وزرّ الشجرة الكاملة
+            if action == .delete {
+                AnyView(TreePlaceSection(place: TreePlace(tree: .men, change: .delete(member.id),
+                                                          kindLabel: L10n.t("طلب حذف", "Delete Request")),
+                                         index: 0, men: memberVM.allMembers))
+            }
             // قسم واحد بلغة مربّعات العمل («أسلوب واحد»): رأسه نوع الطلب بلونه، ثم العضو، ثم الحقل، ثم الملاحظات
             requestSection
             if action == .add {
@@ -132,8 +146,8 @@ struct TreeEditRequestView: View {
                 Text(sentCount > 1
                      ? L10n.t("وصلت طلباتك (\(sentCount)) للإدارة — كلٌّ يُراجَع وحده، ويُضاف الابن عند قبول طلبه.",
                               "Your \(sentCount) requests reached the admins — each is reviewed on its own.")
-                     : L10n.t("تم إرسال طلبك للإدارة وسيتم مراجعته قريباً.",
-                              "Your request has been sent to admin for review."))
+                     // البند ٦: بلا وعد «قريباً» — ماذا يحدث وأين تتابعه
+                     : MemberCardLogic.sentMessage(manual: action == .other))
             }
             .dsAlert(L10n.t("تعذر الإرسال", "Failed to Send"), isPresented: $showErrorAlert) {
                 Button(L10n.t("حسناً", "OK")) {}
@@ -143,6 +157,9 @@ struct TreeEditRequestView: View {
                     "Failed to send request. Please try again."
                 ))
             }
+            // اسم بنت في «طلب إضافة ابن» → «أبناء» في شجرة النساء تحت الأب نفسه بالاسم
+            .familyTreeMenOnly(isPresented: .constant(false), father: member, typedName: "",
+                               nameCheck: $nameCheck, onSon: sendSons, onMoved: movedToWomenTree)
             .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
             .onAppear { prefillFromMember() }
     }
@@ -216,20 +233,13 @@ struct TreeEditRequestView: View {
                             placeholder: L10n.t("اكتب الاسم الجديد...", "Enter new name..."),
                             text: $primaryText, tint: actionColor)
         case .editBirth:
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
+            dateRow(icon: "calendar", tint: DS.Color.warning,
                     title: L10n.t("تاريخ الميلاد الصحيح", "Correct Birth Date"), date: $birthDate)
         case .editPhone:
-            DSFieldBox(L10n.t("الرقم الجديد", "New Phone Number")) {
-                DSPhoneField(
-                    country: $phoneCountry,
-                    digits: $localPhoneDigits,
-                    placeholder: L10n.t("رقم الهاتف", "Phone number"),
-                    compact: true,
-                    bordered: false
-                )
-            }
+            DSPhoneFieldRow(country: $phoneCountry, digits: $localPhoneDigits,
+                            title: L10n.t("الرقم الجديد", "New Phone Number"))
         case .deceased, .addDeathDate:
-            dateRow(icon: "calendar", tint: DS.Color.error,
+            dateRow(icon: "calendar.badge.minus", tint: DS.Color.error,
                     title: L10n.t("تاريخ الوفاة", "Date of Death"), date: $deathDate)
         case .addPhoto:
             // عنوان الحقل بخط عناوين حقول المربّعات، والصورة بلا صندوق حقل حولها (مثل «إضافة ابن»)
@@ -252,18 +262,13 @@ struct TreeEditRequestView: View {
 
     /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف (حتى اليوم) — نفس صفوف التاريخ في «إضافة ابن»
     private func dateRow(icon: String, tint: Color, title: String, date: Binding<Date>) -> some View {
-        Button {
+        // صفّ التاريخ الموحّد (`DSDateFieldRow`) — الطلب يحمل تاريخاً دائماً، فلا «بدون تاريخ»
+        DSDateFieldRow(icon: icon, title: title, hasDate: true,
+                       dateText: DSDateText.display(date.wrappedValue)) {
             dsPresentDatePicker(title: title, initial: date.wrappedValue, allowClear: false) { picked in
                 if let picked { date.wrappedValue = picked }
             }
-        } label: {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: DSDateText.display(date.wrappedValue)) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
     }
 
     // MARK: - Notes / Reason
@@ -325,7 +330,9 @@ struct TreeEditRequestView: View {
 
         switch action {
         case .add:
-            submitSons(namedSons, notes: cleanNotes)
+            // اسم بنت → شجرة النساء تلقائياً؛ غيره يُرسل هنا (`sendSons`)
+            guard !isSendingSons else { return }
+            nameCheck = FamilyTreeNameCheck(names: namedSons.map(\.trimmedName))
             return
 
         case .editName:
@@ -338,6 +345,12 @@ struct TreeEditRequestView: View {
             )
 
         case .editPhone:
+            // الرقم لصاحب الحساب فقط (المالك «رقمه فقط»، والسيرفر يرفضه عن غيره)
+            guard member.id == adminRequestVM.currentUser?.id else {
+                errorMessage = L10n.t(ErrorHelper.phoneNotSelfMessage, "Only the account owner can change the number.")
+                showErrorAlert = true
+                return
+            }
             guard let normalized = KuwaitPhone.normalizedForStorage(country: phoneCountry, rawLocalDigits: localPhoneDigits) else {
                 errorMessage = L10n.t("رقم الهاتف غير صالح", "Invalid phone number")
                 showErrorAlert = true
@@ -409,7 +422,8 @@ struct TreeEditRequestView: View {
                     newPhotoUrl: url,
                     notes: cleanNotes.isEmpty ? nil : cleanNotes
                 )
-                let sent = await adminRequestVM.submitTreeEditRequest(payload: photoPayload)
+                let sent = await adminRequestVM.submitTreeEditRequest(payload: photoPayload,
+                                                                      aboutRequester: targetIsWomenNode)
                 if sent {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     showSuccessAlert = true
@@ -436,6 +450,7 @@ struct TreeEditRequestView: View {
                 showSuccessAlert = true
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
+                errorMessage = adminRequestVM.lastTreeEditError.map { L10n.t($0, "Only the account owner can change the number.") }
                 showErrorAlert = true
             }
         }
@@ -444,6 +459,18 @@ struct TreeEditRequestView: View {
     /// «ابن» أو أكثر — طلب لكل ابن بمسار الطلبات نفسه (`newMemberName`: يُضاف تلقائياً عند قبول طلبه). القبول لا يكتب
     /// الوفاة، فالمتوفّى يُكتب في ملاحظة طلبه بوضوح لتسجّل الإدارة وفاته بعد القبول. ما يُرسل يخرج من المربّع —
     /// إن تعذّر طلب بقي هو وما بعده ولا يتكرّر ما أُرسل
+    /// بعد فحص الأسماء — الإرسال كما كان
+    private func sendSons() {
+        submitSons(namedSons, notes: notes.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// أُغلقت شجرة النساء بعد انتقال تلقائي: البنات خرجن من هذا المربّع، والأبناء الباقون ينتظرون «إرسال»
+    private func movedToWomenTree(_ moved: [String]) {
+        let keys = FamilyTreeMenOnly.sonKeys(moved)
+        sons.removeAll { keys.contains(FamilyTreeMenOnly.normalizedFirstName($0.trimmedName)) }
+        if namedSons.isEmpty { dismiss() }
+    }
+
     private func submitSons(_ list: [DSAddEntry], notes: String) {
         guard !list.isEmpty, !isSendingSons else { return }
         isSendingSons = true

@@ -3,7 +3,7 @@ import Supabase
 
 // MARK: - فئات «استخدام التطبيق» (من `app_usage_members` على السيرفر)
 //
-// صفحات القوائم القديمة حُذفت (٢٠٢٦-١٠-٢٠): الفئات صارت شرائح «العائلة ← مسجّلون/مقيّدون في الشجرة»
+// صفحات القوائم القديمة حُذفت (٢٠٢٦-١٠-٢٠): الفئات صارت شرائح «العائلة ← مسجّلون/بدون حساب»
 // (`AdminAccountsStore` يقرأ القوائم الثلاث التي لها حساب دخول). الأسماء بالمسميات الرسمية.
 
 enum AppUsageCategory: String, CaseIterable, Identifiable {
@@ -76,12 +76,8 @@ struct AppUsageMember: Decodable, Identifiable {
         accountCreated = Self.parse(try c.decodeIfPresent(String.self, forKey: .accountCreated))
     }
 
-    private static func parse(_ raw: String?) -> Date? {
+    static func parse(_ raw: String?) -> Date? {
         guard let raw else { return nil }
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: raw) { return d }
-        f.formatOptions = [.withInternetDateTime]
-        return f.date(from: raw)
+        return DateParsing.iso(raw)
     }
 }

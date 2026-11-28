@@ -25,13 +25,46 @@ function toBase64Url(input: string | Uint8Array): string {
     .replace(/=+$/g, "");
 }
 
+/// رمز أبل يُعاد استعماله داخل نسخة الدالة (٢٠٢٦-١١-٠٦، موافقة المالك): أبل ترفض تجديده أكثر من مرة كل
+/// ٢٠ دقيقة (429 TooManyProviderTokenUpdates — ٨٨ إشعار آيفون ضاع ٢٠٢٦-١١-٠٥ لأن كل استدعاء كان يوقّع
+/// رمزاً جديداً)، وترفضه بعد ٦٠ دقيقة. فيتجدّد كل ٤٥ دقيقة، والطلبات المتزامنة تنتظر التوقيع نفسه.
+export const APNS_JWT_MAX_AGE_SECONDS = 45 * 60;
+let cachedApnsJwt: { value: string; iat: number; teamId: string; keyId: string } | null = null;
+let pendingApnsJwt: { promise: Promise<string>; teamId: string; keyId: string } | null = null;
+
 export async function createApnsJwt(
   teamId: string,
   keyId: string,
-  privateKeyPem: string
+  privateKeyPem: string,
+  nowSeconds: number = Math.floor(Date.now() / 1000)
+): Promise<string> {
+  const cached = cachedApnsJwt;
+  if (cached && cached.teamId === teamId && cached.keyId === keyId &&
+      nowSeconds >= cached.iat && nowSeconds - cached.iat < APNS_JWT_MAX_AGE_SECONDS) {
+    return cached.value;
+  }
+  const pending = pendingApnsJwt;
+  if (pending && pending.teamId === teamId && pending.keyId === keyId) return pending.promise;
+  const promise: Promise<string> = signApnsJwt(teamId, keyId, privateKeyPem, nowSeconds)
+    .then((value) => {
+      cachedApnsJwt = { value, iat: nowSeconds, teamId, keyId };
+      return value;
+    })
+    .finally(() => {
+      if (pendingApnsJwt?.promise === promise) pendingApnsJwt = null;
+    });
+  pendingApnsJwt = { promise, teamId, keyId };
+  return promise;
+}
+
+async function signApnsJwt(
+  teamId: string,
+  keyId: string,
+  privateKeyPem: string,
+  iat: number
 ): Promise<string> {
   const header = { alg: "ES256", kid: keyId };
-  const payload = { iss: teamId, iat: Math.floor(Date.now() / 1000) };
+  const payload = { iss: teamId, iat };
   const encodedHeader = toBase64Url(JSON.stringify(header));
   const encodedPayload = toBase64Url(JSON.stringify(payload));
   const data = `${encodedHeader}.${encodedPayload}`;

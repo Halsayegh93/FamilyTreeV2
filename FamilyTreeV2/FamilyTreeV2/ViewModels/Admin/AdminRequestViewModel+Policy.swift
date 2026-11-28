@@ -39,6 +39,21 @@ nonisolated struct RelativeAddDetails: Decodable, Sendable {
         return try? JSONDecoder().decode(RelativeAddDetails.self, from: data)
     }
 
+    /// صلة القرابة: «زوجة» / «أم» / «أخت» — nil = غير معروفة
+    var relationTitle: String? {
+        switch kind {
+        case "wife": return L10n.t("زوجة", "Wife")
+        case "mother": return L10n.t("أم", "Mother")
+        case "sister": return L10n.t("أخت", "Sister")
+        default: return nil
+        }
+    }
+
+    /// «طلب إضافة زوجة» … — عنوان النوع بصلة القرابة (بدل «إضافة قريبة»)
+    var requestTitle: String {
+        relationTitle.map { L10n.t("طلب إضافة ", "Add ") + $0 } ?? L10n.t("طلب إضافة قريبة", "Add relative")
+    }
+
     /// «إضافة زوجة: …» من السيرفر، وإلا من النوع والاسم
     var summaryText: String {
         if let s = summary?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty { return s }
@@ -52,6 +67,55 @@ nonisolated struct RelativeAddDetails: Decodable, Sendable {
         guard let n = name?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty else { return kindText }
         return "\(kindText): \(n)"
     }
+}
+
+/// `details` لطلب `relative_remove`: `{v, rpc, args, kind: son|daughter|wife, tree: main|women, target_id, name,
+/// requester_id, summary}` — `new_value` = معرّف المحذوف
+nonisolated struct RelativeRemoveDetails: Decodable, Sendable {
+    let kind: String?
+    let tree: String?
+    let targetId: String?
+    let name: String?
+    let requesterId: String?
+    let summary: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind, tree, name, summary
+        case targetId = "target_id", requesterId = "requester_id"
+    }
+
+    static func parse(_ details: String?) -> RelativeRemoveDetails? {
+        guard let data = details?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(RelativeRemoveDetails.self, from: data)
+    }
+
+    /// صلة القرابة: «ابن» / «بنت» / «زوجة» — nil = غير معروفة
+    var relationTitle: String? {
+        switch kind {
+        case "son": return L10n.t("ابن", "Son")
+        case "daughter": return L10n.t("بنت", "Daughter")
+        case "wife": return L10n.t("زوجة", "Wife")
+        default: return nil
+        }
+    }
+
+    /// «طلب حذف ابن» / «طلب حذف بنت» / «طلب حذف زوجة» (§10)
+    var requestTitle: String {
+        relationTitle.map { L10n.t("طلب حذف ", "Remove ") + $0 } ?? RelativeRemoveDetails.genericTitle
+    }
+
+    /// «حذف ابن» … — صفّ «النوع» في «الوارد»
+    var kindText: String {
+        relationTitle.map { L10n.t("حذف ", "Remove ") + $0 } ?? L10n.t("حذف من الشجرة", "Remove from the tree")
+    }
+
+    var trimmedName: String? {
+        let n = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return n.isEmpty ? nil : n
+    }
+
+    /// العنوان العام للنوع (القوائم والإشعارات حين لا يُعرف النوع)
+    static var genericTitle: String { L10n.t("طلب حذف من الشجرة", "Request to remove from the tree") }
 }
 
 /// صف يُتجاوز إن لم يُقرأ — نوع جديد أو عمود ناقص لا يُسقط القائمة كلها
@@ -89,18 +153,27 @@ extension AdminRequestViewModel {
     /// «إضافة قريبة»: مجال طلبات الشجرة (المالك/المدير/المراقب — `can_handle_admin_request`)
     var canHandleRelativeAdd: Bool { canHandlePrivacyRequests }
 
+    /// «طلب حذف من الشجرة»: المالك والمدير فقط (`can_handle_admin_request` بلا المراقب، مثل `canDeleteMembers`)
+    var canHandleRelativeRemove: Bool { authVM?.isAdmin ?? false }
+
     /// عدد طلبات السياسة الظاهرة في «الوارد»
-    var policyRequestsCount: Int { accountDeleteRequests.count + privacyRequests.count + relativeAddRequests.count }
+    var policyRequestsCount: Int {
+        accountDeleteRequests.count + privacyRequests.count + relativeAddRequests.count + lineageRequests.count
+            + relativeRemoveRequests.count
+    }
 
     func fetchPolicyRequests() async {
         var types: [String] = []
         if canHandleAccountDeletion { types.append(RequestType.accountDelete.rawValue) }
         if canHandlePrivacyRequests { types.append(RequestType.privacyRequest.rawValue) }
-        if canHandleRelativeAdd { types.append(RequestType.relativeAdd.rawValue) }
+        if canHandleRelativeAdd { types.append(RequestType.relativeAdd.rawValue); types.append(DaughterSons.requestType) }
+        if canHandleRelativeRemove { types.append(RequestType.relativeRemove.rawValue) }
         guard !types.isEmpty else {
             accountDeleteRequests = []
             privacyRequests = []
             relativeAddRequests = []
+            lineageRequests = []
+            relativeRemoveRequests = []
             return
         }
         do {
@@ -116,6 +189,8 @@ extension AdminRequestViewModel {
             accountDeleteRequests = all.filter { $0.requestType == RequestType.accountDelete.rawValue }
             privacyRequests = all.filter { $0.requestType == RequestType.privacyRequest.rawValue }
             relativeAddRequests = all.filter { $0.requestType == RequestType.relativeAdd.rawValue }
+            lineageRequests = all.filter { $0.requestType == DaughterSons.requestType }
+            relativeRemoveRequests = all.filter { $0.requestType == RequestType.relativeRemove.rawValue }
         } catch {
             Log.fetchError("فشل جلب طلبات الحذف والخصوصية", error)
         }
@@ -179,6 +254,23 @@ extension AdminRequestViewModel {
         guard await decideOnServer(request.id, approve: approve, reason: reason) != nil else { return false }
         relativeAddRequests.removeAll { $0.id == request.id }
         if approve { _ = try? await WomenStore.fetch() }
+        return true
+    }
+
+    // MARK: «طلب حذف من الشجرة»
+
+    /// قبول/رفض «طلب حذف من الشجرة» عبر `decide_admin_request` — الموافقة يحذف فيها السيرفر الشخص باسم صاحب الطلب
+    func decideRelativeRemove(_ request: AdminRequest, approve: Bool, reason: String?) async -> Bool {
+        guard canHandleRelativeRemove, NetworkMonitor.shared.requireOnline() else { return false }
+        isLoading = true
+        defer { isLoading = false }
+        // الخطأ (`requester_gone`، `family_links_protected`…) في `errorMessage` من `decideOnServer`
+        guard await decideOnServer(request.id, approve: approve, reason: reason) != nil else { return false }
+        relativeRemoveRequests.removeAll { $0.id == request.id }
+        if approve {
+            Task { await memberVM?.fetchAllMembers(force: true) }
+            _ = try? await WomenStore.fetch()
+        }
         return true
     }
 

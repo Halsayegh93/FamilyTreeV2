@@ -50,20 +50,23 @@ struct NotificationDetailBox: View {
 
     var body: some View {
         NotificationRichBox(chips: chips, tile: tile, title: notification.title, subtitle: subtitle,
-                            onClose: onClose, content: content)
+                            onClose: onClose, content: content, showsCloseFooter: true)
             .task(id: notification.id) {
                 guard let rid = requestId else { return }
                 request = await adminRequestVM.fetchRequest(id: rid)
             }
-            .fullScreenCover(item: $openMember) { m in
+            .fullScreenCover(item: $openMember.memberDetailsGate(selfId: authVM.currentUser?.id)) { m in
                 MemberDetailsView(member: m, centered: true)
                     .background(ClearPresentationBackground())
             }
             .transaction { t in if openMember != nil { t.disablesAnimations = true } }
             .dsAlert(L10n.t("رفض الطلب؟", "Reject this request?"), isPresented: $confirmReject, icon: "xmark.circle.fill") {
-                TextField(L10n.t("سبب الرفض (اختياري)", "Reason (optional)"), text: $rejectReason)
-                    .dsAlertField()
-                    .layoutValue(key: DSAlertIsFieldKey.self, value: true)
+                // رفض البلاغ لا يحمل سبباً (rejectNewsReport) — لا حقل يُكتب فيه ثم يضيع
+                if request?.requestType != RequestType.newsReport.rawValue {
+                    TextField(L10n.t("سبب الرفض (اختياري)", "Reason (optional)"), text: $rejectReason)
+                        .dsAlertField()
+                        .layoutValue(key: DSAlertIsFieldKey.self, value: true)
+                }
                 Button(L10n.t("رفض", "Reject"), role: .destructive) { reject() }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
             } message: {
@@ -138,6 +141,12 @@ struct NotificationDetailBox: View {
                 NotifBoxLabel(text: L10n.t("التغييرات (\(changes.count))", "Changes (\(changes.count))"))
                 NotificationChangeCards(changes: changes, isStaff: isStaff, subjectName: subjectName ?? "")
             }
+            // «مكانه في الشجرة» (§7، للإدارة): من الطلب بزمن نتيجته، وزرّ المعاينة = «موافقة» المربّع حين تظهر فيه
+            if isStaff {
+                AnyView(TreePlaceRequestNoticeSection(notification: notification, request: request,
+                                                      isRequestNotice: requestId != nil, subjectMember: subjectMember,
+                                                      primary: placePrimary))
+            }
             if isStaff, let name = subjectName, request == nil || subjectMember?.id != request?.requesterId {
                 NotifBoxLabel(text: L10n.t("العضو المعني", "Member concerned"))
                 Button { openMember = subjectMember } label: {
@@ -161,9 +170,9 @@ struct NotificationDetailBox: View {
                     openMember = m
                 }])
             } else if !isStaff {
-                NotifButtonRow(items: [.init(title: L10n.t("عرض ملفي", "View my profile"), kind: .primary,
+                NotifButtonRow(items: [.init(title: L10n.t("عرض الملف الشخصي", "View my profile"), kind: .primary,
                                              action: onOpenProfile)])
-                Text(L10n.t("لو فيه شي غلط، اطلب تصحيحه من ملفك وبتوصل للإدارة.",
+                Text(L10n.t("في حال وجود خطأ، يمكن طلب تصحيحه من الملف الشخصي، وسيصل الطلب إلى الإدارة.",
                             "If something is wrong, request a correction from your profile and it will reach the administration."))
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textSecondary)
@@ -174,6 +183,14 @@ struct NotificationDetailBox: View {
         if let nid = notification.details?.newsId.flatMap(UUID.init(uuidString:)) {
             NotifButtonRow(items: [.init(title: L10n.t("فتح الخبر", "Open post"), kind: .secondary) { onOpenNews(nid) }])
         }
+    }
+
+    /// «موافقة» المربّع نفسه — طلب معلّق تملك قراره (كما يظهر في `NotifAdminRequestSection`)
+    private var placePrimary: TreePlacePrimary? {
+        guard let r = request, r.status == ApprovalStatus.pending.rawValue, adminRequestVM.canApproveFromBox(r) else {
+            return nil
+        }
+        return TreePlacePrimary(title: L10n.t("موافقة", "Approve"), icon: "checkmark", action: approve)
     }
 
     // MARK: القرار (دوال «الوارد» نفسها)
@@ -197,8 +214,8 @@ struct NotificationDetailBox: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         Task {
             adminRequestVM.errorMessage = nil
-            await adminRequestVM.rejectFromBox(r, reason: reason)
-            await finish(ok: true, rid: r.id)
+            let ok = await adminRequestVM.rejectFromBox(r, reason: reason)
+            await finish(ok: ok, rid: r.id)
         }
     }
 
@@ -258,7 +275,7 @@ struct NotifMemberRequestSection: View {
             }
             NotifInfoGrid(cells: [
                 NotifInfoCell(label: L10n.t("نوع الطلب", "Request type"), value: NotifBoxText.requestType(request.requestType)),
-                NotifInfoCell(label: L10n.t("وصلك", "Received"), value: NotifBoxText.short(notification.createdDate)),
+                NotifInfoCell(label: L10n.t("تاريخ الوصول", "Received"), value: NotifBoxText.short(notification.createdDate)),
             ])
             buttons
         }
@@ -271,12 +288,12 @@ struct NotifMemberRequestSection: View {
             // «طلب جديد بالتصحيح» و«طلباتي» — كلاهما في «حسابي» (لا مدخل مباشر لكل نوع طلب)
             NotifButtonRow(items: [
                 .init(title: L10n.t("طلب جديد بالتصحيح", "New corrected request"), kind: .primary, action: onOpenProfile),
-                .init(title: L10n.t("طلباتي", "My requests"), kind: .secondary, action: onOpenProfile),
+                .init(title: L10n.t("الطلبات", "My requests"), kind: .secondary, action: onOpenProfile),
             ])
         case ApprovalStatus.approved.rawValue:
-            NotifButtonRow(items: [.init(title: L10n.t("عرض ملفي", "View my profile"), kind: .primary, action: onOpenProfile)])
+            NotifButtonRow(items: [.init(title: L10n.t("عرض الملف الشخصي", "View my profile"), kind: .primary, action: onOpenProfile)])
         default:
-            NotifButtonRow(items: [.init(title: L10n.t("طلباتي", "My requests"), kind: .secondary, action: onOpenProfile)])
+            NotifButtonRow(items: [.init(title: L10n.t("الطلبات", "My requests"), kind: .secondary, action: onOpenProfile)])
         }
     }
 }
@@ -300,7 +317,12 @@ struct NotifAdminRequestSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            if let m = requester { requesterRow(m) }
+            // §10: «نوع الطلب» · «القرابة» · «مقدّم الطلب» أولاً لطلبات الأشخاص، وإلا صفّ مقدّم الطلب كما كان
+            if let facts = AdminRequestFacts.of(request, member: { memberVM.member(byId: $0) }) {
+                AdminRequestFactRows(facts: facts)
+            } else if let m = requester {
+                requesterRow(m)
+            }
             let cells = NotifRequestCells.cells(for: request, memberVM: memberVM)
             if !cells.isEmpty {
                 VStack(alignment: .leading, spacing: DS.Spacing.sm) {
@@ -437,6 +459,11 @@ enum NotifRequestCells {
         case RequestType.photoSuggestion.rawValue:
             add(L10n.t("العضو", "Member"), memberName)
             add(L10n.t("التفاصيل", "Details"), freeText(r.details))
+        case RequestType.relativeAdd.rawValue:
+            // النوع والقرابة ومقدّم الطلب في الصفوف الثلاثة (§10) — هنا الاسم وحده
+            add(L10n.t("الاسم", "Name"), RelativeAddDetails.parse(r.details)?.name)
+        case RequestType.relativeRemove.rawValue:
+            add(L10n.t("الاسم", "Name"), RelativeRemoveDetails.parse(r.details)?.trimmedName)
         default:
             add(L10n.t("العضو", "Member"), memberName)
             add(L10n.t("القيمة المطلوبة", "Requested value"),
@@ -455,7 +482,7 @@ enum NotifRequestCells {
               let father = memberVM.member(byId: fatherId) else { return nil }
         let n = memberVM.allMembers.filter { $0.fatherId == fatherId }.count
         guard n > 0 else { return nil }
-        return L10n.t("بيصير الابن رقم \(n) لـ\(father.firstName) في الشجرة",
+        return L10n.t("سيكون الابن رقم \(n) لـ\(father.firstName) في الشجرة",
                       "Will be child #\(n) of \(father.firstName) in the tree")
     }
 }

@@ -111,13 +111,25 @@ struct OccasionLinksSection: View {
     @State private var copiedId: UUID?
     @State private var linkToDelete: OccasionLink?
     @State private var expanded = false
+    /// داخل مربّع «رابط الموقع» (زرّ في «تصميم إعلان»): بلا رأس ولا بطاقة، مفتوح دائماً
+    var embedded = false
 
     private let tint = DS.Color.accent
 
     var body: some View {
+        if embedded {
+            content
+        } else {
+            content
+                .padding(DS.Spacing.md)
+                .dsCard(padding: 0)
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            header
-            if expanded {
+            if !embedded { header }
+            if expanded || embedded {
                 createRow
                 list
                 if let error = model.errorText {
@@ -128,8 +140,6 @@ struct OccasionLinksSection: View {
                 }
             }
         }
-        .padding(DS.Spacing.md)
-        .dsCard(padding: 0)
         .animation(DS.Anim.snappy, value: expanded)
         .task { await model.load() }
         .dsAlert(L10n.t("حذف الرابط؟", "Delete link?"),
@@ -141,7 +151,7 @@ struct OccasionLinksSection: View {
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { linkToDelete = nil }
         } message: { _ in
-            Text(L10n.t("الرابط يوقف عند كل اللي عندهم، ولا يمكن إرجاعه.",
+            Text(L10n.t("يتوقف الرابط لدى كل من يملكه، ولا يمكن إرجاعه.",
                         "The link stops working for everyone who has it. This can't be undone."))
         }
     }
@@ -155,11 +165,11 @@ struct OccasionLinksSection: View {
         } label: {
             HStack(spacing: DS.Spacing.sm) {
                 DSStateIcon("link", tint: tint, size: DS.Icon.sizeSm)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(L10n.t("رابط الموقع", "Website link"))
                         .dsFont(.headline)
                         .foregroundColor(DS.Color.fieldLabel)
-                    Text(L10n.t("نفس المولّد على الموقع بدون تسجيل دخول — لمن عنده الرابط بس",
+                    Text(L10n.t("المولّد نفسه على الموقع بدون تسجيل دخول، لمن لديه الرابط فقط",
                                 "The same generator on the website without signing in — only for whoever has the link"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.fieldValue)
@@ -207,7 +217,7 @@ struct OccasionLinksSection: View {
     private var list: some View {
         if let links = model.links {
             if links.isEmpty {
-                Text(L10n.t("ما فيه روابط للحين — أنشئ رابط وشاركه مع من تبي.",
+                Text(L10n.t("لا توجد روابط حتى الآن. يمكن إنشاء رابط ومشاركته.",
                             "No links yet — create one and share it."))
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
@@ -270,7 +280,7 @@ struct OccasionLinksSection: View {
                     Image(systemName: "trash")
                         .dsGlyph(DS.Glyph.sm)
                         .foregroundColor(DS.Color.error)
-                        .frame(width: 36, height: DSBox.chipHeightSmall)
+                        .frame(width: DS.Icon.rowLarge, height: DSBox.chipHeightSmall)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(DSPressStyle())

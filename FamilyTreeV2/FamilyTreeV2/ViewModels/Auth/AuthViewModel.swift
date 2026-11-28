@@ -106,7 +106,18 @@ class AuthViewModel: ObservableObject {
     private var sessionGeneration = UUID()
     @Published var currentUser: FamilyMember? = nil {
         // «إظهار آخر ظهوري ونشاطي» مطفأ → لا يُرسَل `current_screen` (٢٠٢٦-١٠-٢٩)
-        didSet { MemberActivityTracker.setVisible(currentUser?.activityVisible ?? true) }
+        didSet {
+            #if DEBUG
+            // `-tmpAdminRole` (DEBUG فقط، Core/DebugAdminProbe.swift): الدور يدخل هنا من كل تحديث للملف، فيُبدَّل هنا
+            // ولا يرجع للمالك مع التحديث التالي — للعرض فقط، والكتابة تجريبية (`DebugAdminProbe.isDryRun`)
+            if let role = currentUser?.role, let forced = DebugAdminProbe.forcedRole(over: role), forced != role {
+                currentUser?.role = forced
+            }
+            #endif
+            MemberActivityTracker.setVisible(currentUser?.activityVisible ?? true)
+            // قوائم الأسماء: الإدارة كما كانت، وغيرها متشدّد (`NamePrivacy`)
+            NamePrivacy.isStrict = !canModerate
+        }
     }
     @Published var status: AuthStatus = .checking {
         didSet {
@@ -156,18 +167,10 @@ class AuthViewModel: ObservableObject {
     
     // MARK: - صلاحيات الأدوار
 
-    /// المالك — يُقرأ من Info.plist (`OWNER_UUID`) مع fallback للقيمة الافتراضية.
-    /// لنقله إلى build config: أضف `INFOPLIST_KEY_OWNER_UUID = <uuid>` في pbxproj أو xcconfig.
-    static let ownerUUID: UUID? = {
-        if let raw = Bundle.main.object(forInfoDictionaryKey: "OWNER_UUID") as? String,
-           let uuid = UUID(uuidString: raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
-            return uuid
-        }
-        // Default fallback (dev/legacy)
-        return UUID(uuidString: "9849ab4f-fc16-495e-b82d-33811d4b8d3c")
-    }()
+    // المالك بالدور لا بمعرّف ثابت — المالكان اثنان (٢٠٢٦-١١-٠٧)، ونُقل حساب المالك لمعرّف جديد ٢٠٢٦-٠٩-٢٤؛ حُذف
+    // `ownerUUID` الاحتياطي القديم (9849ab4f، لم يعد يُستخدم)
 
-    /// هل المستخدم الحالي مالك التطبيق
+    /// هل المستخدم الحالي أحد مالكي التطبيق
     var isOwner: Bool {
         currentUser?.role == .owner
     }
@@ -213,11 +216,12 @@ class AuthViewModel: ObservableObject {
     /// إعدادات التطبيق — المالك فقط
     var canManageSettings: Bool { isOwner }
 
-    /// قسما «التطبيق» و«الفريق والأمان» وكل مداخلهما (الإعدادات، رسائل الدخول ومحاولاته، الأجهزة، فريق الإدارة
-    /// والأدوار، التسجيل والمنع) — المالك فقط (طلب المالك ٢٠٢٦-١٠-٢٤؛ كان المدير يتصفّحها للقراءة)
+    /// ما يحرسه السيرفر للمالك وحده: إعدادات «التطبيق»، رسائل الدخول ومحاولاته، الأجهزة، التسجيل والمنع، حالة النظام.
+    /// ظهور الأقسام والبطاقات نفسه من جدول السيرفر (`AdminRoleMatrix` / `adminAccess(_:)`، ٢٠٢٦-١١-٠٧) — المدير يطّلع
+    /// على «الفريق والأمان» (الفريق والاستخدام) بلا هذه
     var canViewSystemSettings: Bool { isOwner }
 
-    /// «المؤشرات» (الأعداد، الاستخدام، تقرير الموافقات) — المالك والمدير (أُخفيت عن المراقب ٢٠٢٦-١٠-٢٤)
+    /// تقرير الموافقات والاستخدام (دوال السيرفر للمالك والمدير). ظهور «المؤشرات» نفسه من الجدول — «العائلة» فيها للمراقب أيضاً
     var canViewInsights: Bool { isAdmin }
 
     /// أرقام محظورة — المالك فقط
@@ -258,19 +262,9 @@ class AuthViewModel: ObservableObject {
     private func parseServerDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
 
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = withFraction.date(from: raw) { return date }
+        if let date = DateParsing.iso(raw) { return date }
 
-        let withoutFraction = ISO8601DateFormatter()
-        withoutFraction.formatOptions = [.withInternetDateTime]
-        if let date = withoutFraction.date(from: raw) { return date }
-
-        let fallback = DateFormatter()
-        fallback.locale = Locale(identifier: "en_US_POSIX")
-        fallback.timeZone = TimeZone(secondsFromGMT: 0)
-        fallback.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return fallback.date(from: raw)
+        return DateParsing.sqlDateTimeUTC.date(from: raw)
     }
 
     private func resolveAuthAccess(for profile: FamilyMember) -> AuthStatus {
@@ -595,7 +589,9 @@ class AuthViewModel: ObservableObject {
     /// طلب ربط واحد معلّق فقط لكل حساب (ب-٤: كان كل إرسال للنموذج — ومنه «تعديل البيانات» —
     /// يضيف صفاً جديداً). الطلب عن الملف نفسه: `member_id = requester_id` كما يشترط حارس السيرفر.
     /// - Returns: `nil` = فشل (لا طلب).
-    private func ensurePendingLinkRequest(profileId: UUID, details: String) async -> LinkRequestOutcome? {
+    /// - source: مسار الإرسال (افتراضياً «التسجيل ← طلب الانضمام»)
+    private func ensurePendingLinkRequest(profileId: UUID, details: String,
+                                          source: RequestSource? = nil) async -> LinkRequestOutcome? {
         struct RequestRow: Decodable { let id: UUID }
         do {
             let existing: [RequestRow] = try await supabase
@@ -618,10 +614,13 @@ class AuthViewModel: ObservableObject {
                 "status": AnyEncodable(ApprovalStatus.pending.rawValue),
                 "details": AnyEncodable(details)
             ]
-            try await supabase
-                .from("admin_requests")
-                .insert(joinRequestData)
-                .execute()
+            let path = source ?? RequestSource(.registration, RequestSourceStep("person.crop.circle.badge.checkmark", "طلب الانضمام"))
+            try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(joinRequestData, path))
+                    .execute()
+            }
             Log.info("[REGISTER] ✅ تم إنشاء طلب الانضمام في admin_requests")
             return .created
         } catch {
@@ -977,6 +976,8 @@ class AuthViewModel: ObservableObject {
         )
     }
     
+    private var otpVerifyInFlight = false
+
     func verifyOTP() async {
         let cleanCode = otpCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard cleanCode.count == 6 else {
@@ -992,8 +993,23 @@ class AuthViewModel: ObservableObject {
             return
         }
 
+        // التعبئة التلقائية وزرّ التأكيد قد يطلبان معاً: الطلب الثاني بالرمز نفسه يرجع «منتهي» بعد نجاح الأول
+        guard !otpVerifyInFlight else { return }
+        otpVerifyInFlight = true
+        defer { otpVerifyInFlight = false }
+
         self.isLoading = true
         self.otpErrorMessage = nil
+        // الشبكة البطيئة: سطر يقول إن الطلب شغّال بدل زرّ يدور بلا تفسير
+        let slowNotice = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 8_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.otpStatusMessage = L10n.t("الاتصال بطيء، لحظات…", "Slow connection, one moment…")
+        }
+        defer {
+            slowNotice.cancel()
+            if otpStatusMessage == L10n.t("الاتصال بطيء، لحظات…", "Slow connection, one moment…") { otpStatusMessage = "" }
+        }
 
         do {
             // التحقق من الرمز عن طريق سوبابيس
@@ -1015,7 +1031,13 @@ class AuthViewModel: ObservableObject {
             
         } catch {
             Log.error("فشل التحقق: \(error.localizedDescription)")
-            self.otpErrorMessage = L10n.t("الرمز غير صحيح أو منتهي. أعد طلب رمز جديد.", "Invalid or expired code. Please request a new one.")
+            if (error as NSError).domain == NSURLErrorDomain || !NetworkMonitor.shared.isConnected {
+                // الرمز ما زال صالحاً: نبقيه ليعيد المحاولة، ولا نقول له إنه غلط
+                self.otpErrorMessage = L10n.t("تعذّر الاتصال. تأكد من الإنترنت واضغط تأكيد الدخول.", "Couldn't connect. Check your internet and tap Verify.")
+            } else {
+                self.otpCode = ""   // تفرّغ المربّعات ليستقبل الحقل الرمز الجديد (`LoginView`)
+                self.otpErrorMessage = L10n.t("الرمز غير صحيح أو منتهي. أعد طلب رمز جديد.", "Invalid or expired code. Please request a new one.")
+            }
         }
         
         self.isLoading = false
@@ -1081,7 +1103,8 @@ class AuthViewModel: ObservableObject {
         // البداية لتجديد الجلسة وثلاثة طلبات للخادم (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). إن تغيّر شيء
         // (جُمّد، حُذف رقمه، انتهت الجلسة) ينقله التحقق للشاشة الصحيحة، والسيرفر يحمي البيانات بنفسه.
         if status == .checking, currentUser == nil {
-            restoreActiveMemberFromCache()
+            await restoreActiveMemberFromCache()
+            guard generation == sessionGeneration, !isEndingSession, !Task.isCancelled else { return }
         }
 
         let user: Supabase.User
@@ -1308,10 +1331,14 @@ class AuthViewModel: ObservableObject {
 
     /// العضو المفعّل من كاش حسابه (جلسة محفوظة على الجهاز، بلا شبكة) — للدخول الفوري عند فتح التطبيق.
     /// غير المفعّل (معلّق، مجمّد، بلا رقم…) ينتظر التحقق من الخادم كما كان.
-    private func restoreActiveMemberFromCache() {
+    /// الكاش (~٢٨٠٠ عضو، ~٣ ميغابايت) يُقرأ ويُفكّ على طابور الكاش لا على الخيط الرئيسي — كان يُقرأ متزامناً عند الإقلاع
+    /// (فحص «App hanging» عند الفتح ٢٠٢٦-١١-٢٨)
+    private func restoreActiveMemberFromCache() async {
         guard let storedUser = supabase.auth.currentUser else { return }
         CacheManager.shared.beginAccount(storedUser.id)
-        guard let cached = CacheManager.shared.load([FamilyMember].self, for: .members),
+        let session = CacheManager.shared.session
+        guard let cached = await CacheManager.shared.loadAsync([FamilyMember].self, for: .members, in: session),
+              status == .checking, currentUser == nil,
               let profile = cached.first(where: { $0.id == storedUser.id }),
               resolveAuthAccess(for: profile) == .fullyAuthenticated else { return }
         Log.info("[AUTH] دخول فوري من الكاش — التحقق يكمل بالخلفية")
@@ -1628,7 +1655,9 @@ class AuthViewModel: ObservableObject {
     // MARK: - Registration
     
     /// - fatherId/fatherName: للأنثى (دخول النساء ٢٠٢٦-١٠-٢٤) الأب الذي اختارته — يُحمل في طلب الانضمام لا في ملفها
-    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, fatherName: String? = nil, avatarImage: UIImage? = nil) async {
+    /// `outsideFamily` (R1، ٢٠٢٦-١١-٢٧): التسجيل «من خارج العائلة» — العائلة نص حرّ في `family_name`، وطلب الانضمام بعلامة
+    /// `SignupOriginRules.outsideMarker` تراها الإدارة في «الوارد» (بلا مطابقات بالاسم من شجرة الرجال)
+    func registerNewUser(firstName: String, familyName: String, birthDate: Date?, gender: String, fatherId: UUID? = nil, fatherName: String? = nil, avatarImage: UIImage? = nil, outsideFamily: Bool = false) async {
         self.isLoading = true
         self.registrationError = nil
         guard let user = try? await supabase.auth.session.user else {
@@ -1688,7 +1717,7 @@ class AuthViewModel: ObservableObject {
         
         // بحث تلقائي عن مطابقات في الشجرة بالاسم الكامل أو أجزاء منه — وقبلها ملف شجرة يحمل
         // رقمه ولم يتبنّه السيرفر: مطابقة تربطها الإدارة («ربط بالشجرة»)، لا نقل على الجهاز (ب-٦)
-        let nameMatchedIds = await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
+        let nameMatchedIds = outsideFamily ? [] : await searchForNameMatches(fullName: fullName, firstName: cleanFirstName)
         let phoneMatchedIds = await phoneMatchedProfileIds(normalizedPhone, excluding: user.id).map(\.uuidString)
         let matchedMemberIds = phoneMatchedIds + nameMatchedIds.filter { !phoneMatchedIds.contains($0) }
 
@@ -1782,10 +1811,15 @@ class AuthViewModel: ObservableObject {
                 if !cleanFather.isEmpty { fatherInfo += "|father_name:\(cleanFather)" }
             }
             let matchInfo: String
-            if matchedMemberIds.isEmpty {
-                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة" + fatherInfo
+            if outsideFamily {
+                // العلامة قبل matched_ids — قارئها يأخذ كل ما بعدها (`fetchMatchedMemberIds`)
+                matchInfo = "طلب انضمام — من خارج العائلة" + SignupOriginRules.outsideMarker
+                    + (matchedMemberIds.isEmpty ? "" : "|matched_ids:\(matchedMemberIds.joined(separator: ","))")
+            } else if matchedMemberIds.isEmpty {
+                matchInfo = "طلب انضمام جديد — لا توجد مطابقات بالاسم في الشجرة" + fatherInfo + SignupOriginRules.familyMarker
             } else {
-                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة" + fatherInfo
+                // «من العائلة» (R1): العلامة قبل matched_ids — قارئها يأخذ كل ما بعدها
+                matchInfo = "طلب ربط — وُجدت \(matchedMemberIds.count) مطابقة محتملة" + fatherInfo + SignupOriginRules.familyMarker
                     + "|matched_ids:\(matchedMemberIds.joined(separator: ","))"
             }
             
@@ -1888,7 +1922,8 @@ class AuthViewModel: ObservableObject {
 
     // MARK: - Contact
 
-    func sendContactMessage(category: String, message: String, preferredContact: String?) async -> Bool {
+    func sendContactMessage(category: String, message: String, preferredContact: String?,
+                            source: RequestSource? = nil) async -> Bool {
         guard let user = currentUser else {
             Log.error("[Contact] ❌ لا يوجد مستخدم حالي — تم إلغاء الإرسال")
             return false
@@ -1925,36 +1960,52 @@ class AuthViewModel: ObservableObject {
                 "details": AnyEncodable(details)
             ]
             
-            do {
-                var payload = basePayload
-                payload["new_value"] = AnyEncodable(category)
-                
-                try await supabase
-                    .from("admin_requests")
-                    .insert(payload)
-                    .execute()
-                Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
-            } catch {
-                if ErrorHelper.isMissingColumn(error, column: "new_value") {
-                    Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
-                    try await supabase
+            let path = source ?? RequestSource(.contact, RequestSourceStep("paperplane.fill", "رسالة للإدارة"))
+            // الصف المُدرَج — معرّفه يمرّ في إشعار الإدارة (مثل باقي الطلبات) فيفتحه الضغط عليه
+            let inserted: AdminRequest = try await AdminRequestSource.send(path) { path in
+                do {
+                    var payload = AdminRequestSource.payload(basePayload, path)
+                    payload["new_value"] = AnyEncodable(category)
+
+                    let row: AdminRequest = try await supabase
                         .from("admin_requests")
-                        .insert(basePayload)
+                        .insert(payload)
+                        .select()
+                        .single()
                         .execute()
-                    Log.info("[Contact] ✅ تم الحفظ في admin_requests (بدون new_value)")
-                } else {
-                    throw error
+                        .value
+                    Log.info("[Contact] ✅ تم الحفظ في admin_requests بنجاح")
+                    return row
+                } catch {
+                    if ErrorHelper.isMissingColumn(error, column: "new_value") {
+                        Log.warning("[Contact] ⚠️ عمود new_value غير موجود — إعادة المحاولة بدونه")
+                        let row: AdminRequest = try await supabase
+                            .from("admin_requests")
+                            .insert(AdminRequestSource.payload(basePayload, path))
+                            .select()
+                            .single()
+                            .execute()
+                            .value
+                        Log.info("[Contact] ✅ تم الحفظ في admin_requests (بدون new_value)")
+                        return row
+                    } else {
+                        throw error
+                    }
                 }
             }
 
             // 2. إرسال الإيميل عبر contact-email
             Log.info("[Contact] 2️⃣ استدعاء contact-email edge function...")
-            let emailPayload: [String: AnyEncodable] = [
+            var emailPayload: [String: AnyEncodable] = [
                 "category": AnyEncodable(category),
                 "message": AnyEncodable(cleanMessage),
                 "sender_name": AnyEncodable(user.displayFullName),
                 "sender_phone": AnyEncodable(user.phoneNumber)
             ]
+            // وسيلة التواصل الاختيارية تصل للإيميل أيضاً (الدالة تقرأ preferred_contact)
+            if let pc = preferredContact?.trimmingCharacters(in: .whitespacesAndNewlines), !pc.isEmpty {
+                emailPayload["preferred_contact"] = AnyEncodable(pc)
+            }
 
             do {
                 try await supabase.functions.invoke(
@@ -1972,7 +2023,9 @@ class AuthViewModel: ObservableObject {
             await notifyAdminsWithPush(
                 title: "رسالة تواصل",
                 body: "رسالة \(category) جديدة.",
-                kind: "contact_message"
+                kind: "contact_message",
+                requestId: inserted.id,
+                requestType: inserted.requestType
             )
             Log.info("[Contact] ✅ تم إرسال إشعار المشرفين")
 

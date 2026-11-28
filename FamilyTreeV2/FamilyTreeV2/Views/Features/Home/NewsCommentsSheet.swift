@@ -16,6 +16,7 @@ struct NewsCommentsSheet: View {
     @State private var reportCommentLabel = ""
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
     /// حظر كاتب التعليق (Guideline 1.2) — تعليقات المحظورين لا تظهر للحاظر
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
@@ -121,15 +122,22 @@ struct NewsCommentsSheet: View {
                         contentKind: L10n.t("تعليق", "comment"),
                         contentLabel: label,
                         contentId: id,
-                        reason: reason
+                        reason: reason,
+                        source: RequestSource(.home, RequestSourceStep("bubble.left.fill", "التعليقات"),
+                                              RequestSourceStep("flag.fill", "بلاغ عن تعليق"))
                     )
-                    if ok { await MainActor.run { reportSent = true } }
+                    if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                 }
             }
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { reportCommentId = nil; reportReason = "" }
         } message: {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا التعليق.",
                        "Enter a reason; it will be sent to the admins to review this comment."))
+        }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}
@@ -340,15 +348,9 @@ struct NewsCommentsSheet: View {
         return f
     }()
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     private func relativeTimeFromISO(_ dateString: String) -> String {
         Self.relativeFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        let date = Self.isoFormatter.date(from: dateString) ?? Date()
+        let date = DateParsing.isoRequiringFraction(dateString) ?? Date()
         return Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
 }

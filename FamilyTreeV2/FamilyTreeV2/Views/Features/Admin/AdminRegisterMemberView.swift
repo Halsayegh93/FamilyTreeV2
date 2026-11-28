@@ -228,7 +228,7 @@ struct AdminRegisterMemberView: View {
                 }
             } label: {
                 HStack(spacing: DS.Spacing.sm) {
-                    DSFieldIcon(name: "gift.fill", tint: DS.Color.warning)
+                    DSFieldIcon(name: "calendar", tint: DS.Color.warning)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                         Text(L10n.t("تاريخ الميلاد", "Birth Date"))

@@ -1,579 +1,756 @@
+import Foundation
+#if !ADMIN_LOGIC_TEST
 import SwiftUI
 import Supabase
+#endif
 
-/// قائمة رسائل التواصل من الأعضاء — نموذج بسيط (لا دردشة).
-/// كل صف = رسالة واحدة. الضغط يفتح تفاصيلها مع خيارات الرد بالاتصال/واتساب.
-///
-/// بتصميم صفحات الإدارة الموحّد (طلب المالك ٢٠٢٦-٠٩-٢٧): بطاقة رأس بلون بلاطة «الرسائل» في لوحة
-/// الإدارة وأرقامها الحيّة ← بحث + فلترا الحالة بعددهما ← صفوف `.dsRowBox()` (صورة المرسل · الاسم
-/// والوقت · مقتطف الرسالة · التصنيف والحالة). السحب («حذف» / «تمّت المعالجة»)، التحديد المتعدد والحذف
-/// وتأكيداتهما، السحب للتحديث، ومربّع التفاصيل كما كانت تماماً.
-struct AdminInboxView: View {
-    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
-    /// داخل «الوارد» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠): بلا رأس خاص — رأس «الوارد» فوقها، و«تحديد» شريحة أعلى المحتوى
-    var embedded: Bool = false
-    /// بحث «الوارد» الواحد (الدفعة ب ٢٠٢٦-١٠-٢٠): نفس النص يبحث في الطلبات والرسائل — nil = بحث الصفحة الخاص
-    var sharedSearch: Binding<String>? = nil
+// MARK: - «رسائل الأعضاء» (إعادة تصميم الإدارة ٢٠٢٦-١١-٢٦، الوحدة U10 — spec C.4)
+//
+// منذ ٢٠٢٦-١١-٢٨ تُرسم تحت مربّع «الرسائل» في رأس «الوارد» (`adminInboxBand`): رأسه بأرقامه ومربّعاته و«تحديد» هذه الصفحة،
+// والبحث و«تصفية» على الكحلي بشكل «العائلة» (`AdminMembersFilterBar`)، وتحت الرأس الشرائح المفعّلة وسطر العدد. وحدها (رابط
+// قديم) كما كانت: رأس الصفحات الداخلية (`AdminPage`) —
+// «‹ الوارد» · «رسائل الأعضاء» · «تحديد» نصّاً في الطرف · سطر الأرقام «7 غير مقروءة ‹» «2 بانتظار الرد ‹» (كل رقم يضبط
+// «الحالة» فيكون أول رقم تحت الشريط هو نفسه) ← شريط التصفية (البحث + «تصفية»: «الحالة» و«النوع» في الورقة، اختيار
+// متعدّد يُطبَّق فوراً — F3، وشريحة لكل اختيار تحته) ← «● 7 رسائل جديدة … تحديد الكل كمقروء» ← الأيام (اليوم · أمس · التاريخ)، كل يوم بطاقة من
+// صفوفها (`DSNoticeKit`). السحب: «مقروء» و«تمّت المعالجة» من البداية، «حذف» من الطرف (يسأل أولاً)؛ والضغط المطوّل
+// القائمة نفسها؛ و«تحديد» ← شريط سفلي «تحديد الكل · N محدّدة · حذف».
+// المربّع: المرسل · الرسالة · «الرد على العضو» (واتساب / اتصال / بريد) · «تمّت المعالجة» · «إغلاق» · حذف (يسأل أولاً).
+//
+// الصلاحية: `inbox.messages` في جدول السيرفر (المالك والمدير). غيرهما يصل الصفحة (رابط قديم) فيرى الرأس وبطاقة «ليست ضمن
+// صلاحياتك» بلا جلب. «يعدّل» (`adminCanEdit`) شرط الحذف و«تمّت المعالجة» و«تحديد»؛ «مقروء» حال شخصية لكل مشرف.
+// الحالات (spec A.12/T5): هيكل صفوف · «لا رسائل» · «لا رسائل بهذه التصفية» + «تعديل التصفية» · خطأ + «أعد المحاولة» (والرسائل
+// القديمة تبقى بـ«آخر تحديث»). الكتابة كلها تمرّ بـ`DebugAdminProbe.dryRun` (T0) — بنجاح مصطنع أثناء تجربة دور.
+//
+// الجزء الأول منطق خالص (Foundation) يُفحص بلا محاكي:
+//   xcrun swiftc -D ADMIN_LOGIC_TEST -o /tmp/u10-logic FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminContracts.swift \
+//     FamilyTreeV2/FamilyTreeV2/Views/Features/Admin/AdminInboxView.swift tests/admin-redesign/U10/main.swift && /tmp/u10-logic
 
-    /// تلميح حقل البحث الواحد في «الوارد» (الطلبات والرسائل)
-    static let searchPlaceholder = L10n.t("بحث في الطلبات والرسائل بالاسم أو الرقم", "Search requests and messages by name or number")
+// MARK: - المنطق الخالص
 
-    @State private var ownSearch: String = ""
-    private var searchBinding: Binding<String> { sharedSearch ?? $ownSearch }
-    private var searchText: String { searchBinding.wrappedValue }
-    @State private var isLoading = false
-    @State private var selectedMessage: AdminRequest? = nil
-    @State private var filter: InboxFilter = .pending
-    /// نوع الرسالة المختار (استفسار، اقتراح، شكوى، أخرى) — `allKinds` = الكل
-    @State private var kind: String = AdminInboxView.allKinds
+nonisolated enum AdminInboxMessageLogic {
+    /// «الكل» في مجموعة «النوع» — قيمة الاختيار الواحد في `Filters(kind:)` (لا اختيار)
     static let allKinds = "*"
+
+    /// مجموعة «الحالة» في ورقة التصفية — اختيار متعدّد (F3). «تمّت المعالجة» باقية من فلتر الصفحة القديم (لا يضيع عرض المعالَج)
+    enum Status: String, CaseIterable, Hashable {
+        case all, unread, awaiting, today, handled
+
+        var title: String {
+            switch self {
+            case .all:      return L10n.t("الكل", "All")
+            case .unread:   return L10n.t("غير مقروءة", "Unread")
+            case .awaiting: return L10n.t("بانتظار الرد", "Awaiting reply")
+            case .today:    return L10n.t("جديد اليوم", "New today")
+            case .handled:  return L10n.t("تمّت المعالجة", "Handled")
+            }
+        }
+    }
+
+    /// حالة تصفية الصفحة (F3): اختيار متعدّد في «الحالة» و«النوع» — فارغة = «الكل»، وأيّ المختار داخل المجموعة (OR)،
+    /// والمجموعتان معاً (AND)
+    struct Filters: Equatable {
+        var statuses: Set<Status>
+        var kinds: Set<String>
+
+        /// اختيار واحد لكل مجموعة (رقم الرأس) — «الكل»/`allKinds` = لا اختيار
+        init(status: Status = .all, kind: String = AdminInboxMessageLogic.allKinds) {
+            self.init(statuses: status == .all ? [] : [status], kinds: kind == AdminInboxMessageLogic.allKinds ? [] : [kind])
+        }
+
+        init(statuses: Set<Status>, kinds: Set<String> = []) {
+            self.statuses = statuses.subtracting([.all])
+            self.kinds = kinds.subtracting([AdminInboxMessageLogic.allKinds])
+        }
+
+        var isEmpty: Bool { self == Filters() }
+    }
+
+    /// ما يحتاجه الفلتر من الرسالة (يُحسب مرة لكل رسم)
+    struct Fact: Equatable {
+        var unread: Bool
+        /// بانتظار الرد (`status == pending`)
+        var pending: Bool
+        /// تمّت المعالجة (`status == approved`)
+        var handled: Bool
+        var today: Bool
+        /// اسم النوع المعروض («استفسار»…) — `ContactCategoryInfo.title`
+        var kind: String
+    }
+
+    static func matches(_ fact: Fact, status: Status) -> Bool {
+        switch status {
+        case .all:      return true
+        case .unread:   return fact.unread
+        case .awaiting: return fact.pending
+        case .today:    return fact.today
+        case .handled:  return fact.handled
+        }
+    }
+
+    static func matches(_ fact: Fact, _ filters: Filters) -> Bool {
+        (filters.statuses.isEmpty || filters.statuses.contains { matches(fact, status: $0) })
+            && (filters.kinds.isEmpty || filters.kinds.contains(fact.kind))
+    }
+
+    static func count(_ facts: [Fact], _ filters: Filters) -> Int {
+        facts.reduce(0) { $0 + (matches($1, filters) ? 1 : 0) }
+    }
+
+    /// صفوف «النوع» في الورقة: الأربعة الثابتة دائماً (الصفر رمادي ويبقى قابلاً للاختيار — spec A.13)، ثم أي نوع آخر
+    /// موجود في الرسائل («اعتراض»، نوع قديم) — الأكثر أولاً، والتعادل بترتيب الظهور
+    static func kindOrder(fixed: [String], facts: [Fact]) -> [String] {
+        var counts: [String: Int] = [:]
+        var seen: [String] = []
+        for fact in facts where !fixed.contains(fact.kind) {
+            if counts[fact.kind] == nil { seen.append(fact.kind) }
+            counts[fact.kind, default: 0] += 1
+        }
+        let extras = seen.enumerated()
+            .sorted { lhs, rhs in
+                let a = counts[lhs.element] ?? 0, b = counts[rhs.element] ?? 0
+                return a != b ? a > b : lhs.offset < rhs.offset
+            }
+            .map(\.element)
+        return fixed + extras
+    }
+
+    /// المعدود بعد الرقم («12 رسالة»): ١ رسالة، ٢ رسالتان، ٣–١٠ رسائل، ١١–٩٩ رسالة، وغيرها مفرد
+    static func noun(_ n: Int) -> String {
+        L10n.t(arabicNoun(n, one: "رسالة", two: "رسالتان", few: "رسائل", many: "رسالة"), n == 1 ? "message" : "messages")
+    }
+
+    static func arabicNoun(_ n: Int, one: String, two: String, few: String, many: String) -> String {
+        if n == 1 { return one }
+        if n == 2 { return two }
+        switch n % 100 {
+        case 3...10:  return few
+        case 11...99: return many
+        default:      return one
+        }
+    }
+
+    /// «● 7 رسائل جديدة» — المفرد والمثنى بلا رقم كما كان («رسالة جديدة»، «رسالتان جديدتان»)
+    static func newPhrase(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "1 new message" : "\(n) new messages" }
+        if n == 1 { return "رسالة جديدة" }
+        if n == 2 { return "رسالتان جديدتان" }
+        switch n % 100 {
+        case 3...10: return "\(n) رسائل جديدة"
+        default:     return "\(n) رسالة جديدة"
+        }
+    }
+
+    /// سؤال الحذف الجماعي (spec A.14: السؤال بالفعل)
+    static func deleteQuestion(_ n: Int) -> String {
+        guard L10n.isArabic else { return n == 1 ? "Delete 1 message?" : "Delete \(n) messages?" }
+        if n == 1 { return "حذف الرسالة؟" }
+        if n == 2 { return "حذف الرسالتين؟" }
+        return "حذف \(n) \(arabicNoun(n, one: "رسالة", two: "رسالتان", few: "رسائل", many: "رسالة"))؟"
+    }
+}
+
+#if !ADMIN_LOGIC_TEST
+
+// MARK: - الصفحة
+
+struct AdminInboxView: View {
+    private typealias Logic = AdminInboxMessageLogic
+
+    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
+    @EnvironmentObject var authVM: AuthViewModel
+
+    init() {}
+
+    static var title: String { L10n.t("رسائل الأعضاء", "Members' messages") }
+
+    @State private var search = ""
+    @State private var filters = AdminInboxMessageLogic.Filters()
+    @State private var showsFilters = false
+    /// حال جلب الرسائل (عقد U2): هيكل ← الكلمة، والفشل بعد تحميل ناجح يُبقي الرسائل بـ«آخر تحديث»
+    @State private var health: AdminStoreHealth = .idle
+    @State private var selectedMessage: AdminRequest?
     @State private var isSelectMode = false
     @State private var selectedIDs: Set<UUID> = []
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
-    /// رسالة طُلب حذفها بالسحب — تأكيد قبل الحذف
-    @State private var messageToDelete: AdminRequest? = nil
-    /// اكتمل أول جلب — قبله «—» في الأرقام وبطاقة تحميل (إن لم تكن هناك رسائل محمّلة أصلاً)
-    @State private var hasLoaded = false
-    /// آخر جلب انتهى والجهاز غير متصل — لبطاقة «تعذّر التحميل» بدل «ما فيه رسائل» المضلِّلة
-    /// (تبقى حتى جلب ناجح: السحب للتحديث أو «إعادة المحاولة»)
-    @State private var lastFetchOffline = false
-    /// دخول صفوف الرسائل (نمط الأخبار والديوانيات) — مرة واحدة حين تظهر القائمة
+    /// رسالة طُلب حذفها (سحب، ضغط مطوّل، أو من مربّعها) — تأكيد قبل الحذف
+    @State private var messageToDelete: AdminRequest?
+    /// «ظهور موحّد»: الأيام تصعد مرة عند الظهور الأول (لا عند التحديث)
     @State private var appeared = false
+    /// DRY-RUN (T0): «مقروء» مصطنع محلياً — لا يُرسل للسيرفر
+    @State private var dryReadIds: Set<UUID> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.adminBackTitle) private var outerBack
+    /// غير nil = تحت مربّع «الرسائل» في «الوارد»
+    @Environment(\.adminInboxBand) private var inboxBand
 
-    /// لون بلاطة «الرسائل» في لوحة الإدارة — رأس الصفحة يطابق البلاطة التي ضُغطت
-    private let pageTint = DS.Color.composerDiwaniya
+    private var trimmedSearch: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    private enum InboxFilter: String, CaseIterable {
-        case pending, handled
-        var title: String {
-            switch self {
-            case .pending: return L10n.t("لم تُعالَج بعد", "Pending")
-            case .handled: return L10n.t("تمّت المعالجة", "Handled")
-            }
-        }
-        var icon: String {
-            switch self {
-            case .pending: return "clock.fill"
-            case .handled: return "checkmark.circle.fill"
-            }
-        }
-        /// لون الحالة: منتظر = تحذير، تم = نجاح
-        var color: Color {
-            switch self {
-            case .pending: return DS.Color.warning
-            case .handled: return DS.Color.success
-            }
-        }
-    }
+    // MARK: الصلاحية
 
-    /// الحالة المختارة + البحث (قبل فلتر النوع — منها أعداد شرائح الأنواع)
-    private var statusMessages: [AdminRequest] {
-        let all = adminRequestVM.contactMessages
-        let byStatus: [AdminRequest]
-        switch filter {
-        case .pending: byStatus = all.filter { $0.status == ApprovalStatus.pending.rawValue }
-        case .handled: byStatus = all.filter { $0.status == ApprovalStatus.approved.rawValue }
-        }
-        let sorted = byStatus.sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return sorted }
-        // نفس مطابقة بحث الطلبات: الاسم أو النص بلا تشكيل/همزات، أو الرقم (٣ أرقام فأكثر)
-        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب (والرقم أرقاماً فقط)
-        if NameSearch.isPhoneQuery(q) {
-            return sorted.filter { NameSearch.phoneMatches(query: q, phone: $0.member?.phoneNumber) }
-        }
-        return sorted.filter { msg in
-            NameSearch.matches(query: q, any: [msg.member?.fullName ?? "", ContactParser.message(from: msg)])
-        }
-    }
+    /// الصفحة لمن يرى «الرسائل» في جدول السيرفر (المالك والمدير)
+    private var canSee: Bool { authVM.adminSees(.inboxMessages) }
+    /// الحذف و«تمّت المعالجة» و«تحديد»: «يعدّل» في الجدول للخانة وللقسم (Autoplan note 7)
+    private var canEdit: Bool { canSee && authVM.adminCanEdit(.inboxMessages) && authVM.adminCanEdit(.inbox) }
 
-    /// أنواع الرسائل في الحالة المختارة بعددها (الأكثر أولاً) — شرائح النوع تظهر حين يكون فيها نوعان فأكثر
-    private func kindCounts(_ messages: [AdminRequest]) -> [(info: ContactCategoryInfo, count: Int)] {
-        var order: [String] = []
-        var map: [String: (info: ContactCategoryInfo, count: Int)] = [:]
-        for msg in messages {
-            let info = ContactCategoryInfo.from(raw: ContactParser.category(of: msg))
-            if map[info.title] == nil { order.append(info.title); map[info.title] = (info, 0) }
-            map[info.title]?.count += 1
-        }
-        return order.compactMap { map[$0] }.sorted { $0.count > $1.count }
-    }
+    // MARK: Body
 
-    /// النوع المختار إن كان موجوداً في الحالة الحالية، وإلا «الكل»
-    private func activeKind(_ kinds: [(info: ContactCategoryInfo, count: Int)]) -> String {
-        kinds.contains { $0.info.title == kind } ? kind : Self.allKinds
-    }
-
-    /// عدد الرسائل في كل حالة (نفس أعداد التبويبين السابقين) — مرور واحد على الرسائل
-    private var statusCounts: [InboxFilter: Int] {
-        var counts: [InboxFilter: Int] = [:]
-        for msg in adminRequestVM.contactMessages {
-            if msg.status == ApprovalStatus.pending.rawValue {
-                counts[.pending, default: 0] += 1
-            } else if msg.status == ApprovalStatus.approved.rawValue {
-                counts[.handled, default: 0] += 1
-            }
-        }
-        return counts
-    }
-
-    // MARK: - حالة التحميل
-
-    /// أول تحميل (أو «إعادة المحاولة») ولا رسائل محمّلة بعد
-    private var isInitialLoading: Bool {
-        (isLoading || !hasLoaded) && adminRequestVM.contactMessages.isEmpty
-    }
-
-    /// الجلب انتهى بلا رسائل والجهاز غير متصل — القائمة الفارغة هنا ليست «ما فيه رسائل»
-    private var loadFailed: Bool {
-        hasLoaded && !isLoading && adminRequestVM.contactMessages.isEmpty && lastFetchOffline
-    }
-
-    /// نفس الجلب السابق تماماً (`fetchContactMessages`) — ويحفظ هل انتهى بلا اتصال
-    private func loadMessages(force: Bool = false) async {
-        await adminRequestVM.fetchContactMessages(force: force)
-        lastFetchOffline = !NetworkMonitor.shared.isConnected
-    }
-
-    /// «إعادة المحاولة» — نفس تحميل الفتح (مع بطاقة التحميل)
-    private func retryLoad() async {
-        isLoading = true
-        await loadMessages(force: true)
-        isLoading = false
-    }
-
-    // MARK: - Body
-
-    // حارس المكدس (الدفعة ب ٢٠٢٦-١٠-٢٠): الصفحة ثم التأكيدات والمربّع طبقتان خلف `AnyView`
+    // حارس المكدس: الصفحة ثم التأكيدات والمربّع طبقات خلف `AnyView`
     var body: some View {
-        AnyView(dialogsLayer(AnyView(pageLayer)))
+        AnyView(layered)
+            .debugStackProbe("AdminInboxView", limitKB: DebugStackLimit.page)
     }
 
-    private var pageLayer: some View {
-        let status = statusMessages
-        let kinds = kindCounts(status)
-        let selected = activeKind(kinds)
-        let messages = selected == Self.allKinds ? status
-            : status.filter { ContactCategoryInfo.from(raw: ContactParser.category(of: $0)).title == selected }
-        let counts = statusCounts
+    private var layered: AnyView {
+        guard canSee else { return AnyView(lockedPage) }
+        return AnyView(dialogsLayer(AnyView(pageView(makeModel()))))
+    }
 
-        // صفّ الأرقام ← البحث والفلاتر ← الرسائل: تتمرّر معاً (والسحب للتحديث يعمل حتى والقائمة فارغة)
-        return ScrollView(showsIndicators: false) {
-            AnyView(pageContent(messages: messages, counts: counts, kinds: kinds, selectedKind: selected))
-                .padding(.horizontal, DS.Spacing.lg)
-                .padding(.top, DS.Spacing.sm)
-                .padding(.bottom, DS.Spacing.xxxl)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .refreshable { await loadMessages(force: true) }
-        // شريط الحذف السفلي في وضع التحديد — مثبّت، وآخر رسالة تبقى فوقه
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isSelectMode {
-                deleteBar
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+    private func pageView(_ m: Model) -> some View {
+        AdminPage(header: header(m), lead: inboxBand == nil ? lead(m) : embeddedLead(m), layout: .list,
+                  content: AnyView(rows(m)), updatedAt: health.lastGood,
+                  bandAccessory: inboxBand == nil || !showsFilterBar(m) ? nil
+                    : AnyView(AdminMembersFilterBar(query: $search, activeCount: m.set.activeCount(filters)) {
+                        showsFilters = true
+                    }))
+            .refreshable { await reload(force: true) }
+            // شريط التحديد السفلي — مثبّت، وآخر رسالة تبقى فوقه
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if isSelectMode {
+                    selectionBar(m)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                }
             }
-        }
-        // الرأس الملوّن الموحّد — «تحديد» (كان في شريط النظام) زرّ الرأس؛ داخل «الوارد» بلا رأس
-        .modifier(InboxHeader(embedded: embedded, hasMessages: !messages.isEmpty, isSelectMode: isSelectMode,
-                              toggleSelect: toggleSelectMode))
+            .adminFilterSheet(isPresented: $showsFilters, set: m.set, selection: $filters)
+            // F4 V1: تصفية أو بحث جديد يُسقط المحدّد الذي خرج من القائمة — «حذف» لا يمسّ رسالة لا تُرى
+            .onChange(of: filters) { _ in pruneSelection() }
+            .onChange(of: search) { _ in pruneSelection() }
     }
 
     /// تأكيدا الحذف، والتحميل الأول، ومربّع تفاصيل الرسالة
     private func dialogsLayer(_ content: AnyView) -> some View {
-        content
-        .dsAlert(L10n.t("حذف الرسائل", "Delete Messages"), isPresented: $showDeleteConfirm) {
-            Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                Task { await deleteSelected() }
-            }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
-        } message: {
-            Text(L10n.t("هل تريد حذف \(selectedIDs.count) رسالة؟ لا يمكن التراجع.",
-                        "Delete \(selectedIDs.count) message(s)? This can't be undone."))
-        }
-        .dsAlert(L10n.t("حذف الرسالة", "Delete Message"), isPresented: Binding(
-            get: { messageToDelete != nil },
-            set: { if !$0 { messageToDelete = nil } }
-        )) {
-            Button(L10n.t("حذف", "Delete"), role: .destructive) {
-                if let m = messageToDelete {
-                    Task { await adminRequestVM.deleteContactMessages(ids: [m.id]) }
+        let pendingName = messageToDelete?.member?.displayFullName
+        return content
+            .dsAlert(Logic.deleteQuestion(selectedIDs.count), isPresented: $showDeleteConfirm, icon: "trash.fill") {
+                Button(L10n.t("احذف", "Delete"), role: .destructive) {
+                    Task { await deleteSelected() }
                 }
-                messageToDelete = nil
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("تُحذف الرسائل المحدّدة من الوارد. لا يمكن التراجع.",
+                            "The selected messages are removed from the inbox. This can't be undone."))
             }
-            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { messageToDelete = nil }
-        } message: {
-            Text(L10n.t("هل تريد حذف هذه الرسالة؟ لا يمكن التراجع.", "Delete this message? This can't be undone."))
-        }
-        .task {
-            isLoading = true
-            await loadMessages()
-            isLoading = false
-            withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
-        }
-        .dsCenterBox(item: $selectedMessage) { msg in
-            MessageDetailSheet(message: msg) {
-                selectedMessage = nil
-            }
-        }
-    }
-
-    private func toggleSelectMode() {
-        withAnimation(DS.Anim.quick) {
-            isSelectMode.toggle()
-            if !isSelectMode { selectedIDs.removeAll() }
-        }
-    }
-
-    // MARK: - هيكل الصفحة
-
-    private func pageContent(messages: [AdminRequest], counts: [InboxFilter: Int],
-                             kinds: [(info: ContactCategoryInfo, count: Int)], selectedKind: String) -> some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            if !embedded {
-                // داخل «الوارد»: الأرقام في رأسه، و«تحديد» في طرف شرائح الحالة (أدناه)
-                heroSection(counts: counts)
-            }
-
-            if isInitialLoading {
-                DSPageLoader(L10n.t("جارٍ تحميل الرسائل…", "Loading messages…"), fillsSpace: false)
-                    .padding(.top, DS.Spacing.xl)
-                    .dsStaggerIn(1)
-            } else if loadFailed {
-                DSStateCard(icon: "wifi.exclamationmark",
-                             title: L10n.t("تعذّر تحميل الرسائل", "Couldn't load messages"),
-                             hint: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                             tint: DS.Color.error,
-                             actionTitle: L10n.t("إعادة المحاولة", "Retry"),
-                             action: { Task { await retryLoad() } })
-                    .padding(.top, DS.Spacing.xs)
-                    .dsStaggerIn(1)
-            } else {
-                DSSearchField(text: searchBinding,
-                              placeholder: sharedSearch == nil ? L10n.t("ابحث…", "Search…") : Self.searchPlaceholder,
-                              tint: pageTint)
-                    .dsStaggerIn(1)
-
-                // شرائح الحالة، و«تحديد» في طرفها داخل «الوارد» (كان سطراً وحده فوق البحث) — وفوقها في سطرها إن ضاق
-                // السطر (خط الجهاز الأكبر)
-                if embedded && !messages.isEmpty {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: DS.Spacing.sm) {
-                            filterChips(counts)
-                            selectChip
-                        }
-                        VStack(alignment: .trailing, spacing: DS.Spacing.xs) {
-                            selectChip
-                            filterChips(counts)
-                        }
+            .dsAlert(Logic.deleteQuestion(1), isPresented: Binding(
+                get: { messageToDelete != nil },
+                set: { if !$0 { messageToDelete = nil } }
+            ), icon: "trash.fill") {
+                Button(L10n.t("احذف الرسالة", "Delete message"), role: .destructive) {
+                    if let msg = messageToDelete {
+                        Task { await delete([msg.id]) }
                     }
-                    .dsStaggerIn(1)
+                    messageToDelete = nil
+                }
+                Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { messageToDelete = nil }
+            } message: {
+                if let pendingName, !pendingName.isEmpty {
+                    Text(L10n.t("تُحذف رسالة \(pendingName). لا يمكن التراجع.",
+                                "\(pendingName)'s message is removed. This can't be undone."))
                 } else {
-                    filterChips(counts)
-                        .dsStaggerIn(1)
-                }
-
-                // شرائح النوع (استفسار · اقتراح · شكوى · أخرى) حين يكون في الحالة المختارة نوعان فأكثر
-                if kinds.count >= 2 {
-                    kindChips(kinds, selected: selectedKind)
-                        .dsStaggerIn(1)
-                }
-
-                if messages.isEmpty {
-                    emptyState(counts: counts)
-                        .padding(.top, DS.Spacing.xs)
-                        .dsStaggerIn(2)
-                } else {
-                    if adminRequestVM.unreadContactMessagesCount > 0 {
-                        markAllReadBar
-                            .dsStaggerIn(2)
-                    }
-
-                    // بالأيام (طلب المالك ٢٠٢٦-١٠-٢٤ «ابي ارتبها»): اليوم · أمس · التاريخ — كل يوم بطاقة واحدة بصفوف مختصرة،
-                    // وكل بطاقة تصعد مرة عند الظهور (أول ٧، وما يُبنى بالتمرير يظهر مباشرة)
-                    LazyVStack(alignment: .leading, spacing: DS.Hub.stackSpacing) {
-                        let days = DSDayBuckets.group(messages) { ContactParser.date($0.createdAt) ?? .distantPast }
-                        ForEach(Array(days.enumerated()), id: \.element.id) { dayIndex, day in
-                            VStack(alignment: .leading, spacing: DSNoticeMetrics.headerGap) {
-                                DSDayHeader(title: day.title, count: day.items.count)
-                                VStack(spacing: 0) {
-                                    ForEach(Array(day.items.enumerated()), id: \.element.id) { index, msg in
-                                        messageCell(msg, position: DSGroupPosition(index: index, count: day.items.count))
-                                    }
-                                }
-                            }
-                            .dsCardCascade(dayIndex, appeared: appeared)
-                        }
-                    }
-                    .onAppear(perform: startRowsCascade)
+                    Text(L10n.t("لا يمكن التراجع.", "This can't be undone."))
                 }
             }
-        }
+            .task {
+                appeared = true
+                await reload(force: false)
+            }
+            .dsCenterBox(item: $selectedMessage) { msg in
+                MessageDetailSheet(message: msg,
+                                   canEdit: canEdit,
+                                   markRead: { markRead(msg.id) },
+                                   markHandled: { await markHandled(msg) },
+                                   onDelete: {
+                                       selectedMessage = nil
+                                       messageToDelete = msg
+                                   },
+                                   onDismiss: { selectedMessage = nil })
+            }
     }
 
-    /// «تحديد» / «تم» داخل «الوارد»
-    private var selectChip: some View {
-        DSChipButton(isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"),
-                     icon: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle",
-                     isSelected: isSelectMode, size: .small, action: toggleSelectMode)
-            .fixedSize()
+    // MARK: البيانات
+
+    private struct Entry: Identifiable {
+        let msg: AdminRequest
+        let info: ContactCategoryInfo
+        let fact: AdminInboxMessageLogic.Fact
+        let date: Date?
+        var id: UUID { msg.id }
     }
 
-    /// شرائح نوع الرسالة بعددها — «الكل» أولاً ثم الأنواع الموجودة (الأكثر أولاً) بأيقونة كل نوع
-    private func kindChips(_ kinds: [(info: ContactCategoryInfo, count: Int)], selected: String) -> some View {
-        let total = kinds.reduce(0) { $0 + $1.count }
-        let options = [DSFilterOption(id: Self.allKinds, title: L10n.t("كل الأنواع", "All kinds"), count: total)]
-            + kinds.map { DSFilterOption(id: $0.info.title, title: $0.info.title, icon: $0.info.icon, count: $0.count) }
-        return DSFilterChips(options: options,
-                             selection: Binding(get: { selected }, set: { kind = $0 }),
-                             tint: pageTint)
+    /// كل ما يرسمه الرسم الواحد — يُحسب مرة
+    private struct Model {
+        /// كل الرسائل، الأحدث أولاً
+        let all: [Entry]
+        /// بعد البحث وقبل الفلاتر (منها أعداد الورقة)
+        let searched: [Entry]
+        /// بعد الفلاتر — القائمة
+        let visible: [Entry]
+        let set: AdminFilterSet<AdminInboxMessageLogic.Filters>
+        /// وصلت رسائل (هذا الجلب أو قبله) — قبلها «—» لا أصفار
+        let ready: Bool
+        let unread: Int
+        let awaiting: Int
     }
 
-    /// الصفوف تدخل بعد أقسام الصفحة فوقها (البحث والفلاتر ← العنوان = ٢) — من حيث كانت تبدأ (٣)،
-    /// فيبقى التسلسل: الرأس ← الأقسام ← الصفوف. مرة واحدة؛ «تقليل الحركة»: تلاشٍ فوري بلا انتظار.
-    private func startRowsCascade() {
-        guard !appeared else { return }
-        guard !reduceMotion else { appeared = true; return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.staggerDelay(3, base: DSMotion.sectionsOnPage)) {
-            appeared = true
-        }
-    }
-
-    // MARK: - بطاقة الرأس
-
-    private func heroSection(counts: [InboxFilter: Int]) -> some View {
-        // العنوان والوصف في الرأس الملوّن — الأرقام هنا
-        DSStatsRow(heroStats(counts: counts), tint: pageTint)
-    }
-
-    /// ٣ أرقام حيّة من الرسائل المحمّلة أصلاً (بلا طلبات جديدة للسيرفر): غير المقروءة، ما ينتظر
-    /// الرد، وما وصل اليوم — «—» قبل اكتمال أول تحميل.
-    private func heroStats(counts: [InboxFilter: Int]) -> [DSHeroStat] {
-        let unreadLabel = L10n.t("غير مقروءة", "Unread")
-        let pendingLabel = L10n.t("بانتظار الرد", "Awaiting reply")
-        let todayLabel = L10n.t("جديد اليوم", "New today")
-
-        guard !isInitialLoading, !loadFailed else {
-            return [
-                DSHeroStat(value: "—", label: unreadLabel, icon: "envelope.badge.fill"),
-                DSHeroStat(value: "—", label: pendingLabel, icon: "clock.fill"),
-                DSHeroStat(value: "—", label: todayLabel, icon: "sparkles")
-            ]
-        }
-
+    private func makeModel() -> Model {
+        let read = adminRequestVM.readContactMessageIds.union(dryReadIds)
         let calendar = Calendar.current
-        let today = adminRequestVM.contactMessages.filter { msg in
-            guard let date = ContactParser.date(msg.createdAt) else { return false }
-            return calendar.isDateInToday(date)
-        }.count
-
-        return [
-            DSHeroStat(value: "\(adminRequestVM.unreadContactMessagesCount)",
-                       label: unreadLabel, icon: "envelope.badge.fill"),
-            DSHeroStat(value: "\(counts[.pending] ?? 0)", label: pendingLabel, icon: "clock.fill"),
-            DSHeroStat(value: "\(today)", label: todayLabel, icon: "sparkles")
-        ]
-    }
-
-    // MARK: - الفلاتر
-
-    /// نفس التبويبين السابقين («لم يتم التعامل» / «تم التعامل») — العدد يظهر فقط إذا أكبر من صفر
-    private func filterChips(_ counts: [InboxFilter: Int]) -> some View {
-        DSFilterChips(
-            options: InboxFilter.allCases.map { f in
-                let n = counts[f] ?? 0
-                return DSFilterOption(id: f, title: f.title, icon: f.icon, count: n > 0 ? n : nil)
-            },
-            selection: $filter,
-            tint: pageTint
-        )
-    }
-
-    // MARK: - Swipe actions
-
-    private func swipeActions(for msg: AdminRequest) -> [DSSwipeAction] {
-        var actions = [
-            DSSwipeAction(icon: "trash.fill", title: L10n.t("حذف", "Delete"), color: DS.Color.errorFill) {
-                messageToDelete = msg
+        let all = adminRequestVM.contactMessages
+            .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
+            .map { msg -> Entry in
+                let info = ContactCategoryInfo.from(raw: ContactParser.category(of: msg))
+                let date = ContactParser.date(msg.createdAt)
+                let fact = Logic.Fact(unread: !read.contains(msg.id),
+                                      pending: msg.status == ApprovalStatus.pending.rawValue,
+                                      handled: msg.status == ApprovalStatus.approved.rawValue,
+                                      today: date.map { calendar.isDateInToday($0) } ?? false,
+                                      kind: info.title)
+                return Entry(msg: msg, info: info, fact: fact, date: date)
             }
-        ]
-        if msg.status == ApprovalStatus.pending.rawValue {
-            actions.append(DSSwipeAction(icon: "checkmark.circle.fill", title: L10n.t("تمّت المعالجة", "Handled"),
-                                         color: DS.Color.successFill) {
-                adminRequestVM.markContactMessageRead(msg.id)
-                Task { await adminRequestVM.markContactMessageHandled(msg) }
-            })
+        let searched = Self.search(all, trimmedSearch)
+        let ready = health.hasData || !all.isEmpty
+        let current = filters
+        return Model(all: all,
+                     searched: searched,
+                     visible: searched.filter { Logic.matches($0.fact, current) },
+                     set: Self.filterSet(facts: searched.map(\.fact), ready: ready),
+                     ready: ready,
+                     unread: all.reduce(0) { $0 + ($1.fact.unread ? 1 : 0) },
+                     awaiting: all.reduce(0) { $0 + ($1.fact.pending ? 1 : 0) })
+    }
+
+    /// نفس مطابقة بحث الطلبات (`NameSearch`): كل كلمة بداية كلمة بالترتيب في الاسم أو النص، أو الرقم (أرقاماً فقط)
+    private static func search(_ entries: [Entry], _ query: String) -> [Entry] {
+        guard !query.isEmpty else { return entries }
+        if NameSearch.isPhoneQuery(query) {
+            return entries.filter { NameSearch.phoneMatches(query: query, phone: $0.msg.member?.phoneNumber) }
         }
-        return actions
+        return entries.filter { entry in
+            NameSearch.matches(query: query, any: [entry.msg.member?.fullName ?? "", ContactParser.message(from: entry.msg)])
+        }
     }
 
-    // MARK: - Select / Delete
-
-    private func toggleSelection(_ id: UUID) {
-        if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
-    }
-
-    private func deleteSelected() async {
-        isDeleting = true
-        await adminRequestVM.deleteContactMessages(ids: Array(selectedIDs))
-        selectedIDs.removeAll()
-        isDeleting = false
-        withAnimation(DS.Anim.quick) { isSelectMode = false }
-    }
-
-    /// شريط وضع التحديد: العدد · «حذف» (يسأل قبل الحذف)
-    private var deleteBar: some View {
-        HStack(spacing: DS.Spacing.md) {
-            Text(L10n.t("\(selectedIDs.count) محدّدة", "\(selectedIDs.count) selected"))
-                .dsFieldFont(.rowTitle)
-                .foregroundColor(DS.Color.fieldValue)
-                .monospacedDigit()
-            Spacer()
-            // الزرّ الواحد بالأحمر (دوّارته داخله أثناء الحذف)
-            DSButton(L10n.t("حذف", "Delete"), icon: "trash.fill", role: .destructive,
-                     isLoading: isDeleting, fullWidth: false) {
-                showDeleteConfirm = true
+    /// ورقة «تصفية»: «الحالة» و«النوع» اختيار متعدّد (F3) بأعدادهما لأي حالة (بعد البحث) — عدد الخيار = النتيجة لو اختير
+    /// وحده في مجموعته مع اختيارات الأخرى، و«النتيجة الآن» = القائمة نفسها
+    private static func filterSet(facts: [AdminInboxMessageLogic.Fact],
+                                  ready: Bool) -> AdminFilterSet<AdminInboxMessageLogic.Filters> {
+        typealias L = AdminInboxMessageLogic
+        let fixed = ["استفسار", "اقتراح", "شكوى", "أخرى"].map { ContactCategoryInfo.from(raw: $0).title }
+        let kinds = L.kindOrder(fixed: fixed, facts: facts)
+        let count: (L.Filters) -> Int? = { ready ? L.count(facts, $0) : nil }
+        return AdminFilterSet(noun: L.noun, resultCount: count) { s in
+            let statuses = L.Status.allCases.filter { $0 != .all }.map { status -> AdminFilterOption<L.Status> in
+                AdminFilterOption(status, status.title, count: count(L.Filters(statuses: [status], kinds: s.kinds)))
             }
-            .disabled(selectedIDs.isEmpty || isDeleting)
+            // نوع مختار لم يعد في الرسائل (حُذفت) يبقى خياراً — شريحته تُزال
+            let shownKinds = kinds + s.kinds.filter { !kinds.contains($0) }.sorted()
+            let kindOptions = shownKinds.map { kind in
+                AdminFilterOption(kind, kind, count: count(L.Filters(statuses: s.statuses, kinds: [kind])))
+            }
+            let groups: [AdminFilterGroup<L.Filters>] = [
+                .choices("status", title: L10n.t("الحالة", "Status"), values: \.statuses, options: statuses),
+                .choices("kind", title: L10n.t("النوع", "Type"), values: \.kinds, options: kindOptions),
+            ]
+            return groups
         }
-        .padding(.horizontal, DS.Spacing.lg)
-        .padding(.vertical, DS.Spacing.sm)
-        .dsGlass(Rectangle())
-        .overlay(Divider(), alignment: .top)
     }
 
-    // MARK: - الحالة الفارغة
+    // MARK: الرأس
 
-    /// لا رسائل في الحالة المختارة (أو لا نتيجة للبحث) — وزر يفتح الحالة الأخرى إن كان فيها رسائل
-    @ViewBuilder
-    private func emptyState(counts: [InboxFilter: Int]) -> some View {
-        let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if searching {
-            DSEmptyView(L10n.t("لا توجد نتائج", "No results"),
-                        message: L10n.t("جرّب كلمة أخرى", "Try another word"),
-                        style: .compact)
+    private var backTitle: String? { outerBack == nil ? L10n.t("الوارد", "Inbox") : nil }
+
+    /// «‹ الوارد» · «رسائل الأعضاء» · «تحديد» · سطر الأرقام «7 غير مقروءة ‹» «2 بانتظار الرد ‹»
+    private func header(_ m: Model) -> AdminPageHeader {
+        var actions: [AdminPageAction] = []
+        if canEdit && !m.all.isEmpty {
+            actions.append(AdminPageAction(symbol: "checkmark.circle",
+                                           label: isSelectMode ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select"),
+                                           tap: .action { toggleSelectMode() },
+                                           textOnly: true))
+        }
+        // الأرقام من الرسائل الموجودة ولو فشل التحديث (بـ«آخر تحديث»)؛ «—» وإعادة المحاولة فقط حين لا رسالة في اليد
+        let itemHealth: AdminStoreHealth?
+        if adminRequestVM.contactMessages.isEmpty {
+            itemHealth = health
+        } else if case .failed(let lastGood?) = health {
+            itemHealth = .failed(lastGood: lastGood)
         } else {
-            let other: InboxFilter = filter == .pending ? .handled : .pending
-            let otherCount = counts[other] ?? 0
-            let showOther: (() -> Void)? = otherCount > 0 ? { showFilter(other) } : nil
-            DSEmptyView(L10n.t("ما فيه رسائل", "No messages"),
-                        message: filter == .pending
-                            ? L10n.t("تمّت معالجة كل الرسائل", "All messages handled")
-                            : L10n.t("لا توجد رسائل متعامل معها بعد", "No handled messages yet"),
-                        tint: filter == .pending ? DS.Color.success : nil,
-                        actionTitle: otherCount > 0
-                            ? L10n.t("عرض «\(other.title)» (\(otherCount))", "Show \(other.title) (\(otherCount))")
-                            : nil,
-                        actionIcon: other.icon,
-                        style: .compact, action: showOther)
+            itemHealth = nil
+        }
+        let retry: () -> Void = { Task { await reload(force: true) } }
+        let items = [
+            AdminHeaderItem(id: "unread", value: m.ready ? m.unread : nil, label: L10n.t("غير مقروءة", "unread"),
+                            health: itemHealth, tap: .action { land(.unread) }, retry: retry),
+            AdminHeaderItem(id: "awaiting", value: m.ready ? m.awaiting : nil,
+                            label: L10n.t("بانتظار الرد", "awaiting reply"),
+                            health: itemHealth, tap: .action { land(.awaiting) }, retry: retry),
+        ]
+        return AdminPageHeader(back: backTitle, title: Self.title, readOnly: !canEdit, items: items, actions: actions)
+    }
+
+    /// رقم الرأس يفتح قائمته: «الحالة» وحدها وبلا بحث — فأول رقم تحت الشريط = الرقم المضغوط (T2)
+    private func land(_ status: AdminInboxMessageLogic.Status) {
+        withAnimation(reduceMotion ? nil : DS.Anim.snappy) {
+            filters = Logic.Filters(status: status)
+            search = ""
         }
     }
 
-    private func showFilter(_ f: InboxFilter) {
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { filter = f }
+    // MARK: فوق القائمة
+
+    /// شريط الفلاتر (والملخّص حين يُفلتر) ← «● 7 رسائل جديدة … تحديد الكل كمقروء»
+    private func lead(_ m: Model) -> AnyView? {
+        let bar = showsFilterBar(m)
+        let unreadLine = m.ready && m.unread > 0 && !isSelectMode
+        guard bar || unreadLine else { return nil }
+        return AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if bar {
+                AdminFilterPanel(set: m.set, selection: $filters, search: $search,
+                                 placeholder: AdminFilterText.searchPlaceholder,
+                                 note: L10n.t("الأحدث أولاً", "Newest first"),
+                                 showsCaption: !filters.isEmpty || !trimmedSearch.isEmpty,
+                                 openFilters: { showsFilters = true })
+            }
+            if unreadLine {
+                unreadRow(m.unread)
+            }
+        })
     }
 
-    // MARK: - Row
-
-    /// الخلية: صفّ الرسالة في بطاقة يومه (موضعه منها) — دائرة التحديد داخله في وضع التحديد.
-    /// ضغطة فعلية فقط تفتح التفاصيل — السحب لا يفتحها (طلب المالك).
-    /// (زر Button كان يعدّ رفع الإصبع بعد السحب ضغطة)
-    private func messageCell(_ msg: AdminRequest, position: DSGroupPosition) -> some View {
-        let picked = selectedIDs.contains(msg.id)
-        let isUnread = !adminRequestVM.readContactMessageIds.contains(msg.id)
-        let actions = isSelectMode ? [] : swipeActions(for: msg)
-
-        return messageRow(msg, isUnread: isUnread, picked: picked, position: position)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if isSelectMode {
-                toggleSelection(msg.id)
-            } else {
-                adminRequestVM.markContactMessageRead(msg.id)
-                selectedMessage = msg
+    /// تحت رأس «الوارد»: الشرائح المفعّلة وسطر العدد (شكل «العائلة») ← «● 7 رسائل جديدة … تحديد الكل كمقروء»
+    private func embeddedLead(_ m: Model) -> AnyView? {
+        let status = showsFilterBar(m) && m.ready
+        let unreadLine = m.ready && m.unread > 0 && !isSelectMode
+        guard status || unreadLine else { return nil }
+        return AnyView(VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            if status {
+                AdminInboxFilterStatus(set: m.set, selection: $filters, note: L10n.t("الأحدث أولاً", "Newest first"))
             }
+            if unreadLine {
+                unreadRow(m.unread)
+            }
+        })
+    }
+
+    /// الشريط مع التحميل (يمسك المكان) ومع وجود رسائل — لا شريط فوق «لا رسائل» ولا فوق خطأ بلا رسائل، ولا أثناء «تحديد»
+    /// (كـ«الوارد»: التصفية لا تتغيّر والتحديد قائم — F4 V1)
+    private func showsFilterBar(_ m: Model) -> Bool {
+        guard !isSelectMode else { return false }
+        if m.ready { return !m.all.isEmpty }
+        return !health.canRetry
+    }
+
+    /// «● 7 رسائل جديدة» في البداية و«تحديد الكل كمقروء» (نصّ كحلي، لمس ٤٤) في الطرف — تحتها إن ضاق السطر
+    private func unreadRow(_ unread: Int) -> some View {
+        let label = HStack(spacing: DS.Spacing.sm) {
+            DSGoldDot(size: DSNoticeMetrics.unreadDot)
+            Text(verbatim: Logic.newPhrase(unread))
+                .dsFont(.subtitle)
+                .monospacedDigit()
+                .foregroundColor(DS.Color.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityValue(isUnread ? L10n.t("جديدة", "New") : "")
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAddTraits(isSelectMode && picked ? .isSelected : [])
-        // نفس أزرار السحب للقارئ الصوتي (لا يسحب البطاقة) — نفس الإجراءات تماماً
-        .accessibilityActions {
-            ForEach(actions) { action in
-                Button(action.title) { action.action() }
+        let button = Button(action: markAllRead) {
+            Text(L10n.t("تحديد الكل كمقروء", "Mark all read"))
+                .dsFont(.button)
+                .foregroundColor(AppSection.admin.ink)
+                .multilineTextAlignment(.leading)
+                .frame(minHeight: DS.Icon.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: DS.Spacing.sm) {
+                label
+                Spacer(minLength: DS.Spacing.sm)
+                button.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                label.frame(minHeight: DS.Icon.tapTarget)
+                button
             }
         }
-        // نفس سحب الأخبار: صوب اليمين يكشف «حذف» و«تم التعامل» (طلب المالك)
-        .dsSwipeActions(id: msg.id, actions: actions)
+        .frame(minHeight: DS.Icon.tapTarget)
     }
 
-    /// صفّ مختصر (`DSNoticeRow`، طلب المالك ٢٠٢٦-١٠-٢٤ «ابي ارتبها»): صورة المرسل وعلى ركنها أيقونة نوع الرسالة بلونه ·
-    /// الاسم (سطران — طلب المالك) وفي طرفه الوقت ونقطة «جديد» الذهبية · مقتطف الرسالة · النوع بلونه. الحالة (بانتظار الرد /
-    /// تمّت المعالجة) هي شريحة الفلتر فوق — لا تتكرّر في كل صفّ
-    private func messageRow(_ msg: AdminRequest, isUnread: Bool, picked: Bool, position: DSGroupPosition) -> some View {
-        let info = ContactCategoryInfo.from(raw: ContactParser.category(of: msg))
-        let preview = ContactParser.message(from: msg)
-        let date = ContactParser.date(msg.createdAt)
+    // MARK: القائمة
 
-        return DSNoticeRow(title: msg.member?.displayFullName ?? L10n.t("عضو", "Member"),
-                           time: date.map(relativeShort) ?? "", unread: isUnread, tint: AppSection.admin.ink) {
+    /// صفوف `List`: الحالة (هيكل/فارغ/خطأ) أو الأيام — كل يوم عنوانه ثم صفوفه، وكل صفّ جزء من بطاقة يومه
+    @ViewBuilder
+    private func rows(_ m: Model) -> some View {
+        if !m.ready {
+            if health.canRetry {
+                AnyView(AdminPageStateCard(.error(L10n.t("تعذّر تحميل الرسائل", "Couldn't load messages"),
+                                                  message: L10n.t("تحقّق من اتصالك ثم أعد المحاولة.",
+                                                                  "Check your connection, then try again."),
+                                                  retry: { Task { await reload(force: true) } })))
+                    .adminPageRow(top: DS.Spacing.xs)
+            } else {
+                AnyView(DSCardSkeleton(style: .notice, count: 5,
+                                       label: L10n.t("جارٍ تحميل الرسائل…", "Loading messages…")))
+                    .adminPageRow(top: DS.Hub.stackSpacing)
+            }
+        } else if m.all.isEmpty {
+            AnyView(AdminPageStateCard(.empty(L10n.t("لا رسائل", "No messages"),
+                                              message: L10n.t("عندما يكتب عضو للإدارة تظهر رسالته هنا.",
+                                                              "When a member writes to the admins, it shows here."))))
+                .adminPageRow(top: DS.Spacing.xs)
+        } else {
+            if health.canRetry {
+                // التحديث فشل والرسائل القديمة باقية تحته
+                AnyView(AdminPageStateCard(.error(L10n.t("تعذّر تحديث الرسائل", "Couldn't refresh messages"),
+                                                  message: L10n.t("تعرض آخر رسائل وصلت.", "Showing the last messages received."),
+                                                  retry: { Task { await reload(force: true) } },
+                                                  lastGood: health.lastGood)))
+                    .adminPageRow(top: DS.Spacing.xs)
+            }
+            if m.visible.isEmpty {
+                AnyView(filteredEmpty(m))
+                    .adminPageRow(top: DS.Spacing.xs)
+            } else {
+                ForEach(DSDayBuckets.group(m.visible) { $0.date ?? .distantPast }) { day in
+                    DSDayHeader(title: day.title, count: day.items.count)
+                        .dsCardCascade(1, appeared: appeared)
+                        .adminPageRow(top: DS.Hub.stackSpacing, bottom: DSNoticeMetrics.headerGap)
+                    ForEach(Array(day.items.enumerated()), id: \.element.id) { index, entry in
+                        messageCell(entry, position: DSGroupPosition(index: index, count: day.items.count))
+                    }
+                }
+            }
+        }
+    }
+
+    /// بحث بلا نتيجة (البحث وحده لا يطابق شيئاً): «لا نتائج» + «مسح البحث» ولو كانت تصفية (F4 V7)؛ تصفية تخفي ما وجده البحث
+    /// أو بلا بحث: «لا رسائل بهذه التصفية» + «تعديل التصفية» (لا مسح للكل — الشرائح تُزال واحدة واحدة)
+    private func filteredEmpty(_ m: Model) -> some View {
+        let cause = AdminInboxLogic.emptyCause(searching: !trimmedSearch.isEmpty, searchedCount: m.searched.count,
+                                               filtersActive: !filters.isEmpty)
+        return Group {
+            if cause == .filters {
+                AdminFilterEmptyCard(title: L10n.t("لا رسائل بهذه التصفية", "No messages with this filter"),
+                                     editFilters: { showsFilters = true })
+            } else {
+                AdminPageStateCard(.empty(L10n.t("لا نتائج", "No results"),
+                                          message: L10n.t("جرّب كلمة أخرى", "Try another word"),
+                                          actionTitle: L10n.t("مسح البحث", "Clear search"),
+                                          action: { search = "" }))
+            }
+        }
+    }
+
+    // MARK: الصفّ
+
+    /// إجراءات الرسالة — السحب والضغط المطوّل والقارئ الصوتي نفسها (spec A.15)
+    private enum RowAction: Hashable {
+        case read, handled, delete
+
+        var title: String {
+            switch self {
+            case .read:    return L10n.t("مقروء", "Read")
+            case .handled: return L10n.t("تمّت المعالجة", "Handled")
+            case .delete:  return L10n.t("حذف", "Delete")
+            }
+        }
+        var icon: String {
+            switch self {
+            case .read:    return "envelope.open.fill"
+            case .handled: return "checkmark.circle.fill"
+            case .delete:  return "trash.fill"
+            }
+        }
+    }
+
+    private func actions(for entry: Entry) -> [RowAction] {
+        var list: [RowAction] = []
+        if entry.fact.unread { list.append(.read) }
+        if entry.fact.pending && canEdit { list.append(.handled) }
+        if canEdit { list.append(.delete) }
+        return list
+    }
+
+    private func perform(_ action: RowAction, _ entry: Entry) {
+        switch action {
+        case .read:    withAnimation(DS.Anim.quick) { markRead(entry.id) }
+        case .handled: Task { await markHandled(entry.msg) }
+        case .delete:  messageToDelete = entry.msg
+        }
+    }
+
+    /// الخلية: الضغط يفتح المربّع (أو يحدّد في وضع التحديد)، السحب «مقروء»/«تمّت المعالجة» من الطرف (يسار بالعربية) و«حذف» من البداية (يمين)
+    /// (يسأل أولاً فلا يُسحب للآخر)، والضغط المطوّل القائمة نفسها
+    private func messageCell(_ entry: Entry, position: DSGroupPosition) -> some View {
+        let picked = selectedIDs.contains(entry.id)
+        let list = isSelectMode ? [] : actions(for: entry)
+        let whatsapp = Self.replyPhone(entry.msg).flatMap { KuwaitPhone.whatsappURL($0) }
+        return AnyView(messageRow(entry, picked: picked, position: position))
+            .contentShape(Rectangle())
+            .onTapGesture { tap(entry) }
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(entry.fact.unread ? L10n.t("جديدة", "New") : "")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(isSelectMode && picked ? .isSelected : [])
+            .accessibilityActions {
+                ForEach(list, id: \.self) { action in
+                    Button(action.title) { perform(action, entry) }
+                }
+                if let whatsapp, !isSelectMode {
+                    Button(L10n.t("مراسلة عبر واتساب", "Message on WhatsApp")) { UIApplication.shared.open(whatsapp) }
+                }
+            }
+            // نفس سحب الطلبات (العيّنة inbox-box): بالعربية «حذف» وحده على اليمين (`.leading`) بتأكيد، والباقي على اليسار
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                if list.contains(.delete) {
+                    Button { perform(.delete, entry) } label: {
+                        Label(RowAction.delete.title, systemImage: RowAction.delete.icon)
+                    }
+                    .tint(DS.Color.errorFill)
+                }
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                if list.contains(.read) {
+                    Button { perform(.read, entry) } label: {
+                        Label(RowAction.read.title, systemImage: RowAction.read.icon)
+                    }
+                    .tint(DS.Color.primaryFill)
+                }
+                if list.contains(.handled) {
+                    Button { perform(.handled, entry) } label: {
+                        Label(RowAction.handled.title, systemImage: RowAction.handled.icon)
+                    }
+                    .tint(DS.Color.successFill)
+                }
+            }
+            .contextMenu {
+                ForEach(list, id: \.self) { action in
+                    Button(role: action == .delete ? .destructive : nil) {
+                        perform(action, entry)
+                    } label: {
+                        Label(action.title, systemImage: action.icon)
+                    }
+                }
+            }
+            .dsCardCascade(1, appeared: appeared)
+            .adminPageRow(top: 0, bottom: 0)
+    }
+
+    private func tap(_ entry: Entry) {
+        if isSelectMode {
+            withAnimation(DS.Anim.quick) {
+                if selectedIDs.contains(entry.id) { selectedIDs.remove(entry.id) } else { selectedIDs.insert(entry.id) }
+            }
+            return
+        }
+        markRead(entry.id)
+        selectedMessage = entry.msg
+    }
+
+    /// صفّ مختصر (`DSNoticeRow`): صورة المرسل وعلى ركنها أيقونة النوع ·
+    /// الاسم (سطران) وفي طرفه الوقت ونقطة «جديد» · المقتطف سطران · النوع بلونه («تمّت المعالجة» إن عولجت) ثم رقم
+    /// الرد وزرّ «واتساب» (طلب المالك ٢٠٢٦-١١-١١ «حط رقمه وزر رسالة للواتساب»)
+    private func messageRow(_ entry: Entry, picked: Bool, position: DSGroupPosition) -> some View {
+        let preview = ContactParser.message(from: entry.msg)
+        return DSNoticeRow(title: entry.msg.member?.displayFullName ?? L10n.t("عضو", "Member"),
+                           time: entry.date.map { Self.relativeShort($0) } ?? "",
+                           unread: entry.fact.unread, tint: AppSection.admin.ink) {
             HStack(spacing: DSNoticeMetrics.selectGap) {
                 if isSelectMode {
                     DSNoticeSelectCircle(picked: picked, tint: AppSection.admin.ink)
                 }
-                avatar(for: msg.member, kind: info)
+                avatar(for: entry.msg.member, kind: entry.info)
             }
         } detail: {
             if !preview.isEmpty {
-                DSNoticeText(text: preview, unread: isUnread, role: .subtitle)
+                DSNoticeText(text: preview, unread: entry.fact.unread, lines: 2, role: .subtitle)
             }
-            kindLabel(info)
+            metaLine(entry)
         }
         .dsGroupedRow(position, radius: DS.Hub.cardRadius,
                       dividerInset: DSNoticeMetrics.dividerInset(icon: DS.Icon.avatarRow, selecting: isSelectMode),
                       highlight: isSelectMode && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
     }
 
-    /// نوع الرسالة بلونه تحت المقتطف (أيقونة صغيرة + الاسم)
+    /// النوع (+ «تمّت المعالجة») ثم الرقم وزرّ «واتساب» في السطر نفسه — تحته إن ضاق (الخط الأكبر)
+    @ViewBuilder
+    private func metaLine(_ entry: Entry) -> some View {
+        let tags = HStack(spacing: DS.Spacing.sm) {
+            kindLabel(entry.info)
+            if entry.fact.handled { handledLabel }
+        }
+        if !isSelectMode, let phone = Self.replyPhone(entry.msg), let whatsapp = KuwaitPhone.whatsappURL(phone) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: DS.Spacing.sm) {
+                    tags
+                    Spacer(minLength: DS.Spacing.xs)
+                    phoneText(phone)
+                    whatsappChip(whatsapp)
+                }
+                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                    tags
+                    HStack(spacing: DS.Spacing.sm) {
+                        phoneText(phone)
+                        whatsappChip(whatsapp)
+                    }
+                }
+            }
+        } else {
+            tags
+        }
+    }
+
+    private func phoneText(_ phone: String) -> some View {
+        Text(verbatim: "\u{2066}" + KuwaitPhone.display(phone) + "\u{2069}")
+            .dsFont(.subtitle)
+            .monospacedDigit()
+            .foregroundColor(DS.Color.textSecondary)
+            .lineLimit(1)
+    }
+
+    private func whatsappChip(_ url: URL) -> some View {
+        DSChipButton(L10n.t("واتساب", "WhatsApp"), icon: "message.fill", tint: DS.Color.success, size: .small) {
+            UIApplication.shared.open(url)
+        }
+        .fixedSize()
+        .accessibilityLabel(L10n.t("مراسلة عبر واتساب", "Message on WhatsApp"))
+    }
+
+    /// رقم الرد: ما كتبه العضو للتواصل (إن لم يكن بريداً) وإلا رقمه المسجّل — نفس «الرد على العضو» في التفاصيل
+    static func replyPhone(_ msg: AdminRequest) -> String? {
+        let preferred = ContactParser.preferredContact(from: msg)
+        if let preferred, !preferred.contains("@"), !preferred.trimmingCharacters(in: .whitespaces).isEmpty { return preferred }
+        let phone = msg.member?.phoneNumber?.trimmingCharacters(in: .whitespaces) ?? ""
+        return phone.isEmpty ? nil : phone
+    }
+
+    /// نوع الرسالة بلونه تحت المقتطف (أيقونة صغيرة + الاسم، ١٣)
     private func kindLabel(_ info: ContactCategoryInfo) -> some View {
         Label {
-            Text(info.title).dsFont(.badge).lineLimit(1)
+            Text(info.title).dsFont(.chip).lineLimit(1)
         } icon: {
-            Image(dsSymbol: info.icon).dsGlyph(DS.Glyph.micro)
+            Image(dsSymbol: info.icon).dsGlyph(DS.Glyph.xs)
         }
         .labelStyle(DSNoticeMetaLabelStyle())
         .foregroundColor(info.color.dsReadableGlyph)
     }
 
-    // MARK: - Mark all read bar
-
-    /// «● 7 رسائل جديدة … قراءة الكل» — سطر خفيف فوق الأيام (كان صندوقاً بأيقونة): النقطة الذهبية نفسها التي على
-    /// الرسائل الجديدة، ونفس «تحديد الكل كمقروء»
-    private var markAllReadBar: some View {
-        let unread = adminRequestVM.unreadContactMessagesCount
-        let text = L10n.isArabic
-            ? AdminTodayText.arabicCount(unread, one: "رسالة جديدة", two: "رسالتان جديدتان", few: "رسائل جديدة",
-                                         many: "رسالة جديدة", single: "رسالة جديدة")
-            : (unread == 1 ? "1 new message" : "\(unread) new messages")
-        return HStack(spacing: DS.Spacing.sm) {
-            DSGoldDot(size: DSNoticeMetrics.unreadDot)
-            Text(verbatim: text)
-                .dsFont(.hubLabel)
-                .monospacedDigit()
-                .foregroundColor(DS.Color.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
-            DSChipButton(L10n.t("تحديد الكل كمقروء", "Mark all read"), icon: "envelope.open.fill", size: .small) {
-                withAnimation(DS.Anim.quick) {
-                    adminRequestVM.markAllContactMessagesRead()
-                }
-            }
-            .fixedSize()
+    /// «✓ تمّت المعالجة» — كلمة لا لون وحده (القائمة تجمع المعالَج وغيره حين «الحالة» = الكل)
+    private var handledLabel: some View {
+        Label {
+            Text(Logic.Status.handled.title).dsFont(.chip).lineLimit(1)
+        } icon: {
+            Image(systemName: "checkmark").dsGlyph(DS.Glyph.xs, weight: .semibold)
         }
-        .padding(.horizontal, DS.Spacing.xs)
-        .accessibilityElement(children: .contain)
+        .labelStyle(DSNoticeMetaLabelStyle())
+        .foregroundColor(DS.Color.success)
     }
 
     /// صورة المرسل — وعلى ركنها أيقونة نوع الرسالة بتعبئته (رمز أبيض بحلقة بلون السطح)
@@ -601,30 +778,174 @@ struct AdminInboxView: View {
         if info.color == DS.Color.sadu { return DS.Color.saduFill }
         if info.color == DS.Color.palm { return DS.Color.palmFill }
         if info.color == DS.Color.accent { return DS.Color.goldFill }
+        if info.color == DS.Color.sea { return DS.Color.seaFill }
         if info.color == DS.Color.textSecondary { return DS.Color.slateFill }
         return DS.Color.primaryFill
     }
 
-    private func relativeShort(_ d: Date) -> String {
+    /// «الآن» · «5 د» · «3 س» · «2 ي» · «23 أكتوبر» (أرقام لاتينية كبقية اللوحة)
+    private static func relativeShort(_ d: Date) -> String {
         let secs = Int(Date().timeIntervalSince(d))
         if secs < 60 { return L10n.t("الآن", "Now") }
-        if secs < 3600 { return L10n.t("\(secs/60) د", "\(secs/60)m") }
-        if secs < 86400 { return L10n.t("\(secs/3600) س", "\(secs/3600)h") }
-        if secs < 604800 { return L10n.t("\(secs/86400) ي", "\(secs/86400)d") }
-        let df = DateFormatter()
-        df.dateFormat = "d MMM"
-        df.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en")
-        return df.string(from: d)
+        if secs < 3600 { return L10n.t("\(secs / 60) د", "\(secs / 60)m") }
+        if secs < 86400 { return L10n.t("\(secs / 3600) س", "\(secs / 3600)h") }
+        if secs < 604800 { return L10n.t("\(secs / 86400) ي", "\(secs / 86400)d") }
+        return (L10n.isArabic ? shortDateAr : shortDateEn).string(from: d)
+    }
+
+    private static let shortDateAr: DateFormatter = shortDate("ar_KW@numbers=latn")
+    private static let shortDateEn: DateFormatter = shortDate("en_US")
+
+    private static func shortDate(_ locale: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: locale)
+        f.setLocalizedDateFormatFromTemplate("dMMM")
+        return f
+    }
+
+    // MARK: التحديد
+
+    private func toggleSelectMode() {
+        withAnimation(DS.Anim.quick) {
+            isSelectMode.toggle()
+            if !isSelectMode { selectedIDs.removeAll() }
+        }
+    }
+
+    /// يُبقي من المحدّد ما بقي ظاهراً بعد التصفية والبحث الجديدين (F4 V1) — رقم «N محدّدة» و«حذف» على ما يُرى فقط
+    private func pruneSelection() {
+        guard !selectedIDs.isEmpty else { return }
+        let shown = Set(makeModel().visible.map(\.id))
+        let kept = selectedIDs.intersection(shown)
+        guard kept != selectedIDs else { return }
+        withAnimation(DS.Anim.quick) { selectedIDs = kept }
+    }
+
+    /// شريط وضع التحديد: «تحديد الكل» · العدد · «حذف» (يسأل قبل الحذف) — أبيض بخطّ رفيع فوقه
+    private func selectionBar(_ m: Model) -> some View {
+        let shown = Set(m.visible.map(\.id))
+        let allPicked = !shown.isEmpty && shown.isSubset(of: selectedIDs)
+        return HStack(spacing: DS.Spacing.md) {
+            Button {
+                withAnimation(DS.Anim.quick) {
+                    if allPicked { selectedIDs.subtract(shown) } else { selectedIDs.formUnion(shown) }
+                }
+            } label: {
+                Text(allPicked ? L10n.t("إلغاء تحديد الكل", "Deselect all") : L10n.t("تحديد الكل", "Select all"))
+                    .dsFont(.button)
+                    .foregroundColor(AppSection.admin.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(DSPressStyle())
+            .disabled(shown.isEmpty)
+
+            Text(verbatim: L10n.t("\(selectedIDs.count) محدّدة", "\(selectedIDs.count) selected"))
+                .dsFont(.subtitle)
+                .monospacedDigit()
+                .foregroundColor(DS.Color.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            // الزرّ الواحد بالأحمر (دوّارته داخله أثناء الحذف)
+            DSButton(L10n.t("حذف", "Delete"), icon: "trash.fill", role: .destructive,
+                     isLoading: isDeleting, fullWidth: false) {
+                showDeleteConfirm = true
+            }
+            .disabled(selectedIDs.isEmpty || isDeleting)
+        }
+        .dsPageMargin()
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Hub.background.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { AdminRowDivider() }
+    }
+
+    private func deleteSelected() async {
+        isDeleting = true
+        await delete(Array(selectedIDs))
+        selectedIDs.removeAll()
+        isDeleting = false
+        withAnimation(DS.Anim.quick) { isSelectMode = false }
+    }
+
+    // MARK: الجلب والكتابة (نفس نداءات نموذج العرض، وكلها تمرّ بـDRY-RUN في تجربة الأدوار — T0)
+
+    /// نفس الجلب (`fetchContactMessages`). نموذج العرض يبتلع الخطأ، فالفشل = انتهى الجلب والجهاز غير متصل
+    /// (أو `-tmpFailStores inbox`)
+    private func reload(force: Bool) async {
+        health = health.beginning()
+        if DebugAdminProbe.shouldFail(.inbox, hasLoaded: health.hasData) {
+            withAnimation(reduceMotion ? nil : DS.Anim.smooth) { health = health.ending(success: false) }
+            return
+        }
+        await adminRequestVM.fetchContactMessages(force: force)
+        let online = NetworkMonitor.shared.isConnected
+        withAnimation(reduceMotion ? nil : DS.Anim.smooth) { health = health.ending(success: online) }
+    }
+
+    private func markRead(_ id: UUID) {
+        guard !adminRequestVM.readContactMessageIds.contains(id), !dryReadIds.contains(id) else { return }
+        if DebugAdminProbe.dryRun("contact message mark read \(id)") {
+            dryReadIds.insert(id)
+            return
+        }
+        adminRequestVM.markContactMessageRead(id)
+    }
+
+    private func markAllRead() {
+        if DebugAdminProbe.dryRun("contact messages mark all read") {
+            withAnimation(DS.Anim.quick) { dryReadIds.formUnion(adminRequestVM.contactMessages.map(\.id)) }
+            return
+        }
+        withAnimation(DS.Anim.quick) { adminRequestVM.markAllContactMessagesRead() }
+    }
+
+    private func markHandled(_ msg: AdminRequest) async {
+        markRead(msg.id)
+        if DebugAdminProbe.dryRun("contact message mark handled \(msg.id)") {
+            if let i = adminRequestVM.contactMessages.firstIndex(where: { $0.id == msg.id }) {
+                adminRequestVM.contactMessages[i].status = ApprovalStatus.approved.rawValue
+            }
+            return
+        }
+        await adminRequestVM.markContactMessageHandled(msg)
+    }
+
+    private func delete(_ ids: [UUID]) async {
+        guard !ids.isEmpty else { return }
+        if DebugAdminProbe.dryRun("contact messages delete \(ids.count)") {
+            withAnimation(DS.Anim.quick) { adminRequestVM.contactMessages.removeAll { ids.contains($0.id) } }
+            return
+        }
+        await adminRequestVM.deleteContactMessages(ids: ids)
+    }
+
+    // MARK: من لا يملك الرسائل
+
+    private var lockedCard: some View {
+        AdminPageStateCard(.readOnly(L10n.t("هذه الصفحة ليست ضمن صلاحياتك", "This page isn't part of your role"),
+                                     message: L10n.t("رسائل الأعضاء يقرؤها المالك والمدير.",
+                                                     "Members' messages are read by the owner and admins.")))
+    }
+
+    /// الرأس وبطاقة «ليست ضمن صلاحياتك» — بلا جلب ولا أرقام
+    private var lockedPage: some View {
+        AdminPage(header: AdminPageHeader(back: backTitle, title: Self.title), content: AnyView(lockedCard))
     }
 }
 
 // MARK: - Message Detail Sheet
 
-/// تفاصيل الرسالة — مربّع عرض بنفس التصميم الموحّد (طلب المالك): المرسل، الرسالة،
-/// الرد على العضو، و«تم التعامل» (للرسالة المعلّقة) / «إغلاق» أسفل المربّع
+/// تفاصيل الرسالة — المربّع الموحّد: المرسل، الرسالة، الرد على العضو (واتساب · اتصال · بريد)، ثم «تمّت المعالجة»
+/// (للرسالة المعلّقة) · «إغلاق» · حذف (يسأل في الصفحة قبل الحذف). الكتابة كلها من الصفحة (نفس نداءاتها وDRY-RUN)
 private struct MessageDetailSheet: View {
-    @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     let message: AdminRequest
+    /// الحذف و«تمّت المعالجة» لمن «يعدّل» الرسائل
+    let canEdit: Bool
+    let markRead: () -> Void
+    let markHandled: () async -> Void
+    let onDelete: () -> Void
     let onDismiss: () -> Void
 
     @State private var isMarking = false
@@ -641,12 +962,16 @@ private struct MessageDetailSheet: View {
             tint: DS.Color.actionNavy,
             actionTitle: isMarking ? L10n.t("جارٍ…", "Working…") : L10n.t("تمّت المعالجة", "Mark as Handled"),
             actionIcon: "checkmark.circle.fill",
-            showsAction: isPending,
+            showsAction: isPending && canEdit,
             cancelTitle: L10n.t("إغلاق", "Close"),
             canSubmit: true,
             isBusy: isMarking,
             isBehindExtra: showEmailComposer,
-            onSubmit: { Task { await markHandled() } },
+            // «تمّت المعالجة» · «إغلاق» · حذف (دائرة حمراء) في صفّ واحد — قرار المالك ٢٠٢٦-١١-١١
+            extraActions: canEdit ? [DSComposerAction(id: "delete", title: L10n.t("حذف الرسالة", "Delete message"),
+                                                      icon: "trash.fill", role: .destructive, action: onDelete)] : [],
+            extraInline: canEdit,
+            onSubmit: { Task { await markHandledAndClose() } },
             onCancel: onDismiss
         ) {
             senderSection
@@ -655,7 +980,7 @@ private struct MessageDetailSheet: View {
         }
         .onAppear {
             // defensive: تأكد أن الرسالة معلّمة كمقروءة حتى لو فُتحت من مسار آخر
-            adminRequestVM.markContactMessageRead(message.id)
+            markRead()
         }
         .dsCenterBox(isPresented: $showEmailComposer) {
             OfficialReplySheet(
@@ -687,14 +1012,16 @@ private struct MessageDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(message.member?.displayFullName ?? L10n.t("عضو", "Member"))
-                        .dsFont(.headlineCompact)
+                        .dsFont(.adminRowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                     if !phone.isEmpty {
-                        Text(phone)
+                        Text(verbatim: "\u{2066}" + KuwaitPhone.display(phone) + "\u{2069}")
                             .dsFieldFont(.subtitle)
+                            .monospacedDigit()
                             .foregroundColor(DS.Color.fieldValue)
+                            .textSelection(.enabled)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -703,7 +1030,7 @@ private struct MessageDetailSheet: View {
                     // التصنيف يُقرأ من النص تحته — قرص الحالة المجسّم بلون التصنيف كما هو
                     DSStateIcon(info.icon, tint: info.color, size: DS.Icon.row, mapsChrome: false)
                     Text(info.title)
-                        .dsFont(.micro)
+                        .dsFont(.chip)
                         .foregroundColor(DS.Color.textSecondary)
                 }
             }
@@ -725,6 +1052,7 @@ private struct MessageDetailSheet: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
                 .dsRowBox()
 
             if !isPending {
@@ -732,7 +1060,7 @@ private struct MessageDetailSheet: View {
                     DSFieldIcon(name: "checkmark.seal.fill", tint: DS.Color.success)
                         .accessibilityHidden(true)
                     Text(L10n.t("تمّت معالجة هذه الرسالة", "This message was handled"))
-                        .dsFont(.rowTitle)
+                        .dsFont(.adminRowTitle)
                         .foregroundColor(DS.Color.success)
                     Spacer(minLength: 0)
                 }
@@ -834,10 +1162,9 @@ private struct MessageDetailSheet: View {
     }
 
     @MainActor
-    private func markHandled() async {
+    private func markHandledAndClose() async {
         isMarking = true
-        adminRequestVM.markContactMessageRead(message.id)
-        await adminRequestVM.markContactMessageHandled(message)
+        await markHandled()
         isMarking = false
         onDismiss()
     }
@@ -846,21 +1173,10 @@ private struct MessageDetailSheet: View {
 // MARK: - Helpers
 
 enum ContactParser {
-    private static let isoFull: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private static let isoBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// تحويل ISO string لـ Date (يدعم بكسر ثواني أو بدونها).
     static func date(_ str: String?) -> Date? {
         guard let s = str, !s.isEmpty else { return nil }
-        return isoFull.date(from: s) ?? isoBasic.date(from: s)
+        return DateParsing.iso(s)
     }
 
     /// التصنيف: من new_value مباشرة، fallback لتحليل details.
@@ -1018,7 +1334,7 @@ private struct OfficialReplySheet: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(memberName.isEmpty ? L10n.t("العضو", "Member") : memberName)
-                        .dsFont(.headlineCompact)
+                        .dsFont(.adminRowTitle)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(2)
                     Text(to)
@@ -1093,12 +1409,8 @@ private struct ReplyComposerField: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: DS.Spacing.sm) {
-            Image(systemName: "square.and.pencil")
-                .dsGlyph(DS.Glyph.mdCompact, weight: .semibold)
-                .foregroundColor(focused ? DS.Color.textOnPrimary : tint)
-                .frame(width: DS.Icon.row, height: DS.Icon.row)
-                .background(RoundedRectangle(cornerRadius: DS.Icon.discRadius, style: .continuous)
-                    .fill(focused ? tint : tint.opacity(DS.Opacity.tintFill)))
+            // رمز الحقل الموحّد (`DSFieldIcon`) كبقية حقول المربّعات
+            DSFieldIcon(name: "square.and.pencil", tint: tint)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(label)
@@ -1111,8 +1423,7 @@ private struct ReplyComposerField: View {
                     .focused($focused)
             }
         }
-        .padding(.horizontal, DS.Spacing.sm + DS.Spacing.xxs)
-        .padding(.vertical, DS.Spacing.sm)
+        .dsRowBox()
         .dsFocusFieldBox(focused: focused, tint: tint)
         .contentShape(Rectangle())
         .onTapGesture { focused = true }
@@ -1120,28 +1431,4 @@ private struct ReplyComposerField: View {
 }
 
 
-/// رأس صفحة «رسائل التواصل» — يُحذف داخل «الوارد» (رأسه فوقها)
-private struct InboxHeader: ViewModifier {
-    let embedded: Bool
-    let hasMessages: Bool
-    let isSelectMode: Bool
-    let toggleSelect: () -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if embedded {
-            content
-        } else {
-            content
-                .dsSubPageHeader(L10n.t("رسائل التواصل", "Contact Messages"),
-                                 subtitle: L10n.t("رسائل الأعضاء من «تواصل مع الإدارة» — اضغط أي رسالة للرد عليها",
-                                                  "Members' messages from “Contact Admin” — tap one to reply")) {
-                    if hasMessages {
-                        DSHeaderButton(symbol: isSelectMode ? "checkmark.circle.fill" : "checkmark.circle",
-                                       label: isSelectMode ? L10n.t("تم", "Done") : L10n.t("تحديد", "Select"),
-                                       action: toggleSelect)
-                    }
-                }
-        }
-    }
-}
+#endif

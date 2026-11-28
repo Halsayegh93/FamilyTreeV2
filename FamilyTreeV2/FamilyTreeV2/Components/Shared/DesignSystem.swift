@@ -75,6 +75,11 @@ enum DS {
         /// ذهبي المربّعات: أغمق من ذهبي المصمم حتى يُقرأ الأبيض فوقه
         static let goldFill  = SwiftUI.Color(hex: "#806631")
         static let goldDeep  = SwiftUI.Color(hex: "#40351E")
+        /// مربّعات رأس «الوارد» (٢٠٢٦-١١-٢٨، العيّنة `inbox-final`): اللون حسب المعنى، ثابت بالوضعين (فوق الشريط الكحلي)،
+        /// والنص الأبيض فوقها ≥ ٤٫٥:١ — الطلبات أزرق (٧٫١:١) · المنجزة أخضر (٥٫٠:١) · الرسائل بترولي (٥٫٠:١)
+        static let inboxRequestsFill = SwiftUI.Color(hex: "#2F5A8F")
+        static let inboxDoneFill     = SwiftUI.Color(hex: "#2E7D4F")
+        static let inboxMessagesFill = SwiftUI.Color(hex: "#1E7A86")
 
         // Gradients
         // الهوية: الأزرار والهيدرات والبطاقات بلون واحد بدون تدرّج — يبقى الاسم للتوافق.
@@ -139,7 +144,20 @@ enum DS {
         static let sectionFill      = SwiftUI.Color.gray.opacity(0.08)
         /// حقل الإدخال داخل المربّعات — صندوق رمادي بلا إطار يتميّز عن أرضية المربّع في الفاتح والداكن،
         /// والإطار بلون القسم عند الكتابة فقط (طلب المالك ٢٠٢٦-١١-٠٢ «صندوق رمادي بدون إطار»)
-        static let fieldFill        = SwiftUI.Color.adaptive(light: "#F0F0F2", dark: "#1F2228")
+        static let fieldFill        = SwiftUI.Color.adaptive(light: "#F0F0F2", dark: "#282B31")
+        // حكم مراجعة التصميم ٢٠٢٦-١١-١١ (قرارات المالك) — مكان واحد لكل لون:
+        /// النص الثانوي الذهبي فوق الرؤوس الكحلية (وصف رأس الصفحة والمربّع) — أفتح من `accentLight` ليُقرأ فوق الكحلي
+        static let accentOnBand     = SwiftUI.Color.adaptive(light: "#E2CB97", dark: "#E2CB97")
+        /// حبّة/بطاقة الخيار المختار في `DSChoiceTiles` / `DSOptionTiles`
+        static let choicePill       = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#3A414C")
+        /// إطار الخيار المختار (١ نقطة): كحلي العلامة بشفافية الإطار المختار في الفاتح (#172536 × 0.55 فوق الأبيض ≈ #7F8791)،
+        /// وكحلي فاتح في الداكن (#7FA8D6 — ٥٫٧:١ فوق مسار الحقل #282B31)
+        static let selectionStroke  = SwiftUI.Color.adaptive(light: "#7F8791", dark: "#7FA8D6")
+        /// خلية البيانات: العنوان الصغير رمادي، والقيمة بلون النص الأساسي (قرار المالك ٢٠٢٦-١١-١١ «د»)
+        static var tileLabel: SwiftUI.Color { textSecondary }
+        static var tileValue: SwiftUI.Color { textPrimary }
+        /// الشفة السفلية لصفّ الحقل — مع «زيادة التباين» فقط (قاعدة المالك: الحقل رمادي بلا إطار)
+        static let fieldLip         = SwiftUI.Color.adaptive(light: "#8791A0", dark: "#7A8391")
         static let actionRowFill    = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1C1F25")
         static let actionRowOverlay = SwiftUI.Color.adaptive(light: "#F2EBDD", dark: "#23272E")
         static let headerVeil       = SwiftUI.Color.white.opacity(0.08)
@@ -151,7 +169,7 @@ enum DS {
         static let textPrimary   = SwiftUI.Color.adaptive(light: "#172536", dark: "#FFFFFF") // ink
         static let textSecondary = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#C9CED5") // ink-muted
         /// ink-subtle في الهوية — نص ثالث (تلميحات، أسهم الصفوف، الحالات المعطّلة)؛ مقروء (AA) على الأبيض والأسود
-        static let textTertiary  = SwiftUI.Color.adaptive(light: "#6B7280", dark: "#8A93A0") // ink-subtle
+        static let textTertiary  = SwiftUI.Color.adaptive(light: "#646C79", dark: "#8A93A0") // ink-subtle
         static let textOnPrimary = SwiftUI.Color.white
         static let textGold      = accent // ذهبي
         /// أيقونة/نص فوق مربّع معبّأ بلون متكيّف (مثل palm أو primary): أبيض في الفاتح، وحبر غامق في الداكن
@@ -223,7 +241,7 @@ enum DS {
         /// تعبئة المتوفّى تحت نص/أيقونة بيضاء — slateFill الثابت (الأبيض فوقه ٧:١)
         static let deceasedFill     = slateFill
         /// شريط «متوفّى» على عقدة الشجرة — عنّابي بدرجة خفيفة (كان مكتوباً في TreeView وWomenClassicTreeView)
-        static let deceasedStrip    = SwiftUI.Color(hex: "#A62B32")
+        static let deceasedStrip    = SwiftUI.Color(hex: "#AD4A52")   // عنّابي خفيف قريب من الأحمر (اختيار المالك ٢٠٢٦-١١-٢٧؛ كان #A62B32) — الأبيض عليه 5.4:1
 
         /// ألوان شعارات التواصل (معنى: هوية المنصّة — لا تتبع القسم). كانت مكرّرة في FamilyProjectsView وProjectDetailView
         enum Social {
@@ -243,6 +261,8 @@ enum DS {
         static let likeAction       = newsWedding // وردي
         /// لون الإناث في شجرة النساء — وردي تراثي موحّد (بدل القيم المرمّزة يدوياً في WomenTreeView/WomenClassicTreeView)
         static let female           = SwiftUI.Color.adaptive(light: "#92526F", dark: "#F4B1CB") // وردي
+        /// تعبئة ثابتة تحت نص أبيض في الوضعين (اختيار «أنثى»)
+        static let femaleFill       = SwiftUI.Color(hex: "#92526F")
         /// الأنثى المتوفّاة — بنفسجي خوخي مطفأ: لون مختلف عن وردي الحيّة لكنه من عائلته (طلب المالك)
         static let femaleDeceased   = SwiftUI.Color.adaptive(light: "#7A5578", dark: "#9D7A9B")
         /// حافة الأنثى المتوفّاة — بنفسجي داكن متناسق (وفي الداكن فاتح ليظهر)
@@ -535,12 +555,70 @@ enum DS {
         /// ٦ — بين أيقونة صغيرة ونصّها، وبين عناصر الشبكات الضيقة (كان `spacing: 6` في ٤٥ ملفاً)
         static let xsm:   CGFloat = 6
         static let sm:    CGFloat = 8
+        /// ١٠ — حشوة الصفوف والشرائح الأفقية (كان `sm + 2` في ٢٤ موضعاً) — جولة المسافات ٢٠٢٦-١١-١١
+        static let smd:   CGFloat = 10
         static let md:    CGFloat = 12
         static let lg:    CGFloat = 16
         static let xl:    CGFloat = 20
         static let xxl:   CGFloat = 24
         static let xxxl:  CGFloat = 32
         static let xxxxl: CGFloat = 40
+    }
+
+    // MARK: Page — مسافات الصفحات الموحّدة (جولة المسافات ٢٠٢٦-١١-١١)
+    //
+    // ┌─ خريطة «عدّل هنا ← يتغيّر في كل الأقسام» (طلب المالك: «التعديل يكون من مكان واحد») ───────────────────────────┐
+    //  الصفحات
+    //   DS.Page.margin        ١٦  الهامش الجانبي لكل صفحات التبويبات والصفحات الفرعية ورؤوسها (`.dsPageMargin()`)
+    //   DS.Page.cardGap       ١٦  بين بطاقة وبطاقة / قسم وقسم في الصفحة (`DS.Page.cardGap` في قوائم الصفحات)
+    //   DS.Page.titleGap       ٨  بين عنوان القسم ومحتواه في الصفحة
+    //   DS.Page.top           ١٦  أعلى محتوى الصفحة تحت الرأس
+    //   DS.Page.rowMinHeight  ٤٤  أدنى ارتفاع لصفّ قائمة يُضغط (= مساحة اللمس `DS.Icon.tapTarget`)
+    //  البطاقات
+    //   DS.Card.padding       ١٢  حشوة كل بطاقة (`.dsCard()`) · DSBox.sectionPadding ١٢ حشوة قسم المربّع (`DSComposerSection`)
+    //   DS.Card.radius        ١٢  زوايا كل بطاقة = `DSBox.sectionRadius`
+    //  المربّعات (كل `DSComposer` / `dsCenterBox` / التنبيهات)
+    //   DSBox.contentPadding  ١٦  الحشوة الجانبية داخل المربّع
+    //   DSBox.sectionSpacing  ١٢  بين قسم وقسم داخل المربّع
+    //   DSBox.sectionInnerSpacing ٨  بين عنوان القسم وصفوفه، وبين الصفوف
+    //   DSBox.headerHeight    ٦٤  ارتفاع رأس المربّع · DSBox.composerIcon ٤٠ مربّع رمز الرأس · DSBox.sectionIcon ١٦ رمز عنوان القسم
+    //   DSBox.fieldMinHeight  ٤٤  ارتفاع صفّ الحقل · DSBox.fieldHorizontalPadding ١٢ / fieldVerticalPadding ٦ حشوته (`.dsRowBox()`)
+    //   DSBox.fieldIcon       ٢٢  رمز صفّ الحقل (`DSFieldIcon`)
+    //   DSBox.tileMinHeight / tileGap ٨  خلية البيانات الواحدة وشبكتها (`DSFieldTileFace` · `DSMenuTile` · `DSDateFieldRow` · `DSTileGrid`)
+    //   DSBox.choiceTrackHeight ٤٠ ارتفاع مسار الاختيار (`DSChoiceTiles`) · choiceTrackInset ٢ · optionTilePadding ٨ (`DSOptionTiles`)
+    //   DSBox.commandRowHeight ٤٨ صفّ الأمر (`DSCommandRow`)
+    //   DSBox.buttonHeight    ٤٤  زرّ التذييل وكل الأزرار (`DSButtonFace`) · buttonSpacing ٨ · buttonRadius ٢٢ (حبّة)
+    //   DSBox.choiceCompactWidth ١٥٠ / choiceCompactHeight ٣٦  الاختيار المضغوط (`DSChoiceTiles(compact:)`)
+    //   DSBox.chipHeight ٣٤ / chipPadding ١٢  حبّة القائمة المنسدلة في صفّ «الخصوصية» الواحد (`DSVisibilityPicker`)
+    //   DSBox.footerHorizontal ١٦ / footerTop ١٢ / footerBottom ١٢  شريط أزرار المربّع
+    //   DSBox.alertPadding    ١٢  حشوة التنبيه الصغير (`dsAlert`)
+    //  الألوان والخيط الذهبي
+    //   DS.Color.accentOnBand  النص الذهبي فوق الرؤوس الكحلية · DS.Color.choicePill / selectionStroke  الخيار المختار
+    //   DS.Color.bandFill  لون رأس المربّع الصلب · DS.Thread (color / tick ٣×١٢ / hairline ١)  الخيط الذهبي
+    //  الرموز
+    //   DS.Icon.row ٣٢ رمز الصفّ · DS.Icon.rowLarge ٣٦ · DS.Icon.section ٢٢ · DS.Icon.tapTarget ٤٤ مساحة اللمس
+    //  السلّم الخام (لا يُستعمل مباشرة لمعنى له اسم أعلاه): DS.Spacing ٢·٤·٦·٨·١٠·١٢·١٦·٢٠·٢٤·٣٢·٤٠ ، DS.Radius ٨·١٢·١٦·٢٠·٢٤·٢٨
+    //  الحارس: `scripts/check-layout-literals.sh` يعدّ الأرقام الثابتة الخارجة عن هذه الأسماء.
+    // └────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    enum Page {
+        /// الهامش الجانبي للصفحة (١٦) — استعمله بـ`.dsPageMargin()`
+        static let margin: CGFloat = Spacing.lg
+        /// بين بطاقة وبطاقة أو قسم وقسم (١٢)
+        static let cardGap: CGFloat = Spacing.lg
+        /// بين عنوان القسم ومحتواه (٨)
+        static let titleGap: CGFloat = Spacing.sm
+        /// أعلى محتوى الصفحة تحت الرأس (١٢)
+        static let top: CGFloat = Spacing.lg
+        /// أدنى ارتفاع لصفّ قائمة يُضغط (٤٤)
+        static var rowMinHeight: CGFloat { Icon.tapTarget }
+    }
+
+    // MARK: Thread — الخيط الذهبي (علامة قبل عناوين أقسام المربّعات، وخطّ أسفل رأس المربّع)
+    enum Thread {
+        static var color: SwiftUI.Color { DS.Color.accentLight }
+        static let tickWidth: CGFloat = 3
+        static let tickHeight: CGFloat = Spacing.md
+        static let hairline: CGFloat = Border.width
     }
 
     // MARK: Radius — حواف حديثة ناعمة
@@ -552,6 +630,8 @@ enum DS {
         // «أسلوب واحد» (طلب المالك ٢٠٢٦-١٠-٠٧): شفافيات اللون المكرّرة في الشاشات — من هنا فقط
         /// تعبئة خفيفة جداً بلون (خلفية ملاحظة، صفّ مختار) — كانت ٠٫٠٦–٠٫٠٨
         static let tintFillSoft: Double   = 0.08
+        /// أخفّ من الخفيفة — مربّع «الأرجح» في بطاقة طلب الانضمام (العيّنة ١٨، «خلّه أفتح»)
+        static let tintFillFaint: Double  = 0.04
         /// تعبئة قرص/شارة/شريحة بلون (الدور الأشيع) — كانت ٠٫١٠–٠٫١٤
         static let tintFill: Double       = 0.12
         /// تعبئة أقوى (المختار، الداكن) — كانت ٠٫١٥–٠٫١٨
@@ -583,6 +663,24 @@ enum DS {
         static let xxl:  CGFloat = 24
         static let xxxl: CGFloat = 28
         static let full: CGFloat = 999
+    }
+
+    // MARK: Library folder
+    /// مجلد المكتبة: لسان يلتصق بجسم المجلد، وفوقها غلاف أحدث عنصر (طلب المالك ٢٠٢٦-١١-٠٥، بين «أ» و«ج»)
+    enum Folder {
+        static let tabWidth: CGFloat = 58
+        static let tabHeight: CGFloat = 20
+        static let tabOverlap: CGFloat = 8
+        static let minHeight: CGFloat = 72
+        static let coverWidth: CGFloat = 78
+        static let coverHeight: CGFloat = 102
+        /// أطول ما تأخذه الصفحة في مربّع العنصر من طول الشاشة
+        static let itemPageScreenShare: CGFloat = 0.36
+        /// عرض الصفحة من عرض المربّع الداخلي — أصغر شوي من الحافة (طلب المالك ٢٠٢٦-١١-٠٦)
+        static let itemPageWidthShare: CGFloat = 0.86
+        /// زرّ التكبير الثابت على ركن الصفحة
+        static let zoomButton: CGFloat = 30
+        static let zoomButtonInset: CGFloat = 8
     }
 
     // MARK: Icon
@@ -632,6 +730,8 @@ enum DS {
         static let xl: CGFloat = 18
         /// قرص كبير
         static let xxl: CGFloat = 22
+        /// «خاتمان» المرسوم أعرض من رمز SF بالمقاس نفسه (`SignupRingsGlyph`) — يُضرب في مقاس الرمز
+        static let ringsScale: CGFloat = 1.35
 
         static func font(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> SwiftUI.Font {
             .system(size: size, weight: weight)
@@ -643,7 +743,7 @@ enum DS {
         /// زوايا كل البطاقات (= بطاقة قسم المربّع)
         static var radius: CGFloat { DSBox.sectionRadius }
         /// حشوة البطاقة (= بطاقة قسم المربّع)
-        static var padding: CGFloat { DSBox.sectionPadding }
+        static let padding: CGFloat = DS.Spacing.md
         static let strokeWidth: CGFloat = 1
         /// لمسة الطين: إضاءة علوية داخلية (فاتح/داكن) وعرضها
         static let highlightLight: Double = 0.9
@@ -756,16 +856,19 @@ extension DS {
         let style: SwiftUI.Font.TextStyle
         /// دور نصّ (يُطابق خط الآيفون بالعين بـ `DS.Font.opticalScale`) — لا لمقاسات الرسم الثابتة
         let optical: Bool
+        /// أرقام بعرض ثابت (`.monospacedDigit()`) لأعمدة القيم — spec A.1 `hubValue`
+        let digits: Bool
 
         /// الحجم المرسوم فعلاً
         var textSize: CGFloat { optical ? size * DS.Font.opticalScale : size }
 
         /// دور نصّ = نمط Apple بحجمه الافتراضي + وزن
-        init(_ style: SwiftUI.Font.TextStyle, weight: SwiftUI.Font.Weight = .regular) {
+        init(_ style: SwiftUI.Font.TextStyle, weight: SwiftUI.Font.Weight = .regular, digits: Bool = false) {
             self.size = DS.Font.appleSize(style)
             self.weight = weight
             self.style = style
             self.optical = true
+            self.digits = digits
         }
 
         /// مقاس رسم ثابت (عقد الشجرة، الحرف داخل صورة كبيرة، أرقام رمز التحقق) — يتبع النمط الأقرب لحجمه
@@ -775,6 +878,7 @@ extension DS {
             self.weight = weight
             self.style = style ?? DS.Font.textStyle(for: size)
             self.optical = false
+            self.digits = false
         }
     }
 }
@@ -815,13 +919,13 @@ extension DS.TextRole {
     /// نص جانبي وتلميح (طرف عنوان القسم) — Caption 1 (١٢)
     static let caption      = DS.TextRole(.caption, weight: .medium)
     /// شارة حالة — Caption 2 (١١)
-    static let badge        = DS.TextRole(.caption2, weight: .semibold)
+    static let badge        = DS.TextRole(.caption, weight: .semibold)
     /// عنوان قسم داخل المربّع (`DSComposerSection`) — Footnote (١٣)
     static let boxSectionTitle = DS.TextRole(.footnote, weight: .semibold)
     /// ملاحظة صغيرة (فوق أزرار المربّع) — Footnote (١٣)
     static let footnote     = DS.TextRole(.footnote)
     /// عدّاد ورقم صغير — Caption 2 (١١)
-    static let micro        = DS.TextRole(.caption2, weight: .medium)
+    static let micro        = DS.TextRole(.caption, weight: .medium)
     /// نص الزرّ الواحد (٤٤ في المربّعات والصفحات) — Body (١٧) شبه عريض كأزرار iOS
     static let button       = DS.TextRole(.subheadline, weight: .medium)
     /// زرّ ٤٨ (الإجراء الرئيسي في شاشات ملء الشاشة) — Body (١٧)
@@ -839,7 +943,10 @@ extension DS.TextRole {
 
 extension DS.Font {
     /// خط الدور — `DS.Font.role(.rowTitle)`: حجم Apple الافتراضي للدور، مقيّداً بنمطه (Dynamic Type)
-    static func role(_ role: DS.TextRole) -> SwiftUI.Font { plex(role.textSize, weight: role.weight, relativeTo: role.style) }
+    static func role(_ role: DS.TextRole) -> SwiftUI.Font {
+        let font = plex(role.textSize, weight: role.weight, relativeTo: role.style)
+        return role.digits ? font.monospacedDigit() : font
+    }
 }
 
 // MARK: - النص الطويل («القراءة»، قرار المالك ٢٠٢٦-١٠-٢٨)
@@ -897,6 +1004,14 @@ extension View {
     func dsGlyph(_ size: CGFloat, weight: SwiftUI.Font.Weight = .bold) -> some View {
         font(DS.Glyph.font(size, weight: weight))
     }
+}
+
+// MARK: - هامش الصفحة الواحد
+extension View {
+    /// الهامش الجانبي الموحّد لمحتوى الصفحات ورؤوسها (`DS.Page.margin`) — تغييره هناك يحرّك كل الصفحات
+    func dsPageMargin() -> some View { padding(.horizontal, DS.Page.margin) }
+    /// حشوة محتوى الصفحة من كل الجهات بالهامش الموحّد (قوائم البطاقات)
+    func dsPagePadding() -> some View { padding(DS.Page.margin) }
 }
 
 // MARK: - Color Hex Extension
@@ -1394,6 +1509,8 @@ private struct DSToolbarConfirmButton: View {
 // هذه القيم في الشاشات. ما يختلف: الرأس (كامل في العمل، شريط رفيع في التنبيه) وحجم القرص.
 enum DSBox {
     // المربّع نفسه
+    /// رفع مربّع «استكمال التسجيل» عن المنتصف (المساحة تحته؛ يصعد بنصفها ≈ ٧٠ نقطة) — طلب المالك ٢٠٢٦-١١-٢٨
+    static let signupBoxLift: CGFloat = 140
     /// زوايا المربّع نفسه
     static let radius: CGFloat = DS.Radius.xxl
     /// رأس مربّع العمل (٨٦ ← ٨٠ ← ٦٤ «هيدر المربع شوي نقلله» ٢٠٢٦-١١-٠١، `DSComposerHeader`)
@@ -1405,7 +1522,7 @@ enum DSBox {
     static let compactHeaderHeight: CGFloat = 56
     /// أقل حشوة رأسية فوق عنوان الرأس وتحته — الرأس يطول مع خط الجهاز بدل أن يُقصّ (مقاسات Apple ٢٠٢٦-١٠-٠٨)؛
     /// ٣ = العنوان (١٧) والوصف (١٥) يملآن الرأس المضغوط ٥٦ بالضبط في الحجم الافتراضي
-    static let headerVerticalPadding: CGFloat = 3
+    static let headerVerticalPadding: CGFloat = DS.Spacing.xs
     static let compactHeaderIcon: CGFloat = 30
     static let compactWatermark: CGFloat = 80
     static let compactWatermarkOpacity: Double = 0.18
@@ -1419,15 +1536,15 @@ enum DSBox {
     // الحدّ: نص القيمة ≥ ١٣ نقطة والأزرار ≥ ٤٠ نقطة وصناديق الحقول ≥ ٣٦ (مساحة اللمس والقراءة) —
     // عندها يتوقّف التصغير قبل ٣٠٪ ويُذكر ذلك في التعليق.
     /// هامش محتوى مربّع العمل الجانبي (١٦ ← ١١) وأعلاه (١٢ ← ٨) وأسفله (٨ ← ٦)
-    static let contentPadding: CGFloat = 11
-    static let contentTop: CGFloat = 8
-    static let contentBottom: CGFloat = 6
+    static let contentPadding: CGFloat = DS.Spacing.lg
+    static let contentTop: CGFloat = DS.Spacing.md
+    static let contentBottom: CGFloat = DS.Spacing.xsm
     /// بين الأقسام (١٢ ← ٨)
-    static let sectionSpacing: CGFloat = 8
+    static let sectionSpacing: CGFloat = DS.Spacing.md
     /// بطاقة القسم: حشوة (١٢ ← ٨)، زوايا (١٦ ← ١٢)، المسافة بين عنوانها ومحتواها (١٠ ← ٧)
-    static let sectionPadding: CGFloat = 8
-    static let sectionRadius: CGFloat = 12
-    static let sectionInnerSpacing: CGFloat = 7
+    static let sectionPadding: CGFloat = DS.Spacing.md
+    static let sectionRadius: CGFloat = DS.Radius.md
+    static let sectionInnerSpacing: CGFloat = DS.Spacing.sm
     /// أيقونة عنوان القسم (٢٢ ← ١٦) وخطّه (١٢٫٥ ← ١١ — حدّ القراءة، لا ٨٫٧٥)
     static let sectionIcon: CGFloat = 16
     static var sectionTitleFont: Font { DS.Font.role(.boxSectionTitle) }
@@ -1435,9 +1552,33 @@ enum DSBox {
     /// أدنى ارتفاع لصندوق الحقل (٤٢ ← ٣٦ — حدّ اللمس، لا ٣٢)، وخط القيمة = Body وعنوانه = Footnote
     /// (مقاسات Apple الافتراضية، طلب المالك ٢٠٢٦-١٠-٠٨)
     static let fieldIcon: CGFloat = 22
-    static let fieldVerticalPadding: CGFloat = 4
-    static let fieldHorizontalPadding: CGFloat = 7
-    static let fieldMinHeight: CGFloat = 36
+    static let fieldVerticalPadding: CGFloat = DS.Spacing.xsm
+    static let fieldHorizontalPadding: CGFloat = DS.Spacing.md
+    static let fieldMinHeight: CGFloat = 44
+    // الشكل الخفيف الموحّد (طلب المالك ٢٠٢٦-١١-١١ «المسافات والأحجام»): مقاس واحد لكل عنصر
+    /// ارتفاع مسار الاختيار (`DSChoiceTiles`) المرئي = ارتفاع صفّ الحقل؛ اللمس ٤٤ بالحشوة الشفافة
+    /// خلية البيانات (`DSFieldTileFace` / `DSMenuTile` / `DSDateFieldRow`): أدنى ارتفاع المحتوى، والفاصل بين الخلايا في `DSTileGrid`
+    static var tileMinHeight: CGFloat { fieldMinHeight - 2 * fieldVerticalPadding }
+    static var tileGap: CGFloat { sectionInnerSpacing }
+    static let choiceTrackHeight: CGFloat = 40
+    /// الاختيار في الصفحات (خارج المربّعات — إعدادات «التطبيق» وغيرها): مسار أقصر ونصّ بحجم عنوان الصفّ
+    /// (طلب المالك ٢٠٢٦-١١-١١ «مربّع الاختيار كبير صاير»)
+    static let choicePageHeight: CGFloat = 34
+    static var choicePageText: DS.TextRole { .hubRow }
+    /// الاختيار المضغوط في طرف صفّ (صفّ «الخصوصية» الواحد): عرض ثابت وارتفاع مسار أصغر، واللمس ٤٤
+    static let choiceCompactWidth: CGFloat = 150
+    static let choiceCompactHeight: CGFloat = 36
+    /// الحشوة الرأسية لمربّع الخيار في `DSOptionTiles`
+    static let optionTilePadding: CGFloat = DS.Spacing.sm
+    /// حشوة المسار حول الحبّة المختارة (والفاصل بين مربّعات `DSOptionTiles`)
+    static let choiceTrackInset: CGFloat = DS.Spacing.xxs
+    /// ظلّ الحبّة/البطاقة المختارة الناعم
+    static let choiceShadowRadius: CGFloat = DS.Spacing.xs
+    static let choiceShadowY: CGFloat = 1
+    /// ارتفاع صفّ الأمر (`DSCommandRow`) = مساحة اللمس
+    static let commandRowHeight: CGFloat = 48
+    /// نقطة الحالة في الشرائح الخفيفة
+    static let statusDot: CGFloat = DS.Spacing.xsm
     static var fieldValueSize: CGFloat { DS.TextRole.fieldValue.size }
     static var fieldLabelSize: CGFloat { DS.TextRole.label.size }
     /// صور المربّع: مربّع الصورة المصغّرة في شريط الصور (٧٦ ← ٥٦) ودائرة الشعار (٩٢ ← ٦٤) — كانت
@@ -1448,14 +1589,16 @@ enum DSBox {
     /// اللمس، لا ٣٦)، قرص الأيقونة (٤٦ ← ٣٢)، الهامش الجانبي (١٦ ← ١١)
     static let formRowHeight: CGFloat = 40
     static let formRowIcon: CGFloat = 32
-    static let formRowPadding: CGFloat = 11
+    static let formRowPadding: CGFloat = DS.Spacing.md
 
     // مربّع التنبيه/التأكيد — نفس النسبة
     /// هامش المحتوى (٢٠ ← ١٤)، المسافة بين عناصره (١٢ ← ٨)، العنوان (١٧ ← ١٥)، النص (١٤ ← ١٣ — حدّ
     /// القراءة)، قرص الأيقونة (٣٦ ← ٢٨)، وعرضه الأقصى (٣٤٠ ← ٣٢٠)
-    static let alertPadding: CGFloat = 14
-    static let alertSpacing: CGFloat = 8
+    static let alertPadding: CGFloat = DS.Spacing.md
+    static let alertSpacing: CGFloat = DS.Spacing.sm
     static let alertMaxWidth: CGFloat = 320
+    /// مربّع اختيار التاريخ: أعرض من التنبيه لتتّسع عجلة التاريخ بحشوتها (عرضها الطبيعي ≈ ٣٢٠)
+    static let dateCardMaxWidth: CGFloat = 360
     static var alertTitleFont: Font { DS.Font.role(.headline) }
     static var alertBodyFont: Font { DS.Font.role(.callout) }
 
@@ -1465,8 +1608,9 @@ enum DSBox {
     static let buttonHeight: CGFloat = 44
     /// الإجراء الرئيسي في شاشات ملء الشاشة (الدخول، التسجيل، الانتظار، التجميد، التحديث) — كان ٥٨/٥٢
     static let buttonHeightLarge: CGFloat = 48
-    static let buttonRadius: CGFloat = 12
-    static let buttonSpacing: CGFloat = 7
+    /// حبّة (كبسولة): نصف ارتفاع الزرّ — قرار المالك ٢٠٢٦-١١-١١ «حبّات متساوية»
+    static let buttonRadius: CGFloat = 22
+    static let buttonSpacing: CGFloat = DS.Spacing.sm
     static var buttonFont: Font { DS.Font.role(.button) }
     static var buttonFontLarge: Font { DS.Font.role(.buttonLarge) }
     /// الزرّ المدمج (أزرار رأس تفاصيل العضو — طلب المالك ٢٠٢٦-١٠-٢٥ «صغر حجمه شوي زيادة»): شكله ٣٦، ومساحة
@@ -1478,14 +1622,14 @@ enum DSBox {
     /// `buttonHeight` حدّ أدنى يكبر مع الخط (ن-٥ فحص ٢٠٢٦-١٠-٠٧: كان «حفظ/إضافة/نشر» يلتفّ ويُقصّ)
     static let buttonLabelMinScale: CGFloat = 0.7
     /// شريط الأزرار السفلي لمربّع العمل: هوامشه (١٦/٨/١٢ ← ١١/٦/٨)
-    static let footerHorizontal: CGFloat = 11
-    static let footerTop: CGFloat = 6
-    static let footerBottom: CGFloat = 8
+    static let footerHorizontal: CGFloat = DS.Spacing.lg
+    static let footerTop: CGFloat = DS.Spacing.md
+    static let footerBottom: CGFloat = DS.Spacing.md
 
     // الشرائح (أزرار صغيرة، فلاتر، «+ صور») — `DSChipButton` / `DSExtraChip`
     /// ارتفاع الشريحة (كانت ٢٨–٣٨ في الشاشات) وحشوتها الجانبية
     static let chipHeight: CGFloat = 34
-    static let chipPadding: CGFloat = 12
+    static let chipPadding: CGFloat = DS.Spacing.md
 
     /// زوايا قرص الأيقونة المستدير داخل المربّعات (في الصفحات `DS.Icon.discRadius`)
     static let iconRadius: CGFloat = DS.Icon.discRadiusSmall
@@ -1512,8 +1656,8 @@ enum DSBox {
     // أزرار الرجوع/الإغلاق/الإجراء (`DSNavButtons`): فوق الرأس الملوّن ٤٤ (المضغوط ٣٦)، وفوق السطح ٣٨
     static let navButtonOnColor: CGFloat = 44
     /// أيقونة القسم في دائرة رأس التبويب («الإدارة» في «اليوم») ورؤوس صفحات الإدارة — `MainHeaderView.leadingIcon`
-    static let headerSymbol: CGFloat = 52
-    static let headerSymbolGlyph: CGFloat = 20
+    static let headerSymbol: CGFloat = 38
+    static let headerSymbolGlyph: CGFloat = 17
     static let navButtonCompact: CGFloat = 36
     static let navButtonSurface: CGFloat = 38
     static var navGlyph: CGFloat { DS.Glyph.xl }
@@ -1736,6 +1880,9 @@ struct DSButtonFace: ViewModifier {
     var tint: Color? = nil
     var fullWidth: Bool = true
     var enabled: Bool = true
+    /// الإجراء الثانوي بإطار ذهبي على أرضية البطاقة ونصّ أساسي (v3-boxes، نقد V3 م٧): «تم» وحده ممتلئ. النص بحشوة جانبية
+    /// دائماً (لا يلمس الحافة) ويلتفّ بدل أن يُقصّ
+    var outlined: Bool = false
     /// وضع العرض: الزرّ «بعرض السطر» في الصفحات لا يتجاوز `DS.Landscape.buttonMaxWidth` ويتوسّط سطره
     /// (داخل المربّعات الوسطية يبقى بعرض المربّع — المربّع نفسه محدود العرض)
     @Environment(\.dsLandscape) private var landscape
@@ -1746,10 +1893,12 @@ struct DSButtonFace: ViewModifier {
         let capped = fullWidth && landscape && !inCenterBox
         return content
             .font(size.font)
-            .foregroundColor(cancel ? DS.Color.textPrimary : .white)
-            // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧)
-            .dsButtonLabelFit()
-            .padding(.horizontal, fullWidth ? 0 : (size == .compact ? DS.Spacing.md : DS.Spacing.lg))
+            // «إلغاء» خفيف: نصّ ثانوي على تعبئة فاتحة جداً (طلب المالك ٢٠٢٦-١١-١٠ «خفيف»)
+            .foregroundColor(cancel || outlined ? DS.Color.textPrimary : .white)
+            // سطر واحد يصغر بدل الالتفاف والقصّ، والارتفاع حدّ أدنى (ن-٥ فحص ٢٠٢٦-١٠-٠٧) — وذو الإطار يلتفّ
+            .modifier(DSButtonLabelLines(wraps: outlined))
+            .padding(.horizontal, outlined ? DSBox.buttonOutlinedPadding
+                                           : (fullWidth ? 0 : (size == .compact ? DS.Spacing.md : DS.Spacing.lg)))
             .frame(maxWidth: fullWidth ? (capped ? DS.Landscape.buttonMaxWidth : .infinity) : nil)
             .frame(minHeight: size.height)
             .background { fill }
@@ -1763,13 +1912,17 @@ struct DSButtonFace: ViewModifier {
 
     @ViewBuilder
     private var fill: some View {
-        if let tint {
+        if outlined {
+            DSBox.buttonShape.fill(DS.Color.cardBackground)
+                .overlay(DSBox.buttonShape.strokeBorder(DS.Color.accentLight, lineWidth: DS.Border.widthBold))
+        } else if let tint {
             // لون المعنى بدرجة تعبئته (النص أبيض) — لا بحبره الفاتح في الداكن
             DSBox.buttonShape.fill(tint.dsSolidFill)
         } else if role == .destructive {
             DSBox.buttonShape.fill(DS.Color.errorFill)
         } else if role == .cancel {
-            DSBox.buttonShape.fill(DS.Color.mutedBackground.opacity(0.8))
+            // «إلغاء»: حبّة رمادية فاتحة بلا إطار (من عائلة `fieldFill` — قرار المالك ٢٠٢٦-١١-١١)
+            DSBox.buttonShape.fill(DS.Color.fieldFill)
         } else {
             DSBox.buttonShape.fill(DSActionFill.style())
         }
@@ -1815,6 +1968,29 @@ extension Color {
         if self == DS.Color.accent { return DS.Color.goldFill }
         return self
     }
+}
+
+/// نص وجه الزرّ: سطر يصغر (`dsButtonLabelFit`)، أو — ذو الإطار — يلتفّ حتى `DSBox.buttonLabelWrapLines` في الوسط
+private struct DSButtonLabelLines: ViewModifier {
+    let wraps: Bool
+    func body(content: Content) -> some View {
+        if wraps {
+            content
+                .lineLimit(DSBox.buttonLabelWrapLines)
+                .minimumScaleFactor(DSBox.buttonLabelMinScale)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.vertical, DS.Spacing.xs)
+        } else {
+            content.dsButtonLabelFit()
+        }
+    }
+}
+
+extension DSBox {
+    /// الزرّ ذو الإطار: حشوة النص الجانبية (لا يلمس الحافة)، وأقصى أسطره قبل التصغير
+    static let buttonOutlinedPadding: CGFloat = DS.Spacing.md
+    static let buttonLabelWrapLines = 3
 }
 
 extension View {
@@ -1924,8 +2100,13 @@ extension DS.Icon {
     static let avatarLarge: CGFloat = 66
     /// دائرة اختيار صورة العضو داخل المربّع (فارغة بحلقة متقطّعة، أو الصورة المختارة)
     static let photoPicker: CGFloat = 96
+    /// دائرة الصورة الكبيرة أعلى مربّع بيانات التسجيل (الذكور فقط — طلب المالك ٢٠٢٦-١١-٢٧)
+    static let signupPhoto: CGFloat = 120
     /// شارة «+ / تعديل» على طرف دائرة الصورة
     static let photoBadge: CGFloat = 28
+    /// مربّع الاختيار في «التسجيل» و«استكمال التسجيل» (العيّنة spouse2، ٢٠٢٦-١١-٢٨: كان ١٣٢ ورمز ٥٢): الارتفاع وقرص الرمز
+    static let choiceTileHeight: CGFloat = 96
+    static let choiceTileIcon: CGFloat = 36
     /// نقطة «متصل الآن» على طرف صورة العضو (حلقتها النابضة ضعفها)
     static let onlineDot: CGFloat = 11
 }
@@ -1938,10 +2119,14 @@ extension DS.Opacity {
     static let dimmed: Double = 0.8
 }
 
-// MARK: - لون «رفض» (طلب المالك ٢٠٢٦-١٠-٠٧ «غيّر بين لون الرفض والحذف النهائي»)
+// MARK: - لون «رفض»
+// ٢٠٢٦-١٠-٠٧ صار برتقالياً ليتميّز عن «حذف نهائي»؛ ٢٠٢٦-١١-١١ خرج الحذف من التفاصيل (بالسحب في القائمة فقط)
+// وطلب المالك «رفض خلّه لون أحمر» — فالرفض أحمر الخطأ نفسه، ويبقى الاسم مكاناً واحداً لتغييره
 extension DS.Color {
-    /// الرفض برتقالي محروق — يتميّز عن «حذف نهائي» الأحمر؛ النص الأبيض فوقه ≥ ٤٫٥:١ في الوضعين
-    static let reject = SwiftUI.Color.adaptive(light: "#B94E0C", dark: "#C8621E")
+    static var reject: SwiftUI.Color { error }
+    /// لون المفتاح (تشغيل/إيقاف) المشغَّل في كل التطبيق — أخضر خفيف بدل الكحلي الثقيل (طلب المالك ٢٠٢٦-١١-١١
+    /// «قسم التطبيق ما حدثت على التصميم الجديد»). المكان الوحيد لتغييره
+    static var toggleOn: SwiftUI.Color { success }
 }
 
 // MARK: - دفعة 3-B «أسلوب واحد» (٢٠٢٦-١٠-٠٧): شارة العدد ونقطة الفئة في صفحات الإدارة
@@ -1971,6 +2156,8 @@ extension DS.Icon {
     static let appLogo: CGFloat = 100
     /// ارتفاع شعار العائلة المسطّح في شاشة البداية والدخول (طلب المالك ٢٠٢٦-١٠-٢٩ «الشعار مو واضح» — كان ١٠٠)
     static let familyLogo: CGFloat = 150
+    /// شعار شاشة البداية (طلب المالك ٢٠٢٦-١١-٠٥ «شوي نصغر الشعار») — أصغر من شعار الدخول
+    static let splashLogo: CGFloat = 120
     /// الشعار في صفحة الانتظار ووضع العرض
     static let familyLogoCompact: CGFloat = 120
     /// قرص الحالة الكبير في شاشات ملء الشاشة (الحساب مجمّد، حد الأجهزة، التحديث الإجباري)
@@ -1988,6 +2175,8 @@ extension DS.TextRole {
     static let heroTitle = DS.TextRole(.title, weight: .heavy)
     /// رقم في مربّعات رمز التحقق — مستثنى من تغيير الخط (طلب المالك ٢٠٢٦-١٠-٠٨): كما كان ٢٦ مقيّداً بـ Title 2
     static let codeDigit = DS.TextRole(size: 26, weight: .bold, style: .title2)
+    /// سؤال مربّع «التسجيل» و«استكمال التسجيل» (العيّنة spouse2، ٢٠٢٦-١١-٢٨: كان Headline ١٧) — ١٩ يكبر مع Title 3
+    static let signupQuestion = DS.TextRole(size: 19, weight: .bold, style: .title3)
 }
 
 extension DS.Opacity {
@@ -2039,6 +2228,23 @@ extension DS {
         static let columnsAreaHeight: CGFloat = 142
         /// عجلة التاريخ والوقت داخل مربّع (جدولة الإشعار)
         static let wheelHeight: CGFloat = 190
+
+        // ألوان السلاسل في الحلقات والأشرطة والأعمدة فقط — النصوص تبقى بألوانها (spec A.1/A.11، فاحص dataviz
+        // ٢٠٢٦-١١-٢٦: الثلاثة تنجح على الأبيض و#1C1F25 ومع عمى الألوان). كل لون بجانب اسمه دائماً.
+        /// الرجال — spec A.1/A.11 (كان `male` #172536 الذي يُقرأ حبراً لا سلسلة)
+        static let men = SwiftUI.Color.adaptive(light: "#205293", dark: "#5A8CD8")
+        /// النساء — spec A.1/A.11 (كان `female`؛ وردي الداكن #F4B1CB يفشل الفحص)
+        static let women = SwiftUI.Color.adaptive(light: "#944F6F", dark: "#C96F9C")
+        /// خارج العائلة — spec A.1/A.11 (كان `slate`؛ مع «التمييز بدون لون» يُرسم بتظليل ٤٥°)
+        static let outside = SwiftUI.Color.adaptive(light: "#8D6803", dark: "#A98A3A")
+        /// الإجمالي = الحبر، محايد لا سلسلة — spec A.1/A.11
+        static let total = DS.Color.textPrimary
+        /// مسار الشريط = درجة أفتح من اللون نفسه؛ في الداكن لون السلسلة بنسبة ٢٢٪ (#38 = ٢٢٪) — spec A.1/A.11
+        static let menTrack = SwiftUI.Color.adaptive(light: "#DCE5F2", dark: "#385A8CD8")
+        /// مسار شريط النساء — spec A.1/A.11
+        static let womenTrack = SwiftUI.Color.adaptive(light: "#F3E4EB", dark: "#38C96F9C")
+        /// مسار شريط الإجمالي (الحبر) — spec A.1/A.11
+        static let inkTrack = SwiftUI.Color.adaptive(light: "#E4E7EB", dark: "#38FFFFFF")
     }
 }
 
@@ -2235,7 +2441,7 @@ extension DS.TextRole {
     static let calloutCompact  = DS.TextRole(.subheadline)
     static let chipCompact     = DS.TextRole(.footnote, weight: .medium)
     static let captionCompact  = DS.TextRole(.caption, weight: .medium)
-    static let badgeCompact    = DS.TextRole(.caption2, weight: .semibold)
+    static let badgeCompact    = DS.TextRole(.caption, weight: .semibold)
     static let footnoteCompact = DS.TextRole(.footnote)
     static let microCompact    = DS.TextRole(.caption2, weight: .medium)
 }
@@ -2281,7 +2487,7 @@ extension DS.Icon {
 
 extension DSBox {
     /// كبسولة بارتفاع ٣٠ (شارة إحصاء في اللوحة، صندوق السنة) — بين الصغيرة ٢٨ والعادية ٣٤
-    static let chipHeightCompact: CGFloat = 30
+    static var chipHeightCompact: CGFloat { chipHeightSmall }
 }
 
 // MARK: - قسم «العائلة» في تفاصيل العضو (طلب المالك ٢٠٢٦-١٠-٠٧: الخط كما كان قبل التوحيد)
@@ -2348,17 +2554,22 @@ extension DS {
         /// أرضية صفحات اللوحة: أبيض في الفاتح (طلب المالك ٢٠٢٦-١٠-٢٠ «ابيض بدال الكريمي» — كان رملياً #F5F2EC) — أسود صافٍ
         /// في الداكن. البطاقات فوقها تنفصل بالإطار الرفيع وظلّ البطاقة الخفيف
         static let background = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#000000")
-        /// طرفا تدرّج الرأس: كحلي المصمم ← كحلي أفتح؛ وفي الداكن أعمق
-        static let bandTop = SwiftUI.Color.adaptive(light: "#182E4D", dark: "#0B111A")
-        static let bandBottom = SwiftUI.Color.adaptive(light: "#29446B", dark: "#1A2B45")
-        /// عمودي (حافته العليا كحلي واحد فتلتقي بشريط الحالة الثابت بلا خطّ)
-        static let band = LinearGradient(colors: [bandTop, bandBottom], startPoint: .top, endPoint: .bottom)
+        /// رأس اللوحة كحلي مسطّح = كحلي رؤوس التطبيق (`DS.Color.gradientBand`، نفس رأس «اليوم») — spec A.1 (كان تدرّجاً
+        /// #182E4D ← #29446B)
+        static let band = DS.Color.gradientBand
         /// زجاج الرأس (الأزرار الدائرية، مربّعات الأرقام، شرائح الفلتر) وإطاره الداخلي
         static let glass = SwiftUI.Color.white.opacity(0.09)
         static let glassLine = SwiftUI.Color.white.opacity(0.14)
-        /// الحلقة الذهبية الساكنة في طرف الرأس وهالتها
-        static let ringStroke = DS.Color.accentLight.opacity(0.22)
-        static let ringHalo = DS.Color.accentLight.opacity(0.05)
+        /// إطار البطاقة العادية: خطّ بارد رفيع بلا ظلّ — spec A.1/A.5
+        static let cardStroke = DS.Color.textPrimary.opacity(DS.Opacity.cardStroke)
+        /// إطار ما يجب أن يُرى (بطاقة الحالة، صفّ الانتباه، الحقول، الشرائح) — spec A.1/A.5/A.9
+        static let frameStroke = DS.Color.cardBorder
+        /// ضغط الصفّ = تظليل لا تصغير — spec A.1/A.6
+        static let rowPress = DS.Color.cardBackgroundSoft
+        /// الصفر في سطر الرأس: يُعرض ولا يفتح شيئاً (أبيض ٥٥٪، تباين ٥٫٧:١ على الكحلي) — spec A.1/A.3
+        static let lineZero = SwiftUI.Color.white.opacity(0.55)
+        /// خطّ ذهبي خافت فوق الكحلي: الفاصل بين حلقات رأس «الأجهزة ووصول الإشعارات»، ونقطة «جارٍ الفحص» في سطر حكمه
+        static let bandHairline = DS.Color.accentLight.opacity(0.22)
         /// نص ثانوي فوق الرأس (التاريخ، عناوين الأرقام)
         static let onBandMuted = SwiftUI.Color.white.opacity(0.72)
         /// شارة الدور فوق الرأس
@@ -2366,24 +2577,31 @@ extension DS {
         static let rolePillInk = SwiftUI.Color(hex: "#E7D3A6")
         static let rolePillStroke = DS.Color.accentLight.opacity(0.45)
         /// أرقام الرأس: «بانتظارك» ذهبي فاتح، «مستعجل» مرجاني، «متأخر» كهرماني (ثابتة في الوضعين — فوق الكحلي)
+        /// spec A.1: `kpi*` لتوجيه `.status` القديم فقط — الواجهة الجديدة لا تستعملها
         static let kpiMine = SwiftUI.Color(hex: "#E7D3A6")
         static let kpiHot = SwiftUI.Color(hex: "#FF9C8F")
         static let kpiLate = SwiftUI.Color(hex: "#F5C46B")
         /// نقطة «جديد» على جرس الرأس (وعدد «إشعارات الإدارة» عليه)
         static let bellDot = SwiftUI.Color(hex: "#F47370")
-        /// نقاط سطر الحالة فوق الكحلي: سليم أخضر فاتح، تنبيه = `kpiLate`، عاجل = `bellDot` (ثابتة في الوضعين)
+        /// نقاط سطر الحالة فوق الكحلي: سليم أخضر فاتح، تنبيه كهرماني، عاجل = `bellDot` (ثابتة في الوضعين)
         static let statusOk = SwiftUI.Color(hex: "#7FD3A2")
+        static let statusWarn = SwiftUI.Color(hex: "#F5C46B")
         /// نص فوق الشريحة الذهبية المختارة
         static let onGold = SwiftUI.Color(hex: "#1B1407")
         /// حلقتا «الرجال» و«النساء» في رأس «العائلة» (فوق الكحلي — ثابتة في الوضعين؛ الإجمالي `DS.Color.accentLight`):
         /// أزرق الرجال وورديّ النساء الفاتحان (درجتا `male`/`female` الداكنتان) ليظهرا على الكحلي
         static let censusMale = SwiftUI.Color(hex: "#9DC2E7")
         static let censusFemale = SwiftUI.Color(hex: "#F4B1CB")
+        /// «خارج العائلة» في رأس «العائلة» — رمادي فاتح محايد فوق الكحلي (لا يُعدّ في الإجمالي)
+        static let censusOutside = SwiftUI.Color(hex: "#B4BCC5")
+        /// أقل ارتفاع لقائمة تحت شرائح فلتر — تبديل الشريحة لا يقصّر الصفحة فجأة
+        static let filterListMinHeight: CGFloat = 560
         /// قسم «الدخول والأمان» (صدئي من عائلة الكحلي والذهبي)
         static let securityFill = SwiftUI.Color(hex: "#9A3B2E")
 
         // المقاسات
-        static let cardRadius: CGFloat = DS.Radius.xl
+        /// زاوية البطاقة = `DS.Card.radius` وعيّنات المالك — spec A.1/A.5 (كانت `DS.Radius.xl` ٢٠)
+        static let cardRadius: CGFloat = DS.Radius.md
         static let cardPadding: CGFloat = 14
         static let tileRadius: CGFloat = 18
         static let kpiRadius: CGFloat = DS.Radius.lg
@@ -2394,9 +2612,63 @@ extension DS {
         /// الهوامش داخل الرأس، وكم تصعد البطاقة الأولى فوقه
         static let headerSide: CGFloat = 18
         static let headerTop: CGFloat = DS.Spacing.sm
-        static let headerBottom: CGFloat = 46
+        /// الرأس يلتفّ على محتواه — spec A.1 (كان ٤٦)
+        static let headerBottom: CGFloat = DS.Spacing.lg
+        /// أسفل الرأس حين يظهر سطر الأرقام (`AdminHeaderLine`) — spec A.1
+        static let headerBottomLine: CGFloat = 18
         static let headerBottomCompact: CGFloat = 20
-        static let headerOverlap: CGFloat = 30
+        /// البطاقات لا تصعد فوق الرأس: ينتهي الرأس وتبدأ الصفحة — spec A.1 (كان ٣٠)
+        static let headerOverlap: CGFloat = 0
+        /// سطر أرقام الرأس: الفراغ بين العناصر (وكل عنصر ≥ `DS.Icon.tapTarget`) — spec A.3
+        static let headerLineGap: CGFloat = 18
+        /// إطار الصفحة: بين الأقسام، بين العنوان وبطاقته، بين بطاقتين في قسم، وآخر الصفحة — spec A.2
+        static let sectionGap: CGFloat = DS.Spacing.xxl
+        static let sectionHeadingGap: CGFloat = DS.Spacing.sm
+        static let cardGap: CGFloat = DS.Spacing.md
+        static let pageBottom: CGFloat = DS.Spacing.xxl
+        /// أقل ارتفاع للصفّ: سطر واحد ٤٤، سطران ٥٦ — spec A.6
+        static let rowMinHeight: CGFloat = DS.Icon.tapTarget
+        static let rowMinHeightTwoLines: CGFloat = 56
+        /// حشوة حبّة الحالة (عمودي × أفقي ٦ × ١١) — spec A.7
+        static let statePillPaddingV: CGFloat = DS.Spacing.xsm
+        static let statePillPaddingH: CGFloat = 11
+        /// الحبّة التي تنفّذ تُرسم ٣٤ (`pillHeight`) ولمسها ٤٤، وبين حبّتين متجاورتين ١٢ فلا يتداخل اللمس — spec A.7 / T6
+        static let pillHitHeight: CGFloat = DS.Icon.tapTarget
+        static let actingPillGap: CGFloat = DS.Spacing.md
+        /// شريحة الفلتر: تُرسم ٣٦ ولمسها ٤٤ (`DS.Icon.tapTarget`) — spec A.9
+        static let filterChipHeight: CGFloat = 36
+        /// شريحة الفلتر المفعّل تحت شريط «العائلة» — أصغر (٣٠) وبلا ✓ (طلب المالك ٢٠٢٦-١١-٢٧)، لمسها يبقى ٤٤
+        static let activeFilterChipHeight: CGFloat = 30
+        /// مربّعات رأس «الوارد» (الطلبات · المنجزة · الرسائل): أقل ارتفاع ٥٤ (يكبر مع حجم النص)، الزاوية ١٤، إطار أبيض ١٨٪،
+        /// والمختار حلقة ذهبية `accentLight` بعرض ٢ بعد فاصل ٢ من لون الشريط
+        static let inboxTileHeight: CGFloat = 54
+        static let inboxTileRadius: CGFloat = 14
+        static let inboxTileStrokeOpacity: Double = 0.18
+        static let inboxTileRing: CGFloat = 2
+        static let inboxTileRingGap: CGFloat = 2
+        /// بين سطر الأرقام وصفّ المربّعات
+        static let inboxTilesTop: CGFloat = 14
+        /// رأس «الوارد» (العيّنة inbox-header ٢٠٢٦-١١-٢٨): دائرتا «تحديد» و«الإعدادات» متساويتان — زجاج أبيض ١٠٪ بإطار ١٦٪
+        static let inboxCircle: CGFloat = 38
+        static let inboxCircleFill = SwiftUI.Color.white.opacity(0.10)
+        static let inboxCircleLine = SwiftUI.Color.white.opacity(0.16)
+        /// سطر الأرقام الأربعة بلا مربّعات (طلب المالك «خلّهم بدون مربّعات»): «بانتظار المراجعة» بذهبي أقوى وسهم،
+        /// والأرقام باهتة في وضع «تحديد»
+        static let inboxReviewInk = DS.Color.accentLight
+        static let inboxSelectDim: Double = 0.4
+        /// زرّ الاختيار في ورقة الفلاتر — spec A.13
+        static let filterRadio: CGFloat = 22
+        /// مربّعات الأقسام (`AdminRowTile`؛ غير `areaColumns` ٣ لمربّعات البحث والأدوات): عمودان بفراغ ١٠، حشوة ١٢ جانباً و١٠ فوق وتحت،
+        /// أقل ارتفاع ٦٠، والزاوية `cardRadius` — spec A.8؛ صُغّرت ٢٠٢٦-١١-٢٦ (طلب المالك «نصغر المربعات»: كان ٧٦ وحشوة ١٢ من كل جهة)
+        static let areaTileColumns = 2
+        static let areaTileGap: CGFloat = DS.Spacing.smd
+        static let areaTilePadding: CGFloat = DS.Spacing.md
+        static let areaTilePaddingV: CGFloat = DS.Spacing.smd
+        static let areaTileMinHeight: CGFloat = 60
+        /// الضغط: المربّع يصغر ٠٫٩٧ مع تظليل في ١٢٠ م.ث، والصفّ تظليل فقط في ١٠٠ م.ث — spec A.8/A.16
+        static let tilePressScale: CGFloat = 0.97
+        static let tilePress = Animation.easeOut(duration: 0.12)
+        static let rowPressAnimation = Animation.easeOut(duration: 0.1)
         /// سطر الرأس المطويّ في «العائلة» (الرجوع · العنوان والعدد · البحث · ＋) — أقل ارتفاع، ويكبر مع الخط
         static let compactBar: CGFloat = 52
         /// زرّ البحث في السطر المطويّ: مهلة الرجوع لأعلى قبل وضع المؤشر في الحقل (ثوانٍ)
@@ -2413,21 +2685,22 @@ extension DS {
         /// عرض اللوحة من أحجام إمكانية الوصول (الإجراء تحت النص)
         static let statusPanelWidthLarge: CGFloat = 360
         /// مربّع الأيقونة الملوّن في صفوف البطاقات، ومربّع الأقسام، ومربّع نوع الطلب
-        static let iconSquare: CGFloat = 36
-        static let iconSquareRadius: CGFloat = 11
+        static let iconSquare: CGFloat = 30
+        /// أيقونة صف الطلب في «الوارد» (طلب المالك ٢٠٢٦-١١-٠٥: أصغر)
+        static let rowIcon: CGFloat = 26
+        /// زاوية مربّع الأيقونة ٨ — spec A.6/A.18 (كانت ١١)
+        static let iconSquareRadius: CGFloat = DS.Radius.sm
         static let tileIcon: CGFloat = 34
         static let tileIconRadius: CGFloat = 10
         static let typeIcon: CGFloat = 24
         static let typeIconRadius: CGFloat = 7
-        /// الحلقة الذهبية: قطرها، عرض الهالة، وكم تخرج من طرف الرأس
-        static let ringSide: CGFloat = 260
-        static let ringHaloWidth: CGFloat = 28
-        static let ringOffsetX: CGFloat = 60
-        static let ringOffsetY: CGFloat = 90
-        /// أزرار الكبسولة في الصفوف والبطاقات (اشحن، أعلن، رفض…)
-        static let pillHeight: CGFloat = 32
-        static let pillHeightCard: CGFloat = 36
-        static let pillPadding: CGFloat = 13
+        /// سلّم «من العائلة إلى التطبيق» (صفحة الأجهزة): أخضر العائلة يبدأ بهذه الشفافية في الدرجة الأولى ويغمق حتى الكامل
+        static let usageStepFloor: Double = 0.45
+        /// أزرار الكبسولة في الصفوف والبطاقات (اشحن، أعلن، رفض…) — بمقاس حبّة التطبيق الموحّدة (`DSBox.chipHeight`)
+        /// لا مقاسين خاصّين بالإدارة (كانا ٣٢ و٣٦ — طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
+        static let pillHeight: CGFloat = DSBox.chipHeight
+        static let pillHeightCard: CGFloat = DSBox.chipHeight
+        static let pillPadding: CGFloat = DSBox.chipPadding
         /// الإجراءات السريعة: الدائرة وعرض العمود
         static let quickCircle: CGFloat = 54
         static let quickWidth: CGFloat = 66
@@ -2451,6 +2724,54 @@ extension DS {
         static let miniIcon: CGFloat = 30
         static let miniIconRadius: CGFloat = 9
         static let miniCellPadding: CGFloat = DS.Spacing.sm
+
+        // MARK: ── V2-2 «العائلة» (اتجاه «أ»، ٢٠٢٦-١١-٢٦) — بداية ──
+        // جذر «العائلة» (`AdminMembersPage`/`AdminMembersHeader`): مربّعات الأرقام الزجاجية في الرأس، الحقل وزرّ «تصفية»،
+        // بطاقة «يحتاج مراجعتك»، وعنوان الفرع. الألوان من `DS.Color`/`DS.Hub` الموجودة (الزجاج، الكريمي، أخضر العائلة لمسة)
+        /// زاوية ما في رأس «العائلة»: مربّع الرقم والحقل وزرّ «تصفية» (١٤ — بين البطاقة ١٢ وبطاقة المراجعة ١٦)
+        static let familyControlRadius: CGFloat = 14
+        /// أقل ارتفاع لمربّع الرقم الزجاجي (الرقم ١٧ والاسم ١٢ تحته) — يكبر مع الخط
+        static let familyKPIMinHeight: CGFloat = 52
+        /// عدد التصفية المفعّلة على زرّ «تصفية» (كبسولة خضراء)
+        static let familyFilterBadge: CGFloat = 22
+        /// بطاقة «يحتاج مراجعتك»: أقل ارتفاع، زاويتها، وحبّة «5 قوائم»
+        static let familyReviewMinHeight: CGFloat = 64
+        static let familyReviewRadius: CGFloat = DS.Radius.lg
+        static let familyReviewPill: CGFloat = 26
+        /// عنوان الفرع: طول الشريط الأخضر في بدايته (عرضه `stripeWidth`) وحبّة العدد
+        static let familyBranchBar: CGFloat = 20
+        static let familyBranchCount: CGFloat = 24
+        /// اسم الفرع فوق صفوفه — Headline (١٧) شبه عريض
+        static let familyBranchTitle = DS.TextRole(.headline, weight: .semibold)
+        // MARK: ── V2-2 «العائلة» — نهاية ──
+
+        // MARK: ── V2-3 ورقة العضو «أ3 ملف موجز وأفعال» (اختيار المالك ٢٠٢٦-١١-٢٦) — بداية ──
+        // `AdminMemberSheet`: الرأس الكحلي المختصر بأزراره الأربعة، رقاقات «أكمل الناقص»، عناوين الأقسام بشريطها (نمط
+        // «فرع حسن» — `familyBranchBar`/`familyBranchTitle`)، وزرّ الحذف الأحمر بإطار
+        /// صورة العضو في الرأس
+        static let memberAvatar: CGFloat = 56
+        /// زرّ الرأس: مربّع زجاجي (العرض × الارتفاع) وزاويته، والفراغ بين الأعمدة وبين المربّع واسمه
+        static let memberActionWidth: CGFloat = 56
+        static let memberActionHeight: CGFloat = 52
+        static let memberActionRadius: CGFloat = DS.Radius.lg
+        static let memberActionGap: CGFloat = DS.Spacing.xsm
+        /// الزرّ في شبكة ٢×٢ (أحجام إمكانية الوصول): الرمز واسمه في سطر، أقل ارتفاع وزاوية
+        static let memberActionTileHeight: CGFloat = 56
+        static let memberActionTileRadius: CGFloat = familyControlRadius
+        /// رقاقة «أكمل الناقص»: تعبئة كهرمانية خافتة (كريمية في الفاتح) وزاويتها
+        static let memberMissingFill = DS.Color.warning.opacity(DS.Opacity.tintFill)
+        static let memberMissingRadius: CGFloat = familyControlRadius
+        /// بين أقسام الورقة (العنوان بشريطه ثم بطاقته)
+        static let memberSectionGap: CGFloat = DS.Spacing.xl
+        /// زرّ «حذف العضو نهائياً»: إطار أحمر خافت وزاويته
+        static let memberDeleteStroke = DS.Color.error.opacity(DS.Opacity.tintStroke)
+        static let memberDeleteRadius: CGFloat = familyControlRadius
+        /// V3 (م٨): صندوق رمز زرّ الرأس بارتفاع ثابت ومحاذاة سفلية — أسماء الأزرار على خطّ واحد مهما اختلف طول الرمز
+        /// (`tree` أطول من `pencil`/`phone`). يكبر مع «حجم النص» (`@ScaledMetric` في الرأس)
+        static let memberActionGlyphBox: CGFloat = 26
+        /// قوائم الترتيب في مربّعات كرت العضو (الزوجات، الأبناء والبنات): تقدير ارتفاع الصفّ قبل قياسه — يكبر مع الخط
+        static let memberReorderRow: CGFloat = 60
+        // MARK: ── V2-3 ورقة العضو — نهاية ──
     }
 }
 
@@ -2461,15 +2782,23 @@ extension DS.TextRole {
     /// Title 1 (٢٨) بموافقة المالك على رأس «أ». وأرقام المربّع اللي ينسحب في «اليوم» (الدفعة ١٣ «إلى داخله نكبر»): الأربعة في
     /// «يحتاج انتباهك» ووسط حلقات «إحصاء الأفراد» (`DS.Ring.census`)
     static let hubKPI = DS.TextRole(.title3, weight: .semibold)
+    /// اسم مربّع رأس «الوارد» جنب رقمه (`AdminInboxTileRow`) — Caption 1 (١٢) شبه عريض
+    static let inboxTileLabel = DS.TextRole(.caption, weight: .semibold)
     /// وسط الحلقة المتوسطة الموحّدة (`DS.Ring.medium`)، ورقم رسائل الدخول — Title 2 (٢٢)
     static let hubPulse = DS.TextRole(.headline, weight: .semibold)
     /// اسم الرقم في «يحتاج انتباهك» وسطر «54 حياً · 14 متوفى» تحت حلقات «إحصاء الأفراد» (الدفعة ١٣ — كانت Caption 1 ١٢) —
     /// Footnote (١٣) شبه عريض
     static let hubLabel = DS.TextRole(.footnote, weight: .medium)
     /// عنوان صفّ داخل بطاقات اللوحة وعنوان مربّع القسم — Subheadline (١٥) عريض
-    static let hubRow = DS.TextRole(.subheadline, weight: .medium)
+    static let hubRow = DS.TextRole(.footnote, weight: .medium)
     /// نص زرّ الكبسولة في الصفوف — Footnote (١٣) عريض
     static let hubButton = DS.TextRole(.footnote, weight: .medium)
+    /// عنوان القسم في صفحات اللوحة — Subheadline (١٥) شبه عريض — spec A.1/A.4
+    static let hubSection = DS.TextRole(.subheadline, weight: .semibold)
+    /// قيمة الصفّ — Subheadline (١٥) شبه عريض بأرقام ثابتة العرض — spec A.1/A.6
+    static let hubValue = DS.TextRole(.subheadline, weight: .semibold, digits: true)
+    /// رقم سطر الرأس (أبيض على الكحلي) — Subheadline (١٥) شبه عريض — spec A.1/A.3
+    static let hubLineNumber = DS.TextRole(.subheadline, weight: .semibold)
 }
 
 // MARK: - المؤشرات الموحّدة (الدفعة ١٠ «وحّد شكلها كلها» — طلب المالك ٢٠٢٦-١٠-٢٠)
@@ -2498,12 +2827,17 @@ extension DS {
         static let census = Size(side: 88, line: 8, value: .hubKPI, caption: .micro)
         /// «إحصاء الأفراد» مع XXXL — أصغر قليلاً (الأسماء والأعداد أكبر)
         static let censusCompact = Size(side: 80, line: 8, value: .hubKPI, caption: .micro)
+        /// حلقات «العائلة» الثلاث (`AdminCensusRings` في «اليوم» و«الإحصاءات»): مقاس المتوسطة ٧٦/٧، والوسط نسبة الأحياء
+        /// ١٥ شبه عريض، بلا كلمة تحته (الاسم ١٣ والعدد ١٧ نصّان خارج الحلقة) — spec A.11
+        static let censusCard = Size(side: 76, line: 7, value: .hubValue, caption: nil)
+        /// خمس حلقات في صفّ في «إحصائيات العائلة» بـ«اليوم» (طلب المالك ٢٠٢٦-١١-٠٩ «نكرر الحلقات… ونضيف المستخدمين»)
+        static let todayCensus = Size(side: 50, line: 5, value: .hubLabel, caption: nil)
         /// المتوسطة بجانب النص من أحجام إمكانية الوصول (بلا رقم داخلها — الرقم بجانبها)
         static let mediumStacked = Size(side: 52, line: 6, value: nil, caption: nil)
         /// بطل الصفحة (ملخّص إحصاءات العائلة، رصيد رسائل الدخول)
         static let large = Size(side: 104, line: 10, value: .hubKPI, caption: .caption)
-        /// سُمك الشريط الموحّد (= خطّ المتوسطة)، والفراغ بين الأجزاء في الحلقة والشريط
-        static let barHeight: CGFloat = 7
+        /// سُمك الشريط الموحّد ٨ (المقياس الرفيع في dataviz — spec A.1/A.11، كان ٧)، والفراغ بين الأجزاء في الحلقة والشريط
+        static let barHeight: CGFloat = 8
         static let segmentGap: CGFloat = 2
         /// المسار الفارغ قبل وصول الأرقام، و«الباقي» الخافت (رمادي المتوفين نصف شفاف — لون معنى، لا أحمر)
         static var emptyTrack: SwiftUI.Color { DS.Color.textTertiary.opacity(DS.Opacity.cardStroke) }
@@ -2554,6 +2888,57 @@ extension DS.Hub {
     static let swipeGap: CGFloat = DS.Spacing.xs
 }
 
+// MARK: «اليوم» v2 — الاتجاه «أ» «بطاقات العائلة الملوّنة» (اختيار المالك ٢٠٢٦-١١-٢٦، الوحدة V2-1)
+//
+// الرأس الكحلي يحمل كل ما فوق الأقسام (العنوان، التحية والدور، الأزرار، سطر التحية حبّةً، الحلقات، رابطا «في التطبيق» و«خارج
+// العائلة»)، والأقسام مربّعات مسطّحة بلون كل قسم. ألوان الرأس والمربّعات ثابتة في الوضعين (فوق الكحلي أو تعبئة ثابتة).
+// التباين (مقيس على الكحلي بطبقته البيضاء ٨٪ ≈ #2A3F5B): الذهبي `accentLight` ٤٫٠:١ — للخطوط والأسهم والنقاط فقط، ونصوص
+// الذهبي الصغيرة `DS.Color.headerSubtitle` (٦٫٧:١)؛ حلقات الرجال ٤٫٣:١ والنساء ٦٫١:١ (فاحص dataviz: الحسّ العادي ١٧ ✓،
+// عمى الأحمر ٧٫٨ في نطاق «مسموح مع تمييز ثانٍ» — كل حلقة باسمها وعددها تحتها، لا لون وحده).
+extension DS.Hub {
+    /// حلقات «العائلة» على الرأس: ٥٨/٦ والنسبة في الوسط ١٣ شبه عريض أبيض (الاسم والعدد نصّان تحتها)
+    static let bandRing = DS.Ring.Size(side: 58, line: 6, value: .ringSmall, caption: nil)
+    /// ألوان الحلقات الثلاث فوق الكحلي (ثابتة): الإجمالي ذهبي، الرجال أزرق `male` الفاتح، النساء ورديّ `female` الفاتح
+    static let bandRingTotal = DS.Color.accentLight
+    static let bandRingMen = SwiftUI.Color(hex: "#7FA8D6")
+    static let bandRingWomen = censusFemale
+    /// شارة «≈» (نسبة الأحياء تقديرية) على ركن الحلقة: ذهبية بنص كحلي
+    static let bandApproxBadge: CGFloat = 18
+    /// الخطّ الرفيع فوق رابطَي «في التطبيق» و«خارج العائلة»
+    static let bandDivider = SwiftUI.Color.white.opacity(0.10)
+    /// الفراغ بين كتل الرأس (الأزرار ← الحبّة ← الحلقات ← الرابطان)
+    static let bandGap: CGFloat = DS.Spacing.md
+    /// أصغر تصغير لنصّ سطر واحد في الرأس (العنوان، عدد الحلقة) قبل أن يُقصّ
+    static let bandMinScale: CGFloat = 0.8
+    /// سطر التحية حبّةً ٤٤ فوق الكحلي: تعبئة بيضاء خفيفة، إطار ذهبي، نقطة ذهبية
+    static let bandPillFill = SwiftUI.Color.white.opacity(0.08)
+    static let bandPillStroke = DS.Color.accentLight.opacity(0.55)
+    static let bandPillDot: CGFloat = 8
+    /// الحبّة مرسومةً أصغر (المالك ٢٠٢٦-١١-٢٧ «تصغره شوي»): ٣٢ ونقطتها ٦ — ولمسها يبقى ٤٤ (`DS.Icon.tapTarget`)
+    static let bandPillHeight: CGFloat = 32
+    static let bandPillDotSmall: CGFloat = 6
+    /// «في التطبيق 170» أخضر فوق الكحلي (المالك ٢٠٢٦-١١-٢٧ «ابى في التطبيق يكون اخضر»): أخضر `currentLocation` الفاتح —
+    /// ٨٫٦:١ على #172536 و٨٫٤:١ على #1B2638
+    static let bandInApp = SwiftUI.Color(hex: "#9ACDA1")
+    /// شارة عدد الجرس الذهبية (ما يحتاج إجراء الآن) — ونصّها وحلقتها كحليان
+    static let bellBadgeGold: CGFloat = 18
+
+    /// مربّع القسم المسطّح: الاسم أبيض، سطر الحال كريمي (أبيض على الذهبي — الكريمي ٤٫٦:١ عليه)، الرمز أبيض ٨٢٪
+    static let tileTitleInk = SwiftUI.Color.white
+    static let tileStateInk = SwiftUI.Color(hex: "#F2EBDD")
+    static let tileIconInk = SwiftUI.Color.white.opacity(0.82)
+    /// هيكل التحميل على المربّع الملوّن: شريط فاتح
+    static let tileSkeleton = SwiftUI.Color.white.opacity(0.35)
+    /// المربّع مضغوطاً: طبقة داكنة خفيفة فوق لونه (الإطار لا يتغيّر)
+    static let tilePressVeil = SwiftUI.Color.black.opacity(0.14)
+    /// حبّة «ما ينتظرك» البيضاء على المربّع: كحلي للانتباه (١٥:١)، أحمر للعاجل (٥٫٩:١) — ثابتة في الوضعين
+    static let tilePillFill = SwiftUI.Color.white
+    static let tilePillInk = SwiftUI.Color(hex: "#172536")
+    static let tilePillUrgent = DS.Color.errorFill
+    static let tilePillHeight: CGFloat = 22
+    static let tilePillDot: CGFloat = 7
+}
+
 extension DS.TextRole {
     /// الرقم داخل الحلقة الصغيرة — Footnote (١٣) عريض
     static let ringSmall = DS.TextRole(.footnote, weight: .semibold)
@@ -2601,5 +2986,79 @@ extension DS {
         static let female = rgb(0x92526F)
         /// ختم «سرّي» — عنّابي العائلة
         static let secret = rgb(0x7B414A)
+    }
+}
+
+// MARK: - بطاقة العضو «AB» (اختيار المالك ٢٠٢٦-١١-٢٧ «بين ا و ب»: أساس A الهادئ + لون B حيث يساعد القراءة)
+//
+// المصدر: reports/app-review/member-card-light/directions/AB.png و AB-dark.jpg (`dirs.css` قسم `.AB`).
+// خلفية المربّع كريمية خفيفة، وكل قسم لوح كريمي بإطار رفيع، وخطوط ذهبية رفيعة، وإطار ذهبي للصورة، وزخرفة تحت الاسم.
+// اللون في مكانين فقط: مربّع صغير بلون العائلة بجانب عنوان كل قسم، وخانات «طلب تعديل» الملوّنة (أفتح من B، أيقونة بيضاء).
+// يقرؤها `MemberCardAB.swift` وحده — في الشجرتين (`MemberDetailsView`، `WomanDetailSheet`) وشبكتي «طلب تعديل».
+extension DS {
+    enum MemberCard {
+        // الأرضيات (فاتح / داكن)
+        /// أرضية المربّع: كريمي خفيف جداً / كحلي الرأس الداكن
+        static let boxBackground = SwiftUI.Color.adaptive(light: "#FFFDF8", dark: "#1B2638")
+        /// لوح القسم الكريمي
+        static let panel = SwiftUI.Color.adaptive(light: "#F7F1E6", dark: "#222F44")
+        /// إطار اللوح الرفيع (الداكن = ذهبي ٢٢٪ فوق اللوح)
+        static let panelLine = SwiftUI.Color.adaptive(light: "#E6D9BF", dark: "#434649")
+        /// الخط الذهبي الخافت بعد عنوان القسم (الداكن = ذهبي ٤٥٪)
+        static let hair = SwiftUI.Color.adaptive(light: "#D9C9A6", dark: "#625A47")
+        /// صفّ داخل اللوح (معلومة، طلب) — أبيض / أرضية المربّع
+        static let inset = SwiftUI.Color.adaptive(light: "#FFFFFF", dark: "#1B2638")
+        static let insetLine = SwiftUI.Color.adaptive(light: "#EDE3CF", dark: "#2D3748")
+        /// «إغلاق» وزرّ الإلغاء على الأرضية الكريمية
+        static let soft = SwiftUI.Color.adaptive(light: "#F3EDE1", dark: "#2A3648")
+        /// النصّ الثانوي في البطاقة
+        static let muted = SwiftUI.Color.adaptive(light: "#4A5560", dark: "#A9B4C2")
+        /// الذهبي للنصّ (رقم «طلبك عنه»، «تابِعه»، «عرض») — #725D31 على الفاتح و#C9AD6E على الداكن
+        static let goldText = SwiftUI.Color.adaptive(light: "#725D31", dark: "#C9AD6E")
+        /// الذهبي للخطوط والإطارات (= `DS.Color.accentLight`)
+        static let gold = DS.Color.accentLight
+
+        // المقاسات
+        static let panelRadius: CGFloat = 16
+        static let insetRadius: CGFloat = 12
+        /// مربّع اللون بجانب عنوان القسم
+        static let sectionSquare: CGFloat = 26
+        static let sectionSquareRadius: CGFloat = 8
+        /// رقم «طلبك عنه» في دائرة بإطار ذهبي
+        static let countDisc: CGFloat = 22
+        /// خط الرأس الذهبي تحت الرأس الكحلي
+        static let bandHairline: CGFloat = 2
+        /// حلقة الصورة: فراغ بلون الأرضية ثم خط ذهبي
+        static let avatarMat: CGFloat = 6
+        static let avatarRing: CGFloat = 1.5
+        /// الزخرفة تحت الاسم: عرضها ومعيّنها
+        static let ornamentWidth: CGFloat = 150
+        static let ornamentDiamond: CGFloat = 7
+        /// صور «العائلة» الصغيرة مطويّة
+        static let face: CGFloat = 38
+        /// خانة «طلب تعديل»: الارتفاع الأدنى، حلقة الأيقونة، الرسمة الباهتة
+        static let tileMinHeight: CGFloat = 124
+        static let tileRadius: CGFloat = 14
+        static let tileIconRing: CGFloat = 38
+        static let tileWatermark: CGFloat = 70
+        static let tileWatermarkOpacity: Double = 0.10
+        static let tileRingOpacity: Double = 0.75
+        /// حلقة أيقونة الخانة: كريمي المصمم ثابت (#F2EBDD)
+        static let tileRing = SwiftUI.Color(hex: "#F2EBDD")
+        static let tileDiscOpacity: Double = 0.14
+        static let tileSubtitleOpacity: Double = 0.82
+        /// سطر «طلبك قيد المراجعة» على الخانة، وسطر الحذف
+        static let tilePendingText = SwiftUI.Color(hex: "#FBE3A6")
+        static let tileWarningText = SwiftUI.Color(hex: "#FFE1DF")
+        static let tileHonestText = SwiftUI.Color(hex: "#F7F1E6")
+        /// شريط الملاحظة الذهبي تحت الشبكة: عرض الحدّ الذهبي
+        static let stripEdge: CGFloat = 3
+
+        // ألوان خانات «طلب تعديل» (ثابتة تحت نصّ أبيض في الوضعين): البداية ← النهاية
+        static let tileAdd = (SwiftUI.Color(hex: "#4A8469"), SwiftUI.Color(hex: "#3A715A"))
+        static let tileEdit = (SwiftUI.Color(hex: "#3F5B7B"), SwiftUI.Color(hex: "#324B68"))
+        static let tileRecord = (SwiftUI.Color(hex: "#76808B"), SwiftUI.Color(hex: "#646E79"))
+        static let tileOther = (SwiftUI.Color(hex: "#4A8290"), SwiftUI.Color(hex: "#3A6F7C"))
+        static let tileDelete = (SwiftUI.Color(hex: "#C25255"), SwiftUI.Color(hex: "#AD4144"))
     }
 }

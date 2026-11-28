@@ -102,6 +102,7 @@ struct AdminTreeEditRequestsView: View {
                 isPresented: $showRejectAlert
             ) {
                 TextField(L10n.t("اكتب سبب الرفض (اختياري)", "Reason (optional)"), text: $rejectReasonText)
+                    .dsAlertField()
                 Button(L10n.t("رفض", "Reject"), role: .destructive) {
                     if let req = rejectingRequest {
                         let reason = rejectReasonText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -269,7 +270,7 @@ struct AdminTreeEditRequestsView: View {
     private func emptyState(total: Int, counts: [TreeEditAction: Int]) -> some View {
         if total == 0 {
             DSEmptyView(L10n.t("لا توجد طلبات معلقة", "No pending requests"),
-                        message: L10n.t("كل طلبات الشجرة متابَعة — ما فيه شي ينتظر قرارك",
+                        message: L10n.t("جميع طلبات الشجرة متابَعة، ولا يوجد ما ينتظر القرار",
                                         "All tree requests are handled — nothing is awaiting your decision"),
                         tint: DS.Color.success, style: .compact)
         } else if let next = allActions.first(where: { (counts[$0] ?? 0) > 0 }) {
@@ -344,7 +345,13 @@ struct AdminTreeEditRequestsView: View {
                 }
 
                 // «طلب آخر» يعرض ملاحظته أعلاه («الطلب») — لا تتكرّر
-                if action != .other, let notes = payload?.notes, !notes.isEmpty {
+                // تنبيه للإدارة (سطر «⚠︎») بارز فوق الملاحظات
+                if let notes = payload?.notes {
+                    ForEach(notes.adminNoticeSplit.notices, id: \.self) { notice in
+                        DSNoteCard(notice, icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+                    }
+                }
+                if action != .other, let notes = payload?.notes.map({ $0.adminNoticeSplit.rest }), !notes.isEmpty {
                     HStack(alignment: .top, spacing: DS.Spacing.xs) {
                         Image(systemName: "text.bubble")
                             .dsGlyph(DS.Glyph.xs, weight: .semibold)
@@ -377,30 +384,49 @@ struct AdminTreeEditRequestsView: View {
                 .padding(.top, DS.Spacing.xxs)
             }
 
-            // القرار — نفس الصلاحيات تماماً، بالزرّ الواحد (الموافقة بتعبئة القسم، الرفض أحمر)
-            if showApprove || showReject {
-                HStack(spacing: DSBox.buttonSpacing) {
-                    if showApprove {
-                        DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark.circle.fill") {
-                            Task { await adminRequestVM.approveTreeEditRequest(request: request) }
-                        }
-                        .accessibilityLabel(L10n.t("موافقة — \(targetName)", "Approve — \(targetName)"))
-                    }
+            // «افتح بالشجرة الكاملة» (طلب المالك ٢٠٢٦-١١-١٣) — المعاينة بملاحظتها و«موافقة» البطاقة نفسها
+            if let place = treePlace(request, action: action) {
+                AnyView(TreePlaceSection(place: place, men: memberVM.allMembers,
+                                         primary: showApprove ? TreePlacePrimary(title: L10n.t("موافقة", "Approve"),
+                                                                                icon: "checkmark.circle.fill") {
+                                             Task { await adminRequestVM.approveTreeEditRequest(request: request) }
+                                         } : nil,
+                                         buttonOnly: true))
+                    .padding(.top, DS.Spacing.xxs)
+            }
 
+            // القرار — نفس الصلاحيات تماماً، بالزرّ الواحد (الموافقة بتعبئة القسم، الرفض أحمر)
+            // أزرار الطلبات على التصميم الجديد (٢٠٢٦-١١-١١): الموافقة حبّة كحلية، والرفض دائرة حمراء (المقاس المدمج)
+            if showApprove || showReject {
+                DSDecisionRow(items: {
+                    var items: [DSDecisionItem] = []
+                    if showApprove {
+                        items.append(DSDecisionItem(id: "approve", title: L10n.t("موافقة", "Approve"),
+                                                    icon: "checkmark.circle.fill", kind: .primary) {
+                            Task { await adminRequestVM.approveTreeEditRequest(request: request) }
+                        })
+                    }
                     if showReject {
-                        DSButton(L10n.t("رفض", "Reject"), icon: "xmark.circle.fill", role: .destructive, tint: DS.Color.reject) {
+                        items.append(DSDecisionItem(id: "reject", title: L10n.t("رفض — \(targetName)", "Reject — \(targetName)"),
+                                                    icon: "xmark", kind: .destructive, tint: DS.Color.reject) {
                             rejectingRequest = request
                             rejectReasonText = ""
                             showRejectAlert = true
-                        }
-                        .accessibilityLabel(L10n.t("رفض — \(targetName)", "Reject — \(targetName)"))
+                        })
                     }
-                }
+                    return items
+                }(), size: .compact)
                 .padding(.top, DS.Spacing.xxs)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
+    }
+
+    /// مكان طلب الشجرة (`TreePlace.treeEdit`)
+    private func treePlace(_ request: AdminRequest, action: TreeEditAction) -> TreePlace? {
+        TreePlace.treeEdit(request, action: action, kindLabel: L10n.t(action.arabicLabel, action.englishLabel),
+                           data: TreePlaceData(men: memberVM.allMembers, women: WomenStore.cache))
     }
 
     // MARK: - «مسار الموافقات» (طلب المالك ٢٠٢٦-١٠-١٥)
@@ -435,6 +461,21 @@ struct AdminTreeEditRequestsView: View {
                 DSComposerSection(title: L10n.t("بيانات الطلب", "Request Info"), icon: "doc.text.fill",
                                   tint: AppSection.admin.ink, index: 1) {
                     detailLines(for: request, payload: payload, action: action)
+                }
+                // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣) — «تنفيذ» في المعاينة للمختص في مرحلة التنفيذ وحدها
+                if let place = treePlace(request, action: action) {
+                    let live = adminRequestVM.liveApprovalSnapshot(requestId: flow.requestId) ?? flow
+                    let executes = live.stage == .execute && !adminRequestVM.isOwnApprovalRequest(live)
+                        && !adminRequestVM.isApprovalDecisionLocked(live) && adminRequestVM.canActAsApprovalSpecialist(live)
+                    AnyView(TreePlaceSection(place: place, index: 2, men: memberVM.allMembers,
+                                             primary: executes ? TreePlacePrimary(title: L10n.t("تنفيذ", "Carry out"),
+                                                                                  icon: "checkmark.circle.fill") {
+                                                 approvalRequest = nil
+                                                 Task {
+                                                     await adminRequestVM.approveTreeEditRequest(request: request)
+                                                     AdminApprovalMoment.after(adminRequestVM, title: L10n.t("تم التنفيذ", "Carried out"))
+                                                 }
+                                             } : nil))
                 }
             }
         } else {
@@ -476,12 +517,12 @@ struct AdminTreeEditRequestsView: View {
 
         case .deceased:
             if let deathDate = payload?.deathDate {
-                detailRow(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Date of death"), value: deathDate)
+                detailRow(icon: "calendar", label: L10n.t("تاريخ الوفاة", "Date of death"), value: DateHelper.displayDate(deathDate) ?? deathDate)
             }
 
         case .addDeathDate:
             if let deathDate = payload?.deathDate, !deathDate.isEmpty {
-                detailRow(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Date of death"), value: deathDate)
+                detailRow(icon: "calendar.badge.exclamationmark", label: L10n.t("تاريخ الوفاة", "Date of death"), value: DateHelper.displayDate(deathDate) ?? deathDate)
             }
 
         case .addPhoto:
@@ -504,7 +545,7 @@ struct AdminTreeEditRequestsView: View {
 
         case .editBirth:
             if let newDate = (payload?.newBirthDate ?? payload?.newName), !newDate.isEmpty {
-                detailRow(icon: "birthday.cake", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.palm)
+                detailRow(icon: "calendar", label: L10n.t("تاريخ الميلاد الجديد", "New birth date"), value: newDate, valueColor: DS.Color.palm)
             }
 
         case .other:
@@ -584,33 +625,15 @@ struct AdminTreeEditRequestsView: View {
         }
     }
 
-    /// تاريخ الطلب من نصّ ISO — بمحلّلين ثابتين (البطاقات والأرقام تُرسم كثيراً)
-    private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
+    /// تاريخ الطلب من نصّ ISO — بالمحلّل المشترك السريع (الصفوف والأرقام تُرسم كثيراً)
     private static func requestDate(_ raw: String?) -> Date? {
         guard let raw, !raw.isEmpty else { return nil }
-        return isoWithFraction.date(from: raw) ?? isoPlain.date(from: raw)
+        return DateParsing.iso(raw)
     }
 
     private func formatDate(_ iso: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) {
-            let display = DateFormatter()
-            display.dateStyle = .medium
-            display.timeStyle = .short
-            display.locale = Locale(identifier: L10n.isArabic ? "ar" : "en_US")
-            return display.string(from: date)
+        if let date = DateParsing.iso(iso) {
+            return DateHelper.displayDateTime(date)
         }
         return iso
     }

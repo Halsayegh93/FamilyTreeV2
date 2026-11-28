@@ -10,6 +10,9 @@ private struct QuietSupabaseLogger: SupabaseLogger {
     )
 
     func log(message: SupabaseLogMessage) {
+        // المستوى أولاً — نصّ الرسالة (`description`) يُبنى لكل طلب ورد ولو كان «debug» (حتى ردّ الأعضاء ~٣ ميغابايت)،
+        // وكان يُبنى على الخيط الرئيسي عند الإقلاع (فحص التعليق عند الفتح ٢٠٢٦-١١-٢٨)
+        guard message.level == .warning || message.level == .error else { return }
         let text = message.description
         // تجاهل أخطاء الإلغاء (-999) — تحصل عند الخروج من شاشة أو بدء تحديث جديد، وهي غير مؤذية
         if text.contains("Code=-999") || text.contains("cancelled") || text.contains("CancellationError") {
@@ -74,9 +77,23 @@ struct SupabaseConfig {
         supabaseKey: key,
         options: SupabaseClientOptions(
             auth: .init(emitLocalSessionAsInitialSession: true),
-            global: .init(session: requestSession, logger: QuietSupabaseLogger())
+            global: .init(headers: appHeaders, session: requestSession, logger: QuietSupabaseLogger())
         )
     )
+
+    /// «من أين أُرسل الطلب» (طلب المالك ٢٠٢٦-١١-١١): المنصة ونسخة التطبيق وبناؤه مع كل طلب — السيرفر يقرؤها
+    /// من `request.headers` ويحفظها في `admin_requests.sent_via` (20261111150000). قيم ASCII قصيرة فقط.
+    static let appHeaders: [String: String] = {
+        let info = Bundle.main.infoDictionary
+        var headers = ["x-app-platform": "ios"]
+        if let version = info?["CFBundleShortVersionString"] as? String, !version.isEmpty {
+            headers["x-app-version"] = version
+        }
+        if let build = info?["CFBundleVersion"] as? String, !build.isEmpty {
+            headers["x-app-build"] = build
+        }
+        return headers
+    }()
 
     /// مهلة الطلب ٢٥ ث بدل ٦٠ (الافتراضي): طلب بلا رد كان يُبقي شاشة البداية دقيقة كاملة قبل أي محاولة
     /// بديلة (طلب المالك ٢٠٢٦-١٠-٢٤ «لا يعلق عند الدخول»). المهلة = أقصى صمت بين حزمتين، فرفع ملف كبير

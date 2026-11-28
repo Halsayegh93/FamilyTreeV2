@@ -1,0 +1,1231 @@
+import SwiftUI
+import Combine
+import Supabase
+
+// MARK: - «أبناء البنات من خارج العائلة» (موافقة المالك ٢٠٢٦-١١-٠٧، العيّنة samples/daughters-sons/v4.html)
+//
+// السيرفر (`20261107120000_daughter_sons_lineage`، بانتظار التطبيق):
+//  • `approve_join_as_daughter_son(p_member_id)` — الإدارة تقبل طلب الانضمام كـ «ابن بنت من خارج العائلة»
+//  • `my_lineage_status()` — {needs, pending, was_rejected, rejected_reason…} للعضو
+//  • `submit_daughter_son_lineage(...)` — «أكمل حسابك» (كانت «نسبك»، طلب المالك ٢٠٢٦-١١-٠٧): الأم + الأب (المسجّل أو الاسم الرباعي) ← طلب `lineage_request`
+//  • `decide_lineage_request(p_request_id, 'approve'|'reject', p_reason)` — قرار الإدارة في «الوارد»
+//  • `add_outside_husband(p_woman_id, p_name, p_deceased)` — «زوج من خارج العائلة» في شجرة النساء
+// الإعدادات والنصوص من `app_config()` (قاعدة المالك: بلا بناء تطبيق): `daughter_sons_enabled`، `daughter_sons_allow_later`،
+// `daughter_sons_require_grandfather`، `daughter_sons_max_resubmits` (السيرفر يفرضه)، `daughter_sons_texts` {مفتاح: نص}.
+// قبل الترحيل: الدوال غائبة ← كل الخيارات الجديدة مخفية والتطبيق كما كان.
+//
+// «الحساب المقيّد» (طلب المالك ٢٠٢٦-١١-٠٧ «نبي يكون مقيد الحساب … اسمه اكمل حسابك»): ما دام العضو مُعلَّماً ولم يكتمل
+// (`flagged` و`!completed` — «يحتاج» أو «قيد المراجعة» حتى توافق الإدارة) يستعمل التطبيق بعد «لاحقاً» لكن الأقسام في
+// `daughter_sons_locked_sections` (app_config، الافتراضي `LockedSection.defaults`) مقفولة بحالة هادئة
+// (`lineageLocked(_:)` / `LineageLockedView`)، وبطاقة «أكمل حسابك» له وحده في الرئيسية (`LineageHomeCard`).
+// السيرفر يفرض نفس القائمة (`20261108090000_daughter_sons_restricted`، بانتظار التطبيق): `lineage_locked(section)` +
+// سياسات RESTRICTIVE للقراءة على الديوانيات والمشاريع والمكتبة وشجرة النساء، و`lineage_mother_candidates()` لصفحته.
+
+enum DaughterSons {
+    /// نوع طلب المراجعة (لا حالة في `RequestType` — تجنّباً لمطابقات شاملة في شاشات أخرى)
+    static let requestType = "lineage_request"
+
+    // MARK: الإعدادات والنصوص (السيرفر أولاً)
+
+    @MainActor static var config: AppConfigValues { AppConfigValues.shared }
+
+    @MainActor static func flag(_ key: String, default fallback: Bool) -> Bool {
+        if let b = config.values[key] as? Bool { return b }
+        if let n = config.values[key] as? NSNumber { return n.boolValue }
+        return fallback
+    }
+
+    /// مفتاح الخيار (المالك يطفئه من الإعدادات)
+    @MainActor static var isEnabled: Bool { flag("daughter_sons_enabled", default: true) }
+    @MainActor static var allowsLater: Bool { flag("daughter_sons_allow_later", default: true) }
+    @MainActor static var requiresGrandfather: Bool { flag("daughter_sons_require_grandfather", default: false) }
+    /// أقل عدد كلمات في «اسم أبوك الكامل» — `daughter_sons_father_min_words` (٢–٦، الافتراضي ٣)؛
+    /// «اسم الجد إلزامي» القديم = ٤ على الأقل (السيرفر يفرض نفس القاعدة)
+    @MainActor static var fatherMinWords: Int {
+        let n = min(6, max(2, config.int("daughter_sons_father_min_words", default: 3)))
+        return requiresGrandfather ? max(n, 4) : n
+    }
+
+    /// الأقسام المقفولة على الحساب المقيّد — مفاتيحها كما في `daughter_sons_locked_sections` على السيرفر
+    enum LockedSection: String, CaseIterable, Sendable {
+        case diwaniyas, projects, library
+        case womenTree = "women_tree"
+        case memberDetails = "member_details"
+
+        static let defaults: [LockedSection] = [.diwaniyas, .projects, .library, .womenTree, .memberDetails]
+
+        /// خانتها في «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`)
+        var screen: MemberScreen {
+            switch self {
+            case .diwaniyas: return .diwaniyas
+            case .projects: return .projects
+            case .library: return .library
+            case .womenTree: return .womenTree
+            case .memberDetails: return .memberDetails
+            }
+        }
+    }
+
+    /// القائمة من السيرفر (مصفوفة نصوص)، وإلا الافتراضي — مصفوفة فارغة = لا قفل
+    @MainActor static var lockedSections: Set<LockedSection> { sections("daughter_sons_locked_sections") }
+
+    /// «صلاحيات محدودة» الدائمة (الوالدة من خارج العائلة): `outside_member_locked_sections` — المالك يحدّدها لاحقاً
+    @MainActor static var limitedLockedSections: Set<LockedSection> { sections("outside_member_locked_sections") }
+
+    @MainActor private static func sections(_ key: String) -> Set<LockedSection> {
+        guard let arr = config.values[key] as? [Any] else { return Set(LockedSection.defaults) }
+        return Set(arr.compactMap { ($0 as? String).flatMap(LockedSection.init(rawValue:)) })
+    }
+
+    // MARK: «أكمل حسابك»: البحث عن الأم (طلب المالك ٢٠٢٦-١١-٠٧ للخصوصية — لا تصفّح لبنات العائلة)
+
+    /// أقل عدد كلمات متتالية من اسم الأم قبل ظهور أي نتيجة — `daughter_sons_mother_min_parts` (٢–٥، الافتراضي ٣)
+    @MainActor static var motherMinParts: Int {
+        min(5, max(2, config.int("daughter_sons_mother_min_parts", default: 3)))
+    }
+
+    /// التلميح قبل اكتمال الاسم
+    @MainActor static var motherHint: String {
+        let n = motherMinParts
+        return text("mother_hint",
+                    n == 3 ? "يُرجى كتابة اسم الوالدة الثلاثي" : "يُرجى كتابة اسم الوالدة: \(n) أسماء متتالية على الأقل",
+                    n == 3 ? "Type your mother's three-part name" : "Type at least \(n) consecutive parts of your mother's name")
+    }
+
+    /// بنت من بنات العائلة كما يرجعها `search_daughters_for_lineage` (أقل ما تحتاجه الصفحة)
+    nonisolated struct MotherCandidate: Decodable, Identifiable, Sendable, Equatable {
+        let id: UUID
+        let firstName: String
+        let fullName: String
+        let fatherName: String?
+        let husbandId: UUID?
+        let husbandName: String?
+        let husbandInFamily: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case firstName = "first_name", fullName = "full_name", fatherName = "father_name"
+            case husbandId = "husband_id", husbandName = "husband_name", husbandInFamily = "husband_in_family"
+        }
+    }
+
+    /// nil = لم يُفحص · false = الدالة غائبة (قبل الترحيل) فيُبحث محلياً بالقاعدة نفسها
+    @MainActor private static var searchRPCReady: Bool?
+
+    /// السيرفر يفرض القاعدة (الحد الأدنى + سلسلة متتالية من الاسم الأول، ١٠ نتائج)؛ قبل الترحيل: شجرة النساء محلياً
+    @MainActor static func searchMothers(_ query: String, isFamilyMember: (UUID) -> Bool) async -> [MotherCandidate] {
+        let q = NameSearch.words(query)
+        guard q.count >= motherMinParts else { return [] }
+        if searchRPCReady != false {
+            do {
+                let rows: [MotherCandidate] = try await SupabaseConfig.client
+                    .rpc("search_daughters_for_lineage", params: ["p_query": query]).execute().value
+                searchRPCReady = true
+                return rows
+            } catch {
+                if ErrorHelper.isCancellation(error) { return [] }
+                guard (error as? PostgrestError)?.code == "PGRST202" else {
+                    Log.warning("[DaughterSons] search_daughters_for_lineage: \(error.localizedDescription)")
+                    return []
+                }
+                searchRPCReady = false
+            }
+        }
+        // قبل الترحيل: نفس القاعدة على شجرة النساء المحمّلة
+        if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+        let women = WomenStore.cache
+        let byId = Dictionary(women.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return women.compactMap { w -> (Int, MotherCandidate)? in
+            guard w.isFemale, !w.isHiddenFromTree, w.hasName, let fid = w.fatherId, let f = byId[fid], !f.isFemale,
+                  let rank = NameSearch.chainMatch(queryWords: q, candidateWords: NameSearch.words(w.fullName),
+                                                   fromStart: true)?.rank else { return nil }
+            let h = w.husbandId.flatMap { byId[$0] }
+            let inFamily = h.map { isFamilyMember($0.id) || ($0.fatherId != nil && !WomenStore.outsideFamilyIds.contains($0.id)) } ?? false
+            return (rank, MotherCandidate(id: w.id, firstName: w.firstName, fullName: w.fullName, fatherName: f.fullName,
+                                          husbandId: w.husbandId, husbandName: h?.fullName, husbandInFamily: inFamily))
+        }
+        .sorted { $0.0 < $1.0 }
+        .prefix(10)
+        .map(\.1)
+    }
+
+    /// «ما لقيت أمي؟» متاح: دوال البحث على السيرفر (الترحيل مطبَّق)
+    @MainActor static var newMotherAvailable: Bool { searchRPCReady == true }
+
+    /// رجل من شجرة الرجال (أبو «الأم الجديدة») كما يرجعه `search_men_for_lineage`
+    nonisolated struct ManCandidate: Decodable, Identifiable, Sendable, Equatable {
+        let id: UUID
+        let fullName: String
+        let isDeceased: Bool
+        enum CodingKeys: String, CodingKey { case id, fullName = "full_name", isDeceased = "is_deceased" }
+    }
+
+    /// نفس قاعدة الخصوصية (لا شيء قبل الحد الأدنى)، السيرفر وحده (لا بحث محلي — الخيار يظهر بعد الترحيل)
+    @MainActor static func searchMen(_ query: String) async -> [ManCandidate] {
+        guard NameSearch.words(query).count >= motherMinParts else { return [] }
+        do {
+            return try await SupabaseConfig.client
+                .rpc("search_men_for_lineage", params: ["p_query": query]).execute().value
+        } catch {
+            if !ErrorHelper.isCancellation(error) {
+                Log.warning("[DaughterSons] search_men_for_lineage: \(error.localizedDescription)")
+            }
+            return []
+        }
+    }
+
+    /// عنوان بطاقة طلب النسب في «الوارد» حسب نوعه (ابن بنت من `daughter_sons_texts`، بنت بنت من التطبيق)
+    @MainActor static func inboxTitle(_ kind: DaughterDaughterRules.Kind) -> String {
+        kind == .daughterDaughter
+            ? L10n.t(DaughterDaughterRules.inboxTitle(kind), "Lineage request · daughter's daughter")
+            : text("inbox_title", "طلب نسب · ابن بنت", "Lineage request · daughter's son")
+    }
+
+    /// نص من `daughter_sons_texts` (عربي فقط — الإنجليزية من التطبيق)، وإلا نص التطبيق
+    @MainActor static func text(_ key: String, _ ar: String, _ en: String) -> String {
+        if L10n.isArabic, let dict = config.values["daughter_sons_texts"] as? [String: Any],
+           let s = (dict[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty {
+            return s
+        }
+        return L10n.t(ar, en)
+    }
+
+    // MARK: السيرفر
+
+    /// حالة «أكمل حسابك» للعضو الحالي
+    nonisolated struct Status: Decodable, Sendable, Equatable {
+        let flagged: Bool
+        let needs: Bool
+        let pending: Bool
+        let completed: Bool
+        let wasRejected: Bool
+        let rejectedReason: String?
+        /// «صلاحيات محدودة» دائمة — الوالدة من خارج العائلة (20261127160000؛ قبله غائب = false)
+        var limited: Bool? = nil
+
+        enum CodingKeys: String, CodingKey {
+            case flagged, needs, pending, completed, limited
+            case wasRejected = "was_rejected"
+            case rejectedReason = "rejected_reason"
+        }
+    }
+
+    /// الدوال موجودة على السيرفر (آخر فحص ناجح) — nil = لم يُفحص بعد
+    @MainActor static var serverReady: Bool?
+
+    /// nil = الدالة غائبة (قبل الترحيل) أو تعذّر الاتصال
+    @MainActor static func fetchStatus() async -> Status? {
+        do {
+            let s: Status = try await SupabaseConfig.client.rpc("my_lineage_status").execute().value
+            serverReady = true
+            return s
+        } catch {
+            if ErrorHelper.isCancellation(error) { return nil }
+            // PGRST202 = الدالة غير موجودة (الترحيل لم يُطبَّق)
+            if (error as? PostgrestError)?.code == "PGRST202" { serverReady = false }
+            Log.warning("[DaughterSons] my_lineage_status: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// الخيار متاح للإدارة: المفتاح مفعّل والدوال على السيرفر
+    @MainActor static func isAvailable() async -> Bool {
+        await config.refresh()
+        guard isEnabled else { return false }
+        if let ready = serverReady { return ready }
+        return await fetchStatus() != nil
+    }
+
+    static func approveJoin(memberId: UUID) async throws {
+        _ = try await SupabaseConfig.client
+            .rpc("approve_join_as_daughter_son", params: ["p_member_id": memberId.uuidString]).execute()
+    }
+
+    /// «ما لقيت أمي؟»: اسمها + أبوها من شجرة الرجال + حية/متوفاة (الإدارة تُنشئها تحت أبيها عند الموافقة)
+    struct NewMother: Sendable {
+        let name: String
+        let fatherId: UUID
+        let deceased: Bool
+    }
+
+    /// `motherId` = بنت من بنات العائلة (أو nil مع `newMother`) · `fatherId` = زوج الأم المسجّل، وإلا «اسم الأب الكامل»
+    /// سطراً واحداً (`p_father_full_name`، ترحيل 20261108090000). قبل الترحيل (الدالة القديمة — PGRST202): الاسم يُقسَّم على
+    /// الحقول الأربعة القديمة؛ و«أم جديدة» تحتاج الترحيل.
+    static func submit(motherId: UUID?, newMother: NewMother?, fatherId: UUID?, fatherFullName: String, deceased: Bool) async throws {
+        let line = fatherFullName.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let typed = fatherId == nil
+        var params: [String: AnyEncodable] = [
+            "p_mother_id": AnyEncodable(motherId?.uuidString),
+            "p_father_id": AnyEncodable(fatherId?.uuidString),
+            "p_father_deceased": AnyEncodable(typed && deceased)
+        ]
+        do {
+            var p = params
+            if typed { p["p_father_full_name"] = AnyEncodable(line) }
+            if let nm = newMother {
+                p["p_new_mother_name"] = AnyEncodable(nm.name.split(whereSeparator: \.isWhitespace).joined(separator: " "))
+                p["p_new_mother_father_id"] = AnyEncodable(nm.fatherId.uuidString)
+                p["p_new_mother_deceased"] = AnyEncodable(nm.deceased)
+            }
+            _ = try await SupabaseConfig.client.rpc("submit_daughter_son_lineage", params: p).execute()
+        } catch {
+            guard typed, newMother == nil, (error as? PostgrestError)?.code == "PGRST202" else { throw error }
+            let w = line.split(separator: " ").map(String.init)
+            params["p_first_name"] = AnyEncodable(w.first)
+            params["p_father_name"] = AnyEncodable(w.count > 1 ? w[1] : nil)
+            params["p_grandfather_name"] = AnyEncodable(w.count > 3 ? w[2..<(w.count - 1)].joined(separator: " ") : nil)
+            params["p_family_name"] = AnyEncodable(w.count > 2 ? w.last : nil)
+            _ = try await SupabaseConfig.client.rpc("submit_daughter_son_lineage", params: params).execute()
+        }
+    }
+
+    /// `motherId`: الوالدة التي اختارها المراجع لطلب «استكمال التسجيل» (`outside_typed`، 20261127160000) — يُرسل فقط إن وُجد
+    static func decide(requestId: UUID, approve: Bool, reason: String?, motherId: UUID? = nil) async throws {
+        let r = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+        var params: [String: AnyEncodable] = [
+            "p_request_id": AnyEncodable(requestId.uuidString),
+            "p_decision": AnyEncodable(approve ? "approve" : "reject"),
+            "p_reason": AnyEncodable((r?.isEmpty == false) ? r : nil)
+        ]
+        if let motherId { params["p_mother_id"] = AnyEncodable(motherId.uuidString) }
+        _ = try await SupabaseConfig.client.rpc("decide_lineage_request", params: params).execute()
+    }
+
+    @discardableResult
+    static func addOutsideHusband(womanId: UUID, name: String, deceased: Bool) async throws -> UUID {
+        let params: [String: AnyEncodable] = [
+            "p_woman_id": AnyEncodable(womanId.uuidString),
+            "p_name": AnyEncodable(name.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "p_deceased": AnyEncodable(deceased)
+        ]
+        return try await SupabaseConfig.client.rpc("add_outside_husband", params: params).execute().value
+    }
+
+    /// رسائل الدوال بالـ hint
+    static func message(_ error: Error) -> String {
+        switch (error as? PostgrestError)?.hint ?? "" {
+        case "not_allowed": return L10n.t("ليس لديك صلاحية لهذا الإجراء.", "You don't have permission for this.")
+        case "feature_off": return L10n.t("هذا الخيار مطفأ من الإعدادات.", "This option is turned off in settings.")
+        case "not_male": return L10n.t("صاحبة الطلب أنثى — تُربط من «ربط بشجرة النساء».", "The applicant is female — use «Link to women's tree».")
+        case "has_father": return L10n.t("الحساب مربوط بشجرة الرجال — استعمل «ربط بالشجرة».", "The account is in the men's tree — use «Link to tree».")
+        case "already_linked": return L10n.t("الحساب مربوط بشجرة النساء من قبل.", "The account is already in the women's tree.")
+        case "already_handled", "request_not_found": return L10n.t("عولج هذا الطلب من قبل — لم يُطبَّق شيء.", "This request was already handled — nothing was applied.")
+        case "already_pending": return L10n.t("الطلب لدى الإدارة، ويُرجى انتظار الرد.", "Your request is with the admins — please wait.")
+        case "not_needed": return L10n.t("التسجيل مكتمل.", "Your account is already complete.")
+        case "resubmit_limit": return L10n.t("تم بلوغ الحد الأقصى للمحاولات، ويُرجى التواصل مع الإدارة.", "You've reached the limit — contact the admins.")
+        case "bad_mother": return L10n.t("يُرجى اختيار الوالدة من بنات العائلة.", "Choose your mother from the family's daughters.")
+        case "bad_father", "mother_changed": return L10n.t("زوج الأم تغيّر — حدّث الصفحة واختر من جديد.", "The mother's husband changed — refresh and choose again.")
+        case "father_in_family": return L10n.t("الأب من العائلة — يُربط من «ربط بالشجرة».", "The father is from the family — use «Link to tree».")
+        case "mother_has_husband": return L10n.t("للوالدة زوج مسجّل، لذا يُرجى اختياره أو التواصل مع الإدارة.", "She has a recorded husband — choose him or contact the admins.")
+        case "has_husband": return L10n.t("لها زوج مسجّل.", "She already has a husband.")
+        case "name_required": return L10n.t("اكتب الاسم كاملاً.", "Type the full name.")
+        case "mother_father_not_found": return L10n.t("يُرجى اختيار والدها من شجرة العائلة.", "Choose her father from the family tree.")
+        case "name_too_long": return L10n.t("الاسم طويل.", "The name is too long.")
+        case "requester_gone": return L10n.t("صاحب الطلب لم يعد له حساب.", "The requester no longer has an account.")
+        case "mother_has_other_husband":
+            return L10n.t("لأمّها زوج مسجّل باسم آخر — صحّح الشجرة أولاً أو ارفض الطلب.",
+                          "Her mother has a different recorded husband — fix the tree first or reject.")
+        case "account_frozen": return L10n.t("الحساب موقوف.", "The account is suspended.")
+        default:
+            return AuthViewModel.serverMessage(error, fallback: L10n.t("تعذّر الحفظ. حاول مرة أخرى.", "Couldn't save. Try again."))
+        }
+    }
+}
+
+// MARK: - من هم أبناء البنات (طلب المالك ٢٠٢٦-١١-٠٨ «ظهور ابناء البنات فقط في شجرة النساء»)
+
+/// حسابات أبناء البنات (`daughter_son_lineage` — يقرؤها المالك والمدير والمراقب، وكل عضو صفّه هو).
+/// ابن البنت ليس من شجرة الرجال: لا يُعدّ في «الرجال» ولا يدخل «الكل» والفروع والمشكلات في «العائلة» —
+/// بيته عقدته في شجرة النساء، وحسابه في «مسجّلون» وحده (مثل حساب المرأة). السيرفر يبقيه مخفياً من شجرة الرجال.
+@MainActor
+final class DaughterSonsIndex: ObservableObject {
+    static let shared = DaughterSonsIndex()
+    @Published private(set) var ids: Set<UUID> = []
+    private var lastFetch: Date?
+
+    private struct Row: Decodable { let profile_id: UUID }
+
+    func contains(_ id: UUID) -> Bool { ids.contains(id) }
+
+    /// `force` بعد قبول انضمام كابن بنت؛ غير ذلك مرة كل دقيقة على الأكثر
+    func refresh(force: Bool = false) async {
+        if !force, let last = lastFetch, Date().timeIntervalSince(last) < 60 { return }
+        lastFetch = Date()
+        do {
+            // مهمة مستقلة: إلغاء مهمة الشاشة (أول فتح لـ«اليوم») كان يقطع الجلب فيُعدّ أبناء البنات في «الرجال»
+            let rows: [Row] = try await Task { () -> [Row] in
+                try await SupabaseConfig.client.from("daughter_son_lineage")
+                    .select("profile_id").execute().value
+            }.value
+            let next = Set(rows.map(\.profile_id))
+            if next != ids { ids = next }
+        } catch {
+            lastFetch = nil
+            Log.warning("[DaughterSons] daughter_son_lineage: \(error.localizedDescription)")
+        }
+    }
+}
+
+// MARK: - بوابة «أكمل حسابك» (بعد قبول الانضمام كابن بنت)
+
+@MainActor
+final class LineageGateStore: ObservableObject {
+    static let shared = LineageGateStore()
+    @Published private(set) var status: DaughterSons.Status?
+    /// «لاحقاً» — تختفي حتى الفتح القادم للتطبيق
+    @Published var postponed = false
+    /// فُتحت الصفحة من بطاقة الرئيسية أو من قسم مقفول
+    @Published var pageRequested = false
+    /// «طلب استكمال البيانات» على طلب النسب المعلّق (R2) — يفتح البوابة بحقل «اسم الوالدة» مميّزاً
+    @Published var ask: CompletionAsk.Open?
+    private var accessSub: AnyCancellable?
+
+    init() {
+        // «صلاحيات الأعضاء حسب الفئة»: من يراقب هذا المخزن يُعاد رسمه حين تتغيّر الفئة أو الجدول
+        accessSub = MemberAccessStore.shared.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+    }
+
+    func refresh() async {
+        status = await DaughterSons.fetchStatus()
+        if status?.pending == true {
+            let open = await CompletionAsk.mine()
+            ask = (open?.isLineage == true || open?.isSpouse == true) ? open : nil
+        } else {
+            ask = nil
+        }
+    }
+
+    /// أُرسل اسم الوالدة للطلب المفتوح
+    func answeredAsk() {
+        ask = nil
+        pageRequested = false
+    }
+    func markSent() {
+        if let s = status {
+            status = .init(flagged: s.flagged, needs: false, pending: true, completed: false, wasRejected: false, rejectedReason: nil,
+                           limited: s.limited)
+        }
+        pageRequested = false
+    }
+
+    /// الحساب المقيّد: مُعلَّم كابن بنت ولم يكتمل (يحتاج أو قيد المراجعة) — حتى توافق الإدارة
+    var isRestricted: Bool { status?.flagged == true && status?.completed == false }
+    var isPending: Bool { isRestricted && status?.pending == true }
+    /// «صلاحيات محدودة» دائمة (أجاب «لا» على «هل الأم من العائلة؟») — بلا «استكمال التسجيل»، ولا يُعرض له شيء عنها
+    var isLimited: Bool { isRestricted && status?.limited == true }
+
+    /// القسم مخفي تماماً (لا يظهر مدخله) — «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`؛ «صلاحيات محدودة» منها،
+    /// وقائمتها القديمة احتياط داخله). المالك: «تكون الأشياء مخفية» بلا رسالة
+    func hides(_ section: DaughterSons.LockedSection) -> Bool {
+        !MemberAccessStore.shared.sees(section.screen)
+    }
+
+    /// «لا» على «هل الأم من العائلة؟» ← الحالة محلياً حتى يصل التحديث
+    func markLimited() {
+        if let s = status {
+            status = .init(flagged: s.flagged, needs: false, pending: false, completed: false, wasRejected: false,
+                           rejectedReason: nil, limited: true)
+        }
+        pageRequested = false
+    }
+
+    /// القسم مقفول على هذا الحساب (القائمة من السيرفر)
+    func isLocked(_ section: DaughterSons.LockedSection) -> Bool {
+        if hides(section) { return true }
+        guard isRestricted, !isLimited else { return false }
+        return DaughterSons.lockedSections.contains(section)
+    }
+
+    /// القفل يُخفى بلا رسالة (الفئة أطفأته) — لا «استكمال التسجيل»
+    /// العيّنة spouse2 (٢٠٢٦-١١-٢٨): «الأقسام المقفلة تختفي بلا رسالة» — لمن لم يستكمل أيضاً
+    var locksSilently: Bool { true }
+
+    /// يفتح صفحة «أكمل حسابك» (أو حالة «قيد المراجعة»)
+    func openPage() {
+        guard isRestricted, !isLimited else { return }
+        pageRequested = true
+    }
+}
+
+private struct LineageGateModifier: ViewModifier {
+    @ObservedObject private var store = LineageGateStore.shared
+    @ObservedObject private var terms = TermsAcceptanceStore.shared
+
+    /// عرض الصفحة على المحاكي بلا حساب بهذه الحالة (نسخة التطوير فقط): متغيّر البيئة LINEAGE_PAGE_TEST=1
+    @State private var debugShow: Bool = {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["LINEAGE_PAGE_TEST"] == "1"
+        #else
+        return false
+        #endif
+    }()
+
+    private var showGate: Bool {
+        if debugShow { return true }
+        guard terms.statusChecked && !terms.needsAcceptance else { return false }
+        return (store.status?.needs == true && !store.postponed) || (store.pageRequested && store.isRestricted)
+            || (store.ask != nil && !store.postponed)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                await AppConfigValues.shared.refresh()
+                await store.refresh()
+            }
+            // يرجع للتطبيق أو يصله إشعار (قرار الإدارة) ← الحالة من جديد فينفكّ القفل بلا إعادة تشغيل
+            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                guard store.status?.flagged == true, store.status?.completed == false else { return }
+                Task { await store.refresh() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .didReceivePushNotification)) { _ in
+                guard store.status?.flagged == true, store.status?.completed == false else { return }
+                Task { await store.refresh() }
+            }
+            .fullScreenCover(isPresented: Binding(get: { showGate }, set: { if !$0 { debugShow = false; store.postponed = true; store.pageRequested = false } })) {
+                CompleteRegistrationPage(status: store.status, ask: store.ask,
+                            onSent: { store.ask != nil ? store.answeredAsk() : store.markSent() },
+                            onLater: (DaughterSons.allowsLater || store.status?.needs != true || store.ask != nil)
+                                ? { debugShow = false; store.postponed = true; store.pageRequested = false } : nil,
+                            onLimited: {
+                                debugShow = false
+                                store.markLimited()
+                                Task { await store.refresh() }
+                            })
+                    .interactiveDismissDisabled()
+            }
+    }
+}
+
+extension View {
+    /// «أكمل حسابك» لمن قُبل كابن بنت من خارج العائلة — قبل استخدام التطبيق (أو «لاحقاً» إن سمح الإعداد)
+    func lineageGate() -> some View { modifier(LineageGateModifier()) }
+
+    /// قسم مقفول على الحساب المقيّد («أكمل حسابك») — يحلّ محل المحتوى حالة هادئة بزرّ يفتح الصفحة.
+    /// الرأس يبقى عند من يضعه تحت رأسه. القائمة من `daughter_sons_locked_sections` على السيرفر.
+    func lineageLocked(_ section: DaughterSons.LockedSection, appSection: AppSection? = nil) -> some View {
+        modifier(LineageLockedModifier(section: section, appSection: appSection))
+    }
+}
+
+// MARK: - الحساب المقيّد: الأقسام المقفولة وبطاقة الرئيسية (طلب المالك ٢٠٢٦-١١-٠٧)
+
+private struct LineageLockedModifier: ViewModifier {
+    let section: DaughterSons.LockedSection
+    let appSection: AppSection?
+    @ObservedObject private var store = LineageGateStore.shared
+    @ObservedObject private var config = AppConfigValues.shared
+
+    func body(content: Content) -> some View {
+        if store.isLocked(section) {
+            LineageLockedView(section: appSection)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(DS.Color.background)
+        } else {
+            content
+        }
+    }
+}
+
+/// «أكمل حسابك عشان تشوف هذا القسم» + زرّ الصفحة · قيد المراجعة: «حسابك قيد المراجعة» بلا زرّ
+struct LineageLockedView: View {
+    var section: AppSection? = nil
+    var style: DSEmptyStyle = .page
+    /// nil = يفتح الصفحة مباشرة · مربّع تفاصيل العضو يُغلق نفسه أولاً
+    var onOpen: (() -> Void)? = nil
+    /// القسم مخفي بلا رسالة ووصل إليه برابط/إشعار: nil = الرجوع للرئيسية (`leaveHiddenSection`) · المربّع يُغلق نفسه
+    var onHidden: (() -> Void)? = nil
+    @ObservedObject private var store = LineageGateStore.shared
+
+    var body: some View {
+        let pending = store.isPending
+        // «صلاحيات محدودة» / قسم أطفأته الفئة: لا رسالة ولا زرّ — المدخل نفسه مخفي (`hides`)، ومن وصل برابط أو إشعار
+        // يرجع للرئيسية بهدوء (لا صفحة فارغة، ولا ذكر للصلاحيات — قاعدة المالك)
+        if store.locksSilently {
+            return AnyView(DS.Color.background
+                .onAppear {
+                    if let onHidden { onHidden() } else {
+                        NotificationCenter.default.post(name: .leaveHiddenSection, object: nil)
+                    }
+                }
+                .accessibilityHidden(true))
+        }
+        return AnyView(DSEmptyView(
+            pending ? DaughterSons.text("locked_pending_title", SignupOriginRules.Ar.pendingTitle, "Your account is under review")
+                    : DaughterSons.text("locked_title", SignupOriginRules.Ar.lockedTitle, "Complete your registration to see this section"),
+            message: pending
+                ? DaughterSons.text("locked_pending_body", "يُفتح هذا القسم فور موافقة الإدارة على البيانات.",
+                                    "This section opens as soon as the admins approve your details.")
+                : DaughterSons.text("locked_body", SignupOriginRules.Ar.lockedBody,
+                                    "Pick your mother and add your father's name; it opens once the admins approve."),
+            section: section,
+            icon: pending ? "hourglass" : "lock.fill",
+            actionTitle: pending ? nil : DaughterSons.text("locked_button", SignupOriginRules.Ar.completeTitle, "Complete registration"),
+            actionIcon: pending ? nil : "person.crop.circle.badge.checkmark",
+            style: style,
+            action: pending ? nil : { if let onOpen { onOpen() } else { store.openPage() } }
+        ))
+    }
+}
+
+/// رسالته وحده في الرئيسية: «أكمل حسابك» · «حسابك قيد المراجعة» · «راجع بياناتك وأرسلها من جديد» — الضغط يفتح الصفحة
+struct LineageHomeCard: View {
+    @ObservedObject private var store = LineageGateStore.shared
+
+    var body: some View {
+        if store.isRestricted, let s = store.status {
+            // «صلاحيات محدودة»: لا يُعرض له شيء عنها (المالك)
+            if !store.isLimited {
+                Button { store.openPage() } label: {
+                    content(s).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.t("يفتح «استكمال التسجيل»", "Opens «Complete registration»"))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ s: DaughterSons.Status) -> some View {
+        if s.pending {
+            DSNoteCard(DaughterSons.text("home_pending_body", SignupOriginRules.Ar.sentBody,
+                                         "We'll let you know as soon as the admins approve"),
+                       title: DaughterSons.text("home_pending_title", SignupOriginRules.Ar.pendingTitle, "Your registration is under review"),
+                       icon: "hourglass", tint: DS.Color.info)
+        } else if s.wasRejected {
+            DSNoteCard(s.rejectedReason.map { L10n.t("السبب: ", "Reason: ") + $0 }
+                       ?? DaughterSons.text("home_rejected_body", "لم تُعتمد البيانات السابقة، ويُرجى تعديلها وإرسالها.",
+                                            "Your previous details weren't confirmed — edit and send them."),
+                       title: DaughterSons.text("home_rejected_title", SignupOriginRules.Ar.rejectedTitle,
+                                                "Review your details and send them again"),
+                       icon: "arrow.uturn.backward.circle.fill", tint: DS.Color.warning)
+        } else {
+            DSNoteCard(DaughterSons.text("home_body", SignupOriginRules.Ar.homeBody,
+                                         "Pick your mother and add your father's name to complete your account and unlock everything."),
+                       title: DaughterSons.text("home_title", SignupOriginRules.Ar.completeTitle, "Complete registration"),
+                       icon: "person.crop.circle.badge.exclamationmark", tint: DS.Color.accent)
+        }
+    }
+}
+
+// MARK: - صفحة «استكمال التسجيل» (كانت «أكمل حسابك» بالبحث عن الأم) — `CompleteRegistrationPage`
+// (Views/Features/Auth/CompleteRegistrationViews.swift، R1 ٢٠٢٦-١١-٢٧): «هل الأم من العائلة؟» ثم اسمها، بلا بحث.
+
+// MARK: - «الوارد»: بطاقة طلب النسب
+
+/// تفاصيل `lineage_request` (`details` نص JSON من السيرفر)
+nonisolated struct LineageRequestDetails: Decodable, Sendable {
+    struct Father: Decodable, Sendable {
+        let isDeceased: Bool?
+        enum CodingKeys: String, CodingKey { case isDeceased = "is_deceased" }
+    }
+    /// «أم جديدة» (ما لقيت أمي؟) — تُنشأ بنتاً لأبيها عند الموافقة
+    struct NewMother: Decodable, Sendable {
+        let name: String?
+        let fatherName: String?
+        let isDeceased: Bool?
+        enum CodingKeys: String, CodingKey { case name, fatherName = "father_name", isDeceased = "is_deceased" }
+    }
+    let motherId: String?
+    let motherName: String?
+    let newMother: NewMother?
+    let fatherId: String?
+    let fatherName: String?
+    /// v2: حي/متوفى للأب في الحالتين (المسجّل من الشجرة)
+    let fatherIsDeceased: Bool?
+    let father: Father?
+    /// «بنت بنت» (v3): لأمّها زوج مسجّل والاسم المكتوب لا يطابقه
+    let husbandConflict: Bool?
+    let motherHusbandName: String?
+
+    enum CodingKeys: String, CodingKey {
+        case motherId = "mother_id", motherName = "mother_name", newMother = "new_mother", fatherId = "father_id"
+        case fatherName = "father_name", fatherIsDeceased = "father_is_deceased", father
+        case husbandConflict = "husband_conflict", motherHusbandName = "mother_husband_name"
+    }
+
+    /// اسم زوج الأم المسجّل حين يختلف عن الاسم المكتوب
+    var husbandConflictName: String? {
+        guard husbandConflict == true else { return nil }
+        let n = (motherHusbandName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? nil : n
+    }
+
+    static func parse(_ details: String?) -> LineageRequestDetails? {
+        guard let data = details?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(LineageRequestDetails.self, from: data)
+    }
+}
+
+/// «طلب نسب» كامل من `lineage_request_details(p_request_id)` (طلب المالك ٢٠٢٦-١١-٠٨: اسمه ورقمه، أمّه وجدها،
+/// أبوه، منو سجّل، ومن أي جهاز) — للمالك والمدير والمراقب. nil = الدالة غائبة/تعذّر ← البطاقة كما كانت.
+nonisolated struct LineageFullDetails: Decodable, Sendable {
+    struct Person: Decodable, Sendable {
+        let id: String?
+        let name: String?
+        let isSelf: Bool?
+        let role: String?
+        enum CodingKeys: String, CodingKey { case id, name, isSelf = "is_self", role }
+    }
+    struct Member: Decodable, Sendable {
+        let fullName: String?
+        let phone: String?
+        let phoneHidden: Bool?
+        let registeredAt: String?
+        let registrationPlatform: String?
+        enum CodingKeys: String, CodingKey {
+            case fullName = "full_name", phone, phoneHidden = "phone_hidden", registeredAt = "registered_at"
+            case registrationPlatform = "registration_platform"
+        }
+    }
+    struct Mother: Decodable, Sendable {
+        let isNew: Bool?
+        let name: String?
+        let isDeceased: Bool?
+        let chain: [String]?
+        let father: Person?
+        let grandfather: Person?
+        enum CodingKeys: String, CodingKey {
+            case isNew = "is_new", name, isDeceased = "is_deceased", chain, father, grandfather
+        }
+    }
+    struct Father: Decodable, Sendable {
+        let registered: Bool?
+        let name: String?
+        let isDeceased: Bool?
+        enum CodingKeys: String, CodingKey { case registered, name, isDeceased = "is_deceased" }
+    }
+    struct Join: Decodable, Sendable {
+        let createdAt: String?
+        let requester: Person?
+        let repliedBy: Person?
+        enum CodingKeys: String, CodingKey { case createdAt = "created_at", requester, repliedBy = "replied_by" }
+    }
+    struct Lineage: Decodable, Sendable {
+        let approvedAt: String?
+        let approvedBy: Person?
+        enum CodingKeys: String, CodingKey { case approvedAt = "approved_at", approvedBy = "approved_by" }
+    }
+    struct Device: Decodable, Sendable {
+        let platform: String?
+        let deviceName: String?
+        let appVersion: String?
+        let appBuild: Int?
+        let createdAt: String?
+        enum CodingKeys: String, CodingKey {
+            case platform, deviceName = "device_name", appVersion = "app_version", appBuild = "app_build"
+            case createdAt = "created_at"
+        }
+    }
+    let member: Member?
+    let mother: Mother?
+    let father: Father?
+    let requester: Person?
+    let join: Join?
+    let lineage: Lineage?
+    let devices: [Device]?
+    let deviceCount: Int?
+    enum CodingKeys: String, CodingKey {
+        case member, mother, father, requester, join, lineage, devices, deviceCount = "device_count"
+    }
+
+    /// تاريخ السيرفر (ISO بأجزاء الثانية أو بدونها) ← «13/03/2026» (الصيغة الموحّدة)
+    static func date(_ raw: String?) -> String? {
+        guard var s = raw, !s.isEmpty else { return nil }
+        if let dot = s.firstIndex(of: "."), let tz = s[dot...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) {
+            s.removeSubrange(dot..<tz)
+        }
+        guard let d = isoParser.date(from: s) else { return nil }
+        return DateHelper.displayDate(d)
+    }
+    private static let isoParser: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// ios → iPhone · ipados → iPad · android → Android
+    static func platform(_ raw: String?) -> String {
+        switch (raw ?? "").lowercased() {
+        case "ios", "iphone": return "iPhone"
+        case "ipados", "ipad": return "iPad"
+        case "android": return "Android"
+        case "web": return L10n.t("الموقع", "Website")
+        case "": return "—"
+        default: return raw ?? "—"
+        }
+    }
+}
+
+extension DaughterSons {
+    /// nil = الدالة غائبة (قبل الترحيل) أو تعذّر — البطاقة ترجع لما في الطلب
+    @MainActor static func fetchRequestDetails(_ requestId: UUID) async -> LineageFullDetails? {
+        do {
+            let params: [String: AnyEncodable] = ["p_request_id": AnyEncodable(requestId.uuidString)]
+            return try await SupabaseConfig.client.rpc("lineage_request_details", params: params).execute().value
+        } catch {
+            if !ErrorHelper.isCancellation(error) {
+                Log.warning("[DaughterSons] lineage_request_details: \(error.localizedDescription)")
+            }
+            return nil
+        }
+    }
+}
+
+/// مجموعات «طلب النسب» الكاملة: صاحب الطلب · الأم · الأب · منو سجّل · الجهاز.
+/// `compact` في البطاقة (أول جهاز)، والكامل في «كل التفاصيل» (كل الأجهزة، أبو الأم وجدها، والاتصال).
+struct LineageDetailsGroups: View {
+    let details: LineageFullDetails
+    var fallbackName: String = ""
+    /// «بنت بنت» (B1): «هي بنفسها» بدل «هو بنفسه»
+    var kind: DaughterDaughterRules.Kind = .daughterSon
+    var compact: Bool = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            group(L10n.t("صاحب الطلب", "Applicant")) { applicant }
+            group(L10n.t("الأم", "Mother")) { mother }
+            group(L10n.t("الأب", "Father")) { father }
+            group(L10n.t("من سجّل", "Who registered")) { registeredBy }
+            group(L10n.t("الجهاز", "Device")) { devices }
+        }
+    }
+
+    // MARK: المجموعات
+
+    @ViewBuilder private var applicant: some View {
+        let m = details.member
+        LineageInfoRow(icon: "person.fill", tint: DS.Color.male, label: L10n.t("الاسم", "Name"),
+                       value: nonEmpty(m?.fullName) ?? nonEmpty(fallbackName) ?? "—",
+                       note: LineageFullDetails.date(m?.registeredAt).map { L10n.t("سجّل ", "Registered ") + $0 } ?? "")
+        Divider()
+        LineageInfoRow(icon: "phone.fill", tint: DS.Color.sea, label: L10n.t("الهاتف", "Phone"),
+                       value: KuwaitPhone.display(m?.phone),
+                       note: m?.phoneHidden == true ? L10n.t("مخفي عن الأعضاء", "Hidden from members") : "",
+                       link: compact ? nil : KuwaitPhone.telURL(m?.phone))
+    }
+
+    @ViewBuilder private var mother: some View {
+        let mo = details.mother
+        let chain = (mo?.chain ?? []).filter { !$0.isEmpty }
+        let isNew = mo?.isNew == true
+        let life = mo?.isDeceased == true ? L10n.t("متوفاة", "deceased") : L10n.t("حية", "living")
+        LineageInfoRow(icon: "heart.fill", tint: DS.Color.female,
+                       label: isNew ? L10n.t("أم جديدة · كما كتبها", "New mother · as typed") : L10n.t("من بنات العائلة", "Family daughter"),
+                       value: chain.isEmpty ? (nonEmpty(mo?.name) ?? "—") : chain.joined(separator: " · "),
+                       note: (isNew ? L10n.t("الاسم: ", "Name: ") + (nonEmpty(mo?.name) ?? "—") : (nonEmpty(mo?.name) ?? ""))
+                             + " · " + life,
+                       badge: isNew ? L10n.t("أم جديدة", "New mother") : nil)
+        if !compact {
+            if let f = nonEmpty(mo?.father?.name) {
+                Divider()
+                LineageInfoRow(icon: "person.fill", tint: DS.Color.male, label: L10n.t("أبوها", "Her father"), value: f, note: "")
+            }
+            if let g = nonEmpty(mo?.grandfather?.name) {
+                Divider()
+                LineageInfoRow(icon: "person.fill", tint: DS.Color.male, label: L10n.t("جدها", "Her grandfather"), value: g, note: "")
+            }
+        }
+    }
+
+    @ViewBuilder private var father: some View {
+        let fa = details.father
+        let life = fa?.isDeceased == true ? L10n.t("متوفى", "Deceased") : L10n.t("حي", "Living")
+        LineageInfoRow(icon: "person.2.fill", tint: DS.Color.male,
+                       label: fa?.registered == true ? L10n.t("زوجها المسجّل", "Her recorded husband")
+                                                     : L10n.t("جديد · من خارج العائلة", "New · outside the family"),
+                       value: nonEmpty(fa?.name) ?? "—", note: life)
+    }
+
+    @ViewBuilder private var registeredBy: some View {
+        let j = details.join
+        let who: String = {
+            let me = L10n.t(DaughterDaughterRules.selfLabel(kind), kind == .daughterDaughter ? "Herself" : "Himself")
+            if let r = j?.requester { return r.isSelf == true ? me : (nonEmpty(r.name) ?? "—") }
+            if let r = details.requester { return r.isSelf == true ? me : (nonEmpty(r.name) ?? "—") }
+            return "—"
+        }()
+        let joinNote: String = {
+            var n = LineageFullDetails.date(j?.createdAt) ?? ""
+            if !compact, let by = nonEmpty(j?.repliedBy?.name) {
+                n += (n.isEmpty ? "" : " · ") + L10n.t("ردّ عليه ", "Answered by ") + by
+            }
+            return n
+        }()
+        LineageInfoRow(icon: "person.crop.circle.badge.plus", tint: DS.Color.primary,
+                       label: L10n.t("سجّل الحساب وأرسل الانضمام", "Created the account"), value: who, note: joinNote)
+        if let l = details.lineage {
+            Divider()
+            LineageInfoRow(icon: "checkmark.seal.fill", tint: DS.Color.success,
+                           label: L10n.t("وافق على انضمامه «ابن بنت»", "Approved him as a daughter's son"),
+                           value: nonEmpty(l.approvedBy?.name) ?? "—",
+                           note: LineageFullDetails.date(l.approvedAt) ?? "")
+        }
+    }
+
+    @ViewBuilder private var devices: some View {
+        let list = details.devices ?? []
+        if list.isEmpty {
+            LineageInfoRow(icon: "iphone.slash", tint: DS.Color.textTertiary, label: L10n.t("لا يوجد جهاز مسجّل", "No registered device"),
+                           value: LineageFullDetails.platform(details.member?.registrationPlatform),
+                           note: L10n.t("منصة التسجيل", "Registration platform"))
+        } else {
+            let shown = compact ? Array(list.prefix(1)) : list
+            ForEach(Array(shown.enumerated()), id: \.offset) { i, d in
+                if i > 0 { Divider() }
+                LineageInfoRow(icon: (d.platform ?? "").lowercased() == "android" ? "candybarphone" : "iphone",
+                               tint: DS.Color.primary,
+                               label: i == 0 ? L10n.t("أول جهاز سجّل منه", "First device") : L10n.t("جهاز آخر", "Another device"),
+                               value: [LineageFullDetails.platform(d.platform), nonEmpty(d.deviceName)].compactMap { $0 }.joined(separator: " · "),
+                               note: deviceNote(d, count: i == 0 && compact ? (details.deviceCount ?? list.count) : 1))
+            }
+        }
+    }
+
+    // MARK: أدوات
+
+    private func deviceNote(_ d: LineageFullDetails.Device, count: Int) -> String {
+        var parts: [String] = []
+        if let v = nonEmpty(d.appVersion) {
+            parts.append(L10n.t("النسخة ", "Version ") + v + (d.appBuild.map { " (\($0))" } ?? ""))
+        } else if let b = d.appBuild {
+            parts.append(L10n.t("البناء ", "Build ") + "\(b)")
+        }
+        if let date = LineageFullDetails.date(d.createdAt) { parts.append(date) }
+        if count > 1 { parts.append(L10n.t("\(count) أجهزة", "\(count) devices")) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func nonEmpty(_ s: String?) -> String? {
+        guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+        return t
+    }
+
+    private func group<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(title).dsFont(.sectionTitle).foregroundColor(DS.Color.textSecondary)
+            VStack(spacing: 0) { content() }
+                .padding(.horizontal, DS.Spacing.sm)
+                .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
+        }
+    }
+}
+
+/// صفّ «طلب النسب»: أيقونة · عنوان صغير (+ شارة) · القيمة · سطر — اختيارياً رابط (اتصال)
+struct LineageInfoRow: View {
+    let icon: String
+    let tint: Color
+    let label: String
+    let value: String
+    let note: String
+    var badge: String? = nil
+    var link: URL? = nil
+
+    var body: some View {
+        if let link {
+            Link(destination: link) { content }.buttonStyle(.plain)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(label).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                    if let badge { DSStatusChip(text: badge, tint: DS.Color.warning, size: .mini) }
+                }
+                Text(value).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary).fixedSize(horizontal: false, vertical: true)
+                if !note.isEmpty {
+                    Text(note).dsFont(.caption).foregroundColor(DS.Color.textTertiary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 0)
+            if link != nil {
+                Image(systemName: "phone.arrow.up.right").dsGlyph(DS.Glyph.md).foregroundColor(DS.Color.sea)
+            }
+        }
+        .frame(minHeight: DS.Icon.tapTarget + DS.Spacing.sm)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// «كل التفاصيل» — مربّع طويل بالمجموعات كاملة
+struct LineageFullDetailsBox: View {
+    let details: LineageFullDetails
+    let name: String
+    var kind: DaughterDaughterRules.Kind = .daughterSon
+    let onClose: () -> Void
+
+    var body: some View {
+        DSComposer(
+            title: DaughterSons.inboxTitle(kind),
+            subtitle: name,
+            icon: "arrow.triangle.branch",
+            tint: DS.Color.female,
+            actionTitle: "",
+            showsAction: false,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: false,
+            onSubmit: {},
+            onCancel: onClose
+        ) {
+            LineageDetailsGroups(details: details, fallbackName: name, kind: kind, compact: false)
+        }
+    }
+}
+
+extension AdminRequestViewModel {
+    /// قبول/رفض طلب النسب — true = نجح وأُزيل الصف
+    func decideLineage(_ request: AdminRequest, approve: Bool, reason: String?, motherId: UUID? = nil) async -> Bool {
+        guard canHandleRelativeAdd, NetworkMonitor.shared.requireOnline() else { return false }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await DaughterSons.decide(requestId: request.id, approve: approve, reason: reason, motherId: motherId)
+            lineageRequests.removeAll { $0.id == request.id }
+            if approve {
+                _ = try? await WomenStore.fetch()
+                NotificationCenter.default.post(name: .womenMembersChanged, object: nil)
+            }
+            return true
+        } catch {
+            Log.error("[DaughterSons] فشل القرار: \(error.localizedDescription)")
+            errorMessage = DaughterSons.message(error)
+            return false
+        }
+    }
+}
+
+struct AdminLineageRequestCard: View {
+    let request: AdminRequest
+    @ObservedObject var adminRequestVM: AdminRequestViewModel
+
+    @State private var busy = false
+    @State private var showReject = false
+    @State private var reason = ""
+    /// `lineage_request_details` — nil قبل الترحيل/عند التعذّر ← صفّا الأم والأب من الطلب كما كانا
+    @State private var full: LineageFullDetails?
+    @State private var showFull = false
+
+    var body: some View {
+        // «استكمال التسجيل» (R1): اسم الوالدة مكتوباً — المراجع يختارها من المقترحات، أو «الوالدة من خارج العائلة»
+        if SignupOriginRules.isSpouseLink(details: request.details) {
+            // «الزوج أو الزوجة من العائلة» (20261128150000): الاقتراحات والربط في البطاقة نفسها
+            AnyView(OutsideSpouseRequestCard(request: request, adminRequestVM: adminRequestVM))
+        } else if SignupOriginRules.isTypedLineage(details: request.details) {
+            AnyView(OutsideLineageRequestCard(request: request, adminRequestVM: adminRequestVM))
+        } else {
+            AnyView(legacyBody)
+        }
+    }
+
+    private var legacyBody: some View {
+        let d = LineageRequestDetails.parse(request.details)
+        let isNewFather = (d?.fatherId ?? "").isEmpty
+        let kind = DaughterDaughterRules.kind(ofDetails: request.details)
+        let title = DaughterSons.inboxTitle(kind)
+        return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack(spacing: DS.Spacing.sm) {
+                DSFieldIcon(name: "arrow.triangle.branch", tint: DS.Color.female)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(title)
+                        .dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary)
+                    Text(request.member?.fullName ?? L10n.t("العضو", "the member"))
+                        .dsFont(.footnote).foregroundColor(DS.Color.textSecondary).dsNameLines()
+                }
+                Spacer(minLength: 0)
+                if let created = request.createdAt {
+                    Text(DateHelper.relativeTime(from: created)).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                }
+            }
+            if let full {
+                AnyView(LineageDetailsGroups(details: full, fallbackName: request.member?.fullName ?? "", kind: kind))
+                DSChipButton(L10n.t("كل التفاصيل", "All details"), icon: "list.bullet.rectangle", size: .small) {
+                    showFull = true
+                }
+            } else {
+                legacyRows(d, isNewFather: isNewFather)
+            }
+            if kind == .daughterDaughter, let other = d?.husbandConflictName {
+                // كتبت اسماً غير زوج أمّها المسجّل — الموافقة يرفضها السيرفر (لا يُكتب فوق زوج مختلف)
+                DSNoteCard(L10n.t("كتبت اسم أبيها «\(d?.fatherName ?? "")» ولأمّها زوج مسجّل «\(other)». صحّح الشجرة أولاً أو ارفض الطلب.",
+                                  "She typed «\(d?.fatherName ?? "")» but her mother's recorded husband is «\(other)». Fix the tree first or reject."),
+                           icon: "exclamationmark.triangle.fill", tint: DS.Color.warning)
+            }
+            Text(kind == .daughterDaughter
+                 ? L10n.t(DaughterDaughterRules.approveNote(kind, isNewFather: isNewFather),
+                          isNewFather ? "On approval her father is added as her mother's husband, she is placed under them in the women's tree and her account is activated."
+                                      : "On approval she is placed under her mother and father in the women's tree and her account is activated.")
+                 : d?.newMother != nil
+                 ? L10n.t("عند الموافقة تُضاف أمّه بنتاً لأبيها، وأبوه زوجاً لها، ثم هو تحتهما في شجرة النساء.",
+                          "On approval his mother is added as her father's daughter, his father as her husband, then he under them in the women's tree.")
+                 : L10n.t("عند الموافقة يُضاف تحت أمّه في شجرة النساء" + (isNewFather ? "، ويُضاف أبوه زوجاً لها." : "."),
+                          "On approval he's added under his mother in the women's tree" + (isNewFather ? ", and his father as her husband." : ".")))
+                .dsFont(.footnote).foregroundColor(DS.Color.textTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+            // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣): أمّه في شجرة النساء — زرّ المعاينة الرئيسي = «موافقة»
+            let men = adminRequestVM.memberVM?.allMembers ?? []
+            if let place = TreePlace.lineage(request, kindLabel: title,
+                                             data: TreePlaceData(men: men, women: WomenStore.cache)) {
+                AnyView(TreePlaceSection(place: place, men: men,
+                                         primary: TreePlacePrimary(title: L10n.t("موافقة", "Approve")) {
+                                             decide(approve: true, reason: nil)
+                                         })
+                    .environment(\.dsFlatComposerSections, true))
+            }
+            HStack(spacing: DS.Spacing.sm) {
+                DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark", tint: DS.Color.success, isLoading: busy) {
+                    decide(approve: true, reason: nil)
+                }
+                DSButton(L10n.t("رفض", "Reject"), icon: "xmark", role: .cancel) {
+                    reason = ""; showReject = true
+                }
+            }
+            .disabled(busy)
+        }
+        .padding(DS.Spacing.md)
+        .dsCard(padding: nil, radius: DS.Hub.tileRadius)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: DS.Spacing.xsm, leading: DS.Spacing.lg, bottom: DS.Spacing.xsm, trailing: DS.Spacing.lg))
+        .task(id: request.id) { full = await DaughterSons.fetchRequestDetails(request.id) }
+        .dsTallBox(isPresented: $showFull) {
+            if let full {
+                LineageFullDetailsBox(details: full, name: request.member?.fullName ?? "",
+                                      kind: DaughterDaughterRules.kind(ofDetails: request.details)) { showFull = false }
+            }
+        }
+        .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $showReject) {
+            TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $reason)
+                .dsAlertField()
+            Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) { decide(approve: false, reason: reason) }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            let k = DaughterDaughterRules.kind(ofDetails: request.details)
+            Text(L10n.t(DaughterDaughterRules.rejectNote(k),
+                        k == .daughterDaughter ? "She gets the reason and can choose again; her join request stays open."
+                                               : "He gets «Complete your account» again with the reason."))
+        }
+    }
+
+    /// قبل `lineage_request_details`: الأم والأب من حمولة الطلب (البطاقة كما كانت)
+    private func legacyRows(_ d: LineageRequestDetails?, isNewFather: Bool) -> some View {
+        VStack(spacing: 0) {
+            if let nm = d?.newMother {
+                // «أم جديدة» واضحة: اسمها كما كتبه + أبوها من الشجرة + حية/متوفاة
+                row(icon: "heart.fill", tint: DS.Color.female, label: L10n.t("الأم · أم جديدة", "Mother · new mother"),
+                    value: nm.name ?? d?.motherName ?? "—",
+                    note: L10n.t("بنت ", "Daughter of ") + (nm.fatherName ?? "—")
+                          + (nm.isDeceased == true ? L10n.t(" · متوفاة", " · deceased") : L10n.t(" · حية", " · living")),
+                    badge: L10n.t("أم جديدة", "New mother"))
+            } else {
+                row(icon: "heart.fill", tint: DS.Color.female, label: L10n.t("الأم", "Mother"),
+                    value: d?.motherName ?? "—", note: L10n.t("من بنات العائلة", "Family daughter"))
+            }
+            Divider()
+            row(icon: "person.2.fill", tint: DS.Color.male, label: L10n.t("الأب", "Father"),
+                value: d?.fatherName ?? "—",
+                note: (isNewFather
+                    ? L10n.t("جديد · من خارج العائلة", "New · outside the family")
+                    : L10n.t("زوجها المسجّل", "Her recorded husband"))
+                    + fatherLifeNote(d))
+        }
+        .padding(.horizontal, DS.Spacing.sm)
+        .dsCard(padding: nil, radius: DS.Radius.md, fill: DS.Color.background)
+    }
+
+    /// « · حي» / « · متوفى» — v2 يحملها للأب في الحالتين، والقديم للأب الجديد فقط
+    private func fatherLifeNote(_ d: LineageRequestDetails?) -> String {
+        guard let dead = d?.fatherIsDeceased ?? d?.father?.isDeceased else { return "" }
+        return dead ? L10n.t(" · متوفى", " · deceased") : L10n.t(" · حي", " · living")
+    }
+
+    private func row(icon: String, tint: Color, label: String, value: String, note: String, badge: String? = nil) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon, tint: tint)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                HStack(spacing: DS.Spacing.xs) {
+                    Text(label).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                    if let badge { DSStatusChip(text: badge, tint: DS.Color.warning, size: .mini) }
+                }
+                Text(value).dsFont(.rowTitle).foregroundColor(DS.Color.textPrimary).fixedSize(horizontal: false, vertical: true)
+                Text(note).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: DS.Icon.tapTarget + DS.Spacing.sm)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func decide(approve: Bool, reason: String?) {
+        guard !busy else { return }
+        busy = true
+        Task {
+            let ok = await adminRequestVM.decideLineage(request, approve: approve, reason: reason)
+            busy = false
+            if ok && approve { DSMomentToast.show(L10n.t("تمت الموافقة", "Approved")) }
+        }
+    }
+}
+
+// MARK: - شجرة النساء: «زوج من خارج العائلة»
+
+struct OutsideHusbandBox: View {
+    let woman: FamilyMember
+    var onDone: () async -> Void
+    var onCancel: () -> Void
+
+    @State private var name = ""
+    @State private var deceased = false
+    @State private var busy = false
+    @State private var errorText: String?
+
+    var body: some View {
+        DSComposer(
+            title: DaughterSons.text("outside_husband_title", "زوج من خارج العائلة", "Husband from outside the family"),
+            subtitle: woman.fullName,
+            icon: "person.badge.plus",
+            tint: DS.Color.actionNavy,
+            actionTitle: L10n.t("إضافة", "Add"),
+            actionIcon: "plus",
+            canSubmit: !name.trimmingCharacters(in: .whitespaces).isEmpty,
+            isBusy: busy,
+            note: L10n.t("يظهر تحتها في شجرة النساء فقط، وتضيف عياله من «الأبناء».",
+                         "Shown under her in the women's tree only; add their children from «Children»."),
+            hasUnsavedChanges: !name.isEmpty,
+            onSubmit: save,
+            onCancel: onCancel
+        ) {
+            DSComposerSection(title: L10n.t("الزوج", "Husband"), icon: "person.fill", tint: DS.Color.male, index: 0) {
+                DSComposerField(icon: "person.fill", label: L10n.t("الاسم الكامل", "Full name"),
+                                placeholder: L10n.t("مثلاً: فهد ناصر العتيبي", "e.g. Fahad Nasser Al-Otaibi"),
+                                text: $name, limit: 120, required: true)
+                DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                    DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                    DSChoiceOption(id: true, title: L10n.t("متوفى", "Deceased"), icon: "leaf.fill")
+                ], selection: $deceased)
+                if let errorText {
+                    DSNoteCard(errorText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                }
+            }
+        }
+    }
+
+    private func save() {
+        guard !busy else { return }
+        busy = true
+        errorText = nil
+        Task {
+            do {
+                try await DaughterSons.addOutsideHusband(womanId: woman.id, name: name, deceased: deceased)
+                await onDone()
+            } catch {
+                errorText = DaughterSons.message(error)
+            }
+            busy = false
+        }
+    }
+}

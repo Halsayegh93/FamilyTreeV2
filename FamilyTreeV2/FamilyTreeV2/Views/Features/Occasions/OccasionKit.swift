@@ -111,7 +111,7 @@ final class OccasionKit: ObservableObject {
                     if path.hasPrefix("fonts/") { return (path, url, nil) }
                     // الخلفيات (ونموذج ١: خلفية وحدة تغطي أي مقاس) بدقة الستوري، ومخطوطات نموذج ٣ بمقاسها
                     // (الآية العملاقة خلف الآية أعرض من المنشور)، والباقي يكفيه 1100
-                    let isBackground = path.hasPrefix("bg/") || path.hasPrefix("m1/bg/")
+                    let isBackground = path.hasPrefix("bg/") || path.hasPrefix("m1/bg/") || path.hasPrefix("http") || path.hasPrefix("m4/")
                     let maxPixel = isBackground ? 1920 : (path.hasPrefix("m3/verse/") ? 3400 : 1100)
                     let img = Self.decode(url, maxPixel: maxPixel)
                     if img == nil { try? FileManager.default.removeItem(at: url) }   // ملف تالف — ينزل من جديد المرة الجاية
@@ -163,9 +163,16 @@ final class OccasionKit: ObservableObject {
 
     /// ينزّل الملف مرة وحدة ويخزّنه؛ بعدها يقرأ من Caches
     nonisolated private static func download(_ path: String, base: URL, dir: URL) async throws -> URL {
-        let local = dir.appendingPathComponent(path)
+        // نموذج ٤ (السيرفر) يقدر يعطي رابطاً كاملاً — يُخزَّن باسم آمن تحت remote/
+        let isRemote = path.hasPrefix("https://") || path.hasPrefix("http://")
+        let local = isRemote
+            ? dir.appendingPathComponent("remote", isDirectory: true)
+                .appendingPathComponent(String(path.unicodeScalars.map { CharacterSet.alphanumerics.contains($0) || $0 == "." ? Character($0) : "_" }))
+            : dir.appendingPathComponent(path)
         if FileManager.default.fileExists(atPath: local.path) { return local }
-        let remote = base.appendingPathComponent(path)
+        guard let remote = isRemote ? URL(string: path) : base.appendingPathComponent(path) else {
+            throw URLError(.badURL)
+        }
         let (data, response) = try await URLSession.shared.data(from: remote)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200, !data.isEmpty else {
             throw URLError(.badServerResponse)

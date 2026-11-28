@@ -181,8 +181,13 @@ struct NotificationMetaLine: View {
                     .fixedSize()
             }
             Spacer(minLength: DS.Spacing.xs)
-            if unread { DSGoldDot(size: DSNoticeMetrics.unreadDot) }
+            if unread {
+                DSGoldDot(size: DSNoticeMetrics.unreadDot)
+                    // «تمت القراءة»: النقطة تذوب بدل الاختفاء المفاجئ
+                    .transition(.opacity)
+            }
         }
+        .animation(DSMotion.fade, value: unread)
     }
 }
 
@@ -309,21 +314,56 @@ struct NotificationChangeCards: View {
     let changes: [AppNotification.NotificationDetails.ChangeEntry]
     let isStaff: Bool
     let subjectName: String
+    /// العضو الذي يُطلب منه «طلب تغيير الصورة» تحت بطاقة الصورة — nil = بلا زرّ (العضو، ومن لا يملك التعديل)
+    var photoRequestMember: FamilyMember? = nil
 
     var body: some View {
         VStack(spacing: DS.Spacing.sm) {
             ForEach(Array(changes.enumerated()), id: \.offset) { _, change in
-                NotificationChangeCard(change: change, isStaff: isStaff, subjectName: subjectName)
+                NotificationChangeCard(change: change, isStaff: isStaff, subjectName: subjectName,
+                                       photoRequestMember: photoRequestMember)
             }
         }
     }
 }
 
 /// بطاقة تغيير واحد: اسم الحقل ثم مربّعان متجاوران «قبل» (أحمر خفيف) و«بعد» (أخضر خفيف) — للعضو «كان» رمادي و«صار»
+/// تغيّر الصورة: الضغط على أيّ صورة يفتحها بملء الشاشة (`ProjectPhotoViewer` — القرصة للتكبير)، ويتقلّب العارض
+/// بين «قبل» و«بعد» حين توجد الاثنتان (طلب المالك ٢٠٢٦-١١-١١ «أضغط على الصورة أشوفها وهي كبيرة»)
 struct NotificationChangeCard: View {
     let change: AppNotification.NotificationDetails.ChangeEntry
     let isStaff: Bool
     let subjectName: String
+    /// «طلب تغيير الصورة» (طلب المالك ٢٠٢٦-١١-١١) تحت «قبل ← بعد» لصورة جديدة — nil = بلا زرّ
+    var photoRequestMember: FamilyMember? = nil
+
+    @Environment(\.dsSection) private var section
+    /// الصورة المفتوحة بملء الشاشة — موضعها في `photos`
+    @State private var viewerStart: ProjectPhotoIndex?
+    /// الروابط التي وصلت صورتها — الصورة القديمة قد تكون حُذفت من التخزين (المصغّرة تبقى الحرف)، فلا تُفتح
+    /// ولا تدخل العارض (كان سيبقى على مؤشّر التحميل)
+    @State private var loadedURLs: Set<String> = []
+
+    private var beforeCaption: String { isStaff ? L10n.t("قبل", "Before") : L10n.t("كان", "Was") }
+    private var afterCaption: String { isStaff ? L10n.t("بعد", "After") : L10n.t("بعد", "Now") }
+    private var beforeURL: String? { change.isImage ? change.beforeImageURL : nil }
+    private var afterURL: String? { change.isImage ? change.afterImageURL : nil }
+    private var imageURLs: [String] { [beforeURL, afterURL].compactMap { $0 }.filter { !$0.isEmpty } }
+
+    /// صور «قبل ← بعد» التي وصلت بترتيبها مع عنوان كل واحدة — نفس الرابط الذي تعرضه الصورة المصغّرة
+    /// (`CachedImageLoader` يوقّع رابط المستودع الخاص في الاثنين، ومن الكاش نفسه)
+    private var photos: [(url: String, caption: String)] {
+        [(beforeURL, beforeCaption), (afterURL, afterCaption)].compactMap { url, caption in
+            guard let url, loadedURLs.contains(url) else { return nil }
+            return (url, caption)
+        }
+    }
+
+    /// يفتح العارض على الصورة ذات العنوان المضغوط — nil لغير الصور
+    private func openAction(for caption: String) -> (() -> Void)? {
+        guard change.isImage, let index = photos.firstIndex(where: { $0.caption == caption }) else { return nil }
+        return { viewerStart = ProjectPhotoIndex(id: index) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
@@ -331,18 +371,41 @@ struct NotificationChangeCard: View {
                 .dsFieldFont(.label)
                 .foregroundColor(DS.Color.fieldLabel)
             HStack(alignment: .top, spacing: DS.Spacing.sm) {
-                NotificationValueBox(caption: isStaff ? L10n.t("قبل", "Before") : L10n.t("كان", "Was"),
-                                     value: change.before, imageURL: change.isImage ? change.beforeImageURL : nil,
+                NotificationValueBox(caption: beforeCaption,
+                                     value: change.before, imageURL: beforeURL,
                                      isImage: change.isImage, subjectName: subjectName,
-                                     tint: isStaff ? DS.Color.error : DS.Color.textTertiary, emphasized: false)
-                NotificationValueBox(caption: isStaff ? L10n.t("بعد", "After") : L10n.t("صار", "Now"),
-                                     value: change.after, imageURL: change.isImage ? change.afterImageURL : nil,
+                                     tint: isStaff ? DS.Color.error : DS.Color.textTertiary, emphasized: false,
+                                     onOpenImage: openAction(for: beforeCaption))
+                NotificationValueBox(caption: afterCaption,
+                                     value: change.after, imageURL: afterURL,
                                      isImage: change.isImage, subjectName: subjectName,
-                                     tint: DS.Color.success, emphasized: true)
+                                     tint: DS.Color.success, emphasized: true,
+                                     onOpenImage: openAction(for: afterCaption))
+            }
+            // صورة جديدة (لا حذف) — الإدارة تطلب من العضو تغييرها
+            if change.isImage, let member = photoRequestMember, !(afterURL ?? "").isEmpty {
+                PhotoChangeRequestCommand(member: member)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .dsRowBox()
+        // أيّ الصورتين تُفتح: بعد أن تبدأ المصغّرة تحميلها، فتأتي هذه من الكاش غالباً لا تنزيلاً ثانياً
+        .task(id: imageURLs) {
+            guard !imageURLs.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            for raw in imageURLs where !loadedURLs.contains(raw) {
+                guard !Task.isCancelled else { return }
+                guard let url = URL(string: raw) else { continue }
+                var arrived = CachedImageLoader.memoryHit(for: url) != nil
+                if !arrived { arrived = (try? await CachedImageLoader.load(url)) != nil }
+                if arrived { loadedURLs.insert(raw) }
+            }
+        }
+        .fullScreenCover(item: $viewerStart) { start in
+            let photos = photos
+            ProjectPhotoViewer(urls: photos.map(\.url), startIndex: start.id, section: section ?? .admin,
+                               captions: photos.map(\.caption))
+        }
     }
 }
 
@@ -354,6 +417,8 @@ struct NotificationValueBox: View {
     let subjectName: String
     let tint: Color
     let emphasized: Bool
+    /// صورة: يفتحها بملء الشاشة — المربّع كله زرّ (مساحة لمس أكبر من الصورة المصغّرة) وشكله كما هو
+    var onOpenImage: (() -> Void)? = nil
 
     private var text: String {
         guard let v = value?.trimmingCharacters(in: .whitespacesAndNewlines), !v.isEmpty else { return "—" }
@@ -361,6 +426,17 @@ struct NotificationValueBox: View {
     }
 
     var body: some View {
+        if isImage, let url = imageURL, !url.isEmpty, let onOpenImage {
+            Button(action: onOpenImage) { box }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityLabel(L10n.t("عرض الصورة بحجم كامل", "View full-size photo"))
+                .accessibilityValue(caption)
+        } else {
+            box
+        }
+    }
+
+    private var box: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(verbatim: caption)
                 .dsFont(.micro)
@@ -400,15 +476,5 @@ enum NotificationDetailParts {
             ?? n.subjectMemberId.flatMap(member)
     }
 
-    private static let fullFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .full
-        f.timeStyle = .short
-        return f
-    }()
-
-    static func fullDate(_ date: Date) -> String {
-        fullFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return fullFormatter.string(from: date)
-    }
+    static func fullDate(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 }

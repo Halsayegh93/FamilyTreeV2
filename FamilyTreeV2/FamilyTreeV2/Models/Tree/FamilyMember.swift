@@ -38,6 +38,9 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
     let registrationPlatform: String?
     let username: String?
     var email: String?
+    /// وقت قبول الشروط (`terms_accepted_at`) — يُقرأ فقط ولا يُكتب (خارج `CodingKeys`)؛ مع `registrationPlatform`
+    /// إشارة «له حساب في التطبيق» (`looksRegistered`)
+    var termsAcceptedAt: String? = nil
 
     init(
         id: UUID = UUID(),
@@ -153,6 +156,20 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         self.registrationPlatform = try container.decodeIfPresent(String.self, forKey: .registrationPlatform)
         self.username = try container.decodeIfPresent(String.self, forKey: .username)
         self.email = try container.decodeIfPresent(String.self, forKey: .email)
+        let extra = try decoder.container(keyedBy: ReadOnlyKeys.self)
+        self.termsAcceptedAt = try? extra.decodeIfPresent(String.self, forKey: .termsAcceptedAt)
+    }
+
+    /// أعمدة تُقرأ ولا تُكتب أبداً (الترميز المُركَّب يتجاهلها)
+    private enum ReadOnlyKeys: String, CodingKey {
+        case termsAcceptedAt = "terms_accepted_at"
+    }
+
+    /// يبدو مسجّلاً في التطبيق (قبل الشروط أو له منصة تسجيل) — نفس قاعدة الأندرويد لإخفاء «طلب حذف»
+    var looksRegistered: Bool {
+        let terms = termsAcceptedAt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let platform = registrationPlatform?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !terms.isEmpty || !platform.isEmpty
     }
     
     static func == (lhs: FamilyMember, rhs: FamilyMember) -> Bool {
@@ -242,7 +259,10 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
 
     /// وحدات الاسم من سلسلة الشجرة (القاعدة ٢ في PersonName): «زين العابدين» و«محمد باقر» وحدة واحدة
     var nameUnits: [String] {
-        PersonName.chainUnits(fullName: fullName, firstName: firstName, fatherId: fatherId)
+        // طالب الانضمام: `first_name` فيه كل ما كتبه («حسن محمد عبدالرزاق») وبلا أب، فلو عُدّ وحدة واحدة
+        // لا يطابق أحداً في الشجرة وتفرغ اقتراحات الربط
+        if role == .pending, fatherId == nil { return PersonName.units(fullName) }
+        return PersonName.chainUnits(fullName: fullName, firstName: firstName, fatherId: fatherId)
     }
 
     /// وحدات الاسم مع العائلة المختارة آخر وحدة — للعرض والاختصار (ثلاثي/رباعي/خماسي)
@@ -307,6 +327,13 @@ nonisolated struct FamilyMember: Identifiable, Codable, Equatable, Sendable {
         let parts = nameUnits
         guard parts.count > 3 else { return fullName }
         return PersonName.shorten(parts, to: 3).joined(separator: " ")
+    }
+
+    /// ثلاثة أسماء متتالية من السلسلة: الأول + الأب + الجد (بلا العائلة) — أسماء «إشعارات الإدارة»
+    /// مثال: "علي محمدحسين عبدالله موسى … الصايغ" → "علي محمدحسين عبدالله"
+    var chainThreeName: String {
+        let parts = nameUnits
+        return parts.isEmpty ? fullName : PersonName.firstThree(parts).joined(separator: " ")
     }
 
     /// الاسم الثلاثي: الأول + الثاني + الأخير (العائلة)

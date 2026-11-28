@@ -10,7 +10,7 @@ import Supabase
 //   • حساب موقوف                = `status = frozen` (حيّ) — يُحسب ضمن «مسجّلون»
 //   • عضو مسجّل                 = حيّ له حساب دخول (رابط auth): ظهر في `app_usage_members` بفئة
 //                                 active / idle / login_no_device (كلها `has_login` على السيرفر)، أو موقوف
-//   • مقيّد في الشجرة            = حيّ بلا حساب دخول — له رقم ولم يسجّل الدخول بعد (never_logged)، أو بلا رقم
+//   • بدون حساب            = حيّ بلا حساب دخول — له رقم ولم يسجّل الدخول بعد (never_logged)، أو بلا رقم
 // «مفعّل / بانتظار التفعيل» (`status` active/pending) تقسيم تاريخي من دفعات الاستيراد — لا يُعرض ولا تُبنى عليه شريحة.
 // قبل وصول قوائم الحسابات: الحالة nil للأحياء غير الموقوفين، وأعداد «مسجّلون/مقيّدون» «—» (لا أصفار مضلِّلة).
 
@@ -22,7 +22,7 @@ enum AdminMemberStatus: Equatable {
         switch self {
         case .pendingJoin: return L10n.t("طلب انضمام قيد المراجعة", "Join request under review")
         case .registered: return L10n.t("عضو مسجّل", "Registered member")
-        case .treeOnly:   return L10n.t("مقيّد في الشجرة", "In the tree only")
+        case .treeOnly:   return L10n.t("بدون حساب", "In the tree only")
         case .frozen:     return L10n.t("حساب موقوف", "Suspended account")
         case .deceased:   return L10n.t("متوفى", "Deceased")
         }
@@ -38,12 +38,12 @@ enum AdminMemberStatus: Equatable {
         }
     }
 
-    /// شارة الصفّ المختصرة في قائمة «العائلة» (مسجّل · مقيّد · موقوف · متوفى)
+    /// شارة الصفّ المختصرة في قائمة «العائلة» (مسجّل · بدون حساب · موقوف · متوفى)
     var shortTitle: String {
         switch self {
         case .pendingJoin: return L10n.t("قيد المراجعة", "Under review")
         case .registered:  return L10n.t("مسجّل", "Registered")
-        case .treeOnly:    return L10n.t("مقيّد", "In tree")
+        case .treeOnly:    return L10n.t("بدون حساب", "In tree")
         case .frozen:      return L10n.t("موقوف", "Suspended")
         case .deceased:    return L10n.t("متوفى", "Deceased")
         }
@@ -155,7 +155,7 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
         switch self {
         case .all:          return L10n.t("الكل", "All")
         case .registered:   return L10n.t("مسجّلون", "Registered")
-        case .treeOnly:     return L10n.t("مقيّدون في الشجرة", "In the tree only")
+        case .treeOnly:     return L10n.t("غير مسجّلين", "Not registered")
         case .deceased:     return L10n.t("متوفون", "Deceased")
         case .verifyLiving: return L10n.t("تحقق من الأحياء", "Check the living")
         case .gaps:         return L10n.t("ناقصة", "Incomplete")
@@ -163,15 +163,30 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
         }
     }
 
-    /// الشرائح الظاهرة في «العائلة» بالترتيب
-    static let shown: [AdminMemberChip] = [.all, .registered, .deceased, .gaps]
+    /// الشرائح الظاهرة في «العائلة» بالترتيب (اختيار المالك ٢٠٢٦-١١-٠٦ «ب — المراجعة أولاً»: الكل · مسجّلون · مقيّدون ·
+    /// متوفون — «ناقصة» صارت أربع قوائم مراجعة فوقها `AdminMemberReview`)
+    static let shown: [AdminMemberChip] = [.all, .registered, .treeOnly, .deceased]
 
-    /// الشريحة الظاهرة المقابلة — «مقيّدون» ضمن «الكل»، والمشكلات و«تحقق من الأحياء» ضمن «ناقصة»
+    /// اسم الشريحة المختصر في الصفّ («مقيّدون» بدل «بدون حساب»)
+    var chipTitle: String {
+        title
+    }
+
+    /// الشريحة الظاهرة المقابلة — النواقص والمشكلات و«تحقق من الأحياء» قوائم مراجعة (`review`) فوق «الكل»
     var shownChip: AdminMemberChip {
         switch self {
-        case .treeOnly:               return .all
-        case .problems, .verifyLiving: return .gaps
-        default:                      return self
+        case .problems, .verifyLiving, .gaps: return .all
+        default:                              return self
+        }
+    }
+
+    /// قائمة المراجعة المقابلة لمن يفتح الصفحة بشريحة قديمة («اليوم»، الإشعارات)
+    var review: AdminMemberReview? {
+        switch self {
+        case .verifyLiving: return .living
+        case .gaps:         return .gaps
+        case .problems:     return .problems
+        default:            return nil
         }
     }
 
@@ -185,6 +200,172 @@ enum AdminMemberChip: String, CaseIterable, Identifiable {
         case .verifyLiving: return []
         case .gaps:         return [.all, .noBirth, .noGender, .noPhoto]
         case .problems:     return [.all, .orphan, .noName, .brokenParent, .hidden, .dupPhone]
+        }
+    }
+}
+
+/// فلتر «الحساب» في «العائلة» — قبل فلتر «الحالة» (طلب المالك ٢٠٢٦-١١-٢٦ «فلتر لديهم حساب و ليس لديهم حساب قبل
+/// فلتر المتوفين و الاحياء علشان نراقب التطبيق و الاعضاء بشكل افضل»). في ورقة «الفلاتر» (U11، mock 5): الكل · لهم حساب ·
+/// بلا حساب — «لهم حساب» = له حساب دخول فقط (T2، `AdminMembersLogic.matches`)
+enum AdminAccountFilter: String, CaseIterable, Identifiable {
+    case all, with, without
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all:     return L10n.t("الكل", "All")
+        case .with:    return L10n.t("لهم حساب", "Have an account")
+        case .without: return L10n.t("بلا حساب", "No account")
+        }
+    }
+
+    /// نفس القيم في المنطق الخالص والهبوط
+    var logic: AdminMembersLanding.Account { AdminMembersLanding.Account(rawValue: rawValue) ?? .all }
+
+    init(_ landing: AdminMembersLanding.Account) { self = AdminAccountFilter(rawValue: landing.rawValue) ?? .all }
+}
+
+/// فلتر «الحالة» في «العائلة» (طلب المالك ٢٠٢٦-١١-٢٦): الكل · الأحياء · المتوفون (mock 5)
+enum AdminLifeFilter: String, CaseIterable, Identifiable {
+    case all, alive, deceased
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all:      return L10n.t("الكل", "All")
+        case .alive:    return L10n.t("الأحياء", "Living")
+        case .deceased: return L10n.t("المتوفون", "Deceased")
+        }
+    }
+
+    var logic: AdminMembersLanding.Life { AdminMembersLanding.Life(rawValue: rawValue) ?? .all }
+
+    init(_ landing: AdminMembersLanding.Life) { self = AdminLifeFilter(rawValue: landing.rawValue) ?? .all }
+}
+
+extension AdminMemberChip {
+    /// الشريحة القديمة (من «اليوم» أو التنبيه) ← الفلتران: مسجّلون = لديهم حساب + الأحياء · غير مسجّلين = ليس لديهم
+    /// حساب + الأحياء · متوفون = المتوفون فقط
+    var filters: (account: AdminAccountFilter, life: AdminLifeFilter) {
+        switch self {
+        case .registered: return (.with, .alive)
+        case .treeOnly:   return (.without, .alive)
+        case .deceased:   return (.all, .deceased)
+        default:          return (.all, .all)
+        }
+    }
+}
+
+/// «يحتاج مراجعتك» — أربع قوائم أعلى صفحة «العائلة» (اختيار المالك ٢٠٢٦-١١-٠٦ «ب — المراجعة أولاً»)، كل قائمة تُراجَع
+/// عضواً عضواً بالسابق والتالي في ورقة العضو
+enum AdminMemberReview: String, CaseIterable, Identifiable {
+    /// `notOpened`: لهم رقم هاتف ولم يفتحوا التطبيق بعد (طلب المالك ٢٠٢٦-١١-١١ «حط هذا الخيار بقسم العائلة للاطلاع عليه»)
+    /// `inactive`: لديهم التطبيق ولم يفتحوه ٢١ يوماً أو أكثر (`app_usage_members` = idle) — طلب المالك ٢٠٢٦-١١-١١
+    case living, death, gaps, problems, notOpened, inactive
+
+    var id: String { rawValue }
+
+    /// قوائم «استخدام التطبيق» (للاطلاع) — لا تدخل في عدد «يحتاج مراجعتك»، وتنتظر وصول الحسابات
+    var isUsage: Bool { self == .notOpened || self == .inactive }
+
+    /// «الأحياء والوفيات» (القرار ٦ «أ»): «هل ما زالوا أحياء؟» و«تاريخ وفاة غير مكتمل» صفّ واحد وصفحة واحدة بقسمين
+    static let lifeDeathTitle = L10n.t("الأحياء والوفيات", "Living & deaths")
+    static let lifeDeathSubtitle = L10n.t("تأكّد من الأحياء، وأكمل تواريخ الوفاة", "Confirm the living, complete death dates")
+    /// صفوف بطاقة «يحتاج مراجعتك»: «الوفاة» داخل صفّ «الأحياء والوفيات»
+    static var cardCases: [AdminMemberReview] { allCases.filter { $0 != .death } }
+    var cardTitle: String { self == .living ? Self.lifeDeathTitle : title }
+    var cardSubtitle: String {
+        self == .living ? L10n.t("تحقق من الأحياء · تواريخ الوفاة", "Check the living · death dates") : subtitle
+    }
+
+    /// أعضاء القائمة (مواضع الفهرس) — المكان الواحد لصفحة «العائلة» وصفحة القائمة نفسها
+    func rows(in index: AdminMembersIndex, verified: Set<UUID>) -> [Int] {
+        switch self {
+        case .living:    return index.rows(.verifyLiving, .all).filter { !verified.contains(index.entries[$0].id) }
+        case .death:     return index.rows(.deceased, .deathIncomplete)
+        case .gaps:      return index.rows(.gaps, .all)
+        case .problems:  return index.rows(.problems, .all)
+        case .notOpened: return index.rows(.treeOnly, .notSignedIn)
+        case .inactive:  return index.rows(.registered, .inactive)
+        }
+    }
+
+    /// سطر الشرح تحت العنوان في صفحة القائمة
+    var explanation: String {
+        switch self {
+        case .living:    return L10n.t("كبار سن بلا وفاة مسجّلة",
+                                       "Elderly with no recorded death. Confirm «alive» or record the death.")
+        case .death:     return L10n.t("تاريخ الوفاة السنة فقط أو بلا تاريخ",
+                                       "Deceased with only a year or no date of death.")
+        case .gaps:      return L10n.t("أحياء ينقصهم الميلاد أو الجنس أو الصورة",
+                                       "Living members missing a birth date, gender or photo.")
+        case .problems:  return L10n.t("غير مربوطين بأب، أو رقم مكرر",
+                                       "Members without a father link, or a number shared by several members.")
+        case .notOpened: return L10n.t("لهم رقم ولم يسجّلوا الدخول أبداً",
+                                       "They have a number in the tree and never signed in.")
+        case .inactive:  return L10n.t("لم يفتحوا التطبيق ٢١ يوماً أو أكثر",
+                                       "They have the app and haven't opened it for 21+ days.")
+        }
+    }
+
+    /// سطر الإرشاد آخر صفحة القائمة
+    var hint: String {
+        switch self {
+        case .living:    return L10n.t("«حي ✓» يخفيه من القائمة عندك أنت فقط. «متوفى» يفتح مربّع الوفاة، والتاريخ اختياري.",
+                                       "«Alive ✓» hides him from your list only. «Deceased» opens the death box; the date is optional.")
+        case .death:     return L10n.t("«أدخل التاريخ» يفتح مربّع التاريخ، ومنه «التاريخ غير معروف» فلا يُطلب مرة ثانية.",
+                                       "«Enter date» opens the date box, including «date unknown» so it isn't asked again.")
+        case .gaps:      return L10n.t("«أكمل» يفتح ورقة العضو على الناقص، و«التالي» ينقلك للعضو بعده في القائمة.",
+                                       "«Complete» opens the member sheet; «Next» moves to the next member in the list.")
+        case .problems:  return L10n.t("«قارن» يعرض أصحاب الرقم المكرر واحداً بعد واحد لتصحّح رقم أحدهم.",
+                                       "«Compare» shows the members sharing a number one by one, to fix one of them.")
+        case .notOpened: return L10n.t("الواتساب يفتح برسالة جاهزة فيها رابط التطبيق — ترسلها أنت من جوالك.",
+                                       "WhatsApp opens with a ready message and the app link — you send it from your phone.")
+        case .inactive:  return L10n.t("اتصل أو أرسل واتساب لتذكيره بالتطبيق.",
+                                       "Call or WhatsApp to remind them about the app.")
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .living:   return L10n.t("هل ما زالوا أحياء؟", "Still alive?")
+        case .death:    return L10n.t("تاريخ وفاة غير مكتمل", "Death date incomplete")
+        case .gaps:     return L10n.t("بيانات ناقصة", "Missing data")
+        case .problems: return L10n.t("مشكلات في الشجرة", "Tree problems")
+        case .notOpened: return L10n.t("لم يفتحوا التطبيق بعد", "Haven't opened the app yet")
+        case .inactive:  return L10n.t("لم يدخلوا التطبيق منذ ٢١ يوماً", "Away for 21+ days")
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .living:   return L10n.t("كبار سن بلا وفاة مسجّلة", "Elderly with no recorded death")
+        case .death:    return L10n.t("السنة فقط أو بلا تاريخ", "Year only or no date")
+        case .gaps:     return L10n.t("الميلاد · الجنس · الصورة", "Birth · gender · photo")
+        case .problems: return L10n.t("غير مرتبط بأب · رقم مكرر", "No father link · duplicate number")
+        case .notOpened: return L10n.t("لهم رقم هاتف ولم يسجّلوا الدخول", "Have a phone number, never signed in")
+        case .inactive:  return L10n.t("لديهم التطبيق ولم يفتحوه ٢١ يوماً أو أكثر", "Have the app, not opened for 21+ days")
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .living:   return "person.2.fill"
+        case .death:    return "calendar"
+        case .gaps:     return "exclamationmark.triangle.fill"
+        case .problems: return "point.3.connected.trianglepath.dotted"
+        case .notOpened: return AppUsageCategory.neverLogged.icon
+        case .inactive:  return AppUsageCategory.idle.icon
+        }
+    }
+
+    /// لون المعنى: الأعضاء أخضر، الذكرى رصاصي، النقص كهرماني، المشكلات أحمر
+    var tint: Color {
+        switch self {
+        case .living:   return DS.Color.palm
+        case .death:    return DS.Color.deceased
+        case .gaps:     return DS.Color.warning
+        case .problems: return DS.Color.error
+        case .notOpened: return DS.Color.info
+        case .inactive:  return DS.Color.warning
         }
     }
 }
@@ -363,7 +544,7 @@ enum AdminMemberSub: String, Identifiable {
     var title: String {
         switch self {
         case .all:             return L10n.t("الكل", "All")
-        case .newThisWeek:     return L10n.t("قُيّدوا هذا الأسبوع", "Added this week")
+        case .newThisWeek:     return L10n.t("انضافوا هذا الأسبوع", "Added this week")
         case .usingApp:        return L10n.t("يستخدم التطبيق", "Using the app")
         case .inactive:        return L10n.t("غير نشط", "Inactive")
         case .noPush:          return L10n.t("لا تصله الإشعارات", "No notifications")
@@ -384,6 +565,21 @@ enum AdminMemberSub: String, Identifiable {
     }
 }
 
+extension AdminMemberSub {
+    /// الشريحة التي تحمل قائمة هذه الفرعية في الفهرس (`AdminMembersIndex.rows(homeChip, self)`) — فلتر «القائمة» الإضافي
+    /// في «العائلة» من رابط قديم (U11)
+    var homeChip: AdminMemberChip {
+        switch self {
+        case .all, .newThisWeek:                         return .all
+        case .usingApp, .inactive, .noPush, .frozen:     return .registered
+        case .notSignedIn, .noPhone:                     return .treeOnly
+        case .deathComplete, .deathIncomplete:           return .deceased
+        case .noBirth, .noGender, .noPhoto:              return .gaps
+        case .orphan, .noName, .brokenParent, .hidden, .dupPhone: return .problems
+        }
+    }
+}
+
 // MARK: - حسابات الدخول (من `app_usage_members` الموجودة — للإدارة الأربعة `is_moderator()`)
 
 /// حساب دخول عضو: فئة استخدامه وآخر ظهور وتاريخ إنشاء الحساب
@@ -393,7 +589,9 @@ struct AdminAccountInfo: Equatable {
     let created: Date?
 }
 
-/// من له حساب دخول — ثلاث قوائم من `app_usage_members` (active · idle · login_no_device). الفشل يُبقي آخر قيمة
+/// من له حساب دخول — ثلاث قوائم من `app_usage_members` (active · idle · login_no_device). الفشل يُبقي آخر قيمة،
+/// ويُسجَّل (`Log.error`)، ويقوله `health` (`AdminStoreHealth`، U11): أعداد «لهم حساب/بلا حساب» «—» أو «تعذّر التحميل»
+/// لا صفر. `-tmpFailStores accounts` (T0) يصطنع الفشل.
 @MainActor
 final class AdminAccountsStore: ObservableObject {
     static let shared = AdminAccountsStore()
@@ -401,9 +599,16 @@ final class AdminAccountsStore: ObservableObject {
     @Published private(set) var accounts: [UUID: AdminAccountInfo] = [:]
     /// وصلت القوائم مرة على الأقل (قبلها لا تُعرض حالة «مسجّل/مقيّد»)
     @Published private(set) var loaded = false
+    /// حال المخزن لما يقرأ منه عدداً أو كلمة (spec A.12، Autoplan note 2)
+    @Published private(set) var health: AdminStoreHealth = .idle
     /// سجلّات بلا اسم (رقم دخول بلا اسم) في كل فئة — تُطرح من أرقام `app_usage_stats` (`AppUsageStats.excludingNameless`)
     /// لأنها ليست أفراداً في العائلة. بعد أن يستبعدها السيرفر نفسه تصير أصفاراً فلا يتغيّر شيء
     private(set) var namelessByCategory: [AppUsageCategory: Int] = [:]
+    /// بلاغ المالك ٢٠٢٦-١١-٢٧: من له حساب دخول (أو جهاز) وتستبعده القوائم الثلاث عمداً — أبناء البنات، لا يُعدّون في أرقام
+    /// العائلة — بآخر ظهوره، من `get_members_last_signin` (المالك والمدير والمراقب؛ غيرهم لا شيء). لا يدخل `accounts` ولا
+    /// أي عدد: يقرؤه كرت العضو («آخر دخول») وقائمة «مسجّلون بلا صورة» (`PhotoNudgeLogic.listLogin`) وحدهما. فشله لا يُفشل
+    /// المخزن — يبقى آخر ما وصل
+    @Published private(set) var outsideSeen: [UUID: Date] = [:]
     private var lastFetch: Date?
 
     static let categories: [AppUsageCategory] = [.active, .idle, .loginNoDevice]
@@ -412,13 +617,31 @@ final class AdminAccountsStore: ObservableObject {
 
     func refresh(force: Bool = false) async {
         if !force, let lastFetch, Date().timeIntervalSince(lastFetch) < 60 { return }
-        async let active = Self.fetch(.active)
-        async let idle = Self.fetch(.idle)
-        async let noDevice = Self.fetch(.loginNoDevice)
-        let lists = await (active, idle, noDevice)
-        guard let a = lists.0, let i = lists.1, let n = lists.2 else { return }
-        apply([.active: a, .idle: i, .loginNoDevice: n])
-        lastFetch = Date()
+        let before = health
+        health = health.beginning()
+        do {
+            try DebugAdminProbe.failIfAsked(.accounts, hasLoaded: loaded)   // `-tmpFailStores accounts`
+            async let active = Self.fetch(.active)
+            async let idle = Self.fetch(.idle)
+            async let noDevice = Self.fetch(.loginNoDevice)
+            async let seen = Self.fetchSeen()
+            let lists = try await (active, idle, noDevice)
+            apply([.active: lists.0, .idle: lists.1, .loginNoDevice: lists.2])
+            if let seen = await seen { applyOutside(seen) }
+            lastFetch = Date()
+        } catch {
+            // إلغاء (الصفحة أُغلقت، جلب أحدث) ليس فشلاً — يرجع الحال كما كان
+            if Log.isCancellation(error) {
+                health = before
+                return
+            }
+            if DebugAdminProbe.isInjected(error) {
+                Log.warning("[AdminAccountsStore] load failed: \(error.localizedDescription)")
+            } else {
+                Log.error("[AdminAccountsStore] load failed: \(error.localizedDescription)")
+            }
+            health = health.ending(success: false)
+        }
     }
 
     /// يبني الخريطة من القوائم (يستعملها التحميل)
@@ -436,18 +659,52 @@ final class AdminAccountsStore: ObservableObject {
         namelessByCategory = nameless
         if map != accounts { accounts = map }
         loaded = true
+        health = .loaded(at: Date())
     }
 
-    private static func fetch(_ category: AppUsageCategory) async -> [AppUsageMember]? {
+    /// `outsideSeen` = من في قراءة الدخول وليس في القوائم الثلاث (اليوم: أبناء البنات الثلاثة)
+    func applyOutside(_ rows: [LastSignIn]) {
+        var map: [UUID: Date] = [:]
+        for row in rows where accounts[row.memberId] == nil {
+            if let seen = row.seen { map[row.memberId] = seen }
+        }
+        if map != outsideSeen { outsideSeen = map }
+    }
+
+    /// صفّ `get_members_last_signin` (`private.member_activity`: حساب دخول أو جهاز، بآخر ظهور)
+    struct LastSignIn: Decodable {
+        let memberId: UUID
+        let seen: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case memberId = "member_id"
+            case seen = "last_sign_in_at"
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            memberId = try c.decode(UUID.self, forKey: .memberId)
+            seen = AppUsageMember.parse(try c.decodeIfPresent(String.self, forKey: .seen))
+        }
+    }
+
+    /// nil = تعذّر (يبقى آخر ما وصل)
+    private static func fetchSeen() async -> [LastSignIn]? {
         do {
-            return try await SupabaseConfig.client
-                .rpc("app_usage_members", params: ["p_category": category.rawValue])
-                .execute()
-                .value
+            return try await SupabaseConfig.client.rpc("get_members_last_signin").execute().value
         } catch {
-            Log.fetchError("تعذر جلب حسابات الدخول (\(category.rawValue))", error)
+            if !Log.isCancellation(error) {
+                Log.warning("[AdminAccountsStore] get_members_last_signin: \(error.localizedDescription)")
+            }
             return nil
         }
+    }
+
+    private static func fetch(_ category: AppUsageCategory) async throws -> [AppUsageMember] {
+        try await SupabaseConfig.client
+            .rpc("app_usage_members", params: ["p_category": category.rawValue])
+            .execute()
+            .value
     }
 }
 
@@ -519,7 +776,10 @@ enum AdminMemberFacts {
     }
 
     static func problems(_ m: FamilyMember, in ctx: TreeContext) -> [AdminMemberProblem] {
-        guard m.role != .pending, m.status != .frozen else { return [] }
+        // ليست مشكلات شجرة (طلب المالك ٢٠٢٦-١١-١٤): تسجيل لم يكتمل (الحالة معلّقة)، وحساب مربوط بعقدته في شجرة
+        // النساء (البنت المسجّلة، زوج من خارج العائلة) — مكانه هناك لا في شجرة الرجال
+        guard m.role != .pending, m.status != .frozen, m.status != .pending,
+              WomenStore.node(forAccount: m.id) == nil else { return [] }
         var list: [AdminMemberProblem] = []
         if m.fatherId == nil && !ctx.fatherIds.contains(m.id) { list.append(.orphan) }
         let name = m.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -538,6 +798,8 @@ struct AdminMembersIndex {
         let member: FamilyMember
         let status: AdminMemberStatus?
         let usage: AppUsageCategory?
+        /// له حساب دخول (في قوائم «استخدام التطبيق») — يفرّق المتوفين في فلتر «الحساب»
+        let hasLogin: Bool
         let gaps: [AdminMemberGap]
         let problems: [AdminMemberProblem]
         /// رأس الفرع (ابن مباشر لرأس الشجرة) — nil = خارج الفروع
@@ -577,6 +839,27 @@ struct AdminMembersIndex {
     static let empty = AdminMembersIndex()
 
     func rows(_ chip: AdminMemberChip, _ sub: AdminMemberSub) -> [Int] { lists[Key(chip: chip, sub: sub)] ?? [] }
+
+    /// فلترا «الحساب» و«الحالة» معاً على صفّ من «الكل» — الحساب لا يُعرف قبل وصول قوائم الحسابات.
+    /// T2 (U11): «لهم حساب» = له حساب دخول فقط (`hasLogin`)، فعددها = «المسجّلون» من الرجال؛ الموقوف بلا حساب كان يُعدّ هنا
+    /// وصار في «بلا حساب». `status == .registered` يبقى لحساب المرأة وابن البنت (مسجّلان بطبيعتهما — خارج هذه القائمة أصلاً)
+    func matches(_ i: Int, account: AdminAccountFilter, life: AdminLifeFilter) -> Bool {
+        if account != .all && !accountsReady { return false }
+        let e = entries[i]
+        return AdminMembersLogic.matches(deceased: e.member.isDeceased == true, hasLogin: Self.hasLogin(e),
+                                         account: account.logic, life: life.logic)
+    }
+
+    /// اختيار متعدّد (F3): «الحساب» و«الحالة» مجموعتان (فارغة = «الكل») — الحساب لا يُعرف قبل وصول قوائم الحسابات
+    func matches(_ i: Int, accounts: Set<AdminAccountFilter>, lives: Set<AdminLifeFilter>) -> Bool {
+        if !accounts.isEmpty && !accountsReady { return false }
+        let e = entries[i]
+        return AdminMembersLogic.matches(deceased: e.member.isDeceased == true, hasLogin: Self.hasLogin(e),
+                                         accounts: Set(accounts.map(\.logic)), lives: Set(lives.map(\.logic)))
+    }
+
+    /// له حساب دخول لفلتر «الحساب» (وحساب المرأة وابن البنت مسجّلان بطبيعتهما)
+    static func hasLogin(_ e: Entry) -> Bool { e.hasLogin || e.status == .registered }
     func count(_ chip: AdminMemberChip, _ sub: AdminMemberSub = .all) -> Int { rows(chip, sub).count }
 
     /// العدد للعرض — nil قبل وصول ما يلزمه (الحسابات لشرائح المسجّلين والمقيّدين)
@@ -591,17 +874,32 @@ struct AdminMembersIndex {
 
     @MainActor
     static func build(members all: [FamilyMember], accounts: [UUID: AdminAccountInfo], accountsReady: Bool,
+                      daughterSons: Set<UUID> = [],
+                      countsOnly: Bool = false,
                       branchName: (UUID) -> String?) -> AdminMembersIndex {
+        #if DEBUG
+        let started = CFAbsoluteTimeGetCurrent()
+        defer {
+            DebugProbeLog.line(String(format: "PERF index.build%@ %d members %.0f ms", countsOnly ? " (counts)" : "",
+                                      all.count, (CFAbsoluteTimeGetCurrent() - started) * 1000))
+        }
+        #endif
         var index = AdminMembersIndex()
         index.accountsReady = accountsReady
         index.built = !all.isEmpty
         index.pendingJoin = all.filter { $0.role == .pending }.count
         // أبجدياً بالحروف العربية المطبّعة (الهمزات على الألف ألفاً — `AdminGrouping.alphabetical`): كل القوائم بهذا الترتيب
-        let pool = AdminGrouping.alphabetical(all.filter { $0.role != .pending })
+        // `countsOnly` (من يقرأ الأعداد وحدها: «اليوم» و«المكرر والأخطاء»): بلا ترتيب ولا نصّ بحث — أثقل جزأين في البناء
+        // (تعليق «المكرر والأخطاء» ٥–٦ ث، Sentry FAMILYTREE-B)؛ الأعداد لا تتغيّر بالترتيب
+        let members = all.filter { $0.role != .pending }
+        let pool = countsOnly ? members : AdminGrouping.alphabetical(members)
         let ctx = AdminMemberFacts.TreeContext(all)
         let heads = branchHeads(all)
         // «تحقق من الأحياء»: من له حساب دخول حيّ قطعاً (حين تصل القوائم)
-        let oldLiving = AdminLivingCheck.candidates(all, hasLogin: accountsReady ? { accounts[$0] != nil } : nil)
+        let oldLiving = AdminLivingCheck.candidates(all.filter { !daughterSons.contains($0.id) },
+                                                    hasLogin: accountsReady ? { accounts[$0] != nil } : nil)
+        // بيته شجرة النساء: حساب المرأة وابن البنت (طلب المالك ٢٠٢٦-١١-٠٨)
+        func womenSide(_ m: FamilyMember) -> Bool { m.isWomanAccount || daughterSons.contains(m.id) }
 
         var entries: [Entry] = []
         entries.reserveCapacity(pool.count)
@@ -614,13 +912,13 @@ struct AdminMembersIndex {
             let info = accounts[m.id]
             var status = AdminMemberFacts.status(m, hasLogin: accountsReady ? info != nil : nil)
             // حساب المرأة (دخول النساء) له دخول بطبيعته — لا يُعرض «مقيّداً في الشجرة» ولو غاب عن قوائم الاستخدام
-            if m.isWomanAccount && status == .treeOnly { status = .registered }
+            if womenSide(m) && status == .treeOnly { status = .registered }
             let registered = status == .registered || (status == .frozen && info != nil)
             let gaps = AdminMemberFacts.gaps(m, registered: registered)
             let problems = AdminMemberFacts.problems(m, in: ctx)
-            entries.append(Entry(member: m, status: status, usage: info?.usage, gaps: gaps, problems: problems,
+            entries.append(Entry(member: m, status: status, usage: info?.usage, hasLogin: info != nil, gaps: gaps, problems: problems,
                                  branch: heads[m.id], living: oldLiving[m.id],
-                                 needle: ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
+                                 needle: countsOnly ? "" : ArabicTextNormalizer.normalizeForSearch(m.familyName == nil ? m.fullName : m.fullName + " " + m.displayFullName),
                                  digits: AdminMemberFacts.asciiDigits(m.phoneNumber ?? "")))
             func addProblems() {
                 guard !problems.isEmpty else { return }
@@ -643,25 +941,9 @@ struct AdminMembersIndex {
                 addProblems()
                 continue
             }
-            // حساب امرأة: ليس من شجرة الرجال — بيته «مسجّلون» وحده (بشارة «أنثى» في الصفّ)، خارج «الكل» والفروع
-            // والنواقص والمشكلات و«تحقق من الأحياء»؛ تُعدّ وتُرى بعقدتها في شجرة النساء
-            if m.isWomanAccount {
-                switch status {
-                case .frozen:
-                    add(.registered, .all, i)
-                    add(.registered, .frozen, i)
-                case .registered:
-                    add(.registered, .all, i)
-                    switch info?.usage {
-                    case .active: add(.registered, .usingApp, i)
-                    case .idle: add(.registered, .inactive, i)
-                    default: add(.registered, .noPush, i)
-                    }
-                default:
-                    break
-                }
-                continue
-            }
+            // «شجرة العائلة» بلا نساء ولا ما يخصّهن (طلب المالك ٢٠٢٦-١١-٠٨ «شيل من الاعضاء كل النساء»): حساب المرأة
+            // وابن البنت («فرع خارج العائلة») بيتهما «شجرة النساء» في الصفحة نفسها (`AdminWomenPanel`) — لا شريحة هنا
+            if womenSide(m) { continue }
             add(.all, .all, i)
             if oldLiving[m.id] != nil { add(.verifyLiving, .all, i) }
             switch status {
@@ -684,8 +966,10 @@ struct AdminMembersIndex {
             case .pendingJoin, .none:
                 break
             }
-            if m.isDeceased != true && m.isCountable,
-               let created = ApprovalWorkflow.date(m.createdAt), created >= weekAgo {
+            // القاعدة الواحدة مع حبّة «اليوم» («انضمّ 19 عضواً هذا الأسبوع»)
+            if AdminMembersLogic.joinedThisWeek(deceased: m.isDeceased == true, countable: m.isCountable,
+                                                daughterSon: daughterSons.contains(m.id),
+                                                created: ApprovalWorkflow.date(m.createdAt), weekAgo: weekAgo) {
                 add(.all, .newThisWeek, i)
             }
             if m.isDeceased != true {
@@ -723,7 +1007,7 @@ struct AdminMembersIndex {
 
         // الفروع: أبناء رأس الشجرة المباشرون، ثم «خارج الفروع» (الرأس نفسه ومن لا يتصل به)
         var byBranch: [UUID?: [Int]] = [:]
-        for (i, e) in entries.enumerated() where e.member.hasName && !e.member.isWomanAccount { byBranch[e.branch, default: []].append(i) }
+        for (i, e) in entries.enumerated() where e.member.hasName && !womenSide(e.member) { byBranch[e.branch, default: []].append(i) }
         let headMembers = Set(heads.values).compactMap { id in all.first { $0.id == id } }
             .sorted { ($0.sortOrder, $0.firstName) < ($1.sortOrder, $1.firstName) }
         var branches: [Branch] = headMembers.compactMap { head in

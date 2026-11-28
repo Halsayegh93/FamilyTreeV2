@@ -21,20 +21,8 @@ nonisolated struct NewsPost: Identifiable, Codable, Sendable {
     var approved_at: String?
     
     // ✅ الإضافة السحرية: متغير يحول النص إلى تاريخ تلقائياً ليقرأه كود الواجهة
-    nonisolated(unsafe) private static let isoWithFraction: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    nonisolated(unsafe) private static let isoWithout: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     var timestamp: Date {
-        Self.isoWithFraction.date(from: created_at)
-            ?? Self.isoWithout.date(from: created_at)
+        DateParsing.iso(created_at)
             ?? Date()
     }
 

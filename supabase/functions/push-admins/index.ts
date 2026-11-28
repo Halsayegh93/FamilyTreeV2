@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
   for (const entry of tokenEntries) {
     const { token, env } = entry;
     const host = apnsHostFor(env);
-    const apnsResponse = await fetch(`${host}/3/device/${token}`, {
+    const sendApns = () => fetch(`${host}/3/device/${token}`, {
       method: "POST",
       headers: {
         authorization: `bearer ${jwt}`,
@@ -173,6 +173,13 @@ Deno.serve(async (req) => {
       },
       body: apnsBodyJson,
     });
+    let apnsResponse = await sendApns();
+    if (apnsResponse.status === 429) {
+      // نفس قاعدة push-on-notification (٢٠٢٦-١١-٠٦): محاولة واحدة بعد ثانية بالرمز نفسه
+      await apnsResponse.text().catch(() => "");
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      apnsResponse = await sendApns();
+    }
 
     if (apnsResponse.ok) {
       sent += 1;

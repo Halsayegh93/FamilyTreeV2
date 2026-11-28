@@ -12,6 +12,8 @@ struct PhoneNumberTextField: UIViewRepresentable {
     var maxLength: Int = 15
     /// الدولة المختارة — يُحذف رمزها (+/00) والصفر الأول من اللصق/التعبئة التلقائية قبل القصّ
     var country: KuwaitPhone.Country? = nil
+    /// المؤشّر في الحقل عند الظهور (مربّع تعديل الرقم)
+    var autoFocus: Bool = false
 
     /// دول رقمها المحلي يُكتب بصفر أول يسقط مع رمز الدولة (05xxxxxxxx → 5xxxxxxxx)
     private static let trunkZeroCountries: Set<String> = ["SA", "AE", "EG", "JO", "IQ", "GB"]
@@ -55,6 +57,10 @@ struct PhoneNumberTextField: UIViewRepresentable {
         tf.autocapitalizationType = .none
         tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
         tf.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        if autoFocus {
+            // بعد دخول المربّع — حتى لا تقطع لوحة المفاتيح حركته
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak tf] in tf?.becomeFirstResponder() }
+        }
         return tf
     }
 
@@ -114,6 +120,8 @@ struct DSPhoneField: View {
     var compact: Bool = false
     /// بدون إطار/خلفية — للاستخدام داخل صف على سطر واحد.
     var bordered: Bool = true
+    /// المؤشّر في الحقل عند الظهور
+    var autoFocus: Bool = false
 
     /// نسبة «حجم النص» في الجهاز — الحقل يطول مع الخط الأكبر (ولا يقصر عن مقاسه تحت الافتراضي)
     @ScaledMetric(relativeTo: .body) private var textScale: CGFloat = 1
@@ -145,7 +153,7 @@ struct DSPhoneField: View {
                         .foregroundStyle(DS.Color.textTertiary)
                 }
                 // مساحة ضغط ٤٤ نقطة (حد أبل) بلا تغيير ارتفاع الحقل
-                .frame(minHeight: 44)
+                .frame(minHeight: DS.Icon.tapTarget)
                 .padding(.vertical, -((44 - (compact ? 20 : 24)) / 2))
                 .contentShape(Rectangle())
             }
@@ -165,7 +173,8 @@ struct DSPhoneField: View {
                 font: .systemFont(ofSize: numberFontSize, weight: .semibold),
                 keyboardType: .numberPad,
                 maxLength: country.maxDigits,
-                country: country
+                country: country,
+                autoFocus: autoFocus
             )
             .frame(maxWidth: .infinity)
             .frame(height: innerHeight)

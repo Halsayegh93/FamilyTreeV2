@@ -106,6 +106,13 @@ enum CategoryPalette {
         guard let pair = hex[key] else { return DS.Color.brand }   // كحلي ثابت لا يتبع القسم
         return SwiftUI.Color.adaptive(light: pair.light, dark: pair.dark)
     }
+
+    /// تعبئة ثابتة تحت نص أبيض في الوضعين: لون الوضع الفاتح مغمّقاً ٣٠٪ (مجلدات المكتبة)
+    static func folderFill(_ key: String) -> Color {
+        let value = Int((hex[key]?.light ?? "#1F4E79").dropFirst(), radix: 16) ?? 0x1F4E79
+        func channel(_ shift: Int) -> Double { Double((value >> shift) & 0xFF) / 255 * 0.7 }
+        return Color(red: channel(16), green: channel(8), blue: channel(0))
+    }
 }
 
 /// مخزن التصنيفات — يُحمَّل عند فتح التطبيق، ويقرؤه كل من يعرض تصنيفاً
@@ -196,7 +203,7 @@ final class CategoryStore: ObservableObject {
         } catch {
             let text = "\(error)"
             if text.contains("category_not_empty") {
-                errorMessage = L10n.t("لا يمكن حذفه — فيه عناصر. انقلها لتصنيف آخر أو أخفِ التصنيف.",
+                errorMessage = L10n.t("لا يمكن حذفه لاحتوائه على عناصر. يرجى نقلها إلى تصنيف آخر أو إخفاء التصنيف.",
                                       "Can't delete — it has items. Move them or hide the category.")
             } else if text.contains("protected_category") {
                 errorMessage = L10n.t("هذا تصنيف أساسي ولا يُحذف.", "This is a core category and can't be deleted.")
@@ -248,7 +255,7 @@ final class CategoryStore: ObservableObject {
                                 name_en: category.nameEn.trimmingCharacters(in: .whitespacesAndNewlines),
                                 icon_key: category.iconKey, color_key: category.colorKey,
                                 sort_order: category.sortOrder, is_active: category.isActive,
-                                updated_at: ISO8601DateFormatter().string(from: Date())))
+                                updated_at: DateParsing.isoString(Date())))
                 .eq("id", value: category.id.uuidString)
                 .execute()
             if refetch { await fetch() }

@@ -33,6 +33,7 @@ private struct NotificationKindStyle {
         "member_add":        .init(icon: "person.fill.badge.plus",                   gradient: DS.Color.gradientPrimary, color: DS.Color.secondary,   labelAr: "إضافة عضو",       labelEn: "Member Added"),
         "member_change":     .init(icon: "person.text.rectangle",                    gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تغيير بيانات عضو", labelEn: "Member Change"),
         "my_profile_change": .init(icon: "person.crop.circle.badge.checkmark",       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل بياناتك",   labelEn: "Your Data Edited"),
+        "photo_change_request": .init(icon: "camera.badge.ellipsis",                 gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,        labelAr: "طلب تغيير الصورة", labelEn: "Photo Change Request"),
         "admin_edit":        .init(icon: "pencil.circle.fill",                       gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل بيانات",    labelEn: "Edit"),
         "admin_edit_name":   .init(icon: "pencil",                                   gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل اسم",       labelEn: "Name Edit"),
         "admin_edit_dates":  .init(icon: "calendar",                                 gradient: DS.Color.gradientAccent,  color: DS.Color.accent,      labelAr: "تعديل تواريخ",    labelEn: "Dates Edit"),
@@ -86,8 +87,18 @@ private struct NotificationKindStyle {
         labelAr: "وفاة", labelEn: "Obituary"
     )
 
+    /// «أضف صورتك الشخصية» (طلب إضافة لا تغيير — F4، S-3)
+    private static let photoAdd = NotificationKindStyle(
+        icon: "person.crop.circle.badge.plus", gradient: DS.Color.gradientPrimary, color: DS.Color.sadu,
+        labelAr: "طلب إضافة صورة", labelEn: "Photo Request"
+    )
+
     static func style(for notification: AppNotification) -> NotificationKindStyle {
-        notification.isDeathAnnouncement ? deathAnnouncement : style(for: notification.kind)
+        if notification.isDeathAnnouncement { return deathAnnouncement }
+        if notification.kind == NotificationKind.photoChangeRequest.rawValue, notification.details?.photoAdd == true {
+            return photoAdd
+        }
+        return style(for: notification.kind)
     }
 
     /// لون رأس مربّع التفاصيل — درجات غامقة تبقى الكتابة البيضاء واضحة عليها في
@@ -130,6 +141,8 @@ struct NotificationsCenterView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<UUID> = []
     @State private var selectedNotification: AppNotification? = nil
+    /// «طلب تغيير الصورة» المفتوح من تفاصيل إشعاره — مربّع العضو فوق المركز (`PhotoChangeRequestPresenter`)
+    @State private var photoChangeRequestOpen: PhotoChangeRequest? = nil
     /// العضو المختار لفتح تفاصيله من داخل الإشعار (مثل الشجرة).
     @State private var selectedMember: FamilyMember? = nil
     /// طلب admin_requests المرتبط بالإشعار الحالي — يُحمَّل عند فتح الشيت (للمرحلة ٣)
@@ -161,6 +174,7 @@ struct NotificationsCenterView: View {
     enum NotifTab: Hashable {
         case notifications // إشعاراتي — ما يخصّني شخصياً
         case activity      // المستجدات — تحديثات التطبيق والإعلانات العامة
+        case sent          // الطلبات المرسلة — طلبات العضو المعلّقة وسحبها (كانت «طلباتي» في الملف)
     }
 
     /// تغييرات بيانات الأعضاء من السيرفر (للإدارة — مكانها «إشعارات الإدارة» فقط) وتعديل الإدارة على بياناتي (للعضو)
@@ -175,22 +189,12 @@ struct NotificationsCenterView: View {
         return f
     }()
 
-    private static let fullDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .full
-        f.timeStyle = .short
-        return f
-    }()
-
     private func relativeTime(_ date: Date) -> String {
         Self.relativeDateFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
         return Self.relativeDateFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    private func fullDateTime(_ date: Date) -> String {
-        Self.fullDateFormatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
-        return Self.fullDateFormatter.string(from: date)
-    }
+    private func fullDateTime(_ date: Date) -> String { DateHelper.displayDateTime(date) }
 
     // MARK: - الهيدر — نفس رأس صفحات الرئيسية الفرعية (المكتبة، المشاريع، الأخبار…)
 
@@ -201,7 +205,7 @@ struct NotificationsCenterView: View {
     /// وزخرفة «مجسّمات» تحته بلون القسم — كان نسخة يدوية من رأس صفحات الرئيسية
     private var notificationsHeader: some View {
         DSSubPageHeader(title: L10n.t("الإشعارات", "Notifications"),
-                        subtitle: L10n.t("آخر ما وصلك من العائلة", "The latest from your family"),
+                        subtitle: L10n.t("آخر ما وصل من العائلة", "The latest from your family"),
                         section: pageSection, icon: "bell.fill",
                         onBack: { dismiss() })
     }
@@ -222,28 +226,41 @@ struct NotificationsCenterView: View {
                 // صفحتان — إشعاراتي + المستجدات (تحديثات وإعلانات) للجميع
                 do {
                     let visible = visibleNotifications
-                    let notifUnread = visible.filter { belongsToNotificationsTab($0) && !$0.read }.count
+                    let notifUnread = visible.filter { (belongsToNotificationsTab($0) || belongsToActivityTab($0)) && !$0.read }.count
                     let activityUnread = visible.filter { belongsToActivityTab($0) && !$0.read }.count
 
-                    segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread)
-                        .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.top, DS.Spacing.sm)
-                        .padding(.bottom, DS.Spacing.xs)
+                    // «الطلبات المرسلة» = «طلباتي» (`profile.my_requests`): مخفية لـ«لم يستكمل» و«مقيّد» — بلا مبدّل
+                    if authVM.memberSees(.profileMyRequests) {
+                        segmentedTabBar(notifCount: notifUnread, activityCount: activityUnread,
+                                        sentCount: adminRequestVM.myPendingRequests.count)
+                            .dsPageMargin()
+                            .padding(.top, DS.Spacing.sm)
+                            .padding(.bottom, DS.Spacing.xs)
+                    }
                 }
 
-                // شريط الأدوات الموحد
-                actionBar
+                // شريط الأدوات الموحد (لا تحديد ولا «قراءة الكل» في «الطلبات المرسلة»)
+                if selectedTab != .sent { actionBar }
                 }
 
-                if notificationVM.isLoading && filteredNotifications.isEmpty {
-                    // التحميل الموحّد: مجسّم الجرس يتنفّس بلون القسم
-                    DSPageLoader(section: pageSection, icon: "bell.fill")
-                        .dsStaggerIn(0)
+                if selectedTab == .sent && authVM.memberSees(.profileMyRequests) {
+                    MySentRequestsList(section: pageSection)
+                } else if notificationVM.isLoading && filteredNotifications.isEmpty {
+                    // هيكل صفوف الإشعارات بدل المجسّم (طلب المالك ٢٠٢٦-١١-١٧)
+                    ScrollView {
+                        DSCardSkeleton(style: .notice, count: 5,
+                                       label: L10n.t("جارٍ تحميل الإشعارات…", "Loading notifications…"))
+                            .dsPageMargin()
+                            .padding(.vertical, DS.Spacing.sm)
+                    }
+                    .scrollDisabled(true)
+                    .dsStaggerIn(0)
                 } else if filteredNotifications.isEmpty {
                     emptyState
                         .frame(maxHeight: .infinity)
                 } else {
                     notificationsList
+                        .dsRecordsTapOrigin()   // مربّع الإشعار يكبر من مكان الضغط
                 }
             }
 
@@ -285,6 +302,7 @@ struct NotificationsCenterView: View {
                      onBackgroundTap: { selectedNotification = nil }) { notification in
             notificationDetailSheet(notification)
         }
+        .modifier(PhotoChangeRequestPresenter(request: $photoChangeRequestOpen))
         .dsAlert(
             {
                 if case .failure = adminRequestVM.mergeResult {
@@ -351,7 +369,7 @@ struct NotificationsCenterView: View {
                         }
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.vertical, DS.Spacing.xs)
                 .animation(reduceMotion ? nil : DS.Anim.snappy, value: isSelecting)
                 .animation(reduceMotion ? nil : DS.Anim.snappy, value: selectedIds.count)
@@ -434,7 +452,7 @@ struct NotificationsCenterView: View {
         }
         .padding(DS.Spacing.lg)
         .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous).fill(DS.Color.navyDeep))
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -484,10 +502,10 @@ struct NotificationsCenterView: View {
                 Task { await notificationVM.deleteNotifications(ids: ids) }
             }
         }
-        .padding(DS.Spacing.sm + DS.Spacing.xxs)
+        .padding(DS.Spacing.smd)
         .background(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous).fill(DS.Color.navyDeep))
         .dsGlowShadow()
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.bottom, DS.Spacing.sm)
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
@@ -571,15 +589,15 @@ struct NotificationsCenterView: View {
     // MARK: - التبويبان — المبدّل الكبير المرتّب (DSSegmentedSwitch)
 
     /// «إشعاراتي» · «المستجدات» للجميع («تغييرات الأعضاء» للإدارة في «إشعارات الإدارة» — طلب المالك ٢٠٢٦-١١-٠١)
-    private func segmentedTabBar(notifCount: Int, activityCount: Int) -> some View {
+    private func segmentedTabBar(notifCount: Int, activityCount: Int, sentCount: Int) -> some View {
         DSSegmentedSwitch(
             options: [
                 DSSegmentOption(id: NotifTab.notifications,
-                                title: L10n.t("إشعاراتي", "My notifications"),
+                                title: L10n.t("الإشعارات", "Notifications"),
                                 icon: "bell.badge.fill", count: notifCount),
-                DSSegmentOption(id: NotifTab.activity,
-                                title: L10n.t("المستجدات", "Activity"),
-                                icon: "sparkles", count: activityCount)
+                DSSegmentOption(id: NotifTab.sent,
+                                title: L10n.t("الطلبات المرسلة", "Sent requests"),
+                                icon: "paperplane.fill", count: sentCount)
             ],
             selection: $selectedTab
         )
@@ -699,8 +717,10 @@ struct NotificationsCenterView: View {
     private var filteredNotifications: [AppNotification] {
         let visible = visibleNotifications
         switch selectedTab {
-        case .notifications: return visible.filter(belongsToNotificationsTab)
+        // «المستجدات» حُذفت (طلب المالك ٢٠٢٦-١١-١٧ «شيل المستجدات») — ما كان فيها يظهر في «الإشعارات»
+        case .notifications: return visible.filter { belongsToNotificationsTab($0) || belongsToActivityTab($0) }
         case .activity:      return visible.filter(belongsToActivityTab)
+        case .sent:          return []
         }
     }
 
@@ -738,7 +758,8 @@ struct NotificationsCenterView: View {
                         .listRowInsets(EdgeInsets(top: 0, leading: DS.Spacing.lg, bottom: 0, trailing: DS.Spacing.lg))
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        // الحذف بضغطة على الزرّ فقط — السحب الكامل كان يحذف بلا تراجع (تدقيق ٢٠٢٦-١١-١٠ #14)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             // كل عضو يحذف نسخته الخاصة من الإشعار
                             Button(role: .destructive) {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -796,12 +817,9 @@ struct NotificationsCenterView: View {
                 }
                 UISelectionFeedbackGenerator().selectionChanged()
             } else {
-                if item.kind == NotificationKind.guardianConsent.rawValue {
-                    // موافقة ولي الأمر: القرار في «حسابي» لا في تفاصيل الإشعار
-                    NotificationCenter.default.post(name: .openProfileTab, object: nil)
-                } else {
-                    selectedNotification = item
-                }
+                // كل صفّ يفتح مربّع تفاصيله (طلب المالك ٢٠٢٦-١١-١٠) — موافقة ولي الأمر أيضاً، وزرّ «فتح الملف
+                // الشخصي» داخل المربّع (القرار نفسه في «حسابي»)
+                selectedNotification = item
                 if isUnread {
                     Task { await notificationVM.markNotificationAsRead(id: item.id) }
                 }
@@ -933,7 +951,8 @@ struct NotificationsCenterView: View {
             sender: senderInfo(notification, iconInfo: iconInfo),
             kindLabel: iconInfo.label,
             kindIcon: iconInfo.icon,
-            time: relativeTime(notification.createdDate),
+            // التاريخ بالصيغة الموحّدة مع الوقت (`DateHelper.displayDateTime`)
+            time: fullDateTime(notification.createdDate),
             quote: detailQuote(notification),
             changes: rowChanges(notification),
             subjectMember: subject,
@@ -993,16 +1012,16 @@ struct NotificationsCenterView: View {
         .dsAlert(L10n.t("تم إرسال ردّك", "Reply sent"), isPresented: $approvalReplySent, moment: .sentForApproval) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
-            Text(L10n.t("وصل ردّك للإدارة، ويكمل طلبك مراجعته.",
+            Text(L10n.t("وصل الرد إلى الإدارة، ويُستكمل الطلب بعد المراجعة.",
                         "Your reply reached the administration, and your request continues its review."))
         }
-        .confirmationDialog(
+        // مربّع التطبيق الموحّد (`dsAlert`) بدل قائمة النظام (طلب المالك ٢٠٢٦-١١-١١ «رتّب الأماكن القديمة»)
+        .dsAlert(
             L10n.t("اختر طريقة الموافقة", "Choose approval method"),
             isPresented: Binding(
                 get: { joinApproveDialog != nil },
                 set: { if !$0 { joinApproveDialog = nil } }
             ),
-            titleVisibility: .visible,
             presenting: joinApproveDialog
         ) { activeNotification in
             ForEach(joinMatchCandidates.prefix(8)) { candidate in
@@ -1134,6 +1153,28 @@ struct NotificationsCenterView: View {
             approvalLinkSection(notification, index: kindIndex)
         }
 
+        // موافقة ولي الأمر: القرار في «حسابي» — زرّ يفتحه من المربّع (كان الصفّ يقفز إليه مباشرة بلا تفاصيل)
+        if notification.kind == NotificationKind.guardianConsent.rawValue {
+            DSButton(L10n.t("فتح الملف الشخصي", "Open my profile"), icon: "person.crop.circle.fill") {
+                selectedNotification = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    NotificationCenter.default.post(name: .openProfileTab, object: nil)
+                }
+            }
+            .dsStaggerIn(kindIndex)
+        }
+
+        // «طلب تغيير الصورة الشخصية» ← مربّع تغيير الصورة نفسه (ما دام الطلب مفتوحاً) بعد إغلاق التفاصيل
+        if notification.kind == NotificationKind.photoChangeRequest.rawValue {
+            PhotoChangeRequestNoticeButton { pending in
+                selectedNotification = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff) {
+                    photoChangeRequestOpen = pending
+                }
+            }
+            .dsStaggerIn(kindIndex)
+        }
+
         // «رصيد رسائل الدخول منخفض» ← صفحة رسائل الدخول في «الدخول والأمان» (إعادة تصميم اللوحة ٢٠٢٦-١٠-٢٠)
         if notification.kind == "sms_balance_low" && authVM.canViewSystemSettings {
             DSButton(L10n.t("فتح رسائل الدخول", "Open sign-in messages"), icon: "ellipsis.message.fill") {
@@ -1246,7 +1287,7 @@ struct NotificationsCenterView: View {
             detailMemberCardBody(member: member)
         }
         .buttonStyle(DSScaleButtonStyle())
-        .fullScreenCover(item: $selectedMember) { m in
+        .fullScreenCover(item: $selectedMember.memberDetailsGate(selfId: authVM.currentUser?.id)) { m in
             MemberDetailsView(member: m, centered: true)
                 .background(ClearPresentationBackground())
         }
@@ -1582,7 +1623,7 @@ struct NotificationsCenterView: View {
     ) -> some View {
         if isLoading {
             // التحميل الموحّد (مجسّم يتنفّس + نص قصير) بدل الدوّارة
-            DSPageLoader(L10n.t("جاري البحث عن مطابقات...", "Searching for matches..."),
+            DSPageLoader(L10n.t("جارٍ البحث عن التطابقات…", "Searching for matches..."),
                          icon: "person.2.fill", size: DSBox.composerIcon, fillsSpace: false)
                 .dsRowBox()
         } else if candidates.isEmpty {

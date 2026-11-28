@@ -347,7 +347,7 @@ struct DSNoteCard: View {
             .padding(.top, title == nil ? DS.Spacing.xxs : 0)
             Spacer(minLength: 0)
         }
-        .padding(DS.Spacing.sm + DS.Spacing.xxs)
+        .padding(DS.Spacing.smd)
         .background(shape.fill(ink.opacity(DS.Opacity.tintFillSoft)))
         .overlay(shape.strokeBorder(ink.opacity(DS.Opacity.tintStroke), lineWidth: DS.Card.strokeWidth))
         .accessibilityElement(children: .combine)
@@ -378,26 +378,33 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
     let options: [DSOptionTile<ID>]
     @Binding var selection: ID
     var columns: Int = 4
+    /// كل خيار بلونه (رمزه ملوّن دائماً، والمختار بتعبئة لونه الخفيفة وإطاره) — «نوع الرسالة» في «تواصل مع الإدارة»
+    /// (طلب المالك ٢٠٢٦-١١-١١ «خل نوع الرسالة ملوّنة»). false = الشكل الخفيف الموحّد
+    var colored: Bool = false
     @ViewBuilder var icon: (DSOptionTile<ID>, Bool) -> Icon
     @Environment(\.dsSection) private var section
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
-    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4,
+    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4, colored: Bool = false,
          @ViewBuilder icon: @escaping (DSOptionTile<ID>, Bool) -> Icon) {
         self.options = options
         self._selection = selection
         self.columns = columns
+        self.colored = colored
         self.icon = icon
     }
 
     var body: some View {
         // صفوف عادية لا `LazyVGrid` (دفعة 2-A): الشبكة الكسولة تُبلِّغ ارتفاعاً ناقصاً داخل المربّعات
         // فيُقصّ آخر صف (كان يُرى في «تعديل الخبر») — نفس الشكل تماماً
+        // الشكل الخفيف (طلب المالك ٢٠٢٦-١١-١١ «نفس الاختيار الخفيف»): مسار رمادي فاتح واحد، والمختار بطاقة
+        // بيضاء بظلّ ناعم ونصّ كحلي — شبكة لأربعة خيارات فأكثر
         let cols = max(1, columns)
-        VStack(spacing: DS.Spacing.sm) {
+        VStack(spacing: DSBox.choiceTrackInset) {
             ForEach(Array(stride(from: 0, to: options.count, by: cols)), id: \.self) { start in
                 let end = min(start + cols, options.count)
-                HStack(spacing: DS.Spacing.sm) {
+                HStack(spacing: DSBox.choiceTrackInset) {
                     ForEach(options[start..<end]) { option in tile(option) }
                     ForEach(0..<(cols - (end - start)), id: \.self) { _ in
                         Color.clear.frame(maxWidth: .infinity, maxHeight: DS.Border.width)
@@ -405,35 +412,45 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
                 }
             }
         }
+        .padding(DSBox.choiceTrackInset)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
     }
 
     private func tile(_ option: DSOptionTile<ID>) -> some View {
         let selected = selection == option.id
-        let ink = (option.tint ?? DS.Color.primary).dsChrome(in: section).dsReadableGlyph
-        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md - DSBox.choiceTrackInset, style: .continuous)
+        let ink = (option.tint ?? DS.Color.primary).dsChrome(in: section)
         return Button {
             guard selection != option.id else { return }
             withAnimation(DS.Anim.snappy) { selection = option.id }
             UISelectionFeedbackGenerator().selectionChanged()
         } label: {
-            VStack(spacing: DS.Spacing.xsm) {
+            VStack(spacing: DS.Spacing.xxs) {
                 icon(option, selected)
                     .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-                    .scaleEffect(selected && !reduceMotion ? 1.08 : 1)
+                    .scaleEffect(0.8)
                     .accessibilityHidden(true)
                 Text(option.title)
                     .dsFont(.chip)
-                    .foregroundColor(selected ? ink : DS.Color.textSecondary)
+                    .fontWeight(selected ? .semibold : .regular)
+                    .foregroundColor(colored ? (selected ? .white : ink.dsReadableGlyph)
+                                     : (selected ? DS.Color.textPrimary : DS.Color.textSecondary))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(shape.fill(selected ? ink.opacity(DS.Opacity.tintFillSoft) : DS.Color.background))
-            .overlay(shape.strokeBorder(selected ? ink.opacity(DS.Opacity.selectedStroke)
-                                                 : DS.Color.textTertiary.opacity(DS.Opacity.border),
-                                        lineWidth: selected ? DS.Border.widthBold : DS.Border.width))
-            .trialCardSkin(radius: DS.Radius.md, solid: !selected)   // المختار بلون شفّاف
+            .frame(minHeight: DS.Icon.tapTarget)
+            .padding(.vertical, DSBox.optionTilePadding)
+            .background {
+                if colored {
+                    // كل نوع بتعبئة لونه الخفيفة، والمختار ممتلئ بلونه ونصّه أبيض
+                    shape.fill(selected ? ink.dsSolidFill : ink.opacity(DS.Opacity.tintFill))
+                } else if selected {
+                    shape.fill(DS.Color.choicePill)
+                        .overlay(shape.strokeBorder(DS.Color.selectionStroke, lineWidth: DS.Border.width))
+                        .shadow(color: .black.opacity(colorScheme == .dark ? 0.25 : 0.08), radius: DSBox.choiceShadowRadius, y: DSBox.choiceShadowY)
+                }
+            }
             .contentShape(shape)
         }
         .buttonStyle(DSPressStyle())
@@ -444,9 +461,9 @@ struct DSOptionTiles<ID: Hashable, Icon: View>: View {
 
 extension DSOptionTiles where Icon == DSOptionTileIcon {
     /// القرص الافتراضي: المختار مجسّم ممتلئ بلونه، وغيره قرص خفيف برمزه
-    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4) {
-        self.init(options, selection: selection, columns: columns) { option, selected in
-            DSOptionTileIcon(icon: option.icon, tint: option.tint, selected: selected)
+    init(_ options: [DSOptionTile<ID>], selection: Binding<ID>, columns: Int = 4, colored: Bool = false) {
+        self.init(options, selection: selection, columns: columns, colored: colored) { option, selected in
+            DSOptionTileIcon(icon: option.icon, tint: option.tint, selected: selected, colored: colored)
         }
     }
 }
@@ -456,17 +473,18 @@ struct DSOptionTileIcon: View {
     let icon: String
     var tint: Color? = nil
     let selected: Bool
+    /// الرمز بلونه حتى لغير المختار
+    var colored: Bool = false
     @Environment(\.dsSection) private var section
 
     var body: some View {
         let ink = (tint ?? DS.Color.primary).dsChrome(in: section).dsReadableGlyph
         // مربّع برمز رفيع مثل مربّع الإشعار (طلب المالك ٢٠٢٦-١١-٠١): المختار بلونه ممتلئاً والرمز أبيض
+        // رمز صغير بلا قرص (الشكل الخفيف ٢٠٢٦-١١-١١): كحلي للمختار، وثانوي لغيره
         Image(dsSymbol: icon.dsLightSymbol)
-            .dsGlyph(DS.Glyph.lg, weight: .light)
-            .foregroundColor(selected ? DS.Color.textOnPrimary : ink)
+            .dsGlyph(DS.Glyph.lg, weight: selected ? .regular : .light)
+            .foregroundColor(colored ? (selected ? .white : ink) : (selected ? ink : DS.Color.textTertiary))
             .frame(width: DS.Icon.sizeSm, height: DS.Icon.sizeSm)
-            .background(RoundedRectangle(cornerRadius: DS.Icon.sizeSm * 0.3, style: .continuous)
-                .fill(selected ? ink.dsSolidFill : ink.opacity(DS.Opacity.tintFill)))
             .accessibilityHidden(true)
     }
 }
@@ -537,11 +555,13 @@ struct DSChipButton: View {
     var body: some View {
         let ink = tint.dsChrome(in: section).dsReadableGlyph
         let chrome = tint == DS.Color.primary || tint == DS.Color.actionNavy
+        // نصّ المختار: أبيض أو حبر داكن حسب تباين التعبئة (كان أبيض دائماً — يضيع فوق الألوان الفاتحة في الداكن)
+        let selectedText: Color = chrome ? DS.Color.textOnPrimary : DS.Color.readableText(on: tint.dsChromeFill(in: section).dsSolidFill)
         return Button(action: action) {
             HStack(spacing: size == .mini ? DS.Spacing.xxs : DS.Spacing.xsm) {
                 if isLoading {
                     ProgressView()
-                        .tint(isSelected ? .white : ink)
+                        .tint(isSelected ? selectedText : ink)
                         .scaleEffect(DS.Spinner.chipScale)
                 } else if let icon {
                     Image(dsSymbol: icon).dsGlyph(size == .regular ? DS.Glyph.sm
@@ -557,7 +577,7 @@ struct DSChipButton: View {
                         .opacity(0.85)
                 }
             }
-            .foregroundColor(isSelected ? .white : ink)
+            .foregroundColor(isSelected ? selectedText : ink)
             .padding(.horizontal, padding)
             .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: height)
             .background {
@@ -597,7 +617,7 @@ struct DSStatusChip: View {
 
     var body: some View {
         let ink = tint.dsChrome(in: section).dsReadableGlyph
-        return HStack(spacing: DS.Spacing.xxs + 1) {
+        return HStack(spacing: DS.Spacing.xs) {
             if let icon {
                 Image(dsSymbol: icon)
                     .dsGlyph(DS.Glyph.micro)
@@ -605,12 +625,13 @@ struct DSStatusChip: View {
             }
             Text(text)
                 .dsFont(.badge)
+                .monospacedDigit()   // أرقام بعرض ثابت — العدد والعمر والنسخة لا يهزّون الشارة (٢٠٢٦-١١-١٧)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
         .foregroundColor(ink)
         .padding(.horizontal, size == .mini ? DS.Spacing.xsm : DS.Spacing.sm)
-        .padding(.vertical, size == .mini ? DS.Spacing.xxs : DS.Spacing.xxs + 1)
+        .padding(.vertical, size == .mini ? DS.Spacing.xxs : DS.Spacing.xs)
         .background(ink.opacity(DS.Opacity.tintFill), in: Capsule())
     }
 }
@@ -680,7 +701,7 @@ struct DSSectionTitle: View {
     var iconSize: CGFloat = DS.Icon.section
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xsm + 1) {
+        HStack(spacing: DS.Spacing.sm) {
             DSStateIcon(icon, tint: tint, size: iconSize)
             Text(title)
                 .dsFieldFont(.sectionTitle)
@@ -824,7 +845,7 @@ struct DSAddChipLabel: View {
     var isLoading: Bool = false
 
     static let dash = StrokeStyle(lineWidth: 1.2, dash: [4, 3])
-    static let strokeOpacity: Double = 0.4
+    static let strokeOpacity: Double = 0.6
 
     var body: some View {
         let ink = tint ?? DS.Color.textSecondary

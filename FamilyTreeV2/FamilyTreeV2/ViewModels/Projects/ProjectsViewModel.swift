@@ -17,6 +17,8 @@ class ProjectsViewModel: ObservableObject {
     @Published var myPendingProjects: [Project] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// خطأ اعتماد/رفض مشروع — يُعرض تنبيهاً في صفحة المشاريع و«الوارد» (كان يُسجَّل فقط والبطاقة تختفي)
+    @Published var decisionError: String?
 
     func configure(authVM: AuthViewModel, notificationVM: NotificationViewModel) {
         self.authVM = authVM
@@ -28,7 +30,8 @@ class ProjectsViewModel: ObservableObject {
     func fetchProjects() async {
         // تحميل من الكاش أولاً
         if projects.isEmpty,
-           let cached = CacheManager.shared.load([Project].self, for: .projects, in: cacheSession) {
+           let cached = await CacheManager.shared.loadAsync([Project].self, for: .projects, in: cacheSession),
+           projects.isEmpty {
             self.projects = cached
             Log.info("[Projects] تم تحميل \(cached.count) مشروع من الكاش")
         }
@@ -104,8 +107,8 @@ class ProjectsViewModel: ObservableObject {
             // إشعار للأدمن بطلب جديد
             let submitter = submitterName ?? ownerName
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
-                body: L10n.t(
+                title: L10n.stored("مشروع جديد يحتاج موافقة", "New Project Needs Approval"),
+                body: L10n.stored(
                     "«\(submitter)» قدّم مشروع: «\(title)»" + (ownerName.isEmpty ? " — ليس صاحبه" : ""),
                     "«\(submitter)» submitted a project: «\(title)»" + (ownerName.isEmpty ? " — not the owner" : "")
                 ),
@@ -193,8 +196,8 @@ class ProjectsViewModel: ObservableObject {
                 // إشعار للمالك
                 if let info = projectInfo {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم اعتماد مشروعك", "Your Project Was Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("تم اعتماد مشروعك", "Your Project Was Approved"),
+                        body: L10n.stored(
                             "مشروع «\(info.title)» أصبح مرئياً للجميع",
                             "Project «\(info.title)» is now visible to everyone"
                         ),
@@ -204,8 +207,8 @@ class ProjectsViewModel: ObservableObject {
 
                     // إشعار للإدارة في "المستجدات"
                     await self?.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تم اعتماد مشروع", "Project Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("تم اعتماد مشروع", "Project Approved"),
+                        body: L10n.stored(
                             "تم اعتماد مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
                             "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was approved"
                         ),
@@ -213,8 +216,14 @@ class ProjectsViewModel: ObservableObject {
                     )
                 }
             } catch {
-                await MainActor.run { self?.errorMessage = L10n.t("تعذر اعتماد المشروع.", "Failed to approve project.") }
+                let msg = L10n.t("تعذّر اعتماد المشروع.", "Failed to approve project.")
+                await MainActor.run {
+                    self?.errorMessage = msg
+                    self?.decisionError = msg
+                }
                 Log.error("خطأ اعتماد المشروع: \(error.localizedDescription)")
+                // الحذف المحلي كان تفاؤلياً — أعِد البطاقة من السيرفر
+                await self?.fetchPendingProjects()
             }
         }
     }
@@ -222,6 +231,7 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Reject
 
     func rejectProject(id: UUID) async {
+        guard NetworkMonitor.shared.requireOnline() else { return }
         guard authVM?.isAdmin == true else { Log.warning("رفض المشروع مرفوض: الصلاحية للمدير فقط"); return }
         // حفظ معلومات المشروع قبل الحذف المحلي للإشعار
         let projectInfo = pendingProjects.first(where: { $0.id == id })
@@ -241,8 +251,8 @@ class ProjectsViewModel: ObservableObject {
                 // إشعار للمالك
                 if let info = projectInfo {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("لم يتم اعتماد مشروعك", "Your Project Was Not Approved"),
-                        body: L10n.t(
+                        title: L10n.stored("لم يتم اعتماد مشروعك", "Your Project Was Not Approved"),
+                        body: L10n.stored(
                             "مشروع «\(info.title)» لم يتم اعتماده. تواصل مع الإدارة لمعرفة السبب.",
                             "Project «\(info.title)» was not approved. Contact admin for details."
                         ),
@@ -252,8 +262,8 @@ class ProjectsViewModel: ObservableObject {
 
                     // إشعار للإدارة في "المستجدات"
                     await self?.notificationVM?.notifyAdminsWithPush(
-                        title: L10n.t("تم رفض مشروع", "Project Rejected"),
-                        body: L10n.t(
+                        title: L10n.stored("تم رفض مشروع", "Project Rejected"),
+                        body: L10n.stored(
                             "تم رفض مشروع «\(info.title)»" + (info.ownerName.isEmpty ? "" : " لـ «\(info.ownerName)»"),
                             "Project «\(info.title)»" + (info.ownerName.isEmpty ? "" : " for «\(info.ownerName)»") + " was rejected"
                         ),
@@ -261,8 +271,14 @@ class ProjectsViewModel: ObservableObject {
                     )
                 }
             } catch {
-                await MainActor.run { self?.errorMessage = L10n.t("تعذر رفض المشروع.", "Failed to reject project.") }
+                let msg = L10n.t("تعذّر رفض المشروع.", "Failed to reject project.")
+                await MainActor.run {
+                    self?.errorMessage = msg
+                    self?.decisionError = msg
+                }
                 Log.error("خطأ رفض المشروع: \(error.localizedDescription)")
+                // الحذف المحلي كان تفاؤلياً — أعِد البطاقة من السيرفر
+                await self?.fetchPendingProjects()
             }
         }
     }
@@ -322,11 +338,17 @@ class ProjectsViewModel: ObservableObject {
         guard authVM?.isAdmin == true else {
             Log.warning("إخفاء المشروع مرفوض: الصلاحية للمدير فقط"); return
         }
-        guard let idx = projects.firstIndex(where: { $0.id == id }) else { return }
+        // البطاقة قد تكون معتمدة (projects) أو معلّقة (pendingProjects) — كان البحث في المعتمدة فقط
+        let current: Bool
+        if let idx = projects.firstIndex(where: { $0.id == id }) {
+            current = projects[idx].isHidden
+        } else if let idx = pendingProjects.firstIndex(where: { $0.id == id }) {
+            current = pendingProjects[idx].isHidden
+        } else { return }
 
-        let newValue = !projects[idx].isHidden
+        let newValue = !current
         // تحديث تفاؤلي
-        projects[idx].isHidden = newValue
+        setHidden(newValue, id: id)
 
         do {
             try await supabase
@@ -338,12 +360,15 @@ class ProjectsViewModel: ObservableObject {
             Log.info("[Projects] \(newValue ? "إخفاء" : "إظهار"): \(id.uuidString)")
         } catch {
             // استرجاع عند الفشل
-            if let i = projects.firstIndex(where: { $0.id == id }) {
-                projects[i].isHidden = !newValue
-            }
+            setHidden(!newValue, id: id)
             self.errorMessage = L10n.t("تعذر تغيير حالة الإخفاء.", "Failed to toggle visibility.")
             Log.error("خطأ إخفاء المشروع: \(error.localizedDescription)")
         }
+    }
+
+    private func setHidden(_ value: Bool, id: UUID) {
+        if let i = projects.firstIndex(where: { $0.id == id }) { projects[i].isHidden = value }
+        if let i = pendingProjects.firstIndex(where: { $0.id == id }) { pendingProjects[i].isHidden = value }
     }
 
     // MARK: - Toggle Pinned (تثبيت في الأعلى — admin only)

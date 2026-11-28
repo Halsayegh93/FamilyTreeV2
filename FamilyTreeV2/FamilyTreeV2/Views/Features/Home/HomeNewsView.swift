@@ -6,6 +6,8 @@ struct HomeNewsView: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
     @EnvironmentObject var appSettingsVM: AppSettingsViewModel
+    /// «صلاحيات محدودة» (R1): مداخل الأقسام المقفولة مخفية تماماً
+    @ObservedObject private var lineageGate = LineageGateStore.shared
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @Environment(\.colorScheme) private var colorScheme
@@ -25,6 +27,7 @@ struct HomeNewsView: View {
     @State private var postToReport: NewsPost? = nil
     @State private var newsReportReason = ""
     @State private var newsReportSent = false
+    @State private var reportFailed = false
     /// حظر ناشر الخبر (Guideline 1.2) — أخبار المحظورين لا تظهر للحاظر
     @State private var blockTarget: BlockTarget? = nil
     @ObservedObject private var blockedStore = BlockedMembersStore.shared
@@ -58,6 +61,8 @@ struct HomeNewsView: View {
 
     /// الصفحة الفرعية المفتوحة — تُدفع كوجهة تنقّل حقيقية لتأخذ حركة iOS الأصلية
     @State private var activeSubPage: HomeSubPage? = nil
+    /// مجلد المكتبة المفتوح — الرأس يعرض اسمه ورجوعه يرجع للمجلدات
+    @State private var archiveFolder: String? = nil
 
     /// مقاييس التخطيط المتجاوبة — تتكيّف مع عرض الجهاز الفعلي + size class
     private var layout: DS.Layout.Metrics {
@@ -147,6 +152,7 @@ struct HomeNewsView: View {
                 Task { await newsVM.setNewsFilter(search: debouncedNewsSearch, type: value) }
             }
             .onChange(of: activeSubPage) { value in
+                if value != .archive { archiveFolder = nil }
                 if value != .news {
                     newsSearchText = ""
                     selectedNewsTypeFilter = nil
@@ -170,6 +176,10 @@ struct HomeNewsView: View {
                 activeSubPage = nil
             }
         }
+        // قسم مخفي عن هذا الحساب وصل إليه برابط أو إشعار: يرجع للرئيسية بهدوء (بلا صفحة فارغة ولا رسالة)
+        .onReceive(NotificationCenter.default.publisher(for: .leaveHiddenSection)) { _ in
+            if activeSubPage != nil { activeSubPage = nil }
+        }
         // Deep-link من push خارجي لطلب انضمام — يفتح مركز الإشعارات تلقائياً
         .onReceive(NotificationCenter.default.publisher(for: .openHomeNotificationsCenter)) { _ in
             if activeSubPage != nil { activeSubPage = nil }
@@ -182,6 +192,13 @@ struct HomeNewsView: View {
             showingNotifications = false
             selectedTab = 0
             focusNewsId = id
+            openNewsPage()
+        }
+        // زرّ «افتح الأخبار» في إعلان الفتح: الرئيسية ← صفحة الأخبار
+        .onReceive(NotificationCenter.default.publisher(for: .showNewsList)) { _ in
+            showingNotifications = false
+            showingContactForm = false
+            selectedTab = 0
             openNewsPage()
         }
         // إشعار «موافقة ولي الأمر» يفتح «حسابي» حيث بطاقة الموافقة
@@ -198,13 +215,16 @@ struct HomeNewsView: View {
             showingNotifications = true
         }
         // مركز الإشعارات (رابط push) — المربّع الطويل الموحّد من الأسفل بدل ورقة النظام
-        .dsTallBox(isPresented: $showingNotifications) {
+        // (مطفأة لفئته: رابط push لا يفتحها — المخفي غائب)
+        .dsTallBox(isPresented: Binding(get: { showingNotifications && authVM.memberSees(.notifications) },
+                                        set: { showingNotifications = $0 })) {
             NavigationStack {
                 NotificationsCenterView()
             }
         }
         // التواصل مع الإدارة — مربّع بمنتصف الشاشة لا صفحة فرعية (طلب المالك)
-        .dsCenterBox(isPresented: $showingContactForm) {
+        .dsCenterBox(isPresented: Binding(get: { showingContactForm && authVM.memberSees(.contact) },
+                                          set: { showingContactForm = $0 })) {
             MemberContactFormView()
         }
         .task {
@@ -225,8 +245,9 @@ struct HomeNewsView: View {
         VStack(spacing: 0) {
             subPageHeader(for: page)
             switch page {
-            case .archive: FamilyArchiveView()
-            case .projects: FamilyProjectsView()
+            // الحساب المقيّد («أكمل حسابك»): القسم مقفول تحت رأسه
+            case .archive: FamilyArchiveView(openFolder: $archiveFolder).lineageLocked(.library, appSection: .library)
+            case .projects: FamilyProjectsView().lineageLocked(.projects, appSection: .projects)
             case .contact: MemberContactFormView()
             case .news: newsFullPage.dsSectionPage(.news)   // بلون قسم الأخبار مثل إضافة/تعديل الخبر والتعليقات
             }
@@ -269,7 +290,7 @@ struct HomeNewsView: View {
                 }
             }
 
-            if authVM.currentUser?.role != .pending {
+            if authVM.currentUser?.role != .pending && authVM.memberSees(.newsAdd) {
                 VStack {
                     Spacer()
                     HStack {
@@ -287,14 +308,8 @@ struct HomeNewsView: View {
         // الأوراق والتنبيهات مربوطة بصفحة الأخبار نفسها — كانت على الرئيسية خلف
         // الصفحة المدفوعة فلا تظهر إلا بعد الخروج من القسم
         // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-        .fullScreenCover(isPresented: $showingAddNews) {
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                AddNewsView()
-            }
-            .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            if showingAddNews { t.disablesAnimations = true }
+        .dsCenterBox(isPresented: $showingAddNews) {
+            AddNewsView()
         }
         // التعليقات نصف الشاشة من الأسفل بزر إغلاق أعلاه (طلب المالك ٢٠٢٦-١٠-٠١)
         .dsHalfBox(item: $selectedNewsForComments) { news in
@@ -325,9 +340,11 @@ struct HomeNewsView: View {
                     Task {
                         let ok = await newsVM.reportNewsPost(
                             postId: post.id,
-                            reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason
+                            reason: reason.isEmpty ? "بلاغ على محتوى خبر" : reason,
+                            source: RequestSource(.home, RequestSourceStep("newspaper.fill", "الأخبار"),
+                                                  RequestSourceStep("flag.fill", "بلاغ عن منشور"))
                         )
-                        if ok { await MainActor.run { newsReportSent = true } }
+                        if ok { await MainActor.run { newsReportSent = true } } else { await MainActor.run { reportFailed = true } }
                     }
                 }
                 postToReport = nil
@@ -336,6 +353,11 @@ struct HomeNewsView: View {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { postToReport = nil; newsReportReason = "" }
         } message: { Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا الخبر.",
                                 "Enter a reason; it will be sent to the admins to review this post.")) }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
+        }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $newsReportSent) {
             Button(L10n.t("حسناً", "OK")) {}
         } message: {
@@ -344,7 +366,7 @@ struct HomeNewsView: View {
         }
         // حظر ناشر الخبر — نفس رسائل «إبلاغ» (بلاغ تلقائي للإدارة)
         .dsBlockMemberFlow(target: $blockTarget)
-        .fullScreenCover(item: $selectedMemberForDetails) { member in
+        .fullScreenCover(item: $selectedMemberForDetails.memberDetailsGate(selfId: authVM.currentUser?.id)) { member in
             MemberDetailsView(member: member, centered: true)
                 .background(ClearPresentationBackground())
         }
@@ -364,7 +386,7 @@ struct HomeNewsView: View {
     private func subPageHeader(for page: HomeSubPage) -> some View {
         let title: String = {
             switch page {
-            case .archive: return L10n.t("مكتبة العائلة", "Family Library")
+            case .archive: return archiveFolder.map(ArchiveItem.categoryName) ?? L10n.t("مكتبة العائلة", "Family Library")
             case .projects: return L10n.t("مشاريع العائلة", "Family Projects")
             case .contact: return L10n.t("التواصل", "Contact")
             case .news: return L10n.t("الأخبار والمناسبات", "News & Events")
@@ -374,7 +396,8 @@ struct HomeNewsView: View {
         // سطر توضيحي تحت اسم القسم
         let subtitle: String? = {
             switch page {
-            case .archive:  return L10n.t("أرشيف ووثائق العائلة", "Family archive & documents")
+            case .archive:  return archiveFolder != nil ? L10n.t("مكتبة العائلة", "Family Library")
+                                                        : L10n.t("أرشيف ووثائق العائلة", "Family archive & documents")
             case .projects: return L10n.t("مبادرات ومشاريع الأعضاء", "Member initiatives & projects")
             case .contact:  return L10n.t("اكتب رسالتك ويصلك الرد بأقرب وقت",
                                           "Write your message — you'll get a reply soon")
@@ -385,7 +408,13 @@ struct HomeNewsView: View {
         let sec: AppSection = page == .archive ? .library : page == .projects ? .projects : page == .contact ? .admin : .news
 
         // الرجوع مكان أيقونة القسم (طلب المالك) — بلا علامة ×، بنفس زر الرجوع الموحّد
-        return DSSubPageHeader(title: title, subtitle: subtitle, section: sec, onBack: { activeSubPage = nil }) {
+        return DSSubPageHeader(title: title, subtitle: subtitle, section: sec, onBack: {
+            if page == .archive, archiveFolder != nil {
+                withAnimation(DS.Anim.snappy) { archiveFolder = nil }
+            } else {
+                activeSubPage = nil
+            }
+        }) {
             // التحديد المتعدّد انتقل للهيدر — للإدارة فقط (المكتبة والمشاريع)
             if authVM.isAdmin && (page == .archive || page == .projects) {
                 DSHeaderButton(symbol: "checkmark.circle", label: L10n.t("تحديد متعدّد", "Multi-select"),
@@ -411,27 +440,31 @@ struct HomeNewsView: View {
                 HStack(alignment: .top, spacing: DS.Spacing.md) {
                     VStack(spacing: DS.Spacing.sm) {
                         greetingRow
+                        AnyView(LineageHomeCard())   // «أكمل حسابك» — له وحده (الحساب المقيّد)
                         AnyView(primaryTilesRow(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         AnyView(quickAccessGrid(tileHeight: max(DS.Landscape.homeTileMinHeight, layout.tileHeight - DS.Landscape.homeTileTrim)))
                         Spacer(minLength: 0)
                     }
                     .frame(maxWidth: .infinity, alignment: .top)
 
-                    AnyView(newsBentoCard)
+                    if authVM.memberSees(.news) { AnyView(newsBentoCard)
                         .frame(maxWidth: max(DS.Landscape.homeNewsMinWidth, UIScreen.main.bounds.width * DS.Landscape.homeNewsShare), alignment: .top)
+                    }
                 }
             } else {
                 // فراغات أقل بين المربّعات (طلب المالك)
                 // حدود AnyView: تُبقي عمق مكدس الرئيسية تحت الحد (كان ٨٠١ ك.ب بعد دمج ٢٠٢٦-١٠-٢٥ — iOS 16 أحوج)
                 VStack(spacing: DS.Spacing.sm) {
                     greetingRow
+                    AnyView(LineageHomeCard())   // «أكمل حسابك» — له وحده (الحساب المقيّد)
                     AnyView(primaryTilesRow(tileHeight: layout.tileHeight + 12))
                     AnyView(quickAccessGrid(tileHeight: layout.tileHeight + 6))
-                    AnyView(newsBentoCard)
+                    // «صلاحيات الأعضاء حسب الفئة»: الأخبار تغيب إن أُطفئت لفئته
+                    if authVM.memberSees(.news) { AnyView(newsBentoCard) }
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         // حد أقصى للعرض على الأجهزة الواسعة (iPad) حتى لا تتمدد الكروت بشكل مبالغ
         .frame(maxWidth: hSizeClass == .regular ? 700 : .infinity)
         .frame(maxWidth: .infinity)
@@ -452,6 +485,7 @@ struct HomeNewsView: View {
     /// وأطول قليلاً ليكونا عنصري الوصول الأساسيين. الديوانيات تختفي إن عُطّلت.
     private func primaryTilesRow(tileHeight: CGFloat) -> some View {
         HStack(spacing: tileSpacing) {
+            if authVM.memberSees(.tree) {
             unifiedTile(
                 title: L10n.t("شجرة المحمدعلي", "Al-Mohammad Ali family tree"),   // سطر واحد (طلب المالك ٢٠٢٦-١٠-٠٧)
                 icon: "tree.fill",
@@ -462,7 +496,8 @@ struct HomeNewsView: View {
                 cascade: 1,
                 action: { selectedTab = 1 }
             )
-            if appSettingsVM.settings.diwaniyasEnabled ?? true {
+            }
+            if (appSettingsVM.settings.diwaniyasEnabled ?? true) && !lineageGate.hides(.diwaniyas) {
                 unifiedTile(
                     title: L10n.t("الديوانيات", "Diwaniyas"),
                     icon: AppSection.diwaniyas.symbol,   // «مجلس» الموحّد
@@ -481,15 +516,18 @@ struct HomeNewsView: View {
     // MARK: - Quick Access — الأقسام التي لا تبويب لها
     /// المكتبة / المشاريع / التواصل — المشاريع تختفي إن عُطّلت من الإعدادات.
     private func quickAccessGrid(tileHeight: CGFloat) -> some View {
-        let projectsOn = appSettingsVM.settings.projectsEnabled ?? true
+        let projectsOn = (appSettingsVM.settings.projectsEnabled ?? true) && !lineageGate.hides(.projects)
+        let libraryOn = !lineageGate.hides(.library)
+        let contactOn = authVM.memberSees(.contact)
 
         return LazyVGrid(
             columns: Array(
                 repeating: GridItem(.flexible(), spacing: tileSpacing),
-                count: projectsOn ? 3 : 2
+                count: max(1, (contactOn ? 1 : 0) + (projectsOn ? 1 : 0) + (libraryOn ? 1 : 0))
             ),
             spacing: tileSpacing
         ) {
+            if libraryOn {
             unifiedTile(
                 title: L10n.t("مكتبة العائلة", "Family Library"),
                 icon: "books.vertical.fill",
@@ -501,6 +539,7 @@ struct HomeNewsView: View {
                 isNew: newDots.hasNew(.library),
                 action: { activeSubPage = .archive }
             )
+            }
             if projectsOn {
                 unifiedTile(
                     title: L10n.t("مشاريع العائلة", "Family Projects"),
@@ -514,6 +553,7 @@ struct HomeNewsView: View {
                     action: { activeSubPage = .projects }
                 )
             }
+            if contactOn {
             unifiedTile(
                 title: L10n.t("التواصل", "Contact"),
                 icon: "envelope.fill",
@@ -524,6 +564,7 @@ struct HomeNewsView: View {
                 cascade: 5,
                 action: { showingContactForm = true }
             )
+            }
         }
     }
 
@@ -631,14 +672,14 @@ struct HomeNewsView: View {
             .overlay(alignment: .topLeading) {
                 if isNew {
                     DSNewDot()
-                        .padding(DS.Spacing.sm + 2)
+                        .padding(DS.Spacing.smd)
                 }
             }
             .animation(DS.Anim.snappy, value: isNew)
         }
         .buttonStyle(DSScaleButtonStyle())
         .accessibilityLabel(title)
-        .accessibilityValue(isNew ? L10n.t("فيه جديد", "New") : "")
+        .accessibilityValue(isNew ? L10n.t("يوجد جديد", "New") : "")
         // المربّعات تتوالى واحداً بعد الآخر مع بقية بطاقات الرئيسية
         .dsCardCascade(cascade, appeared: appeared)
     }
@@ -701,6 +742,7 @@ struct HomeNewsView: View {
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(DS.Color.textOnPrimary, DS.Color.shadowHeavy)
                 }
+                .accessibilityLabel(L10n.t("إغلاق المعاينة", "Close preview"))
                 Text(L10n.t("شاشة معاينة", "Preview"))
                     .dsFont(.badge)
                     .foregroundColor(DS.Color.textSecondary)
@@ -737,7 +779,8 @@ struct HomeNewsView: View {
         ) {
             // الجرس ثم علامة «عن التطبيق» بعده (طلب المالك)
             HStack(spacing: 0) {
-                HomeBellButton()
+                // «صلاحيات الأعضاء حسب الفئة»: الجرس يغيب إن أُطفئت «الإشعارات» لفئته
+                if authVM.memberSees(.notifications) { HomeBellButton() }
                 HomeInfoButton()
             }
         }
@@ -800,7 +843,7 @@ struct HomeNewsView: View {
                 DSStateCard(icon: "exclamationmark.triangle.fill", title: error, tint: DS.Color.error,
                             actionTitle: L10n.t("إعادة المحاولة", "Try again"),
                             action: { Task { await newsVM.fetchNews(force: true) } })
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.vertical, DS.Spacing.sm)
                 .dsCardCascade(0, appeared: newsAppeared)
             }
@@ -834,7 +877,7 @@ struct HomeNewsView: View {
                     Task { await newsVM.loadMoreNews() }
                 }
                 .disabled(newsVM.isLoadingMoreNews || newsVM.isLoadingNews)
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 // يترك مكان زرّ الإضافة العائم في طرفه — كان الزرّ العائم فوق «تحميل أخبار أقدم» (فحص ٢٠٢٦-١٠-٠٨)
                 .padding(.trailing, authVM.currentUser?.role != .pending
                          ? DS.Icon.floatingButton + DS.Spacing.xl - DS.Spacing.sm : 0)
@@ -898,7 +941,7 @@ struct HomeNewsView: View {
                 }
             } else {
                 // قائمة واحدة بلا عناوين «اليوم / أمس / … / أقدم» ولا عدّاد (طلب المالك)
-                LazyVStack(spacing: DS.Spacing.md) {
+                LazyVStack(spacing: DS.Page.cardGap) {
                     ForEach(Array(filteredNews.enumerated()), id: \.element.id) { index, news in
                         newsCard(for: news, index: index)
                             .newsSwipeActions(
@@ -916,8 +959,12 @@ struct HomeNewsView: View {
                 }
             }
         }
-        .padding(.horizontal, DS.Spacing.md)
+        // هامش الصفحة الموحّد (كان ١٢ — بقية الصفحات ١٦)
+        .dsPageMargin()
         .padding(.top, DS.Spacing.sm)
+        // بعد السحب للتحديث أو «تحميل أخبار أقدم»: البطاقات الجديدة تذوب في مكانها وما تحتها ينزاح بهدوء
+        // (تلاشٍ ٠٫٢ ث — مسموح مع «تقليل الحركة»؛ دخول الصفحة نفسه يبقى `dsCardCascade`)
+        .animation(DSMotion.fade, value: filteredNews.map(\.id))
     }
 
 
@@ -964,7 +1011,7 @@ struct HomeNewsView: View {
             canDelete: canDelete(news),
             // الإبلاغ متاح للجميع (أعضاء وإدارة) لغير منشوراتهم — سياسة Apple
             canReport: authVM.currentUser?.id != news.author_id,
-            canEdit: authVM.canDeleteNews || authVM.currentUser?.id == news.author_id,
+            canEdit: authVM.canDeleteNews || (news.ownerId != nil && authVM.currentUser?.id == news.ownerId),
             onDeleteTap: { postToDelete = news },
             onReportTap: { postToReport = news },
             onEditTap: { postToEdit = news },
@@ -980,6 +1027,9 @@ struct HomeNewsView: View {
             onMediaTap: { photo in
                 mediaViewer = NewsMediaViewerItem(urls: news.mediaURLs, start: photo)
             },
+            showsLike: authVM.memberSees(.newsLike),
+            showsComment: authVM.memberSees(.newsComment),
+            showsPoll: authVM.memberSees(.newsPolls),
             // الختم يُطبع مع دخول البطاقات (نفس توقيت `dsCardCascade`)
             appeared: newsAppeared,
             cascadeIndex: index
@@ -989,7 +1039,7 @@ struct HomeNewsView: View {
     // MARK: - Empty State
     private var emptyNewsView: some View {
         // الحالة الفارغة الموحّدة: مجسّم الأخبار + عنوان (+ زرّ الإضافة لغير المعلّق)
-        let canAdd = authVM.currentUser?.role != .pending
+        let canAdd = authVM.currentUser?.role != .pending && authVM.memberSees(.newsAdd)
         return DSEmptyView(L10n.t("لا توجد أخبار حديثة", "No recent news"), section: .news,
                            actionTitle: canAdd ? L10n.t("أضف أول خبر", "Add First Post") : nil,
                            actionIcon: "plus.circle.fill",

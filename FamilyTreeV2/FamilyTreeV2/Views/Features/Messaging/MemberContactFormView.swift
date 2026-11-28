@@ -47,7 +47,7 @@ struct MemberContactFormView: View {
             title: L10n.t("تواصل مع الإدارة", "Contact Admin"),
             subtitle: L10n.t("اكتب رسالتك ويصلك الرد بأقرب وقت", "Write your message — you'll get a reply soon"),
             icon: "envelope.fill",
-            tint: DS.Color.tileContact,
+            tint: DS.Color.sea,
             actionTitle: submitTitle,
             actionIcon: didSend ? "square.and.pencil" : "paperplane.fill",
             cancelTitle: didSend ? L10n.t("إغلاق", "Close") : L10n.t("إلغاء", "Cancel"),
@@ -93,19 +93,9 @@ struct MemberContactFormView: View {
                           icon: "square.grid.2x2.fill",
                           tint: categoryTint(selectedCategory),
                           index: 0) {
-            // مربّعات الاختيار الموحّدة (`DSOptionTiles`) — كل نوع بلون معناه
-            DSOptionTiles(ContactCategory.allCases.map {
-                              DSOptionTile($0, title: $0.title, icon: $0.icon, tint: categoryTint($0))
-                          },
-                          selection: $selectedCategory, columns: ContactCategory.allCases.count)
-            if selectedCategory == .appeal {
-                Text(L10n.t("اعتراض على قرار إداري — نرد خلال ٧ أيام",
-                            "An appeal against an administrative decision — we reply within 7 days"))
-                    .dsFont(.footnote)
-                    .foregroundColor(DS.Color.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
-            }
+            // القرار ٧ «ب» (اختيار المالك ٢٠٢٦-١١-١٢): أربعة مربّعات بصفّ — قرص ممتلئ بلون النوع فوق اسمه،
+            // والمختار بتعبئة لونه الخفيفة وإطاره
+            ContactTypeDiscRow(selection: $selectedCategory, tint: categoryTint)
         }
     }
 
@@ -170,10 +160,10 @@ struct MemberContactFormView: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
-            .strokeBorder(messageFocused ? tint.opacity(DS.Opacity.selectedStroke) : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke),
-                          lineWidth: messageFocused ? DS.Border.widthBold : DS.Border.width))
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+            .strokeBorder(messageFocused ? tint.opacity(DS.Opacity.selectedStroke) : .clear,
+                          lineWidth: DS.Border.widthBold))
         .animation(.easeInOut(duration: 0.2), value: messageFocused)
     }
 
@@ -223,11 +213,10 @@ struct MemberContactFormView: View {
         }
         .padding(.horizontal, DS.Spacing.sm)
         .padding(.vertical, DS.Spacing.sm)
-        .background(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous).fill(DS.Color.background))
-        .overlay(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.fieldFill))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
             .strokeBorder(replyFocused ? tint.opacity(DS.Opacity.selectedStroke)
-                                       : (emailIsValid ? DS.Color.success.opacity(DS.Opacity.tintStroke)
-                                                       : DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke)),
+                                       : (emailIsValid ? DS.Color.success.opacity(DS.Opacity.tintStroke) : .clear),
                           lineWidth: replyFocused ? DS.Border.widthBold : DS.Border.width))
         .contentShape(Rectangle())
         .onTapGesture { replyFocused = true }
@@ -309,7 +298,7 @@ struct MemberContactFormView: View {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             withAnimation(DS.Anim.smooth) { didSend = true }
         } else {
-            errorText = authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة. حاول مرة ثانية.", "Failed to send. Please try again.")
+            errorText = authVM.contactMessageError ?? L10n.t("تعذر إرسال الرسالة. يرجى المحاولة مرة أخرى.", "Failed to send. Please try again.")
         }
     }
 
@@ -326,14 +315,13 @@ struct MemberContactFormView: View {
 // MARK: - التصنيفات الأربعة
 
 enum ContactCategory: CaseIterable {
-    case inquiry, complaint, suggestion, appeal, other
+    case inquiry, complaint, suggestion, other  // «اعتراض» أُزيل (المالك ٢٠٢٦-١١-٠٦)
 
     var title: String {
         switch self {
         case .complaint: return L10n.t("شكوى", "Complaint")
         case .suggestion: return L10n.t("اقتراح", "Suggestion")
         case .inquiry: return L10n.t("استفسار", "Inquiry")
-        case .appeal: return L10n.t("اعتراض", "Appeal")
         case .other: return L10n.t("أخرى", "Other")
         }
     }
@@ -343,7 +331,6 @@ enum ContactCategory: CaseIterable {
         case .complaint: return "exclamationmark.bubble.fill"
         case .suggestion: return "lightbulb.fill"
         case .inquiry: return "questionmark.bubble.fill"
-        case .appeal: return "hand.raised.fill"
         case .other: return "ellipsis.message.fill"
         }
     }
@@ -353,7 +340,6 @@ enum ContactCategory: CaseIterable {
         case .complaint: return DS.Color.sadu
         case .suggestion: return DS.Color.palm
         case .inquiry: return DS.Color.primary
-        case .appeal: return DS.Color.sea
         case .other: return DS.Color.accent
         }
     }
@@ -364,8 +350,50 @@ enum ContactCategory: CaseIterable {
         case .complaint: return "شكوى"
         case .suggestion: return "اقتراح"
         case .inquiry: return "استفسار"
-        case .appeal: return "اعتراض"
         case .other: return "أخرى"
+        }
+    }
+}
+
+
+/// «نوع الرسالة»: أربعة مربّعات بصفّ، قرص ملوّن فوق الاسم (القرار ٧ «ب»)
+struct ContactTypeDiscRow: View {
+    @Binding var selection: ContactCategory
+    let tint: (ContactCategory) -> Color
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.xs) {
+            ForEach(ContactCategory.allCases, id: \.self) { cat in
+                let on = selection == cat
+                let color = tint(cat)
+                let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(DS.Anim.snappy) { selection = cat }
+                } label: {
+                    VStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: cat.icon)
+                            .dsGlyph(DS.Glyph.lg, weight: .semibold)
+                            .foregroundColor(DS.Color.textOnPrimary)
+                            .frame(width: DS.Icon.avatar, height: DS.Icon.avatar)
+                            .background(Circle().fill(color.dsSolidFill))
+                        Text(cat.title)
+                            .dsFont(.chip)
+                            .fontWeight(on ? .semibold : .regular)
+                            .foregroundColor(on ? color.dsReadableGlyph : DS.Color.textSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, DS.Spacing.smd)
+                    .background(shape.fill(on ? color.opacity(DS.Opacity.tintFill) : DS.Color.fieldFill))
+                    .overlay(shape.strokeBorder(on ? color.dsReadableGlyph : .clear, lineWidth: DS.Border.widthBold))
+                    .contentShape(shape)
+                }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(cat.title)
+                .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+            }
         }
     }
 }

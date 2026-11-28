@@ -20,7 +20,7 @@ struct DSOTPField: View {
                 .frame(height: DSBox.otpBoxHeight + DS.Spacing.xsm)
                 .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
 
-            HStack(spacing: DS.Spacing.xs + 2) {
+            HStack(spacing: DS.Spacing.xsm) {
                 ForEach(0..<6, id: \.self) { box(at: $0) }
             }
             // الرمز يُملأ من اليسار لليمين حتى مع واجهة عربية

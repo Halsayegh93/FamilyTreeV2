@@ -14,14 +14,26 @@ import Combine
 //   • «النظام»: تنبيهات رصيد رسائل الدخول.
 // البحث الواحد هنا (كان في «سجل التعديلات»)، والسحب: «مقروء» و«حذف» (كل عضو يحذف نسخته)، و«تحديد» للقراءة والحذف معاً.
 //
+// إعادة تصميم الإدارة ٢٠٢٦-١١-٢٦ (الوحدة U18 — spec C.15، mock 11):
+//   الرأس الداخلي (`AdminPage` .list): «‹ الإدارة» · «إشعارات الإدارة» · «تحديد» نصّاً في الطرف ← شرائح الفلتر بُعداً واحداً
+//   تلتفّ (`DSFilterChips(style: .admin)`: الكل · يحتاج إجراء N · تغييرات الأعضاء · نشاط الفريق · النظام) ← البحث
+//   (`DSSearchField(style: .admin)`) ← سطر «12 غير مقروء … قراءة الكل» ← «يحتاج إجراء الآن» ثم الأيام، كل قسم بطاقة من
+//   صفوفها (مربّع النوع ٣٠، العنوان ١٥ — غير المقروء متوسط بنقطة ذهبية — والنص والوقت). زرّ البيت الواحد كحلي في طرف صفّ
+//   «يحتاج إجراء الآن» («إعلان» · «مراجعة» · «راجع» · «شحن الرصيد» ← صفحة رسائل الدخول لا الرابط)، و«تمت إضافة ابن»:
+//   «الملف» (ورقة العضو — بيت الحذف الوحيد، T4) و«تنبيه». السحب والضغط المطوّل «مقروء»/«حذف»، و«تحديد» ← شريط سفلي
+//   «مقروء (3)» · «حذف (3)». الحالات: هيكل · «لا إشعارات» · «لا شيء في هذا الفلتر» · خطأ + «أعد المحاولة» (من
+//   `AdminNoticeStore.health`). الكتابة كلها تمرّ بـ`DebugAdminProbe.dryRun` (`AdminNoticeWrites`، T0).
+//   المنطق الخالص (الفلاتر، الأقسام، الحالات، سبب فشل الجلب) في `AdminNoticeLogic.swift` ويُفحص بلا محاكي.
+//
 // **مكان واحد لكل إشعار** (`AdminNotices.category`): ما يخصّ الإدارة لا يظهر في مركز الإشعارات العام للإدارة ولا في
 // عدّاد جرسه — يبقى هناك ما يخصّ العضو نفسه (تعديل على بياناته، نتيجة طلبه، إعلانات العائلة ووفياتها، تحديث التطبيق،
 // الإعجاب والتعليق، رسائل الإدارة له، ردود «مسار الموافقات» لصاحب الطلب). العضو العادي لا يتغيّر عنده شيء.
 
 /// تصنيف إشعارات الإدارة — المصدر الواحد لمركز الإشعارات (يستبعدها) ولهذه الصفحة وعدّاد جرس «اليوم»
 enum AdminNotices {
-    /// `changes` = «تغييرات الأعضاء» (`member_change` من السيرفر، طلب المالك ٢٠٢٦-١١-٠١) — هنا وحدها، لا في المركز العام
-    enum Category: String { case action, team, system, changes }
+    /// `changes` = «تغييرات الأعضاء» (`member_change` من السيرفر، طلب المالك ٢٠٢٦-١١-٠١) — هنا وحدها، لا في المركز العام.
+    /// النوع نفسه في `AdminNoticeLogic.swift` (منطق يُفحص بلا محاكي)
+    typealias Category = AdminNoticeCategory
 
     /// تغييرات بيانات الأعضاء (v2: قبل ← بعد لكل حقل، والمنفّذ)
     static let memberChangeKind = "member_change"
@@ -96,9 +108,14 @@ enum AdminNotices {
     static let smsSuspicious = "sms_suspicious"
     /// أنواع KWT SMS — نقر إشعارها يفتح صفحتها في لوحة الإدارة
     static let smsKinds: Set<String> = [smsBalanceLow, smsSuspicious]
+    /// «خطأ في التطبيق» (`sentry-alert-ar`، طلب المالك ٢٠٢٦-١١-٢٧: تنبيه Sentry بالعربي) — للمالك وحده، يفتح «الأخطاء»
+    static let appError = "app_error"
+    /// أنواع النظام للمالك وحده — نقر إشعارها (push أو هنا) يفتح صفحتها؛ لغيره يبقى على «اليوم»
+    static let ownerSystemKinds: Set<String> = smsKinds.union([appError])
 
-    /// تنبيهات النظام (رصيد رسائل رمز الدخول)
-    static let systemKinds: Set<String> = [smsBalanceLow]
+    /// تنبيهات النظام (رصيد رسائل رمز الدخول، أخطاء التطبيق)
+    static let systemKinds: Set<String> = [smsBalanceLow, appError, "review_account_activity"]
+    private static let decidedPrefixes = ["تم قبول", "تم رفض"]
     /// تنبيهات أمنية تحتاج مراجعة («يحتاج إجراء» بزرّ «راجع»)
     static let securityKinds: Set<String> = [smsSuspicious]
 
@@ -116,6 +133,8 @@ enum AdminNotices {
         if n.kind == memberChangeKind { return .changes }
         // ما يخصّني أنا (تعديل على بياناتي، طلب عنّي) يبقى في «الإشعارات» — كما كان
         if let me, n.subjectMemberId == me, n.createdBy != me { return nil }
+        // نتيجة طلب انتهى («تم قبول…») بنوع الطلب نفسه: سجلّ لا مهمّة — كانت تطلع «يحتاج إجراء» بزرّ «مراجعة»
+        if requestKinds.contains(n.kind), decidedPrefixes.contains(where: { n.title.hasPrefix($0) }) { return .team }
         if requestKinds.contains(n.kind) { return .action }
         if teamKinds.contains(n.kind) { return .team }
         if n.kind == NotificationKind.admin.rawValue, n.details?.type == "approval_workflow",
@@ -143,6 +162,8 @@ enum AdminNoticeTarget: Equatable {
     /// «طلبات رمز الدخول» كاملة (محاولات دخول مريبة)
     case smsAttempts
     case treeProblems
+    /// «الأخطاء» (إشعار `app_error`)
+    case errors
 }
 
 /// صفّ في «إشعارات الإدارة»: إشعار (له معرّف للقراءة والحذف والتفاصيل) أو حالة مشتقة («يحتاج إجراء» الآن)
@@ -154,8 +175,8 @@ struct AdminNoticeItem: Identifiable, Equatable {
     var pinned = false
     let icon: String
     let tint: Color
-    let title: String
-    let subtitle: String
+    var title: String
+    var subtitle: String
     var isUnread = false
     var notificationId: UUID? = nil
     var needsAction = false
@@ -163,6 +184,13 @@ struct AdminNoticeItem: Identifiable, Equatable {
     var target: AdminNoticeTarget = .none
     /// الصفّ الجديد (المرسل + «قبل ← بعد») — «تغييرات الأعضاء»
     var rich: AdminNoticeRich? = nil
+    /// «تمت إضافة ابن»: «الملف» (أو «راجع») و«تنبيه» في الصفّ، و«إرسال تنبيه» في التفاصيل — `AdminSelfChildNotice.swift`.
+    /// لا «حذف» هنا (T4): بيت حذف العضو الوحيد ورقة العضو التي يفتحها «الملف»
+    var selfChild: AdminNoticeSelfChild? = nil
+    /// نوعه بالكلام للقارئ الصوتي (طلب · إضافة · تعديل · نظام)
+    var tone: AdminNoticeTone = .system
+    /// السطر الصغير: مَن فعل («أضافه أبوه فهد»، «بواسطة: فيصل»)
+    var meta: String? = nil
 }
 
 /// محتوى الصفّ الجديد لـ«تغييرات الأعضاء»: المرسل («الإدارة · بواسطة: فلان» أو العضو) والتغييرات
@@ -171,14 +199,59 @@ struct AdminNoticeRich: Equatable {
     let changes: [AppNotification.NotificationDetails.ChangeEntry]
 }
 
-/// الحالات المشتقة («يحتاج إجراء» الآن) — يكتبها «اليوم» من حالته، ويقرؤها الجرس والصفحة
+/// الحالات المشتقة («يحتاج إجراء» الآن) — يكتبها «اليوم» من حالته، ويقرؤها الجرس والصفحة.
+/// وحال جلب الإشعارات (`AdminStoreHealth`، Autoplan note 2 — U18): أول جلب هيكل، والفشل «تعذّر التحميل» + «أعد المحاولة»
+/// (أو القديم بـ«آخر تحديث»)، ويُسجَّل سببه. `-tmpFailStores notices` (T0) يصطنع الفشل.
 @MainActor
 final class AdminNoticeStore: ObservableObject {
     static let shared = AdminNoticeStore()
     @Published private(set) var derived: [AdminNoticeItem] = []
+    /// «اليوم» نشر الحالات المشتقة في هذه الجلسة — قبلها لا تُعرض (لا حالة قديمة أبداً، spec C.15)
+    @Published private(set) var derivedPublished = false
+    /// حال جلب الإشعارات لهذه الصفحة (الشرائح وأعدادها والقائمة تقرأ منه)
+    @Published private(set) var health: AdminStoreHealth = .idle
 
     func publish(_ items: [AdminNoticeItem]) {
+        if !derivedPublished { derivedPublished = true }
         if items != derived { derived = items }
+    }
+
+    /// يلتقط أن نموذج العرض كتب القائمة أثناء الجلب — `fetchNotifications` يبتلع خطأه، فلا كتابة = فشل
+    private final class DeliveryFlag { var delivered = false }
+
+    /// نفس الجلب (`fetchNotifications(force: true)`) بحاله: الإلغاء (أُغلقت الصفحة) ليس فشلاً، والفشل يُسجَّل بسببه —
+    /// `Log.error` لما يستحق البلاغ، و`Log.warning` للانقطاع والفشل المصطنع
+    func load(using vm: NotificationViewModel) async {
+        let before = health
+        health = health.beginning()
+        var injected = false
+        do {
+            try DebugAdminProbe.failIfAsked(.notices, hasLoaded: before.hasData)   // `-tmpFailStores notices`
+        } catch {
+            injected = true
+        }
+        var delivered = false
+        if !injected {
+            let flag = DeliveryFlag()
+            let watch = vm.$notifications.dropFirst().sink { _ in flag.delivered = true }
+            await vm.fetchNotifications(force: true)
+            watch.cancel()
+            delivered = flag.delivered
+            if Task.isCancelled && !delivered {
+                health = before
+                return
+            }
+        }
+        if let failure = AdminNoticeLogic.loadFailure(injected: injected,
+                                                      featureAvailable: vm.notificationsFeatureAvailable,
+                                                      delivered: delivered,
+                                                      online: NetworkMonitor.shared.isConnected) {
+            let line = "[AdminNoticeStore] load failed: \(failure.cause)"
+            if failure.isExpected { Log.warning(line) } else { Log.error(line) }
+            health = health.ending(success: false)
+        } else {
+            health = health.ending(success: true)
+        }
     }
 
     /// وفاة لم يُعلن عنها (المالك والمدير) · مشكلات الشجرة (المراقب) · خلل في إعداد قاعدة البيانات (للكل)
@@ -196,16 +269,17 @@ final class AdminNoticeStore: ObservableObject {
             list.append(AdminNoticeItem(id: "derived.schema", category: .action, date: now, pinned: true,
                                         icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
                                         title: L10n.t("خلل في إعداد قاعدة البيانات", "Database setup problem"),
-                                        subtitle: lines.joined(separator: "\n"), needsAction: true))
+                                        subtitle: lines.joined(separator: "\n"), needsAction: true, tone: .system))
         }
         if authVM.isAdmin {
             for m in unannounced {
                 list.append(AdminNoticeItem(id: "derived.death.\(m.id.uuidString)", category: .action, date: now, pinned: true,
                                             icon: NewsTypeHelper.icon(for: "وفاة"), tint: DS.Color.slate,
                                             title: L10n.t("وفاة لم يُعلن عنها", "Death not announced"),
-                                            subtitle: [m.shortFullName, m.deathDate.map { String($0.prefix(10)) }]
+                                            subtitle: [m.shortFullName, m.deathDate.flatMap { DateHelper.displayDate($0) }]
                                                 .compactMap { $0 }.joined(separator: " · "),
-                                            needsAction: true, button: L10n.t("إعلان", "Announce"), target: .occasions))
+                                            needsAction: true, button: L10n.t("إعلان", "Announce"), target: .occasions,
+                                            tone: .request))
             }
         }
         if authVM.currentUser?.role == .monitor, let n = treeIssues, n > 0 {
@@ -214,7 +288,8 @@ final class AdminNoticeStore: ObservableObject {
                                         title: L10n.t("مشكلات الشجرة: \(n) تحتاج مراجعة", "Tree problems: \(n) to review"),
                                         subtitle: L10n.t("غير مرتبط بأب، بلا اسم، ارتباط أب غير صالح",
                                                          "Unlinked, unnamed or invalid father links"),
-                                        needsAction: true, button: L10n.t("مراجعة", "Review"), target: .treeProblems))
+                                        needsAction: true, button: L10n.t("مراجعة", "Review"), target: .treeProblems,
+                                        tone: .request))
         }
         return list
     }
@@ -223,17 +298,32 @@ final class AdminNoticeStore: ObservableObject {
 // MARK: - بيوت الأزرار
 
 enum AdminNoticeRoutes {
-    /// الصفحة التي يفتحها الزرّ — بقسمها في قائمة العنوان
+    /// الصفحة التي يفتحها الزرّ — بقسمها في قائمة العنوان، وخلف حارس القسم (spec B.6: الدور الذي لا يرى القسم يرى رأسه
+    /// و«ليس ضمن صلاحياتك» بلا بيانات). «شحن الرصيد» يفتح صفحة رسائل الدخول (بيت «شحن» — E.20)، لا الرابط
     static func page(_ target: AdminNoticeTarget) -> AnyView {
         let back = L10n.t("إشعارات الإدارة", "Admin notifications")
         switch target {
-        case .none:            return AnyView(EmptyView())
-        case .inbox(let id):   return AnyView(AdminAllRequestsView(focusId: id).adminArea(.inbox))
-        case .messages:        return AnyView(AdminAllRequestsView(startsWithMessages: true).adminArea(.inbox))
-        case .occasions:       return AnyView(AdminOccasionsPage().adminArea(.occasions).adminBackTitle(back))
-        case .sms:             return AnyView(AdminSmsView(backTitle: back).adminArea(.team))
-        case .smsAttempts:     return AnyView(SmsAttemptsListPage().adminBackTitle(back).adminArea(.team))
-        case .treeProblems:    return AnyView(AdminMembersPage(chip: .problems).adminArea(.family))
+        case .none:
+            return AnyView(EmptyView())
+        case .inbox(let id):
+            return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView(focusId: id)) }.adminArea(.inbox))
+        case .messages:
+            return AnyView(AdminAreaGate(area: .inbox) { AnyView(AdminAllRequestsView(startsWithMessages: true)) }
+                .adminArea(.inbox))
+        case .occasions:
+            return AnyView(AdminAreaGate(area: .occasions) { AnyView(AdminOccasionsPage()) }
+                .adminArea(.occasions).adminBackTitle(back))
+        case .sms:
+            // بيتها «التطبيق والنظام ← النظام» منذ ٢٠٢٦-١١-٢٨ (المالك وحده كما كانت — الصفحة نفسها تحرس للمالك)
+            return AnyView(AdminAreaGate(area: .app) { AnyView(AdminSmsView(backTitle: back)) }.adminArea(.app))
+        case .smsAttempts:
+            return AnyView(AdminAreaGate(area: .app) { AnyView(SmsAttemptsListPage()) }
+                .adminBackTitle(back).adminArea(.app))
+        case .treeProblems:
+            return AnyView(AdminAreaGate(area: .family) { AnyView(AdminMembersPage(chip: .problems)) }
+                .adminArea(.family))
+        case .errors:
+            return AnyView(AdminAreaGate(area: .app) { AnyView(AdminErrorsPage()) }.adminArea(.app).adminBackTitle(back))
         }
     }
 
@@ -244,6 +334,7 @@ enum AdminNoticeRoutes {
         case .changes:
             return ("person.text.rectangle", DS.Color.accent)
         case .system:
+            if kind == AdminNotices.appError { return ("exclamationmark.triangle.fill", DS.Color.error) }
             return ("ellipsis.message.fill", DS.Color.warning)
         case .action:
             switch kind {
@@ -294,6 +385,49 @@ enum AdminNoticeRoutes {
     }
 }
 
+// MARK: - الكتابة
+
+/// كل كتابة من «إشعارات الإدارة» ومربّعاتها — نفس نداءات نموذج العرض، وتمرّ بـ`DebugAdminProbe.dryRun` (T0): أثناء تجربة
+/// دور تُسجَّل «DRY-RUN» ويُصطنع نجاحها محلياً بلا سيرفر
+@MainActor
+enum AdminNoticeWrites {
+    /// «مقروء» (صفّ، تحديد، «قراءة الكل»، فتح الإشعار أو ملف الابن)
+    static func markRead(_ ids: Set<UUID>, _ vm: NotificationViewModel) async {
+        guard !ids.isEmpty else { return }
+        if DebugAdminProbe.dryRun("admin notices mark read \(ids.count)") {
+            for i in vm.notifications.indices where ids.contains(vm.notifications[i].id) {
+                vm.notifications[i] = vm.notifications[i].withRead(true)
+            }
+            return
+        }
+        if ids.count == 1, let id = ids.first {
+            await vm.markNotificationAsRead(id: id)
+        } else {
+            await vm.markNotificationsAsRead(ids: ids)
+        }
+    }
+
+    /// «حذف» — كل عضو يحذف نسخته
+    static func delete(_ ids: Set<UUID>, _ vm: NotificationViewModel) async {
+        guard !ids.isEmpty else { return }
+        if DebugAdminProbe.dryRun("admin notices delete \(ids.count)") {
+            withAnimation(DS.Anim.quick) { vm.notifications.removeAll { ids.contains($0.id) } }
+            return
+        }
+        if ids.count == 1, let id = ids.first {
+            await vm.deleteNotification(id: id)
+        } else {
+            await vm.deleteNotifications(ids: ids)
+        }
+    }
+
+    /// «تنبيه» لأب الابن المضاف أو لمن غيّر البيانات: إشعار «تنبيه من الإدارة» (`sendNotification`، `kind: admin`)
+    static func sendAlert(title: String, body: String, to member: UUID, _ vm: NotificationViewModel) async -> Bool {
+        if DebugAdminProbe.dryRun("admin notice alert to \(member)") { return true }
+        return await vm.sendNotification(title: title, body: body, targetMemberIds: [member], kind: "admin")
+    }
+}
+
 // MARK: - الصفحة
 
 struct AdminNotificationsPage: View {
@@ -305,32 +439,13 @@ struct AdminNotificationsPage: View {
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @ObservedObject private var store = AdminNoticeStore.shared
     @ObservedObject private var sms = SmsBalanceStore.shared
+    @ObservedObject private var pendingContent = AdminPendingContentStore.shared
     @Environment(\.adminBackTitle) private var opener
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    enum Filter: String, CaseIterable, Identifiable {
-        case all, action, changes, team, system
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .all:    return L10n.t("الكل", "All")
-            case .action: return L10n.t("يحتاج إجراء", "Needs action")
-            case .changes: return L10n.t("تغييرات الأعضاء", "Member changes")
-            case .team:   return L10n.t("نشاط الفريق", "Team activity")
-            case .system: return L10n.t("النظام", "System")
-            }
-        }
-        var icon: String {
-            switch self {
-            case .all:    return "square.grid.2x2.fill"
-            case .action: return "exclamationmark.circle.fill"
-            case .changes: return "pencil.line"
-            case .team:   return "person.2.fill"
-            case .system: return "gearshape.fill"
-            }
-        }
-    }
+    /// الفلاتر الخمسة (`AdminNoticeLogic.Filter`)
+    typealias Filter = AdminNoticeLogic.Filter
+    private typealias Logic = AdminNoticeLogic
 
     @State private var filter: Filter = .all
     @State private var searchText = ""
@@ -338,44 +453,90 @@ struct AdminNotificationsPage: View {
     @State private var selectedIds: Set<UUID> = []
     @State private var showDeleteConfirm = false
     @State private var detail: AppNotification?
-    @State private var hasLoaded = false
+    /// «ظهور موحّد»: الأقسام تصعد مرة عند الظهور الأول (لا عند التحديث)
     @State private var appeared = false
+    @State private var selfChildFlow = AdminSelfChildFlow()
 
     static var title: String { L10n.t("إشعارات الإدارة", "Admin notifications") }
 
+    /// ما يُرسم، محسوباً مرة لكل رسم
+    private struct Model {
+        let all: [AdminNoticeItem]
+        /// في اليد إشعارات تُعرض (من جلب ناجح أو سابق)
+        let ready: Bool
+        let counts: [Filter: Int]
+        /// بعد الفلتر والبحث
+        let visible: [AdminNoticeItem]
+        /// أقسام `visible`: «يحتاج إجراء الآن» ثم الأيام
+        let sections: [AdminNoticeLogic.Section]
+        let unreadIds: Set<UUID>
+        let searching: Bool
+
+        /// صفوف لها إشعار (تُحدَّد وتُقرأ وتُحذف)
+        var noticeIds: Set<UUID> { Set(all.compactMap(\.notificationId)) }
+    }
+
+    // حارس المكدس: الصفحة ثم المربّعات طبقات خلف `AnyView`، والقياس (`-tmpStackDepth`) على الجذر (≤ ٦٠٠ ك.ب)
     var body: some View {
-        let items = allItems
-        return AdminPage(header: header(items), lead: AnyView(leadCard(items)), layout: .list,
-                         content: AnyView(rows(items)))
-            .dsAlert(L10n.t("حذف \(selectedIds.count) من الإشعارات؟", "Delete \(selectedIds.count) notifications?"),
-                     isPresented: $showDeleteConfirm, icon: "trash.fill") {
+        AnyView(layered)
+            .debugStackProbe("AdminNotificationsPage", limitKB: DebugStackLimit.page)
+    }
+
+    private var layered: AnyView {
+        let model = makeModel()
+        return AnyView(dialogs(AnyView(page(model))))
+    }
+
+    private func page(_ m: Model) -> some View {
+        AdminPage(header: header(m), lead: lead(m), layout: .list, content: AnyView(rows(m)),
+                  updatedAt: m.ready ? store.health.lastGood : nil)
+            .refreshable { await store.load(using: notificationVM) }
+            // شريط التحديد السفلي — مثبّت، وآخر صفّ يبقى فوقه
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if isSelecting {
+                    AnyView(selectionBar(m))
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .task {
+                appeared = true
+                await store.load(using: notificationVM)
+                await pendingContent.refresh()
+            }
+    }
+
+    /// تأكيد الحذف الجماعي، ومربّع التفاصيل، ومربّعات صفّ الابن
+    private func dialogs(_ content: AnyView) -> some View {
+        content
+            .dsAlert(Logic.deleteQuestion(selectedIds.count), isPresented: $showDeleteConfirm, icon: "trash.fill") {
                 Button(L10n.t("حذف", "Delete"), role: .destructive) { deleteSelected() }
                 Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+            } message: {
+                Text(L10n.t("تُحذف من إشعاراتك أنت فقط. لا يمكن التراجع.",
+                            "They're removed from your notifications only. This can't be undone."))
             }
             // تفاصيل الإشعار المربّع الغني بمنتصف الشاشة — نفسه في مركز الإشعارات (طلب المالك ٢٠٢٦-١١-٠١)
             .dsCenterBox(item: $detail, onBackgroundTap: { detail = nil }) { n in
                 AnyView(detailBox(n))
             }
-            .task {
-                // «ظهور موحّد» (الدفعة ١٠): الصفوف تصعد بعد البطاقة الأولى مرة عند الظهور
-                appeared = true
-                await notificationVM.fetchNotifications(force: true)
-                withAnimation(reduceMotion ? nil : DS.Anim.smooth) { hasLoaded = true }
-            }
-            .refreshable { await notificationVM.fetchNotifications(force: true) }
+            .modifier(AdminSelfChildFlowModifier(flow: $selfChildFlow, missingChildren: missingSelfChildren))
     }
 
     // MARK: البيانات
 
     /// الطلبات التي ما زالت معلّقة (الإشعار يحتاج إجراء ما دام طلبه هنا)
     private var openRequestIds: Set<UUID> {
-        var ids = Set<UUID>()
+        // الديوانيات والمكتبة والمعرض المعلّقة (F4، V34) — نفس الجرس
+        var ids = pendingContent.ids
         let vm = adminRequestVM
         for list in [vm.deceasedRequests, vm.childAddRequests, vm.newsReportRequests, vm.photoSuggestionRequests,
                      vm.nameChangeRequests, vm.treeEditRequests, vm.joinApprovalRequests] {
             ids.formUnion(list.map(\.id))
         }
         ids.formUnion(vm.phoneChangeRequests.map(\.id))
+        // «إضافة قريبة» و«طلب حذف من الشجرة» (§9): يحتاج إجراء ما دام معلّقاً، و«مراجعة» تفتح مربّعه في «الوارد»
+        ids.formUnion(vm.relativeAddRequests.map(\.id))
+        ids.formUnion(vm.relativeRemoveRequests.map(\.id))
         ids.formUnion(vm.contactMessages.filter { $0.status == ApprovalStatus.pending.rawValue }.map(\.id))
         ids.formUnion(newsVM.pendingNewsRequests.map(\.id))
         ids.formUnion(projectsVM.pendingProjects.map(\.id))
@@ -388,19 +549,117 @@ struct AdminNotificationsPage: View {
         let open = openRequestIds
         let canSms = authVM.canViewSystemSettings
         let canTopUp = canSms && sms.needsTopUp
-        var list = store.derived
+        // الحالات المشتقة بعد أن نشرها «اليوم» في هذه الجلسة فقط — لا حالة قديمة (spec C.15)
+        var list = Logic.keepsDerived(published: store.derivedPublished) ? store.derived : []
+        // «الرسائل» رسائل خاصة — إشعارها لمن يراها في جدول السيرفر فقط (`inbox.messages`)
+        let seesMessages = authVM.adminSees(.inboxMessages)
         for n in notificationVM.notifications {
+            if !seesMessages && n.kind == NotificationKind.contactMessage.rawValue { continue }
             guard let category = AdminNotices.category(of: n, me: me) else { continue }
             var item = Self.item(n, category: category, open: open, canTopUp: canTopUp, canSms: canSms)
             if category == .changes {
+                let isSelfChild = n.details?.selfChild == true
+                // إضافة الابن: نصّ الإشعار (مَن أضاف مَن) بدل «قبل ← بعد»
                 item.rich = AdminNoticeRich(sender: sender(n, style: AdminNoticeRoutes.style(n, category)),
-                                            changes: n.details?.changes ?? [])
+                                            changes: isSelfChild ? [] : (n.details?.changes ?? []))
+                if isSelfChild { applySelfChild(n, to: &item) } else { applyChangeAlert(n, to: &item) }
+                // بلا تكرار (اختيار المالك ٢٠٢٦-١١-٠٦): العنوان نوع الحدث، والسطر الشخص، والصغير مَن فعل
+                if n.details?.action != nil || isSelfChild {
+                    item.title = AdminNoticeText.eventTitle(n)
+                    let person = AdminNoticeText.subjectName(n, member: { memberVM.member(byId: $0) })
+                    // مكان التغيير (شجرة النساء/العائلة) دائماً، ولو غاب الاسم
+                    var parts = person.isEmpty ? [] : [person]
+                    if !person.isEmpty, isSelfChild,
+                       let year = AdminNoticeText.birthYear(n, member: { memberVM.member(byId: $0) }) {
+                        parts.append(L10n.t("مواليد \(year)", "Born \(year)"))
+                    }
+                    if let tree = AdminNoticeText.treeLabel(n) { parts.append(tree) }
+                    if !parts.isEmpty { item.subtitle = parts.joined(separator: " · ") }
+                    item.meta = AdminNoticeText.actorLine(n, member: { memberVM.member(byId: $0) })
+                }
             }
             list.append(item)
         }
-        return list.sorted { a, b in
-            if a.pinned != b.pinned { return a.pinned }
-            return a.date > b.date
+        return list
+    }
+
+    private func makeModel() -> Model {
+        let all = allItems
+        let ready = Logic.ready(health: store.health, hasNotices: all.contains { $0.notificationId != nil })
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
+        let visible = all.filter { item in
+            Logic.matches(Self.fact(item), filter)
+                && (q.isEmpty || NameSearch.matches(query: q, any: [item.title, item.subtitle, item.meta ?? ""]))
+        }
+        return Model(all: all, ready: ready, counts: Logic.counts(all.map { Self.fact($0) }), visible: visible,
+                     sections: Logic.sections(visible.map { Self.fact($0) }),
+                     unreadIds: Set(all.filter(\.isUnread).compactMap(\.notificationId)),
+                     searching: !q.isEmpty)
+    }
+
+    private static func fact(_ item: AdminNoticeItem) -> AdminNoticeLogic.Fact {
+        AdminNoticeLogic.Fact(category: item.category, needsAction: item.needsAction, pinned: item.pinned,
+                              unread: item.isUnread, date: item.date)
+    }
+
+    /// أدوات صفّ «تمت إضافة ابن». بعد حذف الابن يفرّغ السيرفر `subject_member_id` فيبقى الصفّ سجلّاً بلا أزرار.
+    /// «راجعه» يحتاج إجراء ما دام غير مقروء (مثل «محاولات دخول مريبة»): السيرفر لا يحفظ حالة مراجعة
+    private func applySelfChild(_ n: AppNotification, to item: inout AdminNoticeItem) {
+        guard let childId = n.subjectMemberId else { return }
+        let child = memberVM.member(byId: childId)
+        let father = n.createdBy.flatMap { memberVM.member(byId: $0) }
+        let review = n.details?.review == true
+        let childFullName = child?.chainThreeName ?? PersonName.firstThree(n.details?.subject?.name ?? "")
+        item.selfChild = AdminNoticeSelfChild(
+            childId: childId,
+            fatherId: n.createdBy,
+            notificationId: n.id,
+            childFirstName: child?.firstName ?? childFullName.split(separator: " ").first.map(String.init) ?? "",
+            childFullName: childFullName,
+            fatherName: father?.chainThreeName ?? (n.details?.actor?.name ?? n.details?.sender?.name).map(PersonName.firstThree) ?? "",
+            review: review,
+            canAlert: authVM.canSendNotifications && n.createdBy != nil)
+        if review && !n.read { item.needsAction = true }
+    }
+
+    /// باقي «تغييرات الأعضاء»: «إرسال تنبيه» في التفاصيل لمن غيّر البيانات إذا فيه خطأ (ليس لتعديلاتي أنا)
+    private func applyChangeAlert(_ n: AppNotification, to item: inout AdminNoticeItem) {
+        guard authVM.canSendNotifications, let actor = n.createdBy, actor != authVM.currentUser?.id else { return }
+        let name = PersonName.firstThree(n.details?.subject?.name ?? "")
+        item.selfChild = AdminNoticeSelfChild(
+            childId: n.subjectMemberId ?? n.id,
+            fatherId: actor,
+            notificationId: n.id,
+            childFirstName: n.subjectMemberId.flatMap { memberVM.member(byId: $0)?.firstName } ?? name,
+            childFullName: name,
+            fatherName: memberVM.member(byId: actor)?.chainThreeName
+                ?? (n.details?.actor?.name ?? n.details?.sender?.name).map(PersonName.firstThree) ?? "",
+            review: false,
+            canAlert: true,
+            isGeneral: true)
+    }
+
+    /// أبناء أُضيفوا بعد آخر تحميل للأعضاء — يُجلبون ليعمل الملف والاسم وسنة الميلاد
+    private var missingSelfChildren: [UUID] {
+        notificationVM.notifications.compactMap { n in
+            guard n.details?.selfChild == true, let id = n.subjectMemberId, memberVM.member(byId: id) == nil else { return nil }
+            return id
+        }
+    }
+
+    /// زرّ في صفّ «تمت إضافة ابن» — كل زرّ بصلاحيته، والصفّ لا يعرض ما لا يملكه الدور
+    private func handleSelfChild(_ action: AdminSelfChildAction, _ notice: AdminNoticeSelfChild) {
+        switch action {
+        case .openProfile:
+            Task {
+                if memberVM.member(byId: notice.childId) == nil { await memberVM.fetchSingleMember(id: notice.childId) }
+                selfChildFlow.sheet = AdminMemberSheetContext(ids: [notice.childId], start: 0)
+                await AdminNoticeWrites.markRead([notice.notificationId], notificationVM)
+            }
+        case .alert:
+            guard notice.canAlert else { return }
+            selfChildFlow.alert = notice
         }
     }
 
@@ -408,8 +667,10 @@ struct AdminNotificationsPage: View {
                              canTopUp: Bool, canSms: Bool) -> AdminNoticeItem {
         let style = AdminNoticeRoutes.style(n, category)
         var item = AdminNoticeItem(id: n.id.uuidString, category: category, date: n.createdDate,
-                                   icon: style.icon, tint: style.tint, title: n.title, subtitle: n.body,
+                                   icon: style.icon, tint: style.tint, title: AdminNoticeText.shortenQuotedNames(n.title),
+                                   subtitle: AdminNoticeText.shortenQuotedNames(n.body),
                                    isUnread: !n.read, notificationId: n.id)
+        item.tone = AdminNoticeTone.of(n, category)
         switch category {
         case .action where n.kind == AdminNotices.smsSuspicious:
             // محاولات دخول مريبة: تحتاج إجراء ما دامت غير مقروءة، و«راجع» يبقى ← «طلبات رمز الدخول»
@@ -428,9 +689,15 @@ struct AdminNotificationsPage: View {
                     ? .messages : .inbox(rid.flatMap { open.contains($0) ? $0 : nil })
             }
         case .system:
-            if canTopUp {
+            // «شحن الرصيد» ← صفحة رسائل رمز الدخول (بيت «شحن»)، لا رابط الشحن مباشرة (spec E.20)
+            if canTopUp, n.kind == AdminNotices.smsBalanceLow {
                 item.button = L10n.t("شحن الرصيد", "Top up")
                 item.target = .sms
+            }
+            // «خطأ في التطبيق» ← «الأخطاء» (للمالك وحده — `canSms` = `canViewSystemSettings`)
+            if canSms, n.kind == AdminNotices.appError {
+                item.button = L10n.t("الأخطاء", "Errors")
+                item.target = .errors
             }
         case .team, .changes:
             break
@@ -438,149 +705,162 @@ struct AdminNotificationsPage: View {
         return item
     }
 
-    private func matches(_ item: AdminNoticeItem, _ f: Filter) -> Bool {
-        switch f {
-        case .all:    return true
-        case .action: return item.needsAction
-        case .changes: return item.category == .changes
-        case .team:   return item.category == .team
-        case .system: return item.category == .system
-        }
-    }
-
-    private func visible(_ items: [AdminNoticeItem]) -> [AdminNoticeItem] {
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب
-
-        return items.filter { item in
-            matches(item, filter) && (q.isEmpty || NameSearch.matches(query: q, any: [item.title, item.subtitle]))
-        }
-    }
-
-    /// قسم في الخطّ الزمني: «يحتاج إجراء الآن» (الحالات المشتقة — ليست أحداثاً بوقت) ثم الأيام: اليوم · أمس · التاريخ
-    private struct NoticeSection: Identifiable {
-        let id: String
-        let title: String
-        let items: [AdminNoticeItem]
-    }
-
-    /// ترتيب الصفحة (طلب المالك ٢٠٢٦-١٠-٢٤ «ابي ارتبها»): ما يحتاج إجراء الآن أولاً بقسمه، ثم كل يوم بطاقة واحدة
-    private func sections(_ items: [AdminNoticeItem]) -> [NoticeSection] {
-        let pinned = items.filter(\.pinned)
-        var list: [NoticeSection] = []
-        if !pinned.isEmpty {
-            list.append(NoticeSection(id: "now", title: L10n.t("يحتاج إجراء الآن", "Needs action now"), items: pinned))
-        }
-        for day in DSDayBuckets.group(items.filter { !$0.pinned }, date: \.date) {
-            list.append(NoticeSection(id: "day.\(day.day.timeIntervalSince1970)", title: day.title, items: day.items))
-        }
-        return list
-    }
-
     // MARK: الرأس
 
-    private func header(_ items: [AdminNoticeItem]) -> AdminPageHeader {
-        let unread = items.filter(\.isUnread).compactMap(\.notificationId)
-        let hasRows = items.contains { $0.notificationId != nil }
+    /// «‹ الإدارة» · «إشعارات الإدارة» · «تحديد» نصّاً في الطرف (spec C.15، mock 11) — «قراءة الكل» فوق القائمة
+    private func header(_ m: Model) -> AdminPageHeader {
         var actions: [AdminPageAction] = []
-        if !isSelecting && !unread.isEmpty {
-            actions.append(AdminPageAction(symbol: "envelope.open", label: L10n.t("قراءة الكل", "Mark all read"),
-                                           tap: .action {
-                                               Task { await notificationVM.markNotificationsAsRead(ids: Set(unread)) }
-                                           }))
+        if isSelecting || (m.ready && !m.noticeIds.isEmpty) {
+            actions.append(AdminPageAction(symbol: "checkmark.circle",
+                                           label: isSelecting ? L10n.t("إلغاء", "Cancel") : L10n.t("تحديد", "Select"),
+                                           tap: .action { toggleSelect() },
+                                           textOnly: true))
         }
-        if isSelecting || hasRows {
-            actions.append(AdminPageAction(symbol: isSelecting ? "checkmark.circle.fill" : "checkmark.circle",
-                                           label: isSelecting ? L10n.t("إلغاء التحديد", "Cancel selection")
-                                                              : L10n.t("تحديد", "Select"),
-                                           dot: isSelecting,
-                                           tap: .action {
-                                               withAnimation(DS.Anim.quick) {
-                                                   isSelecting.toggle()
-                                                   if !isSelecting { selectedIds.removeAll() }
-                                               }
-                                           }))
+        return AdminPageHeader(back: Logic.backTitle(opener), title: Self.title, actions: actions)
+    }
+
+    // MARK: فوق القائمة
+
+    /// الشرائح (تلتفّ) ← البحث ← «12 غير مقروء … قراءة الكل». مع التحميل تمسك مكانها (بلا أعداد)، ولا تظهر فوق «لا
+    /// إشعارات» ولا فوق خطأ بلا بيانات
+    private func lead(_ m: Model) -> AnyView? {
+        guard Logic.showsFilters(ready: m.ready, health: store.health, total: m.all.count) else { return nil }
+        let options = Filter.allCases.map { f in
+            DSFilterOption(id: f, title: f.title, count: Logic.chipCount(f, counts: m.counts, ready: m.ready))
         }
-        var counts: [Filter: Int] = [:]
-        for item in items {
-            for f in Filter.allCases where matches(item, f) { counts[f, default: 0] += 1 }
-        }
-        let chips = Filter.allCases.map { f in
-            // بلا رموز: الشرائح الأربع في سطر واحد
-            AdminPageChip(id: f.rawValue, title: f.title, count: (counts[f] ?? 0) > 0 ? counts[f] : nil,
-                          selected: filter == f) {
-                withAnimation(reduceMotion ? .easeInOut(duration: 0.15) : DS.Anim.snappy) { filter = f }
+        let unread = m.unreadIds
+        let showsCaption = m.ready && !unread.isEmpty && !isSelecting
+        return AnyView(VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            DSFilterChips(options: options, selection: $filter, style: .admin)
+            DSSearchField(text: $searchText, placeholder: L10n.t("ابحث في الإشعارات", "Search notifications"),
+                          style: .admin)
+            if showsCaption {
+                AdminNoticeCaption(unread: unread.count) { markRead(unread) }
             }
-        }
-        return AdminPageHeader(back: opener ?? L10n.t("اليوم", "Today"), title: Self.title,
-                               glyph: "bell.badge", actions: actions, chips: chips)
+        })
     }
 
-    // MARK: المحتوى
+    // MARK: القائمة
 
-    private func leadCard(_ items: [AdminNoticeItem]) -> AnyView {
-        if !hasLoaded && items.isEmpty {
-            return AnyView(AdminPageStateCard(.loading(L10n.t("جارٍ تحميل الإشعارات…", "Loading notifications…"))))
-        }
-        if items.isEmpty {
-            return AnyView(AdminPageStateCard(.empty(L10n.t("لا توجد إشعارات للإدارة", "No admin notifications"),
-                                                     message: L10n.t("الطلبات الجديدة وتعديلات الفريق تظهر هنا",
-                                                                     "New requests and team changes show up here"))))
-        }
-        return AnyView(DSSearchField(text: $searchText,
-                                     placeholder: L10n.t("ابحث في الإشعارات والتعديلات…", "Search notifications and changes…"))
-            .adminCard(padding: DS.Spacing.md))
-    }
-
+    /// صفوف `List`: الحالة (هيكل/خطأ/فارغ) أو الأقسام — كل قسم عنوانه ثم صفوفه، وكل صفّ جزء من بطاقة قسمه
     @ViewBuilder
-    private func rows(_ all: [AdminNoticeItem]) -> some View {
-        if !all.isEmpty {
-            let shown = visible(all)
-            if isSelecting {
-                AnyView(selectionBar(shown))
-                    .adminPageRow(top: DS.Hub.stackSpacing, bottom: DS.Spacing.xxs)
-            }
-            if shown.isEmpty {
-                AnyView(noResults)
-                    .adminPageRow(top: DS.Hub.stackSpacing)
-            } else {
-                // كل قسم: عنوانه بعدده، ثم صفوفه بطاقة واحدة (كل صفّ جزءه منها — السحب لكل صفّ)؛ البطاقة تصعد كلها معاً
-                ForEach(sections(shown)) { section in
-                    DSDayHeader(title: section.title, count: section.items.count)
-                        .dsCardCascade(1, appeared: appeared)
-                        .adminPageRow(top: DS.Hub.stackSpacing, bottom: DSNoticeMetrics.headerGap)
-                    ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
-                        row(item, position: DSGroupPosition(index: index, count: section.items.count))
-                    }
+    private func rows(_ m: Model) -> some View {
+        let state = Logic.body(ready: m.ready, health: store.health, total: m.all.count, shown: m.visible.count,
+                               searching: m.searching)
+        if Logic.showsRefreshError(ready: m.ready, health: store.health, total: m.all.count) {
+            // التحديث فشل والإشعارات القديمة باقية تحته
+            AnyView(AdminPageStateCard(.error(L10n.t("تعذّر تحديث الإشعارات", "Couldn't refresh notifications"),
+                                              message: L10n.t("تعرض آخر إشعارات وصلت.", "Showing the last notifications received."),
+                                              retry: reload, lastGood: store.health.lastGood)))
+                .adminPageRow(top: DS.Spacing.xs)
+        }
+        switch state {
+        case .skeleton:
+            AnyView(DSCardSkeleton(style: .notice, count: 5,
+                                   label: L10n.t("جارٍ تحميل الإشعارات…", "Loading notifications…")))
+                .adminPageRow(top: DS.Hub.stackSpacing)
+        case .failed:
+            AnyView(AdminPageStateCard(.error(L10n.t("تعذّر تحميل الإشعارات", "Couldn't load notifications"),
+                                              message: L10n.t("تحقّق من اتصالك ثم أعد المحاولة.",
+                                                              "Check your connection, then try again."),
+                                              retry: reload)))
+                .adminPageRow(top: DS.Spacing.xs)
+        case .empty:
+            AnyView(AdminPageStateCard(.empty(L10n.t("لا إشعارات", "No notifications"),
+                                              message: L10n.t("ستصلك هنا تنبيهات الطلبات والنظام.",
+                                                              "Request and system alerts will arrive here."))))
+                .adminPageRow(top: DS.Spacing.xs)
+        case .filteredEmpty(let searching):
+            AnyView(filteredEmpty(searching: searching))
+                .adminPageRow(top: DS.Spacing.xs)
+        case .list:
+            ForEach(m.sections, id: \.id) { section in
+                let items = section.indices.map { m.visible[$0] }
+                DSDayHeader(title: sectionTitle(section), count: items.count)
+                    .dsCardCascade(1, appeared: appeared)
+                    .adminPageRow(top: DS.Hub.stackSpacing, bottom: DSNoticeMetrics.headerGap)
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    cell(item, position: DSGroupPosition(index: index, count: items.count), now: section.kind == .now)
                 }
             }
         }
     }
 
-    private func row(_ item: AdminNoticeItem, position: DSGroupPosition) -> some View {
+    private func sectionTitle(_ section: AdminNoticeLogic.Section) -> String {
+        switch section.kind {
+        case .now:          return L10n.t("يحتاج إجراء الآن", "Needs action now")
+        case .day(let day): return DSDayBuckets.title(for: day)
+        }
+    }
+
+    /// بحث بلا نتيجة: «لا نتائج» + «مسح البحث»؛ فلتر بلا نتيجة: «لا شيء في هذا الفلتر» + «عرض الكل»
+    private func filteredEmpty(searching: Bool) -> some View {
+        Group {
+            if searching {
+                AdminPageStateCard(.empty(L10n.t("لا نتائج", "No results"),
+                                          message: L10n.t("جرّب كلمة أخرى", "Try another word"),
+                                          actionTitle: L10n.t("مسح البحث", "Clear search"),
+                                          action: { searchText = "" }))
+            } else {
+                AdminPageStateCard(.empty(L10n.t("لا شيء في هذه التصفية", "Nothing in this filter"),
+                                          message: L10n.t("«\(filter.title)» فارغ الآن.", "«\(filter.title)» is empty now."),
+                                          actionTitle: L10n.t("عرض الكل", "Show all"),
+                                          action: { withAnimation(reduceMotion ? nil : DS.Anim.snappy) { filter = .all } }))
+            }
+        }
+    }
+
+    // MARK: الصفّ
+
+    private func rowActions(_ item: AdminNoticeItem) -> [AdminNoticeRowAction] {
+        guard item.notificationId != nil else { return [] }
+        return item.isUnread ? [.read, .delete] : [.delete]
+    }
+
+    private func perform(_ action: AdminNoticeRowAction, _ item: AdminNoticeItem) {
+        guard let id = item.notificationId else { return }
+        switch action {
+        case .read:   markRead([id])
+        case .delete: Task { await AdminNoticeWrites.delete([id], notificationVM) }
+        }
+    }
+
+    /// الخلية: الضغط يفتح التفاصيل ويعلّم الإشعار مقروءاً (أو يحدّد في وضع التحديد)، السحب «مقروء» من البداية و«حذف» من
+    /// الطرف، والضغط المطوّل القائمة نفسها (spec A.15)
+    private func cell(_ item: AdminNoticeItem, position: DSGroupPosition, now: Bool) -> some View {
         let picked = item.notificationId.map(selectedIds.contains) ?? false
-        return AdminNoticeRow(item: item, selecting: isSelecting, picked: picked, position: position, onTap: { tap(item) })
-            .dsCardCascade(1, appeared: appeared)
-            .adminPageRow(top: 0, bottom: 0)
+        let actions = isSelecting ? [] : rowActions(item)
+        return AnyView(AdminNoticeListRow(item: item, position: position, now: now, selecting: isSelecting,
+                                          picked: picked, actions: actions,
+                                          onTap: { tap(item) },
+                                          perform: { perform($0, item) },
+                                          onSelfChild: handleSelfChild))
+            .contentShape(Rectangle())
+            .onTapGesture { tap(item) }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                if let id = item.notificationId {
-                    Button(role: .destructive) {
-                        Task { await notificationVM.deleteNotification(id: id) }
-                    } label: {
-                        Label(L10n.t("حذف", "Delete"), systemImage: "trash.fill")
+                if actions.contains(.delete) {
+                    Button(role: .destructive) { perform(.delete, item) } label: {
+                        Label(AdminNoticeRowAction.delete.title, systemImage: AdminNoticeRowAction.delete.icon)
                     }
                 }
             }
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                if let id = item.notificationId, item.isUnread {
-                    Button {
-                        Task { await notificationVM.markNotificationAsRead(id: id) }
-                    } label: {
-                        Label(L10n.t("مقروء", "Read"), systemImage: "envelope.open")
+                if actions.contains(.read) {
+                    Button { perform(.read, item) } label: {
+                        Label(AdminNoticeRowAction.read.title, systemImage: AdminNoticeRowAction.read.icon)
                     }
                     .tint(DS.Color.primaryFill)
                 }
             }
+            .contextMenu {
+                ForEach(actions) { action in
+                    Button(role: action == .delete ? .destructive : nil) { perform(action, item) } label: {
+                        Label(action.title, systemImage: action.icon)
+                    }
+                }
+            }
+            .dsCardCascade(1, appeared: appeared)
+            .adminPageRow(top: 0, bottom: 0)
     }
 
     /// الضغط: في التحديد يختار، وإلا يفتح التفاصيل ويعلّم الإشعار مقروءاً
@@ -592,59 +872,86 @@ struct AdminNotificationsPage: View {
             }
             return
         }
-        let n = notificationVM.notifications.first { $0.id == id }
-        detail = n
-        if item.isUnread { Task { await notificationVM.markNotificationAsRead(id: id) } }
+        detail = notificationVM.notifications.first { $0.id == id }
+        if item.isUnread { markRead([id]) }
     }
 
-    private var noResults: some View {
-        let searching = !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return DSEmptyView(searching ? L10n.t("لا توجد نتائج", "No results") : L10n.t("لا شيء هنا الآن", "Nothing here now"),
-                           message: searching ? L10n.t("جرّب كلمة أخرى", "Try another word")
-                                              : L10n.t("لا شيء في «\(filter.title)»", "Nothing in \(filter.title)"),
-                           actionTitle: filter == .all ? nil : L10n.t("عرض الكل", "Show all"),
-                           actionIcon: Filter.all.icon, style: .compact,
-                           action: filter == .all ? nil : { withAnimation(DS.Anim.snappy) { filter = .all } })
-            .padding(.vertical, DS.Spacing.sm)
-            .frame(maxWidth: .infinity)
-            .adminCard()
-    }
+    // MARK: التحديد
 
-    /// شريط التحديد: تحديد الكل · العدد · مقروء · حذف
-    private func selectionBar(_ shown: [AdminNoticeItem]) -> some View {
-        let all = Set(shown.compactMap(\.notificationId))
-        return HStack(spacing: DS.Spacing.sm) {
-            DSChipButton(L10n.t("تحديد الكل", "Select all"), icon: "checkmark.circle.fill") {
-                withAnimation(DS.Anim.quick) { selectedIds = selectedIds == all ? [] : all }
-            }
-            Text(L10n.t("\(selectedIds.count) محدّد", "\(selectedIds.count) selected"))
-                .dsFieldFont(.chip)
-                .foregroundColor(DS.Color.fieldValue)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            Spacer(minLength: 0)
-            DSChipButton(L10n.t("مقروء", "Read"), icon: "envelope.open.fill") {
-                let ids = selectedIds
-                withAnimation(DS.Anim.quick) { selectedIds.removeAll(); isSelecting = false }
-                Task { await notificationVM.markNotificationsAsRead(ids: ids) }
-            }
-            .disabled(selectedIds.isEmpty)
-            .opacity(selectedIds.isEmpty ? DS.Opacity.disabled : 1)
-            DSChipButton(L10n.t("حذف", "Delete"), icon: "trash.fill", tint: DS.Color.error) {
-                showDeleteConfirm = true
-            }
-            .disabled(selectedIds.isEmpty)
-            .opacity(selectedIds.isEmpty ? DS.Opacity.disabled : 1)
+    private func toggleSelect() {
+        withAnimation(DS.Anim.quick) {
+            isSelecting.toggle()
+            if !isSelecting { selectedIds.removeAll() }
         }
-        .adminCard(padding: DS.Spacing.md)
+    }
+
+    /// شريط وضع التحديد (spec C.15): «تحديد الكل» · «مقروء (3)» · «حذف (3)» (يسأل قبل الحذف) — أبيض بخطّ رفيع فوقه،
+    /// والزرّان تحت «تحديد الكل» إن ضاق السطر (الخط الكبير)
+    private func selectionBar(_ m: Model) -> some View {
+        let shown = Set(m.visible.compactMap(\.notificationId))
+        let allPicked = !shown.isEmpty && shown.isSubset(of: selectedIds)
+        let picked = selectedIds.intersection(m.noticeIds)
+        let selectAll = Button {
+            withAnimation(DS.Anim.quick) {
+                if allPicked { selectedIds.subtract(shown) } else { selectedIds.formUnion(shown) }
+            }
+        } label: {
+            Text(allPicked ? L10n.t("إلغاء تحديد الكل", "Deselect all") : L10n.t("تحديد الكل", "Select all"))
+                .dsFont(.button)
+                .foregroundColor(AppSection.admin.ink)
+                .lineLimit(1)
+                .frame(minHeight: DS.Icon.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
+        .disabled(shown.isEmpty)
+        let read = DSButton(Logic.countedVerb(L10n.t("مقروء", "Read"), picked.count), icon: "envelope.open.fill",
+                            fullWidth: false) { markSelectedRead(picked) }
+            .disabled(picked.isEmpty)
+        let delete = DSButton(Logic.countedVerb(L10n.t("حذف", "Delete"), picked.count), icon: "trash.fill",
+                              role: .destructive, fullWidth: false) { showDeleteConfirm = true }
+            .disabled(picked.isEmpty)
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: DS.Spacing.md) {
+                selectAll.fixedSize()
+                Spacer(minLength: 0)
+                read.fixedSize()
+                delete.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+                selectAll
+                HStack(spacing: DS.Spacing.md) {
+                    read
+                    delete
+                }
+            }
+        }
+        .dsPageMargin()
+        .padding(.vertical, DS.Spacing.sm)
+        .background(DS.Hub.background.ignoresSafeArea(edges: .bottom))
+        .overlay(alignment: .top) { AdminRowDivider() }
+    }
+
+    private func markSelectedRead(_ ids: Set<UUID>) {
+        withAnimation(DS.Anim.quick) { selectedIds.removeAll(); isSelecting = false }
+        markRead(ids)
     }
 
     private func deleteSelected() {
-        let ids = selectedIds
+        let ids = selectedIds.intersection(Set(notificationVM.notifications.map(\.id)))
         withAnimation(DS.Anim.quick) { selectedIds.removeAll(); isSelecting = false }
-        Task { await notificationVM.deleteNotifications(ids: ids) }
+        Task { await AdminNoticeWrites.delete(ids, notificationVM) }
     }
+
+    private func markRead(_ ids: Set<UUID>) {
+        Task { await AdminNoticeWrites.markRead(ids, notificationVM) }
+    }
+
+    private func reload() {
+        Task { await store.load(using: notificationVM) }
+    }
+
+    // MARK: التفاصيل
 
     /// المرسل — المصدر الواحد مع مركز الإشعارات (الصفوف القديمة: اسم المنفّذ أو «الإدارة»)
     private func sender(_ n: AppNotification, style: (icon: String, tint: Color)) -> NotificationSenderInfo {
@@ -653,29 +960,53 @@ struct AdminNotificationsPage: View {
                                               member: { memberVM.member(byId: $0) })
     }
 
-    private func categoryTitle(_ n: AppNotification, _ category: AdminNotices.Category) -> (title: String, icon: String) {
+    private func categoryTitle(_ n: AppNotification, _ category: AdminNotices.Category) -> String {
         switch category {
         case .action:
-            return (AdminNotices.securityKinds.contains(n.kind) ? L10n.t("تنبيه أمني", "Security alert")
-                                                                : L10n.t("طلب", "Request"),
-                    Filter.action.icon)
-        case .changes: return (Filter.changes.title, Filter.changes.icon)
-        case .team:    return (Filter.team.title, Filter.team.icon)
-        case .system:  return (Filter.system.title, Filter.system.icon)
+            return AdminNotices.securityKinds.contains(n.kind) ? L10n.t("تنبيه أمني", "Security alert")
+                                                               : L10n.t("طلب", "Request")
+        case .changes: return Filter.changes.title
+        case .team:    return Filter.team.title
+        case .system:  return Filter.system.title
         }
     }
 
-    private func detailBox(_ n: AppNotification) -> some View {
+    private func detailBox(_ n: AppNotification) -> AnyView {
         let category = AdminNotices.category(of: n, me: authVM.currentUser?.id) ?? .system
         let style = AdminNoticeRoutes.style(n, category)
         let cat = categoryTitle(n, category)
+        // تغييرات الأعضاء ونشاط الفريق: المربّع «بلا تكرار» و«فيه خطأ؟» داخله (اختيار المالك ٢٠٢٦-١١-٠٦)؛ الطلبات والنظام
+        // يبقون في مربّع الإشعار بقرارهم
+        if category == .changes || category == .team {
+            let notice = allItems.first { $0.notificationId == n.id }?.selfChild
+            return AnyView(AdminNoticeDetailBox(
+                notification: n, categoryTitle: cat, icon: style.icon, notice: notice,
+                onClose: { detail = nil },
+                onOpenProfile: { id in
+                    detail = nil
+                    afterBox { selfChildFlow.sheet = AdminMemberSheetContext(ids: [id], start: 0) }
+                })
+                .environmentObject(memberVM)
+                .environmentObject(notificationVM)
+                // «طلب تغيير الصورة» تحت بطاقة الصورة يقرأ الصلاحية
+                .environmentObject(authVM))
+        }
+        return AnyView(requestDetailBox(n, style: style, cat: cat))
+    }
+
+    /// بعد إغلاق المربّع — لا تتداخل حركتاهما
+    private func afterBox(_ run: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + DSMotion.boxHandoff, execute: run)
+    }
+
+    private func requestDetailBox(_ n: AppNotification, style: (icon: String, tint: Color), cat: String) -> some View {
         let subject = NotificationDetailParts.subjectMember(n, member: { memberVM.member(byId: $0) })
         let body = n.body.trimmingCharacters(in: .whitespacesAndNewlines)
         return NotificationDetailBox(
             notification: n,
             isStaff: true,
             sender: sender(n, style: style),
-            kindLabel: cat.title,
+            kindLabel: cat,
             kindIcon: style.icon,
             time: AdminNoticeRow.relative(n.createdDate),
             quote: body.isEmpty ? nil : AnyView(Text(body).dsFont(.body).foregroundColor(DS.Color.textPrimary)),
@@ -687,14 +1018,14 @@ struct AdminNotificationsPage: View {
             onOpenRequest: { rid in
                 detail = nil
                 // «الوارد» على الطلب نفسه — نفس مسار نقر الإشعار في «اليوم»
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                afterBox {
                     NotificationCenter.default.post(name: .openAdminReviewForKind, object: nil,
                                                     userInfo: ["kind": n.kind, "request_id": rid.uuidString])
                 }
             },
             onOpenNews: { nid in
                 detail = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                afterBox {
                     NotificationCenter.default.post(name: .openNewsPost, object: nil, userInfo: ["id": nid])
                 }
             }
@@ -705,71 +1036,10 @@ struct AdminNotificationsPage: View {
     }
 }
 
-// MARK: - الصفّ
+// MARK: - الوقت
 
-/// صفّ مختصر في بطاقة يومه (`DSNoticeRow`): مربّع النوع بلونه · العنوان وفي طرفه الوقت (ونقطة «جديد» الذهبية) · السطر —
-/// وزرّ البيت الواحد لما يحتاج إجراء في طرف السطر. غير المقروء عنوانه أعرض؛ المحدَّد بتعبئة خفيفة
-struct AdminNoticeRow: View {
-    let item: AdminNoticeItem
-    let selecting: Bool
-    let picked: Bool
-    var position: DSGroupPosition = .single
-    let onTap: () -> Void
-
-    private var showsCircle: Bool { selecting && item.notificationId != nil }
-
-    var body: some View {
-        content
-            .dsGroupedRow(position, radius: DS.Hub.cardRadius,
-                          dividerInset: DSNoticeMetrics.dividerInset(icon: item.rich == nil ? DS.Hub.iconSquare : DS.Icon.avatar,
-                                                                     selecting: item.rich == nil && showsCircle),
-                          highlight: selecting && picked ? AppSection.admin.ink.opacity(DS.Opacity.tintFill) : nil)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: onTap)
-            // بزرّ: يبقى الزرّ عنصراً مستقلاً للقارئ الصوتي
-            .accessibilityElement(children: item.button == nil || selecting ? .combine : .contain)
-            .accessibilityValue(item.isUnread ? L10n.t("جديد", "New") : "")
-            .accessibilityAddTraits(item.notificationId != nil ? .isButton : [])
-            .accessibilityAddTraits(selecting && picked ? .isSelected : [])
-    }
-
-    /// «تغييرات الأعضاء» بالصفّ الجديد (المرسل · العنوان · «قبل ← بعد»)، والباقي بالصفّ المختصر كما كان
-    private var content: AnyView {
-        if let rich = item.rich {
-            return AnyView(NotificationRowContent(
-                title: item.title, sender: rich.sender, time: Self.relative(item.date), unread: item.isUnread,
-                changes: rich.changes, showsInlineChanges: true, isSelecting: showsCircle, isSelected: picked,
-                tint: AppSection.admin.ink,
-                bodyText: AnyView(DSNoticeText(text: item.subtitle, unread: item.isUnread, lines: 1))))
-        }
-        return AnyView(compactRow)
-    }
-
-    private var compactRow: some View {
-        DSNoticeRow(title: item.title, time: item.pinned ? "" : Self.relative(item.date), unread: item.isUnread,
-                    tint: AppSection.admin.ink) {
-            HStack(spacing: DSNoticeMetrics.selectGap) {
-                if showsCircle {
-                    DSNoticeSelectCircle(picked: picked, tint: AppSection.admin.ink)
-                }
-                AdminIconSquare(symbol: item.icon, tint: item.tint)
-            }
-        } detail: {
-            if !item.subtitle.isEmpty {
-                // الحالة المشتقة (الآن) نصّها كاملاً حتى ٣ أسطر، والإشعار سطر واحد
-                DSNoticeText(text: item.subtitle, unread: item.isUnread || item.pinned, lines: item.pinned ? 3 : 1)
-            }
-        } accessory: {
-            if let button = item.button, !selecting {
-                AdminTapWrap(tap: .page { AdminNoticeRoutes.page(item.target) },
-                             label: AnyView(AdminPillLabel(title: button, style: item.pinned ? .navy : .soft)
-                                .dsTapArea(width: DS.Icon.tapTarget, height: DS.Hub.pillHeight)),
-                             accessibilityLabel: "\(button): \(item.title)")
-                    .fixedSize()
-            }
-        }
-    }
-
+/// «قبل 5 دقائق» (قسم «يحتاج إجراء الآن» والمربّعات) و«9:05 ص» (صفوف الأيام — اليوم في عنوان قسمه). أرقام لاتينية
+enum AdminNoticeRow {
     private static let formatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
         f.unitsStyle = .short
@@ -779,5 +1049,18 @@ struct AdminNoticeRow: View {
     static func relative(_ date: Date) -> String {
         formatter.locale = L10n.isArabic ? Locale(identifier: "ar") : Locale(identifier: "en_US")
         return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private static var clockFormatter: (arabic: Bool, formatter: DateFormatter)?
+
+    static func clock(_ date: Date) -> String {
+        let arabic = L10n.isArabic
+        if clockFormatter?.arabic != arabic {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: arabic ? "ar_KW@numbers=latn" : "en_US")
+            f.setLocalizedDateFormatFromTemplate("jmm")
+            clockFormatter = (arabic, f)
+        }
+        return clockFormatter?.formatter.string(from: date) ?? ""
     }
 }

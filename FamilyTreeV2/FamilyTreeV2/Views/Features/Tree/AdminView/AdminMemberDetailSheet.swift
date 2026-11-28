@@ -24,6 +24,9 @@ struct AdminMemberDetailSheet: View {
     let deathOnly: Bool
     /// حالة الوفاة التي فُتح عليها المربّع («إلغاء» بلا تعديل لا يسأل — مثل مربّع الوفاة في شجرة النساء)
     private let startDeceased: Bool
+    /// نقد V3 م-ج١: سجلّك أنت من كرت العضو — «النسب» للاطلاع (الأب نصّاً، الأبناء بلا ترتيب ولا إضافة ولا تعديل)،
+    /// كما أوامر العائلة مقفولة في الكرت على ورقتك. غير الكرت (الشجرة، حسابي…) كما كان
+    let lineageLocked: Bool
 
     // MARK: - States
     @State private var selectedPhoneCountry: KuwaitPhone.Country
@@ -70,6 +73,8 @@ struct AdminMemberDetailSheet: View {
     // «حالة الحساب»: تجميد / حظر الرقم وإلغاؤهما من هنا (طلب المالك ٢٠٢٦-١٠-١٠)
     private enum AccountAction: Identifiable { case activate, freeze, unfreeze, ban, unban; var id: Self { self } }
     @State private var pendingAccountAction: AccountAction?
+    /// سبب الإيقاف الاختياري — يصل للعضو في إشعاره (كورقة العضو `AdminMemberSheet`)
+    @State private var suspendReason = ""
     @State private var accountBusy: AccountAction?
     /// حالة الحساب هنا — المجمّد قد لا يكون في قائمة الأعضاء المحمّلة، فلا يُقرأ منها
     @State private var accountStatus: FamilyMember.MemberStatus?
@@ -141,10 +146,11 @@ struct AdminMemberDetailSheet: View {
 
     private var isMonitorOnly: Bool { authVM.currentUser?.role == .monitor }
 
-    init(member: FamilyMember, showsAccount: Bool = true, deathOnly: Bool = false) {
+    init(member: FamilyMember, showsAccount: Bool = true, deathOnly: Bool = false, lineageLocked: Bool = false) {
         self.member = member
         self.showsAccount = showsAccount
         self.deathOnly = deathOnly
+        self.lineageLocked = lineageLocked
         self.startDeceased = deathOnly || (member.isDeceased ?? false)
         self._currentAvatarURL = State(initialValue: member.avatarUrl)
         self._accountStatus = State(initialValue: member.status)
@@ -200,13 +206,19 @@ struct AdminMemberDetailSheet: View {
         DSComposer(
             title: deathOnly ? L10n.t("تسجيل الوفاة", "Record death") : L10n.t("بيانات العضو", "Member details"),
             subtitle: member.displayFullName,
-            icon: deathOnly ? "heart.text.square.fill" : "person.badge.shield.checkmark.fill",
+            icon: deathOnly ? "leaf.fill" : "person.badge.shield.checkmark.fill",
             tint: deathOnly || member.isDeceased == true ? DS.Color.textSecondary : DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
             actionIcon: "checkmark",
             canSubmit: deathOnly || (isPhoneValid && isFirstNameValid),
             isBusy: isSaving,
             hasUnsavedChanges: hasUnsavedChanges,
+            // «حذف العضو نهائياً» سطراً أحمر هادئاً تحت «حفظ/إلغاء» (تذييل المربّعات الموحّد) — التأكيد كما هو
+            extraActions: (!deathOnly && showsAccount && !isMonitorOnly && canDeleteMember)
+                ? [DSComposerAction(id: "delete-member", title: L10n.t("حذف", "Delete"),
+                                    icon: "trash", role: .destructive) { showDeleteConfirmation = true }]
+                : [],
+            extraInline: true,
             onSubmit: saveAction,
             onCancel: { dismiss() }
         ) {
@@ -219,7 +231,6 @@ struct AdminMemberDetailSheet: View {
                 if !isMonitorOnly { lineageCard.dsStaggerIn(3) }
                 bioCard.dsStaggerIn(4)
                 if showsAccount && showsAccountCard { accountCard.dsStaggerIn(5) }
-                if showsAccount, !isMonitorOnly, canDeleteMember { deleteButton.dsStaggerIn(6) }
             }
         }
             // كل نوافذ التعديل المباشر ألواح بمنتصف الشاشة (طلب المالك)
@@ -239,23 +250,11 @@ struct AdminMemberDetailSheet: View {
                     }
                 )
             }
-            .fullScreenCover(isPresented: $showAddSonSheet) {
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    AddSonByAdminSheet(parent: member)
-                }
-                .background(ClearPresentationBackground())
+            .dsCenterBox(isPresented: $showAddSonSheet) {
+                AddSonByAdminSheet(parent: member)
             }
-            .fullScreenCover(item: $childToEdit) { child in
-                DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                    AddSonByAdminSheet(parent: member, editingChild: child)
-                }
-                .background(ClearPresentationBackground())
-            }
-            .transaction { t in
-                // بلا انزلاق من الأسفل — الألواح تظهر في المنتصف
-                if showAddSonSheet || childToEdit != nil {
-                    t.disablesAnimations = true
-                }
+            .dsCenterBox(item: $childToEdit) { child in
+                AddSonByAdminSheet(parent: member, editingChild: child)
             }
             .onAppear { setupLocalChildren() }
             .task {
@@ -274,6 +273,10 @@ struct AdminMemberDetailSheet: View {
                      isPresented: Binding(get: { pendingAccountAction != nil },
                                           set: { if !$0 { pendingAccountAction = nil } }),
                      presenting: pendingAccountAction) { action in
+                if action == .freeze {
+                    TextField(L10n.t("سبب الإيقاف (اختياري)", "Reason (optional)"), text: $suspendReason)
+                        .dsAlertField()
+                }
                 Button(accountActionButton(action),
                        role: action == .freeze || action == .ban ? .destructive : nil) {
                     performAccountAction(action)
@@ -473,7 +476,11 @@ struct AdminMemberDetailSheet: View {
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() },
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
-        DSFormCard(title, icon: icon, color: color, trailing: trailing, content: content)
+        // قسم المربّعات الموحّد (`DSComposerSection`، طلب المالك ٢٠٢٦-١١-١١) بدل بطاقة النموذج القديمة
+        DSComposerSection(title: title, icon: icon, tint: color, index: 0,
+                          accessory: Trailing.self == EmptyView.self ? nil : AnyView(trailing())) {
+            content()
+        }
     }
 
     /// الاسم الأول موجود والاسم الكامل يبدأ فيه
@@ -493,8 +500,29 @@ struct AdminMemberDetailSheet: View {
         if PersonName.clean(updated) != PersonName.clean(fullName) { fullName = updated }
     }
 
-    private func fieldBox<Content: View>(_ label: String, @ViewBuilder content: @escaping () -> Content) -> some View {
-        DSFieldBox(label, content: content)
+    /// صفّ الحقل الموحّد: رمز + عنوان صغير + الحقل في صندوق الصفوف (نفس `DSComposerField`)
+    private func fieldBox<Content: View>(_ label: String, icon: String,
+                                         @ViewBuilder content: @escaping () -> Content) -> some View {
+        HStack(spacing: DS.Spacing.sm) {
+            DSFieldIcon(name: icon).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                Text(label)
+                    .dsFieldFont(.label)
+                    .foregroundColor(DS.Color.tileLabel)
+                content()
+                    .dsFieldFont(.fieldValue)
+                    .foregroundColor(DS.Color.tileValue)
+            }
+            // الرمز الواحد في طرف الخلية: قلم = تُكتب (الهاتف له قائمته، فبلا قلم)
+            if icon != "phone.fill" {
+                Image(systemName: "pencil")
+                    .dsGlyph(DS.Glyph.sm)
+                    .foregroundColor(chromeInk)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(minHeight: DSBox.fieldMinHeight)
+        .dsRowBox()
     }
 
     private func toggleBox(_ title: String, isOn: Binding<Bool>, tint: Color) -> some View {
@@ -505,9 +533,8 @@ struct AdminMemberDetailSheet: View {
     private var basicsCard: some View {
         adminCard(L10n.t("البيانات الأساسية", "Basic Info"),
                   icon: "person.text.rectangle.fill", color: chromeInk) {
-            fieldBox(L10n.t("الاسم الأول", "First Name")) {
+            fieldBox(L10n.t("الاسم الأول", "First Name"), icon: "person.fill") {
                 TextField(L10n.t("الاسم الأول", "First Name"), text: $firstName)
-                    .padding(.vertical, DS.Spacing.sm)
                     .onChange(of: firstName) { _ in applyFirstNameToFullName() }
             }
             Text(L10n.t("للأسماء المركبة مثل زين العابدين اكتبها كاملة هنا",
@@ -515,10 +542,9 @@ struct AdminMemberDetailSheet: View {
                 .dsFont(.footnote)
                 .foregroundColor(DS.Color.textTertiary)
 
-            fieldBox(L10n.t("الاسم الكامل", "Full Name")) {
+            fieldBox(L10n.t("الاسم الكامل", "Full Name"), icon: "person.text.rectangle") {
                 TextField(L10n.t("الاسم الكامل", "Full Name"), text: $fullName, axis: .vertical)
                     .lineLimit(1...3)
-                    .padding(.vertical, DS.Spacing.sm)
                     .onChange(of: fullName) { _ in
                         if fullName.count > 100 { fullName = String(fullName.prefix(100)) }
                     }
@@ -532,7 +558,7 @@ struct AdminMemberDetailSheet: View {
 
             // رأس الشجرة: اسمه هو العائلة نفسها — لا حقل «اسم العائلة» (طلب المالك)
             if !isFamilyRoot {
-                fieldBox(L10n.t("اسم العائلة", "Family Name")) {
+                fieldBox(L10n.t("اسم العائلة", "Family Name"), icon: "person.2.fill") {
                     TextField(L10n.t("اسم العائلة", "Family Name"), text: $familyName)
                         .onChange(of: familyName) { _ in
                             if familyName.count > 50 { familyName = String(familyName.prefix(50)) }
@@ -542,7 +568,7 @@ struct AdminMemberDetailSheet: View {
 
             // المتوفّى بلا رقم هاتف (طلب المالك)
             if !isDeceased {
-                fieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
+                fieldBox(L10n.t("رقم الهاتف", "Phone Number"), icon: "phone.fill") {
                     DSPhoneField(
                         country: $selectedPhoneCountry,
                         digits: $phoneNumber,
@@ -604,27 +630,25 @@ struct AdminMemberDetailSheet: View {
                     Text(L10n.t("الأب في الشجرة", "Father in Tree"))
                         .dsFont(.sectionTitle)
                         .foregroundColor(DS.Color.fieldValue)
-                    Button { showFatherPicker = true } label: {
-                        HStack(spacing: DS.Spacing.sm) {
-                            if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
-                                Text(father.displayFullName)
-                                    .dsFieldFont(.rowTitle)
-                                    .foregroundColor(DS.Color.textPrimary)
-                                    .dsNameLines()
-                            } else {
-                                Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
-                                    .dsFieldFont(.fieldValue)
-                                    .foregroundColor(DS.Color.textSecondary)
+                    if lineageLocked {
+                        // م-ج١: على سجلّك — الأب نصّاً بلا منتقٍ
+                        fatherLabel
+                            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget, alignment: .leading)
+                            .dsRowBox()
+                    } else {
+                        Button { showFatherPicker = true } label: {
+                            HStack(spacing: DS.Spacing.sm) {
+                                fatherLabel
+                                Spacer(minLength: 0)
+                                DSChevron()
                             }
-                            Spacer(minLength: 0)
-                            DSChevron()
+                            .frame(minHeight: DS.Icon.tapTarget)
+                            // صندوق صفوف المربّعات الموحّد
+                            .dsRowBox()
+                            .contentShape(Rectangle())
                         }
-                        .frame(minHeight: DS.Icon.tapTarget)
-                        // صندوق صفوف المربّعات الموحّد
-                        .dsRowBox()
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
 
                 if selectedFatherId != member.fatherId, descendantCount > 0 {
@@ -644,7 +668,7 @@ struct AdminMemberDetailSheet: View {
                     .dsFont(.sectionTitle)
                     .foregroundColor(DS.Color.fieldValue)
                 Spacer()
-                if localChildren.count > 1 {
+                if localChildren.count > 1 && !lineageLocked {
                     // «ترتيب» / «تم» — الشريحة الموحّدة (مساحة ضغط ٤٤ فيها)
                     DSChipButton(isSortingChildren ? L10n.t("تم", "Done") : L10n.t("ترتيب", "Sort"),
                                  icon: isSortingChildren ? "checkmark" : "arrow.up.arrow.down",
@@ -663,13 +687,38 @@ struct AdminMemberDetailSheet: View {
                     childRow(child: child, index: index)
                 }
 
-                // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة، والإجراء الرئيسي «حفظ» أسفل المربّع
-                DSButton(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
-                                               : L10n.t("إضافة ابن آخر", "Add Another Child"),
-                         icon: "plus.circle.fill", role: .cancel) {
-                    showAddSonSheet = true
+                if lineageLocked {
+                    // م-ج١: سطر القفل نفسه في الكرت — لماذا لا أزرار هنا
+                    Text(L10n.t("هذا سجلّك: الأب والأبناء يغيّرهم غيرك من الإدارة.",
+                                "This is your record: another admin changes your father and children."))
+                        .dsFont(.subtitle)
+                        .foregroundColor(DS.Color.textTertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    // الزرّ الواحد — ثانوي (رمادي) داخل البطاقة، والإجراء الرئيسي «حفظ» أسفل المربّع
+                    DSButton(localChildren.isEmpty ? L10n.t("إضافة ابن", "Add Child")
+                                                   : L10n.t("إضافة ابن آخر", "Add Another Child"),
+                             icon: "plus.circle.fill", role: .cancel) {
+                        showAddSonSheet = true
+                    }
                 }
             }
+        }
+    }
+
+    /// اسم الأب المختار أو «رأس شجرة (غير مرتبط)»
+    @ViewBuilder
+    private var fatherLabel: some View {
+        if let fId = selectedFatherId, let father = memberVM.member(byId: fId) {
+            Text(father.displayFullName)
+                .dsFieldFont(.rowTitle)
+                .foregroundColor(DS.Color.textPrimary)
+                .dsNameLines()
+        } else {
+            Text(L10n.t("رأس شجرة (غير مرتبط)", "Tree root (unlinked)"))
+                .dsFieldFont(.fieldValue)
+                .foregroundColor(DS.Color.textSecondary)
         }
     }
 
@@ -707,7 +756,7 @@ struct AdminMemberDetailSheet: View {
                     .foregroundColor(DS.Color.textPrimary)
                     .lineLimit(1)
                 if let birth = child.birthDate, !birth.isEmpty {
-                    Text(birth)
+                    Text(DateHelper.displayDate(birth) ?? birth)
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textSecondary)
                 }
@@ -748,7 +797,7 @@ struct AdminMemberDetailSheet: View {
                         .accessibilityLabel(L10n.t("حذف \(child.firstName)", "Delete \(child.firstName)"))
                     }
                 }
-            } else {
+            } else if !lineageLocked {
                 DSChevron()
             }
         }
@@ -756,10 +805,11 @@ struct AdminMemberDetailSheet: View {
         // صندوق صفوف المربّعات الموحّد
         .dsRowBox()
         .contentShape(Rectangle())
-        .onTapGesture { if !isSortingChildren { childToEdit = child } }
+        // م-ج١: على سجلّك الأبناء للاطلاع — لا تعديل ولا حذف من هنا
+        .onTapGesture { if !isSortingChildren && !lineageLocked { childToEdit = child } }
         // القارئ الصوتي: خارج الترتيب الصف كله زر «تعديل»؛ في الترتيب تبقى أزراره منفصلة
         .accessibilityElement(children: isSortingChildren ? .contain : .combine)
-        .accessibilityAddTraits(isSortingChildren ? [] : .isButton)
+        .accessibilityAddTraits(isSortingChildren || lineageLocked ? [] : .isButton)
     }
 
     /// قرص أسهم الترتيب وزرّ الحذف (قرص الصفّ)، وفرقه عن مساحة الضغط ٤٤
@@ -844,7 +894,7 @@ struct AdminMemberDetailSheet: View {
         (accountStatus == nil || accountStatus == .pending) && !savedPhone.isEmpty && member.role != .pending
     }
 
-    /// شارة الحالة الرسمية في رأس البطاقة: حساب موقوف · عضو مسجّل (له حساب دخول) · مقيّد في الشجرة
+    /// شارة الحالة الرسمية في رأس البطاقة: حساب موقوف · عضو مسجّل (له حساب دخول) · بدون حساب
     /// («مفعّل / بانتظار التفعيل» تقسيم تاريخي لا يُعرض)
     private var accountChip: (text: String, tint: Color)? {
         if isFrozen { return (AdminMemberStatus.frozen.title, AdminMemberStatus.frozen.tint) }
@@ -864,7 +914,7 @@ struct AdminMemberDetailSheet: View {
             return L10n.t("طلب انضمام قيد المراجعة — القرار من «الوارد».", "A join request under review — decide in the Inbox.")
         }
         return canActivate
-            ? L10n.t("يتيح له الدخول برقمه فيصير «عضواً مسجّلاً».", "Lets them sign in with their number.")
+            ? L10n.t("يتيح له الدخول برقمه ليصبح «عضواً مسجّلاً».", "Lets them sign in with their number.")
             : nil
     }
     /// منع الأرقام للمالك وحده (نفس صفحة «الأرقام الممنوعة من التسجيل» وصلاحية السيرفر)
@@ -907,6 +957,7 @@ struct AdminMemberDetailSheet: View {
                         } else {
                             DSButton(L10n.t("إيقاف الحساب", "Suspend"), icon: "hand.raised.fill",
                                      tint: DS.Color.info, isLoading: accountBusy == .freeze) {
+                                suspendReason = ""
                                 pendingAccountAction = .freeze
                             }
                         }
@@ -980,8 +1031,8 @@ struct AdminMemberDetailSheet: View {
     private func accountActionMessage(_ action: AccountAction) -> String {
         switch action {
         case .activate: return L10n.t("سيتمكن من الدخول للتطبيق برقمه.", "They will be able to sign in with their number.")
-        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف.",
-                                    "They won't be able to use the app until the suspension is lifted.")
+        case .freeze: return L10n.t("لن يتمكن من الدخول للتطبيق حتى يُرفع الإيقاف. يصله إشعار بالسبب إن كتبته.",
+                                    "They can't use the app until the suspension is lifted. They're notified, with the reason if you add one.")
         case .unfreeze: return L10n.t("سيتمكن من الدخول للتطبيق مجدداً.", "They will be able to use the app again.")
         case .ban: return L10n.t("لن يتمكن هذا الرقم من التسجيل، ويُوقف حساب صاحبه.",
                                  "This number won't be able to sign up, and its account will be suspended.")
@@ -1023,8 +1074,12 @@ struct AdminMemberDetailSheet: View {
                     break
                 }
                 let target: FamilyMember.MemberStatus = action == .freeze ? .frozen : .active
-                ok = await memberVM.setMemberStatus(memberId: member.id, status: target)
+                // من السيرفر بالسبب وإشعار العضو (`set_member_suspension`) — كورقة العضو والأندرويد
+                let reason = suspendReason.trimmingCharacters(in: .whitespacesAndNewlines)
+                ok = await memberVM.setMemberSuspension(memberId: member.id, suspend: action == .freeze,
+                                                        reason: action == .freeze && !reason.isEmpty ? reason : nil)
                 if ok { withAnimation(DS.Anim.snappy) { accountStatus = target } }
+                else if let msg = memberVM.errorMessage { accountErrorText = msg }
             case .ban:
                 ok = await authVM.banPhone(savedPhone, reason: L10n.t("من «بيانات العضو»: \(member.fullName)",
                                                                       "From Member details: \(member.fullName)"))
@@ -1059,24 +1114,6 @@ struct AdminMemberDetailSheet: View {
         guard canBan, showsAccountCard, !savedPhone.isEmpty else { return }
         let ban = await authVM.activeBan(for: savedPhone)
         withAnimation(DS.Anim.snappy) { activeBan = ban }
-    }
-
-    // MARK: - حذف السجل
-    /// نصّ أحمر صغير في آخر المربّع مع تنبيه تحته — يختلف بالشكل والحجم والمكان عن «حظر الرقم»
-    /// (طلب المالك ٢٠٢٦-١٠-١١، نفس تفريق «حذف الحساب» في الإعدادات) — التأكيد كما هو
-    private var deleteButton: some View {
-        VStack(spacing: DS.Spacing.xs) {
-            DSDangerTextButton(L10n.t("حذف العضو نهائياً", "Delete member permanently")) {
-                showDeleteConfirmation = true
-            }
-            Text(L10n.t("يحذف العضو وكل بياناته من الشجرة، ولا يمكن التراجع عنه.",
-                        "Removes the member and all their data from the tree. This can't be undone."))
-                .dsFont(.footnote)
-                .foregroundColor(DS.Color.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, DS.Spacing.md)
     }
 
     // MARK: - Setup / Validation Helpers
@@ -1392,6 +1429,10 @@ struct AdminMemberDetailSheet: View {
             isSaving = false
             guard !genderLockedByAccount else {
                 selectedGender = member.gender ?? "male"
+                // كان يرجع بصمت فيظنّ الإداري أن الجنس حُفظ (K1)
+                accountErrorText = L10n.t("له حساب في التطبيق — لا يُنقل بين الشجرتين، فبقي الجنس كما هو.",
+                                          "Has an app account — can't be moved between trees, so the gender is unchanged.")
+                accountError = true
                 return
             }
             // الأب يُحفظ قبل النقل لشجرة النساء — لا الاثنان في حفظة واحدة
@@ -1498,13 +1539,32 @@ struct AdminMemberDetailSheet: View {
             if fatherChanged {
                 Log.info("[AdminEdit] 🌳 تعديل الأب: \(capturedFatherId?.uuidString ?? "بدون")")
                 await memberVM.updateMemberFather(memberId: capturedMemberId, fatherId: capturedFatherId, silent: true)
-                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)") }
+                // ت-ج٦: يُسجَّل ثم يُمسح — لا يقرؤه فشل لاحق غير مرتبط
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الأب: \(err)"); memberVM.errorMessage = nil }
             }
             // الجنس نُقل على السيرفر قبل هذا الحفظ (`moveChildGender`) — لا يُكتب العمود مرة ثانية
+            // (احتياط: التغيير يمرّ بالنقل قبل هنا.) «أنثى» لمن له أب لا تُكتب عموداً — السيرفر يرفضها
+            // (`family_tree_men_only`)؛ وأي فشل يظهر للإداري برسالة السيرفر بدل التسجيل فقط (K1)
             if genderChanged && !genderAlreadyMoved {
                 Log.info("[AdminEdit] ⚧ تعديل الجنس: \(capturedGender)")
-                await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)
-                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(err)") }
+                let route = FamilyTreeMenOnly.genderChangeRoute(to: capturedGender, current: member.gender,
+                                                                hasFather: capturedFatherId != nil)
+                var genderError: String?
+                if route == .moveBetweenTrees {
+                    genderError = FamilyTreeMenOnly.title + " — "
+                        + L10n.t("غيّر الجنس من مربّع «الجنس» لتُنقل إلى شجرة النساء.",
+                                 "Change the gender from the Gender box to move her to the women's tree.")
+                } else if route == .plainUpdate {
+                    memberVM.errorMessage = nil
+                    if !(await memberVM.updateMemberGender(memberId: capturedMemberId, gender: capturedGender, silent: true)) {
+                        genderError = memberVM.errorMessage ?? FamilyTreeMenOnly.genderFailureMessage(serverMessage: nil)
+                        memberVM.errorMessage = nil
+                    }
+                }
+                if let genderError {
+                    Log.error("[AdminEdit] ❌ فشل تحديث الجنس: \(genderError)")
+                    DSStandaloneAlert.show(title: L10n.t("لم يُحفظ الجنس", "Gender not saved"), message: genderError)
+                }
             }
             if datesChanged {
                 Log.info("[AdminEdit] 📅 تعديل التواريخ: deceased=\(capturedIsDeceased), birth=\(capturedBirthDate?.description ?? "—"), death=\(capturedDeathDate?.description ?? "—")")
@@ -1538,7 +1598,7 @@ struct AdminMemberDetailSheet: View {
                     updatedChildren[i].sortOrder = i
                 }
                 await memberVM.updateChildrenOrder(for: capturedMemberId, newOrder: updatedChildren)
-                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الترتيب: \(err)") }
+                if let err = memberVM.errorMessage { Log.error("[AdminEdit] ❌ فشل تحديث الترتيب: \(err)"); memberVM.errorMessage = nil }
             }
             Log.info("[AdminEdit] ✅ انتهى حفظ تعديلات: \(auditMemberName)")
 
@@ -1565,9 +1625,7 @@ struct AdminMemberDetailSheet: View {
                 ))
             }
             if deceasedJustMarked {
-                let auditFormatter = ISO8601DateFormatter()
-                auditFormatter.formatOptions = [.withFullDate]
-                let dateStr = capturedDeathDate.map { auditFormatter.string(from: $0) }
+                let dateStr = capturedDeathDate.map { DateParsing.isoFullDate.string(from: $0) }
                 await adminRequestVM.logAdminDirectEdit(payload: TreeEditPayload.make(
                     action: .deceased,
                     targetMemberId: capturedMemberId.uuidString,

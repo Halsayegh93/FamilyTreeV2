@@ -10,20 +10,177 @@ extension Notification.Name {
     static let openMemberInTree = Notification.Name("openMemberInTree")
 }
 
-// MARK: - ثوابت الشجرة
-/// مستوى تكبير شجرة العائلة الحالي (الملاءمة ثم كل تكبير/تصغير) — شجرة النساء تفتح به (طلب المالك ٢٠٢٦-١٠-٢٧ «نفس مستوى شجرة العائلة»)
-enum TreeSharedZoom {
-    static var familyFit: CGFloat?
+/// «في الشجرة» من ورقة العضو في الإدارة (F4، V36): الطلب ينتظر هنا حتى تجهز شجرة العائلة — كان يُرسل بعد ٠٫٦ ث ثابتة
+/// فيمسحه إعداد البداية (`resetToTopRoot`) في أول فتح، أو يضيع حين تُبنى شجرة النساء أولاً (حساب المرأة)
+@MainActor
+enum TreeFocusRequest {
+    static var pending: UUID?
 }
 
-private enum TreeConst {
+// MARK: - ثوابت الشجرة
+/// ملاءمة «مجموعة» (الأب + أبنائه) في الشجرتين — مكان واحد للمساحة الظاهرة (طلب المالك ٢٠٢٦-١١-١٠):
+/// تحت الهيدر وبطاقة الأدوات، فوق الشريط السفلي، وبعيداً عن عمود الأزرار العائمة (+ / − / ↻) بعرضه المقيس —
+/// فلا تقع عقدة تحت الأزرار. كل الإحداثيات بنقاط الشاشة؛ الناتج بإحداثيات الكانفس.
+enum TreeGroupFit {
+    static let margin: CGFloat = 20
+    /// هامش صغير بين عمود الأزرار وأقرب عقدة
+    static let gutterGap: CGFloat = 8
+    /// التكبير الافتراضي للشجرتين (طلب المالك ٢٠٢٦-١١-١١) — رقم واحد: به تفتح الشجرة و«البداية»، وعليه تبقى
+    /// عند فتح عقدة أبناؤها يتّسعون في الشاشة (تحريك فقط). الملاءمة لا تكبّر فوقه أبداً؛ تصغّر تحته فقط
+    /// حين لا تتّسع المجموعة. يُقسم على معامل «حجم النص» مثل بقية الحدود.
+    static let defaultScale: CGFloat = 0.6
+    /// أخفّ تصغير تلقائي للمجموعة الكبيرة (طلب المالك ٢٠٢٦-١١-١١ «زوم خفيف»): لا ينزل تحت هذه النسبة من
+    /// التكبير الافتراضي — ما لا يتّسع بعدها يُسحب باليد، والأب ووسط أبنائه بالمنتصف
+    static let gentleFloor: CGFloat = 0.7
+    /// موضع العضو عند «موقعك» والانتقال لعضو: نسبة من ارتفاع المساحة الظاهرة — فوق المنتصف قليلاً
+    /// فيظهر أبوه فوقه وأبناؤه تحته
+    static let memberAnchorY: CGFloat = 0.42
+    /// موضع مجموعة «البداية» (الجذر وأبناؤه) عمودياً: نسبة من ارتفاع المساحة الظاهرة لمركزها — ٠٫٥ = بالمنتصف
+    /// بين بطاقة الأدوات والشريط السفلي (طلب المالك ٢٠٢٦-١١-١١ «ننزل الشجرة في البداية»). الأطول من المساحة:
+    /// الجذر أعلاها كما كان
+    static let homeAnchorY: CGFloat = 0.5
+    /// أدنى تكبير في الشجرتين — للملاءمة والقرص والأزرار معاً (كان ٠٫٢ في العائلة و٠٫٣ في النساء، فالمجموعة
+    /// الكبيرة تُقصّ على الشاشات الصغيرة — ملاحظة المالك ٢٠٢٦-١١-١٠). القرص بالحدّ نفسه فلا يرتدّ بعد الملاءمة.
+    static let minScale: CGFloat = 0.1
+    /// ما يبقى ظاهراً من الكانفس على الأقل في وضع الملاءمة (حدود السحب المرتخية)
+    static let keepVisible: CGFloat = 40
+
+    /// حدود الإزاحة المرتخية بعد ملاءمة مجموعة: الحدود العادية كانت تدفع المجموعة القريبة من طرف الكانفس
+    /// خارج مكانها (تحت الأزرار أو خارج الشاشة) — هنا يكفي أن يبقى جزء من الكانفس ظاهراً
+    static func looseClamp(_ o: CGSize, content: CGSize, viewport: CGSize) -> CGSize {
+        CGSize(width: min(max(o.width, keepVisible - content.width), viewport.width - keepVisible),
+               height: min(max(o.height, keepVisible - content.height), viewport.height - keepVisible))
+    }
+
+    /// المساحة الظاهرة داخل الكانفس: `avail` بعيداً عن عمود الأزرار، و`band` العرض كاملاً (للتوسيط الحقيقي
+    /// بمنتصف الشاشة)، و`tools` إطار عمود الأزرار بإحداثيات الكانفس (`.null` = لا عمود)
+    struct Area { let avail: CGRect; let band: CGRect; let tools: CGRect }
+
+    /// `chromeTop`: ارتفاع ما يغطّي أعلى الكانفس (الهيدر/بطاقة الأدوات)، `tools`: إطار عمود الأزرار العائمة
+    /// على الشاشة (فارغ = لا عمود)، `sideBar`: عرض البار الجانبي أفقياً.
+    static func area(viewport: CGSize, canvas: CGRect, chromeTop: CGFloat,
+                     tools: CGRect, sideBar: CGFloat) -> Area {
+        let edge = max(margin, sideBar)
+        var left = edge, right = edge
+        var toolsRect = CGRect.null
+        if !tools.isEmpty, canvas.width > 0 {
+            toolsRect = tools.offsetBy(dx: -canvas.minX, dy: -canvas.minY)
+            if toolsRect.midX < viewport.width / 2 {
+                left = max(left, toolsRect.maxX + gutterGap)
+            } else {
+                right = max(right, viewport.width - toolsRect.minX + gutterGap)
+            }
+        }
+        let top = chromeTop + margin
+        let height = max(1, viewport.height - top - DS.Spacing.xl - margin)
+        return Area(avail: CGRect(x: left, y: top, width: max(1, viewport.width - left - right), height: height),
+                    band: CGRect(x: edge, y: top, width: max(1, viewport.width - edge * 2), height: height),
+                    tools: toolsRect)
+    }
+
+    /// المقياس والإزاحة لمجموعة `rect` (إحداثيات الكانفس) بحدود `lo`…`hi`:
+    /// - تتّسع بالافتراضي: تبقى عليه، والأب قرب أعلى المساحة وأبناؤه تحته (تحريك فقط) — وفي «البداية» (`home`)
+    ///   مركزها على `homeAnchorY` من المساحة
+    /// - لا تتّسع: تصغير خفيف حتى `lo` وبالمنتصف؛ وما زالت أطول: الأب أعلى المساحة والباقي بالسحب
+    /// - أفقياً بمنتصف الشاشة دائماً؛ إن لامست عقدةٌ (`nodes`) عمود الأزرار تُزاح عنه بقدر ما يلزم فقط،
+    ///   والأعرض من الشاشة وسطها بالمنتصف
+    static func camera(rect: CGRect, nodes: [CGRect], area: Area, lo: CGFloat, hi: CGFloat,
+                       home: Bool = false) -> (scale: CGFloat, offset: CGSize) {
+        let avail = area.avail
+        let fit = min(avail.width / rect.width, avail.height / rect.height)
+        let s = min(hi, max(lo, fit))
+        let w = rect.width * s, h = rect.height * s
+        let top = avail.minY - rect.minY * s
+        let y: CGFloat
+        if h > avail.height {
+            y = top
+        } else if home {
+            y = max(top, avail.minY + avail.height * homeAnchorY - rect.midY * s)
+        } else {
+            y = fit < hi ? avail.midY - rect.midY * s : top
+        }
+        var x = area.band.midX - rect.midX * s
+        if w <= avail.width, !area.tools.isNull {
+            // العقد نفسها لا إطار المجموعة — فالصف القصير بجانب الأزرار لا يُزيح المجموعة كلها
+            let gutter = area.tools.insetBy(dx: -gutterGap, dy: -gutterGap)
+            let leftSide = gutter.midX < area.band.midX
+            var shift: CGFloat = 0
+            for n in nodes {
+                let r = CGRect(x: x + n.minX * s, y: y + n.minY * s, width: n.width * s, height: n.height * s)
+                guard r.intersects(gutter) else { continue }
+                shift = max(shift, leftSide ? gutter.maxX - r.minX : r.maxX - gutter.minX)
+            }
+            x += leftSide ? shift : -shift
+        }
+        return (s, CGSize(width: x, height: y))
+    }
+
+    /// حدود التصغير التلقائي للمجموعة: الافتراضي × `gentleFloor` (ولا تحت أدنى تكبير)، مقسومة على معامل «حجم النص»
+    static func autoRange(k: CGFloat) -> (lo: CGFloat, hi: CGFloat) {
+        (max(minScale, defaultScale * gentleFloor) / k, defaultScale / k)
+    }
+
+    /// «موقعك» والانتقال لعضو: العضو بمنتصف الشاشة أفقياً، وعلى `memberAnchorY` من المساحة الظاهرة عمودياً
+    static func memberOffset(node: CGRect, area: Area, scale s: CGFloat) -> CGSize {
+        CGSize(width: area.band.midX - node.midX * s,
+               height: area.avail.minY + area.avail.height * memberAnchorY - node.midY * s)
+    }
+}
+
+/// نوع آخر حركة كاميرا تلقائية — تُعاد إن تغيّر ارتفاع بطاقة الأدوات بعدها والمستخدم لم يحرّك شيئاً
+enum TreeAutoCamera { case group, home, member }
+
+/// عمود الأزرار العائمة في الشجرتين: «تكبير» · «تصغير» · ↻ «تحديث الشجرة» — نفس الشكل والمكان والتسميات،
+/// ويُقاس إطاره (`onFrame`) لتبتعد عنه الملاءمة
+struct TreeFloatingTools: View {
+    var shown: Bool = true
+    let isRefreshing: Bool
+    let onZoomIn: () -> Void
+    let onZoomOut: () -> Void
+    let onRefresh: () -> Void
+    let onFrame: (CGRect) -> Void
+
+    var body: some View {
+        HStack {
+            Spacer()
+            VStack(spacing: DS.Spacing.sm) {
+                button("plus.magnifyingglass", label: L10n.t("تكبير", "Zoom in"), action: onZoomIn)
+                button("minus.magnifyingglass", label: L10n.t("تصغير", "Zoom out"), action: onZoomOut)
+                // أثناء التحديث دوّارة صغيرة داخل الدائرة
+                Button(action: { if !isRefreshing { onRefresh() } }) {
+                    DSNavButtonLabel(symbol: isRefreshing ? "" : "arrow.counterclockwise", context: .surface)
+                        .overlay { if isRefreshing { ProgressView().tint(DS.Color.textPrimary) } }
+                }
+                .buttonStyle(DSPressStyle())
+                .disabled(isRefreshing)
+                .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
+                .dsSubtleShadow()
+                .modifier(TreeToolPop(shown: shown))
+            }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onFrame($0) }
+            .padding(.bottom, DS.Spacing.xl)
+        }
+        .dsPageMargin()
+    }
+
+    private func button(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { DSNavButtonLabel(symbol: symbol, context: .surface) }
+            .buttonStyle(DSPressStyle())
+            .accessibilityLabel(label)
+            .dsSubtleShadow()
+            .modifier(TreeToolPop(shown: shown))
+    }
+}
+
+enum TreeConst {
     // Zoom
-    static let minScale: CGFloat = 0.2
+    static let minScale: CGFloat = TreeGroupFit.minScale
     static let maxScale: CGFloat = 3.0
-    static let defaultScale: CGFloat = 0.60
+    static let defaultScale: CGFloat = TreeGroupFit.defaultScale
     static let openNodeScale: CGFloat = 0.75
     static let closeNodeScale: CGFloat = 0.80
-    static let kinshipScale: CGFloat = 0.45
+    /// خطوة زرّي «تكبير» / «تصغير» (تدقيق ٢٠٢٦-١١-١٠ #6)
+    static let zoomStep: CGFloat = 1.25
 
     // Durations (nanoseconds)
     static let shortDelay: UInt64 = 100_000_000     // 0.1s
@@ -38,7 +195,7 @@ private enum TreeConst {
 
 // MARK: - تخطيط الكانفس (إحداثيات مطلقة — نفس محرّك تبويب النساء)
 /// نتيجة حساب مواضع كل العقد المرئية بإحداثيات مطلقة داخل كانفس ثابت.
-private struct FamilyLayout {
+struct FamilyLayout {
     var positions: [UUID: CGPoint] = [:]     // الزاوية العليا-اليسرى لكل عقدة
     var depth: [UUID: Int] = [:]
     var heights: [UUID: CGFloat] = [:]       // ارتفاع صندوق كل عقدة
@@ -52,7 +209,7 @@ private struct FamilyLayout {
 /// أبعاد العقدة الدائرية + فجوات الكانفس × معامل «حجم النص» (`DS.TreeScale`، طلب المالك ٢٠٢٦-١٠-٠٨):
 /// العقدة والفجوات والخطوط تكبر معاً فلا تتراكب. تُحسب مرة مع كل تخطيط (لا لكل عقدة في كل إطار).
 /// الأرقام = مقاس «كبير» (الافتراضي) — نفس الشكل السابق تماماً عند المعامل ١.
-private struct FamilyTreeMetrics: Equatable {
+struct FamilyTreeMetrics: Equatable {
     let k: CGFloat
     let nodeW: CGFloat        // عرض صندوق العقدة (الدائرة 105 + الإطار)
     let circleFull: CGFloat   // ارتفاع الدائرة + حلقة الرتبة
@@ -80,7 +237,7 @@ private struct FamilyTreeMetrics: Equatable {
 }
 
 /// خطوط أب واحد مع كل أبنائه (كل الصفوف) — تُبنى مرة مع التخطيط بعد المرآة لا كل إطار.
-private struct ConnectorGroup: Equatable {
+struct ConnectorGroup: Equatable {
     var pid: UUID? = nil       // الأب — لرسم خطوط آخر أب فُتح بالتدريج
     var path = Path()          // الخطوط العادية
     var kinPath = Path()       // طريق القرابة — ذهبي وأسمك
@@ -89,7 +246,7 @@ private struct ConnectorGroup: Equatable {
 
 /// خطوط كل الآباء وأبنائهم في لوحة واحدة — طبقة مستقلة متساوية (`.equatable()`) فلا يُعاد رسمها مع كل إطار
 /// سحب/تكبير (كانت تُرسم من جديد بكل إطار لأن جسم الشجرة يُعاد مع الإزاحة — فحص «اللاق» ٢٠٢٦-١٠-٠٧). نفس الرسم.
-private struct TreeConnectorsLayer: View, Equatable {
+struct TreeConnectorsLayer: View, Equatable {
     let connectors: [ConnectorGroup]
     let size: CGSize
     /// خطوط الأب المفتوح للتو تُرسم بالتدريج في طبقتها
@@ -201,7 +358,7 @@ private final class TreeTouchWatcher: UIGestureRecognizer, UIGestureRecognizerDe
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 }
 
-private struct TreePinchZoomModifier: ViewModifier {
+struct TreePinchZoomModifier: ViewModifier {
     @Binding var scale: CGFloat
     @Binding var baseScale: CGFloat
     @Binding var offset: CGSize
@@ -253,6 +410,8 @@ private struct TreePinchZoomModifier: ViewModifier {
 // MARK: - 1. واجهة الشجرة الرئيسية — Liquid Glass
 struct TreeView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة»: البحث و«موقعك» وصلة القرابة (تتغيّر نادراً)
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var adminRequestVM: AdminRequestViewModel
     @Binding var selectedTab: Int
@@ -267,6 +426,9 @@ struct TreeView: View {
 
     @State private var searchedMemberID: UUID? = nil
     @State private var highlightTask: Task<Void, Never>?
+    /// «موقعك» ضُغط للتو: حلقة «أنت هنا» تنبض على الساعة المشتركة لمدة `TreeConst.highlightDuration` ثم تسكن
+    @State private var locatePulseId: UUID?
+    @State private var locatePulseTask: Task<Void, Never>?
 
     // ── محرّك الكانفس (إحداثيات مطلقة، يطابق تبويب النساء — زوم حقيقي + سحب بزخم) ──
     @State private var scale: CGFloat = TreeConst.defaultScale
@@ -294,13 +456,7 @@ struct TreeView: View {
         // (طلب المالك) — دالة perRow(for:) تتكفّل بالتقسيم لكل أب على حدة.
         return 99
     }
-    /// عدد الأبناء في الصف الواحد لهذا الأب:
-    /// عمودي ٣ · أفقي: صف واحد حتى ١٠، وإذا كثروا فسطران متساويان (طلب المالك).
-    private func perRow(for count: Int) -> Int {
-        guard viewport.width > viewport.height else { return 3 }
-        if count <= 10 { return max(1, count) }
-        return Int(ceil(Double(count) / 2.0))
-    }
+    // عدد الأبناء في الصف الواحد لكل أب: `FamilyTreeLayoutEngine.perRow(for:landscape:)`
 
     @Environment(\.verticalSizeClass) var verticalSizeClass
     @Environment(\.colorScheme) var colorScheme
@@ -313,6 +469,8 @@ struct TreeView: View {
     @State private var activePath: Set<UUID> = []
     @State private var kinshipBanner: String? = nil
     @State private var kinshipHighlightedIds: Set<UUID> = [] // الأعضاء المهايلايتين بصلة القرابة
+    /// الصلة عن طريق الأم (K1) — البانر يقول «عن طريق الأم» ولا يُرسم طريق
+    @State private var kinshipViaMother = false
     /// متى ينتهي وضع صلة القرابة وحده (شريط الإلغاء السفلي يعدّ تنازلياً إليه)
     @State private var kinshipEndsAt: Date? = nil
     @State private var kinshipTimer: Task<Void, Never>? = nil
@@ -321,9 +479,21 @@ struct TreeView: View {
     /// آخر أب فُتح — خطوطه تُرسم بالتدريج من الأب نحو أبنائه، وأبناؤه يدخلون تباعاً
     /// (طلب المالك ٢٠٢٦-١٠-٠٤: حركات بالشجرة). «تقليل الحركة»: بلا تدريج.
     @State private var drawOnId: UUID? = nil
+    /// أسفل الهيدر وبطاقة الأدوات وأعلى الكانفس (إحداثيات الشاشة) — المساحة الظاهرة لملاءمة المجموعة
+    @State private var chromeMaxY: CGFloat = 0
+    /// آخر ملاءمة تلقائية (المجموعة والكاميرا الناتجة) — إن تغيّر ارتفاع بطاقة الأدوات بعدها (ظهور مسار الأسماء)
+    /// والمستخدم لم يحرّك شيئاً، تُعاد الملاءمة فلا يختفي الأب تحت البطاقة
+    @State private var autoFit: (id: UUID, mode: TreeAutoCamera, scale: CGFloat, offset: CGSize)?
+    @State private var canvasFrame: CGRect = .zero
+    /// إطار عمود الأزرار العائمة على الشاشة — الملاءمة تبتعد عنه
+    @State private var toolsFrame: CGRect = .zero
+    /// بعد ملاءمة مجموعة: حدود السحب مرتخية حتى لا تُزاح المجموعة عن مكانها (تُلغى عند «البداية»/«موقعك»/التمركز)
+    @State private var looseClamp = false
     @State private var drawProgress: CGFloat = 1
     // MARK: - بيانات مُخزنة مؤقتاً لتجنب إعادة الحساب كل render
     @State private var cachedVisibleMembers: [FamilyMember] = []
+    /// انتهى إعداد البداية — طلب «في الشجرة» يُنفَّذ الآن، وقبله ينتظر في `TreeFocusRequest` (V36)
+    @State private var focusReady = false
     @State private var cachedMemberById: [UUID: FamilyMember] = [:]
     @State private var cachedRootMembers: [FamilyMember] = []
     @State private var cachedChildrenByFatherId: [UUID: [FamilyMember]] = [:]
@@ -344,33 +514,10 @@ struct TreeView: View {
 
     /// حساب الكاش — pure function، تشتغل على أي thread.
     private nonisolated static func computeCache(from members: [FamilyMember]) -> TreeCache {
-        // المعيار القانوني الموحّد لـ"عضو في العائلة" — نفسه في الويب وكل العدّادات
-        let visible = members.filter(\.isCountable)
-        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
-
-        // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)
-        let fatherIds = Set(visible.compactMap(\.fatherId))
-
-        let roots = visible.filter { member in
-            guard let fatherId = member.fatherId else {
-                // عضو بدون أب: يظهر كجذر فقط إذا عنده أبناء (جد/أب أصلي)
-                return fatherIds.contains(member.id)
-            }
-            return byId[fatherId] == nil
-        }.sortedForDisplay()
-
-        let childrenMap = Dictionary(
-            grouping: visible.compactMap { m in m.fatherId.map { (m, $0) } },
-            by: { $0.1 }
-        ).mapValues { pairs in pairs.map(\.0).sortedForDisplay() }
-
-        return TreeCache(
-            visible: visible,
-            byId: byId,
-            roots: roots,
-            childrenMap: childrenMap,
-            ids: Set(visible.map(\.id))
-        )
+        // القاعدة الواحدة (`FamilyTreeLayoutEngine.index`) — نفسها في معاينة «مكانه في الشجرة»
+        let i = FamilyTreeLayoutEngine.index(members)
+        return TreeCache(visible: i.visible, byId: i.byId, roots: i.roots, childrenMap: i.children,
+                         ids: Set(i.visible.map(\.id)))
     }
 
     /// تطبيق الكاش على @State — يحب يكون على MainActor.
@@ -417,6 +564,7 @@ struct TreeView: View {
                         SwiftUI.Color.clear
                             .frame(width: geometry.size.width,
                                    height: geometry.size.height + geometry.safeAreaInsets.bottom)
+                            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { canvasFrame = $0 }
                             .overlay(alignment: .topLeading) {
                                 ZStack(alignment: .topLeading) {
                                     // خطوط الأب وأبنائه — كل الصفوف موصولة (طلب المالك ٢٠٢٦-١٠-٠٤:
@@ -437,6 +585,8 @@ struct TreeView: View {
                                                     .stroke(l.color, style: l.style)
                                             }
                                         }
+                                            // يذوب مع أول الامتداد (طبقة الفرع المفتوح وحده — لا كل الخطوط)
+                                            .opacity(Double(min(1, drawProgress * 4)))
                                             .frame(width: layout.size.width, height: layout.size.height, alignment: .topLeading)
                                             .allowsHitTesting(false)
                                             .accessibilityHidden(true)
@@ -482,7 +632,7 @@ struct TreeView: View {
                             if !userInteracted {
                                 fitCanvas(in: viewport, layout: L)
                             } else if let focus = breadcrumbChain.last ?? primaryRootMember {
-                                centerOn(focus.id, in: L, verticalAnchor: 0.42)
+                                focusMember(focus.id, in: L)
                             }
                         }
                         .onAppear {
@@ -499,11 +649,11 @@ struct TreeView: View {
                             if orientationFlipped {
                                 // تدوير: أعد بناء التخطيط (عدد الأعمدة يتغيّر) ثم مركّز
                                 // العقدة المفتوحة الحالية بمنتصف الشاشة تلقائياً (طلب المالك)
-                                withAnimation(DS.Anim.smooth) {
+                                withAnimation(reduceMotion ? nil : DSMotion.camera) {
                                     let L = rebuildLayout()
                                     fitCanvas(in: newSize, layout: L)
                                     if let focus = breadcrumbChain.last ?? primaryRootMember {
-                                        centerOn(focus.id, in: L, verticalAnchor: 0.5)
+                                        focusMember(focus.id, in: L)
                                     }
                                 }
                             } else if !userInteracted {
@@ -517,11 +667,13 @@ struct TreeView: View {
                         VStack(spacing: DS.Spacing.sm) {
                             if showSearch {
                                 TreeSearchOverlay(
-                                    onSelect: { member in selectMemberFromSearch(member) },
+                                    onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
-                                    onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
+                                    onClose: { withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
                                 )
+                                // لوحة البحث تنزل قليلاً مع تلاشٍ وتختفي أسرع — «تقليل الحركة»: تلاشٍ فقط
+                                .transition(.dsReveal(reduceMotion: reduceMotion))
                             } else if breadcrumbChain.count > 1 {
                                 breadcrumbStrip
                                     .padding(.horizontal, DS.Spacing.sm)
@@ -531,6 +683,7 @@ struct TreeView: View {
                         }
                         .padding(.horizontal, DS.Spacing.sm)
                         .dsCardCascade(0, appeared: chromeAppeared)
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { let grew = $0 > chromeMaxY; chromeMaxY = $0; refitAfterChromeChange(grew: grew) }
                         .zIndex(101)
 
                         // البار الجانبي — نفس أدوات البار العلوي عمودياً (طلب المالك)
@@ -546,7 +699,8 @@ struct TreeView: View {
                             selectedTab: $selectedTab,
                             showingNotifications: $showingNotifications,
                             title: L10n.t("شجرة العائلة", "Family Tree"),
-                            subtitle: "\(cachedVisibleMembers.count) " + L10n.t("فرد", "members"),
+                            subtitle: L10n.t(TreeHeaderCount.arabic(cachedVisibleMembers.count),
+                                            TreeHeaderCount.english(cachedVisibleMembers.count)),
                             icon: AppSection.tree.symbol,   // الشجرة (رمز التطبيق) لا ورقة
                             section: .tree,
                             subtitleChip: true
@@ -557,11 +711,13 @@ struct TreeView: View {
                         Group {
                             if showSearch {
                                 TreeSearchOverlay(
-                                    onSelect: { member in selectMemberFromSearch(member) },
+                                    onSelect: { member in chooseSearchResult(member) },
                                     autoFocus: true,
-                                    onClose: { withAnimation(DS.Anim.snappy) { showSearch = false } },
+                                    onClose: { withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false } },
                                     showFiltersWhenEmpty: true
                                 )
+                                // لوحة البحث تنزل قليلاً مع تلاشٍ وتختفي أسرع — «تقليل الحركة»: تلاشٍ فقط
+                                .transition(.dsReveal(reduceMotion: reduceMotion))
                             } else {
                                 VStack(spacing: DS.Spacing.xxs) {
                                     classicToolbarRow
@@ -585,6 +741,7 @@ struct TreeView: View {
                         // مرة مع أول ظهور للتبويب. «تقليل الحركة»: تلاشٍ فقط
                         .dsCardCascade(0, appeared: chromeAppeared)
                         }
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { let grew = $0 > chromeMaxY; chromeMaxY = $0; refitAfterChromeChange(grew: grew) }
                         .zIndex(101)
                     }
 
@@ -596,21 +753,29 @@ struct TreeView: View {
                             VStack {
                                 HStack(spacing: DS.Spacing.sm) {
                                     DSStateIcon("person.2.fill", tint: AppSection.tree.ink, size: DS.Icon.discSmall, mapsChrome: false)
-                                    Text(banner)
-                                        .dsFont(.headline)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(banner)
+                                            .dsFont(.headline)
+                                        if kinshipViaMother {
+                                            Text(KinshipCalculator.motherNote)
+                                                .dsFont(.caption)
+                                                // تنزل مع البانر، أو وحدها حين يتبدّل البانر الظاهر إلى «عن طريق الأم» (A1)
+                                                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                                        }
+                                    }
                                     Spacer()
                                     // «×» الصغير بلا قرص (كما كان) — مساحة ضغطه ٤٤ لا تكبّر البانر
                                     DSCloseButton(context: .onColor, size: .mini) { endKinship(resetView: true) }
                                 }
                                 .foregroundColor(DS.Color.headerTitle)
-                                .padding(.horizontal, DS.Spacing.lg)
+                                .dsPageMargin()
                                 .padding(.vertical, DS.Spacing.md)
                                 // تدرّج الشجرة — «الهادئ الفاتح»: لونها الخفيف بنص داكن (`DSHeaderBackground`)
                                 .background(DSHeaderBackground(section: .tree, veil: false))
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Card.radius, style: .continuous))
                                 // لمسة الطين الواحدة بظلّها (كان ظلاً يدوياً بلون الشجرة)
                                 .modifier(DSClaySkin(radius: DS.Card.radius, onFill: !DS.Theme.isCalm, shadow: true, section: .tree))
-                                .padding(.horizontal, DS.Spacing.lg)
+                                .dsPageMargin()
                                 .padding(.top, DS.Spacing.sm)
                                 // «تقليل الحركة»: تلاشٍ بلا انزلاق
                                 .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
@@ -629,11 +794,11 @@ struct TreeView: View {
                      isPresented: $showNotInTree) {
                 Button(L10n.t("حسناً", "OK"), role: .cancel) {}
             } message: {
-                Text(L10n.t("طلب انضمامك عند الإدارة لربط حسابك بمكانك في الشجرة. بعد الربط يأخذك «موقعي» إلى اسمك مباشرة.",
+                Text(L10n.t("طلب الانضمام لدى الإدارة لربط الحساب بمكانه في الشجرة، وبعد الربط ينقل زرّ «موقعك» إلى الاسم مباشرة.",
                             "Your join request is with the admins to link your account to your place in the tree. After that, «Me» takes you straight to your name."))
             }
             // تفاصيل العضو: مربّع بالمنتصف قابل للتوسّع بدل الشيت (طلب المالك)
-            .fullScreenCover(item: $selectedMember) { member in
+            .fullScreenCover(item: $selectedMember.memberDetailsGate(selfId: authVM.currentUser?.id)) { member in
                 MemberDetailsView(member: member, centered: true)
                     .background(ClearPresentationBackground())
             }
@@ -648,19 +813,23 @@ struct TreeView: View {
                 if cachedVisibleMembers.isEmpty {
                     rebuildCache()
                     currentLocationMemberID = authVM.currentUser?.id
-                    // أول تحميل — نبدأ من الجذر بالمنتصف (نفس إعادة الوضع)
+                    // كل فتح = حالة «البداية»: رأس الشجرة وأبناؤه بالتكبير الافتراضي (طلب المالك ٢٠٢٦-١١-١١) —
+                    // «موقعك» ينقل للمستخدم عند الضغط فقط
                     try? await Task.sleep(nanoseconds: TreeConst.shortDelay)
                     resetToTopRoot(animated: false)
                 }
+                // «في الشجرة» من الإدارة ينتظر حتى هنا (بعد إعداد البداية) — V36
+                focusReady = true
+                consumeFocusRequest()
             }
             .onDisappear {
                 // إلغاء أي highlight tasks عالقة لتفادي memory leaks عند التنقل السريع
                 highlightTask?.cancel()
                 highlightTask = nil
+                locatePulseTask?.cancel()
+                locatePulseId = nil
             }
             // «أنت هنا» دائم — يتبع حساب المستخدم الحالي
-            // زوم شجرة العائلة الحالي (بعد التكبير/التصغير باليد أيضاً) — شجرة النساء تفتح عليه (طلب المالك ٢٠٢٦-١٠-٢٧)
-            .onChange(of: scale) { TreeSharedZoom.familyFit = $0 }
             .onChange(of: authVM.currentUser?.id) { newId in
                 currentLocationMemberID = newId
             }
@@ -687,15 +856,41 @@ struct TreeView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openMemberInTree)) { note in
                 // مزامنة الشجرة مع الشيت — التحريك فقط دون لمس selectedMember
                 // (الشيت يبقى مفتوح ومحتواه يتحدث داخلياً عبر currentMemberId)
-                guard let info = note.userInfo,
-                      let memberId = info["memberId"] as? UUID,
-                      let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
+                guard let info = note.userInfo, let memberId = info["memberId"] as? UUID else { return }
+                // قبل انتهاء إعداد البداية يُحفظ الطلب (كان `resetToTopRoot` يمسحه) — V36
+                guard focusReady else {
+                    TreeFocusRequest.pending = memberId
+                    return
+                }
+                if TreeFocusRequest.pending == memberId { TreeFocusRequest.pending = nil }
+                guard let target = cachedMemberById[memberId] ?? memberVM.member(byId: memberId) else { return }
                 selectMemberFromSearch(target)
             }
             .onReceive(NotificationCenter.default.publisher(for: .showKinshipPath)) { note in
-                guard let info = note.userInfo,
+                // «صلاحيات الأعضاء حسب الفئة»: صلة القرابة في الشجرة مطفأة لفئته
+                guard authVM.memberSees(.treeKinship),
+                      let info = note.userInfo,
                       let memberId = info["memberId"] as? UUID,
                       let relationship = info["relationship"] as? String else { return }
+
+                // عن طريق الأم (K1): الأم في شجرة النساء فلا يُرسم الطريق هنا — الكلمة ومعها «عن طريق الأم»،
+                // والشجرة تفتح على العضو كالبحث (بلا خطوط قرابة توحي بطريق الأب)
+                if info["viaMother"] as? Bool == true {
+                    if preKinship == nil {
+                        preKinship = TreeCameraSnapshot(activePath: activePath, scale: scale, baseScale: baseScale,
+                                                        offset: offset, baseOffset: baseOffset, fittedScale: fittedScale,
+                                                        searchedMemberID: searchedMemberID, userInteracted: userInteracted)
+                    }
+                    withAnimation(DSMotion.banner) {
+                        kinshipHighlightedIds = []
+                        kinshipBanner = relationship
+                        kinshipViaMother = true
+                    }
+                    if let target = cachedMemberById[memberId] { selectMemberFromSearch(target) }
+                    startKinshipTimer()
+                    return
+                }
+                if kinshipViaMother { withAnimation(DSMotion.banner) { kinshipViaMother = false } }
 
                 // بناء مسار كامل من الجذر للعضو الممسوح
                 var fullPath = Set<UUID>()
@@ -736,33 +931,20 @@ struct TreeView: View {
                                                     searchedMemberID: searchedMemberID, userInteracted: userInteracted)
                 }
 
-                // فتح كل الفروع بالمسار + هايلايت
-                withAnimation(.easeInOut(duration: 0.3)) {
+                // فتح كل الفروع بالمسار + هايلايت (علامة البحث هنا تبقى ما بقي وضع صلة القرابة)
+                highlightTask?.cancel()
+                withAnimation(DSMotion.banner) {
                     activePath = fullPath
                     kinshipHighlightedIds = fullPath
                     searchedMemberID = memberId
                     kinshipBanner = relationship
                 }
 
-                // تصغير الزوم لإظهار المسار كامل + التمركز على الجد المشترك (كانفس)
+                // التمركز على الجد المشترك بموضع طبيعي (التكبير الافتراضي — طلب المالك ٢٠٢٦-١١-١١)
                 let scrollToId = commonAncestor ?? memberId
-                userInteracted = true
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    scale = TreeConst.kinshipScale
-                    baseScale = TreeConst.kinshipScale
-                    fittedScale = TreeConst.kinshipScale
-                    let L = rebuildLayout()
-                    centerOn(scrollToId, in: L)
-                }
+                moveCamera { focusMember(scrollToId, in: rebuildLayout()) }
 
-                // ينتهي الوضع وحده بعد ٢٠ ثانية (شريط الإلغاء السفلي يعدّ تنازلياً) — طلب جديد يبدأ العدّ من جديد
-                kinshipTimer?.cancel()
-                kinshipEndsAt = Date().addingTimeInterval(TreeConst.kinshipSeconds)
-                kinshipTimer = Task {
-                    try? await Task.sleep(nanoseconds: UInt64(TreeConst.kinshipSeconds * 1_000_000_000))
-                    guard !Task.isCancelled else { return }
-                    endKinship(resetView: false)
-                }
+                startKinshipTimer()
             }
             // البحث منقول إلى TreeSearchOverlay — لا يعيد رسم الشجرة عند الكتابة
         }
@@ -786,9 +968,16 @@ struct TreeView: View {
         return name
     }
 
+    /// اختيار نتيجة من البحث: يُغلق البحث (فيرجع مسار الأسماء و«البداية»/«موقعك») ثم ينتقل للعضو — الكاميرا تُعاد
+    /// وحدها حين تصغر بطاقة الأدوات (`refitAfterChromeChange`) فلا يقع الشخص أسفل الشاشة (مراجعة ٢٠٢٦-١١-٢٧ #1)
+    private func chooseSearchResult(_ member: FamilyMember) {
+        withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.snappy) { showSearch = false }
+        selectMemberFromSearch(member)
+    }
+
     private func selectMemberFromSearch(_ member: FamilyMember) {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        searchedMemberID = member.id
+        markSearched(member.id)
         var ancestors = Set<UUID>()
         var currentParentId = member.fatherId
         var visited = Set<UUID>()
@@ -800,11 +989,7 @@ struct TreeView: View {
         }
         ancestors.insert(member.id)
         activePath = ancestors
-        userInteracted = true
-        withAnimation(.easeInOut(duration: 0.35)) {
-            let L = rebuildLayout()
-            centerOn(member.id, in: L)
-        }
+        moveCamera { focusMember(member.id, in: rebuildLayout()) }
     }
 
     private func centerOnMember(_ member: FamilyMember, highlight: Bool = true, includeFocusedMemberInPath: Bool = true) {
@@ -819,22 +1004,62 @@ struct TreeView: View {
         }
         if includeFocusedMemberInPath { ancestors.insert(member.id) }
         activePath = ancestors
-        searchedMemberID = highlight ? member.id : nil
-        userInteracted = true
-        withAnimation(.easeInOut(duration: 0.35)) {
-            let L = rebuildLayout()
-            centerOn(member.id, in: L)
-        }
+        if highlight { markSearched(member.id) } else { highlightTask?.cancel(); searchedMemberID = nil }
+        moveCamera { focusMember(member.id, in: rebuildLayout()) }
+    }
 
-        // إزالة التظليل بعد ٥ ثوانٍ
-        if highlight {
-            highlightTask?.cancel()
-            highlightTask = Task {
+    /// علامة الشخص المبحوث عنه (حلقة ذهبية) — تتلاشى بعد `TreeConst.highlightDuration` (كانت تبقى بلا نهاية بعد البحث)
+    private func markSearched(_ id: UUID) {
+        highlightTask?.cancel()
+        searchedMemberID = id
+        highlightTask = Task {
+            try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
+            guard !Task.isCancelled else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.6)) { searchedMemberID = nil }
+        }
+    }
+
+    /// «موقعك» — الدالة الواحدة للزرّين (العمودي والأفقي؛ مراجعة ٢٠٢٦-١١-٢٧ #2): المربوط ينتقل لعقدته وتنبض حلقة
+    /// «أنت هنا» قليلاً، وابن البنت/حساب المرأة ينتقل لشجرة النساء (بلاغ المالك ٢٠٢٦-١١-٢٧)، وغير المربوط يرى
+    /// «حسابك غير مربوط بالشجرة بعد». القرار في `TreeMyPlace.resolve` (مفحوص: tests/admin-redesign/T1)
+    private func goToMyPlace() {
+        let byId = cachedMemberById
+        let place = TreeMyPlace.resolve(userId: authVM.currentUser?.id, rootId: primaryRootMember?.id,
+                                        isInTree: { byId[$0] != nil },
+                                        fatherOf: { id in byId[id]?.fatherId.flatMap { byId[$0] != nil ? $0 : nil } },
+                                        inWomenTree: Self.placeIsInWomenTree(authVM.currentUser),
+                                        hasWomenTab: treeTab != nil)
+        switch place {
+        case .family(let id)?:
+            guard let me = byId[id] else { return }
+            currentLocationMemberID = id
+            // حلقة «أنت هنا» الدائمة تكفي — بلا حلقة البحث فوقها (كانت ثلاث حلقات على عقدتك)
+            centerOnMember(me, highlight: false, includeFocusedMemberInPath: false)
+            locatePulseTask?.cancel()
+            locatePulseId = id
+            locatePulseTask = Task {
                 try? await Task.sleep(nanoseconds: TreeConst.highlightDuration)
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.3)) { searchedMemberID = nil }
+                locatePulseId = nil
             }
+        case .women?:
+            // مكانه في شجرة النساء تحت أمّه — التبديل يبني شجرة النساء من جديد، فالطلب الصريح ينتظرها فتنفّذ
+            // «موقعك» بالمعرّفات و«أنت هنا» لكل أنواع الحسابات (`WomenLocateRequest` → `WomenOpenAction`، مفحوص: W1)
+            WomenLocateRequest.pending = true
+            NotificationCenter.default.post(name: .openWomenTree, object: nil)
+        case .notLinked?:
+            showNotInTree = true
+        case nil:
+            break
         }
+    }
+
+    /// طلب «في الشجرة» المنتظر (V36) — يُنفَّذ مرة ثم يُمسح
+    private func consumeFocusRequest() {
+        guard let id = TreeFocusRequest.pending else { return }
+        TreeFocusRequest.pending = nil
+        guard let target = cachedMemberById[id] ?? memberVM.member(byId: id) else { return }
+        selectMemberFromSearch(target)
     }
 
     private func resetToTopRoot(animated: Bool = true) {
@@ -844,11 +1069,18 @@ struct TreeView: View {
         activePath = [root.id]
         searchedMemberID = nil
         let L = rebuildLayout()
-        if animated {
-            withAnimation(.easeInOut(duration: 0.4)) { fitCanvas(in: viewport, layout: L) }
+        if animated && !reduceMotion {
+            withAnimation(DSMotion.camera) { fitCanvas(in: viewport, layout: L) }
         } else {
             fitCanvas(in: viewport, layout: L)
         }
+    }
+
+    /// مكان الحساب في شجرة النساء لا شجرة العائلة: عقدة مربوطة بحسابه هناك (`linked_user_id`)، أو ابن بنت معلَّم
+    /// (`LineageGateStore` — قبل وصول شجرة النساء)
+    static func placeIsInWomenTree(_ user: FamilyMember?) -> Bool {
+        guard let user else { return false }
+        return WomenStore.womanByLinkedUser[user.id] != nil || LineageGateStore.shared.status?.flagged == true
     }
 
     // MARK: - صف الأدوات تحت الهيدر — مطابق للتفرّع (بحث / البداية / موقعي) أيقونات فقط
@@ -859,22 +1091,15 @@ struct TreeView: View {
     /// بار جانبي عمودي للوضع الأفقي — نفس أدوات البار العلوي (طلب المالك)
     private var landscapeSideToolbar: some View {
         VStack(spacing: DS.Spacing.xs) {
-            searchToolButton(.mini)
+            if authVM.memberSees(.treeSearch) { searchToolButton(.mini) }
             homeToolButton(.mini)
             if let treeTab {
                 FamilyTreeSideTabs(selection: treeTab)
             }
-            if authVM.currentUser != nil {
-                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+            if authVM.currentUser != nil && authVM.memberSees(.treeMyLocation) {
+                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .mini, tint: AppSection.tree.ink) {
-                    if let currentUserID = authVM.currentUser?.id,
-                       let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID),
-                       cachedMemberById[currentUserID] != nil {
-                        currentLocationMemberID = userMember.id
-                        centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                    } else {
-                        showNotInTree = true
-                    }
+                    goToMyPlace()
                 }
             }
         }
@@ -885,7 +1110,7 @@ struct TreeView: View {
     private var classicToolbarRow: some View {
         HStack(spacing: DS.Spacing.sm) {
             // الترتيب: بحث → البداية → تبويب [عائلة/نساء] → موقعي
-            searchToolButton(.toolbar)
+            if authVM.memberSees(.treeSearch) { searchToolButton(.toolbar) }
             homeToolButton(.toolbar)
 
             Spacer(minLength: 0)
@@ -898,15 +1123,10 @@ struct TreeView: View {
             Spacer(minLength: 0)
 
             // زر موقعي — آخر شي
-            if authVM.currentUser != nil {
-                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعي", "Me"), context: .surface,
+            if authVM.currentUser != nil && authVM.memberSees(.treeMyLocation) {
+                DSHeaderButton(symbol: "location.fill", label: L10n.t("موقعك", "Me"), context: .surface,
                                size: .toolbar, tint: AppSection.tree.ink) {
-                    if let currentUserID = authVM.currentUser?.id,
-                       let userMember = cachedMemberById[currentUserID] ?? memberVM.member(byId: currentUserID) {
-                        // التمييز «أنت هنا» دائم — الزر يفتح المسار ويتمركز فقط
-                        currentLocationMemberID = userMember.id
-                        centerOnMember(userMember, highlight: true, includeFocusedMemberInPath: false)
-                    }
+                    goToMyPlace()
                 }
             }
         }
@@ -915,7 +1135,7 @@ struct TreeView: View {
     private func searchToolButton(_ size: DSNavButtonSize) -> some View {
         DSHeaderButton(symbol: "magnifyingglass", label: L10n.t("بحث", "Search"), context: .surface,
                        size: size, tint: AppSection.tree.ink) {
-            withAnimation(DS.Anim.smooth) { showSearch = true }
+            withAnimation(reduceMotion ? DSMotion.fade : DS.Anim.smooth) { showSearch = true }
         }
     }
 
@@ -952,11 +1172,7 @@ struct TreeView: View {
         activePath.subtract(rm)
         activePath.insert(member.id)
         searchedMemberID = nil
-        userInteracted = true
-        withAnimation(.easeInOut(duration: 0.3)) {
-            let L = rebuildLayout()
-            centerOn(member.id, in: L)
-        }
+        moveCamera { focusMember(member.id, in: rebuildLayout()) }
     }
 
     /// شريط المسار المدمّج — نسخة أصغر مدمجة داخل بطاقة الأدوات (يظهر عند التعمق فقط).
@@ -968,12 +1184,12 @@ struct TreeView: View {
                     ForEach(Array(breadcrumbChain.enumerated()), id: \.element.id) { idx, m in
                         let isLast = idx == breadcrumbChain.count - 1
                         HStack(spacing: DS.Spacing.xxs) {
-                            // شريحة العُدّة الواحدة (`DSChipButton`) — الأخيرة (موقعك الآن) ممتلئة؛ المصغّرة داخل
-                            // بطاقة الأدوات (كما كانت)، والصغيرة في بطاقتها المستقلة أفقياً
+                            // شريحة العُدّة الواحدة (`DSChipButton`) — الأخيرة (موقعك الآن) ممتلئة؛ بالمقاس الصغير
+                            // (٢٨) في الوضعين — قابلة للضغط فلا تنزل إلى المصغّرة (تدقيق ٢٠٢٦-١١-١٠ #5)
                             DSChipButton(m.firstName.isEmpty ? "—" : m.firstName,
                                          icon: idx == 0 ? "house.fill" : nil,
                                          isSelected: isLast,
-                                         size: verticalSizeClass == .compact ? .small : .mini) {
+                                         size: .small) {
                                 jumpToBreadcrumb(m)
                             }
                             .accessibilityLabel(L10n.t("الرجوع إلى \(m.firstName)", "Back to \(m.firstName)"))
@@ -983,8 +1199,13 @@ struct TreeView: View {
                             }
                         }
                         .id(m.id)
+                        // اسم جديد في المسار يكبر قليلاً مع تلاشٍ، والمحذوف يذوب أسرع — «تقليل الحركة»: تلاشٍ فقط
+                        .transition(reduceMotion ? .opacity : .asymmetric(
+                            insertion: AnyTransition.scale(scale: 0.85).combined(with: .opacity),
+                            removal: AnyTransition.opacity.animation(DSMotion.revealOut)))
                     }
                 }
+                .animation(reduceMotion ? DSMotion.fade : DS.Anim.snappy, value: breadcrumbChain.map(\.id))
                 .padding(.horizontal, DS.Spacing.xxs)
                 .padding(.vertical, DS.Border.width)
             }
@@ -1018,41 +1239,25 @@ struct TreeView: View {
             if let endsAt = kinshipEndsAt, kinshipBanner != nil {
                 // وضع صلة القرابة: شريط سفلي بزرّ الإلغاء وعدّ تنازلي ٢٠ ثانية (طلب المالك ٢٠٢٦-١٠-٠٩)
                 KinshipExitBar(endsAt: endsAt, duration: TreeConst.kinshipSeconds) { endKinship(resetView: true) }
-                    .padding(.horizontal, DS.Spacing.lg)
+                    .dsPageMargin()
                     .padding(.bottom, DS.Spacing.xl)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             } else {
-            HStack {
-                Spacer()
-                // زرّ الرأس الموحّد على السطح (دائرة زجاجية رمادية) — أثناء التحديث دوّارة صغيرة داخله
-                Button(action: {
-                    guard !isRefreshing else { return }
-                    isRefreshing = true
-                    Task {
-                        await memberVM.fetchAllMembers(force: true)
-                        guard !Task.isCancelled else { return }
-                        await rebuildCacheBackground()
-                        resetToTopRoot()
-                        withAnimation { isRefreshing = false }
-                    }
-                }) {
-                    DSNavButtonLabel(symbol: isRefreshing ? "" : "arrow.counterclockwise", context: .surface)
-                        .overlay {
-                            if isRefreshing {
-                                ProgressView().tint(DS.Color.textPrimary)
-                            }
-                        }
-                }
-                // ضغطة ناعمة موحّدة (كان بلا إحساس بالضغط)
-                .buttonStyle(DSPressStyle())
-                .disabled(isRefreshing)
-                .accessibilityLabel(L10n.t("تحديث الشجرة", "Refresh tree"))
-                .dsSubtleShadow()
-                // الزر العائم يقفز آخراً بعد بطاقة الأدوات (مثل أزرار «+» العائمة)
-                .modifier(TreeToolPop(shown: chromeAppeared))
-                .padding(.bottom, DS.Spacing.xl)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
+            // «تكبير» / «تصغير» فوق ↻ — بديل القرص لمن يصعب عليه (تدقيق ٢٠٢٦-١١-١٠ #6)؛ يقفز آخراً بعد بطاقة الأدوات
+            TreeFloatingTools(shown: chromeAppeared, isRefreshing: isRefreshing,
+                              onZoomIn: { zoomStep(TreeConst.zoomStep) },
+                              onZoomOut: { zoomStep(1 / TreeConst.zoomStep) },
+                              onRefresh: {
+                                  isRefreshing = true
+                                  Task {
+                                      await memberVM.fetchAllMembers(force: true)
+                                      guard !Task.isCancelled else { return }
+                                      await rebuildCacheBackground()
+                                      resetToTopRoot()
+                                      withAnimation { isRefreshing = false }
+                                  }
+                              },
+                              onFrame: { toolsFrame = $0 })
             }
         }
         .animation(DS.Anim.snappy, value: kinshipEndsAt)
@@ -1060,6 +1265,17 @@ struct TreeView: View {
 
     /// إنهاء وضع صلة القرابة — الزرّ (والـ«×») يرجع الشجرة لمكانها قبل صلة القرابة بالضبط (الفروع المفتوحة
     /// والتكبير والموضع)؛ انتهاء المدة يطفئ التمييز ويترك المكان كما هو
+    /// ينتهي الوضع وحده بعد ٢٠ ثانية (شريط الإلغاء السفلي يعدّ تنازلياً) — طلب جديد يبدأ العدّ من جديد
+    private func startKinshipTimer() {
+        kinshipTimer?.cancel()
+        kinshipEndsAt = Date().addingTimeInterval(TreeConst.kinshipSeconds)
+        kinshipTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(TreeConst.kinshipSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            endKinship(resetView: false)
+        }
+    }
+
     private func endKinship(resetView: Bool) {
         kinshipTimer?.cancel()
         kinshipTimer = nil
@@ -1067,6 +1283,7 @@ struct TreeView: View {
         preKinship = nil
         withAnimation(DS.Anim.snappy) {
             kinshipBanner = nil
+            kinshipViaMother = false
             kinshipHighlightedIds = []
             kinshipEndsAt = nil
             if resetView, let snap {
@@ -1091,6 +1308,24 @@ struct TreeView: View {
     // MARK: - محرّك الكانفس (إحداثيات مطلقة) — يصلّح الزوم المعطوب ويضيف خطوط ربط حقيقية
 
     /// نقر مزدوج: تكبير نحو نقطة اللمس، أو رجوع لملاءمة الشاشة إذا كان مكبّراً.
+    /// تكبير/تصغير بخطوة حول منتصف الشاشة — بنفس حدود القرص، وبلا حركة مع «تقليل الحركة»
+    private func zoomStep(_ factor: CGFloat) {
+        let k = layout.m.k
+        let ns = min(TreeConst.maxScale / k, max(TreeConst.minScale / k, scale * factor))
+        guard scale > 0, abs(ns - scale) > 0.001 else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        userInteracted = true
+        let c = CGPoint(x: viewport.width / 2, y: viewport.height / 2)
+        let r = ns / scale
+        let target = CGSize(width: c.x - (c.x - offset.width) * r,
+                            height: c.y - (c.y - offset.height) * r)
+        let apply = {
+            scale = ns; baseScale = ns
+            offset = clampOffset(target); baseOffset = offset
+        }
+        if reduceMotion { apply() } else { withAnimation(.easeInOut(duration: 0.25)) { apply() } }
+    }
+
     private func handleDoubleTap(at location: CGPoint) {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         userInteracted = true
@@ -1098,7 +1333,7 @@ struct TreeView: View {
         // سقف التكبير على الشاشة كما كان (الزوم بوحدات العقدة ÷ معامل «حجم النص»)
         let ns: CGFloat = zoomedIn ? fittedScale : min(TreeConst.maxScale / layout.m.k, max(fittedScale * 2, 0.95))
         let r = scale > 0 ? ns / scale : 1
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(reduceMotion ? nil : DSMotion.camera) {
             if zoomedIn {
                 scale = ns; baseScale = ns
                 offset = centeredOffset(scale: ns, in: viewport, layout: layout)
@@ -1119,17 +1354,422 @@ struct TreeView: View {
         return L
     }
 
-    /// يحسب مواضع كل العقد المرئية بإحداثيات مطلقة (أبوي، صفوف بحدّ PER_ROW، بلا فصل جنسين).
+    /// يحسب مواضع كل العقد المرئية بإحداثيات مطلقة — المحرّك الواحد (`FamilyTreeLayoutEngine`) الذي تقرؤه معاينة
+    /// «مكانه في الشجرة» أيضاً، فالمواضع والخطوط هناك هي نفسها هنا.
     private func computeLayout() -> FamilyLayout {
+        FamilyTreeLayoutEngine.layout(rootId: primaryRootMember?.id, children: cachedChildrenByFatherId,
+                                      byId: cachedMemberById, activePath: activePath,
+                                      kinship: kinshipHighlightedIds,
+                                      landscape: viewport.width > viewport.height, k: treeScale)
+    }
+
+    /// دخول أبناء الأب المفتوح للتو: يكبرون من موضعهم تباعاً بعد امتداد الخط إليهم.
+    private func nodeEntrance(for m: FamilyMember) -> AnyTransition {
+        // «تقليل الحركة»: الفتح والطيّ بلا حركة أصلاً (toggleNode بلا withAnimation)
+        guard !reduceMotion else { return .opacity }
+        // الطيّ: يذوب أسرع من الدخول (`treeNodeOut`)
+        let removal = AnyTransition.opacity.animation(DSMotion.treeNodeOut)
+        guard let fid = m.fatherId, fid == drawOnId,
+              let idx = layout.childRows[fid]?.flatMap({ $0 }).firstIndex(of: m.id),
+              let p = layout.positions[m.id], layout.size.width > 0, layout.size.height > 0
+        else { return .asymmetric(insertion: .opacity, removal: removal) }
+        let anchor = UnitPoint(x: (p.x + layout.m.nodeW / 2) / layout.size.width, y: p.y / layout.size.height)
+        // أول ٨ أبناء بفاصل قصير بعد امتداد الخط، والباقي معاً مع الثامن (`treeNodeCap`)
+        return .asymmetric(
+            insertion: AnyTransition.scale(scale: 0.5, anchor: anchor)
+                .combined(with: .opacity)
+                .animation(DSMotion.treeNodeIn.delay(DSMotion.treeNodeDelay(idx, base: 0.24))),
+            removal: removal)
+    }
+
+    /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.
+    @ViewBuilder
+    private func canvasNode(_ m: FamilyMember) -> some View {
+        let M = layout.m
+        let p = layout.positions[m.id] ?? .zero
+        let h = layout.heights[m.id] ?? M.nodeHDefault
+        TreeMemberNode(
+            member: m,
+            isExpanded: activePath.contains(m.id),
+            searchedMemberID: $searchedMemberID,
+            hasChildren: !((cachedChildrenByFatherId[m.id] ?? []).isEmpty),
+            childrenCount: (cachedChildrenByFatherId[m.id] ?? []).count,
+            showName: true,
+            level: layout.depth[m.id] ?? 0,
+            currentLocationMemberID: currentLocationMemberID,
+            isLocating: locatePulseId == m.id,
+            // المالك يظهر للأعضاء بلون المدير (CLAUDE.md «Publicly the owner shows the admin colour»)
+            ownerShowsAsAdmin: !authVM.isOwner,
+            isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
+            searchedSnapshot: searchedMemberID,
+            // العقدة كلها × معامل «حجم النص» (نفس معامل التخطيط) — نصوصها بحجم ثابت فلا تكبر مرتين
+            k: M.k,
+            onTap: { selectedMember = m },
+            onToggle: { toggleNode(m) }
+        )
+        // العقدة لا يُعاد بناؤها مع كل إطار سحب/تكبير ما لم تتغيّر بياناتها (فحص «اللاق»)
+        .equatable()
+        .frame(width: M.nodeW, height: h, alignment: .top)
+        .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
+    }
+
+    /// فتح/طيّ عقدة (نفس منطق التفرّع السابق) ثم تحريك الكاميرا.
+    private func toggleNode(_ member: FamilyMember) {
+        let kids = cachedChildrenByFatherId[member.id] ?? []
+        guard !kids.isEmpty else { return }
+        let wasExpanded = activePath.contains(member.id)
+        let hasDeeper = kids.contains { activePath.contains($0.id) }
+        if !wasExpanded {
+            activePath.insert(member.id)
+        } else if hasDeeper {
+            var rm = Set<UUID>(); collectDescendants(of: member.id, into: &rm)
+            activePath.subtract(rm); searchedMemberID = nil
+        } else {
+            var rm: Set<UUID> = [member.id]; collectDescendants(of: member.id, into: &rm)
+            activePath.subtract(rm); searchedMemberID = nil
+        }
+        userInteracted = true
+        let opening = !wasExpanded || hasDeeper
+        let drawOn = !wasExpanded && !reduceMotion
+        if drawOn { drawOnId = member.id; drawProgress = 0 }
+        defer {
+            if drawOn { withAnimation(DSMotion.treeLineDraw) { drawProgress = 1 } }
+        }
+        // بعد كل فتح/طيّ: ملاءمة المجموعة كاملة في الشاشة (طلب المالك ٢٠٢٦-١١-١٠) —
+        // الفتح = العقدة وكل أبنائها، والطيّ = أبوها وإخوتها. لا تعمل إلا بعد ضغطة الفتح/الطيّ نفسها.
+        let groupId = opening ? member.id : (member.fatherId ?? member.id)
+        let apply = { fitGroup(groupId, in: rebuildLayout()) }
+        if reduceMotion { apply() } else { withAnimation(DSMotion.camera) { apply() } }
+    }
+
+    private func collectDescendants(of parentId: UUID, into set: inout Set<UUID>) {
+        for child in cachedChildrenByFatherId[parentId] ?? [] where child.id != parentId {
+            if set.insert(child.id).inserted {
+                collectDescendants(of: child.id, into: &set)
+            }
+        }
+    }
+
+    /// يلائم «مجموعة» (الأب + أبناؤه الظاهرون) داخل المساحة الظاهرة تحت بطاقة الأدوات بهامش مريح:
+    /// تكبير حتى `groupFitMaxScale` للأبناء القليلين، وتصغير حتى أدنى حدّ للكثيرين (وإن لم تتّسع يظهر أعلاها).
+    private func fitGroup(_ pid: UUID, in L: FamilyLayout, size: CGSize? = nil, home: Bool = false) {
+        let viewport = size ?? self.viewport
+        guard viewport.width > 0, viewport.height > 0, L.positions[pid] != nil else { return }
+        let ids = [pid] + (L.childRows[pid]?.flatMap { $0 } ?? [])
+        let nodes = ids.compactMap { id in
+            L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeHDefault) }
+        }
+        let rect = nodes.reduce(CGRect.null) { $0.union($1) }
+        guard !rect.isNull, rect.width > 0, rect.height > 0 else { return }
+        let area = cameraArea(viewport)
+        // السقف = التكبير الافتراضي دائماً (ولو كبّر المستخدم بيده قبلها): تتّسع → الافتراضي، لا تتّسع → تصغير خفيف
+        let r = TreeGroupFit.autoRange(k: L.m.k)
+        let cam = TreeGroupFit.camera(rect: rect, nodes: nodes, area: area, lo: r.lo, hi: r.hi, home: home)
+        scale = cam.scale; baseScale = cam.scale
+        if home { fittedScale = cam.scale } else { userInteracted = true }
+        // بلا الحدود العادية: كانت تُزيح المجموعة القريبة من طرف الكانفس خارج المساحة الظاهرة
+        looseClamp = true
+        offset = TreeGroupFit.looseClamp(cam.offset,
+                                         content: CGSize(width: L.size.width * cam.scale, height: L.size.height * cam.scale),
+                                         viewport: viewport)
+        baseOffset = offset
+        autoFit = (pid, home ? .home : .group, scale, offset)
+    }
+
+    /// المساحة الظاهرة: أسفل الهيدر وبطاقة الأدوات، فوق الشريط السفلي، والجانب = عمود الأزرار (والبار الجانبي أفقياً)
+    private func cameraArea(_ viewport: CGSize) -> TreeGroupFit.Area {
+        TreeGroupFit.area(viewport: viewport, canvas: canvasFrame,
+                          chromeTop: max(0, chromeMaxY - canvasFrame.minY), tools: toolsFrame,
+                          sideBar: viewport.width > viewport.height ? DS.Icon.tapTarget + DS.Spacing.lg + TreeGroupFit.margin : 0)
+    }
+
+    /// الانتقال لعضو — مكان واحد لكل المسارات («موقعك»، نتيجة البحث، فتحه من إشعار أو ملف، صلة القرابة،
+    /// مسار الأسماء): موضع طبيعي بالتكبير الافتراضي، العضو بمنتصف الشاشة أفقياً وفوق المنتصف قليلاً
+    /// (`TreeGroupFit.memberAnchorY`) فيظهر أبوه فوقه وأبناؤه تحته
+    private func focusMember(_ id: UUID, in L: FamilyLayout) {
+        guard let p = L.positions[id], viewport.width > 0, viewport.height > 0 else { return }
+        let s = TreeGroupFit.defaultScale / L.m.k
+        func frame(_ id: UUID) -> CGRect? {
+            L.positions[id].map { CGRect(x: $0.x, y: $0.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeHDefault) }
+        }
+        let node = CGRect(x: p.x, y: p.y, width: L.m.nodeW, height: L.heights[id] ?? L.m.nodeHDefault)
+        // الأب وأول صف من الأبناء الظاهرين: يتوسّطون المساحة مع العضو ما اتّسعوا (مراجعة ٢٠٢٦-١١-٢٧ #4 — كان الأب
+        // تحت بطاقة الأدوات والنصف السفلي فارغاً)
+        let father = cachedMemberById[id]?.fatherId.flatMap(frame)
+        let kids = (L.childRows[id]?.first ?? []).compactMap(frame).reduce(CGRect.null) { $0.union($1) }
+        let area = cameraArea(viewport)
+        scale = s; baseScale = s
+        userInteracted = true
+        looseClamp = true
+        offset = TreeGroupFit.looseClamp(TreeFocusCamera.offset(member: node, father: father, kids: kids.isNull ? nil : kids,
+                                                                avail: area.avail, bandMidX: area.band.midX, scale: s,
+                                                                fallbackAnchorY: TreeGroupFit.memberAnchorY),
+                                         content: CGSize(width: L.size.width * s, height: L.size.height * s),
+                                         viewport: viewport)
+        baseOffset = offset
+        autoFit = (id, .member, scale, offset)
+    }
+
+    /// حركة الكاميرا بسلاسة — ومباشرة مع «تقليل الحركة»
+    private func moveCamera(_ body: @escaping () -> Void) {
+        if reduceMotion { body() } else { withAnimation(DSMotion.camera) { body() } }
+    }
+
+    /// تغيّر ارتفاع بطاقة الأدوات بعد آخر حركة تلقائية والمستخدم لم يحرّك شيئاً: أعد الحركة نفسها —
+    /// كبرت (ظهر مسار الأسماء) فلا يختفي شيء تحتها، أو صغرت في «البداية» (اختفى المسار) فتبقى مطابقة لأول فتح،
+    /// أو صغرت بعد الانتقال لعضو (أُغلق البحث بقائمة نتائجه الطويلة) فيرجع العضو لموضعه الطبيعي لا أسفل الشاشة
+    /// (مراجعة ٢٠٢٦-١١-٢٧ #1). تصغيرها بعد ملاءمة مجموعة لا يحرّك الشجرة
+    private func refitAfterChromeChange(grew: Bool) {
+        guard let f = autoFit, grew || f.mode != .group,
+              f.scale == scale, f.offset == offset, layout.positions[f.id] != nil else { return }
+        moveCamera {
+            if f.mode == .member { focusMember(f.id, in: layout) } else { fitGroup(f.id, in: layout, home: f.mode == .home) }
+        }
+    }
+
+    // ─── الكاميرا (offset) ───
+
+    /// حالة «البداية»: رأس الشجرة وأبناؤه بالتكبير الافتراضي `TreeGroupFit.defaultScale` — الجذر قرب أعلى المساحة
+    /// الظاهرة؛ إن لم يتّسعوا يُصغَّر بقدر ما يلزم (نفس قاعدة فتح أي عقدة — `fitGroup`).
+    private func fitCanvas(in size: CGSize, layout L: FamilyLayout) {
+        guard L.size.width > 0, size.width > 0 else { return }
+        if let root = primaryRootMember, L.positions[root.id] != nil {
+            fitGroup(root.id, in: L, size: size, home: true)
+            return
+        }
+        looseClamp = false
+        let s = TreeGroupFit.defaultScale / L.m.k
+        scale = s; baseScale = s; fittedScale = s
+        offset = centeredOffset(scale: s, in: size, layout: L)
+        baseOffset = offset
+    }
+
+    /// إزاحة التوسيط: الكانفس بالمنتصف أفقياً، والجذر بمنتصف الشاشة عمودياً
+    /// (نفس سلوك المحرّك السابق — scrollTo(root, anchor: .center)).
+    private func centeredOffset(scale s: CGFloat, in size: CGSize, layout L: FamilyLayout) -> CGSize {
+        // أعلى الجذر حيث يكون بالمقاس الافتراضي — العقدة الأكبر مع «حجم النص» تمتدّ للأسفل لا تحت الشريط
+        var rootCY: CGFloat = L.m.canvasPad + L.m.nodeHDefault / (2 * L.m.k)
+        if let root = primaryRootMember, let p = L.positions[root.id] {
+            rootCY = p.y + (L.heights[root.id] ?? L.m.nodeHDefault) / (2 * L.m.k)
+        }
+        // عمودي: 0.37 (رفع الجذر — طلب المالك) · أفقي: 0.30 ليتّسع الجيل الأول بأسمائه
+        let rootAnchor: CGFloat = size.width > size.height ? 0.30 : 0.37
+        let y = size.height * rootAnchor - rootCY * s
+        return CGSize(width: (size.width - L.size.width * s) / 2, height: y)
+    }
+
+    /// يُبقي الشجرة داخل حدود معقولة مع هامش overscroll.
+    private func clampOffset(_ o: CGSize) -> CGSize {
+        guard viewport.width > 0, viewport.height > 0 else { return o }
+        let overscroll: CGFloat = 120
+        let contentW = layout.size.width * scale
+        let contentH = layout.size.height * scale
+        if looseClamp {
+            return TreeGroupFit.looseClamp(o, content: CGSize(width: contentW, height: contentH), viewport: viewport)
+        }
+        func clampAxis(_ v: CGFloat, content: CGFloat, view: CGFloat, topHi: CGFloat) -> CGFloat {
+            if content <= view {
+                let slack = view - content
+                return min(max(v, -overscroll), slack + overscroll)
+            }
+            let lo = view - content - overscroll
+            return min(max(v, lo), topHi)
+        }
+        return CGSize(
+            width: clampAxis(o.width, content: contentW, view: viewport.width, topHi: overscroll),
+            height: clampAxis(o.height, content: contentH, view: viewport.height, topHi: viewport.height * 0.5)
+        )
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { v in
+                userInteracted = true
+                TreeTapGuard.moved()
+                offset = clampOffset(CGSize(width: baseOffset.width + v.translation.width,
+                                            height: baseOffset.height + v.translation.height))
+            }
+            .onEnded { v in
+                TreeTapGuard.moved()
+                // زخم مثل ScrollView: يكمل حسب السرعة ثم يستقر داخل الحدود.
+                let projected = CGSize(width: baseOffset.width + v.predictedEndTranslation.width,
+                                       height: baseOffset.height + v.predictedEndTranslation.height)
+                let target = clampOffset(projected)
+                withAnimation(.easeOut(duration: 0.4)) { offset = target }
+                baseOffset = target
+            }
+    }
+
+    // MARK: - حالة فارغة
+    @ViewBuilder
+    private var emptyStateView: some View {
+        // الحالات الثلاث بالعُدّة الواحدة (أسلوب واحد ٢٠٢٦-١٠-٠٧): مجسّم قسم الشجرة (الغافة) + عنوان + سطر،
+        // والتحميل نفس المجسّم يتنفّس — مثل باقي الأقسام وشجرة النساء
+        if memberVM.membersLoadFailed {
+            DSEmptyView(L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
+                        message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
+                        section: .tree, icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
+                        actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise") {
+                memberVM.membersLoadFailed = false
+                Task {
+                    await memberVM.fetchAllMembers(force: true)
+                    guard !Task.isCancelled else { return }
+                    await rebuildCacheBackground()
+                    resetToTopRoot()
+                }
+            }
+        } else if memberVM.membersVersion > 0 && !memberVM.isLoading {
+            // التحميل تم فعلاً لكن لا يوجد أعضاء — رسالة مختلفة عن "جاري المزامنة"
+            DSEmptyView(L10n.t("لا يوجد أفراد في الشجرة بعد", "No family members yet"),
+                        message: L10n.t("أعد المحاولة أو تواصل مع الإدارة", "Try again or contact the admin"),
+                        section: .tree,
+                        actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise") {
+                Task {
+                    await memberVM.fetchAllMembers(force: true)
+                    guard !Task.isCancelled else { return }
+                    await rebuildCacheBackground()
+                    resetToTopRoot()
+                }
+            }
+        } else {
+            DSPageLoader(L10n.t("جارٍ مزامنة الشجرة…", "Syncing tree..."), section: .tree)
+        }
+    }
+
+}
+
+/// زر الشجرة العائم يقفز آخراً — نفس قفزة DSIconPop (تكبير بنابض من ٠٫٥٥) وتأخير أزرار «+»
+/// العائمة، لكن يقوده علم ظهور التبويب فلا يتكرر مع التبديل «العائلة/النساء».
+/// «تقليل الحركة»: تلاشٍ فقط.
+/// مكان الشجرة (الفروع المفتوحة + التكبير + الموضع) — يُحفظ قبل صلة القرابة ويُرجَع له عند «إلغاء»
+private struct TreeCameraSnapshot {
+    let activePath: Set<UUID>
+    let scale: CGFloat
+    let baseScale: CGFloat
+    let offset: CGSize
+    let baseOffset: CGSize
+    let fittedScale: CGFloat
+    let searchedMemberID: UUID?
+    let userInteracted: Bool
+}
+
+/// شريط صلة القرابة السفلي — كبسولة صغيرة بلون صلة القرابة (`DS.Color.warning`، لون تمييز المسار وشريحة
+/// «صلة القرابة»): حلقة تعدّ تنازلياً (تفرغ خلال المدة والثواني داخلها) + «إلغاء صلة القرابة» ×، والكبسولة كلها زرّ.
+/// الحلقة حركة خطية واحدة (لا تكرار)، والرقم يتحدّث مرة كل ثانية فقط.
+private struct KinshipExitBar: View {
+    let endsAt: Date
+    let duration: Double
+    let onCancel: () -> Void
+    @State private var remaining: CGFloat = 1
+
+    var body: some View {
+        Button(action: onCancel) {
+            HStack(spacing: DS.Spacing.sm) {
+                ZStack {
+                    Circle().stroke(DS.Color.textOnPrimary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * 2)
+                    Circle()
+                        .trim(from: 0, to: remaining)
+                        .stroke(DS.Color.textOnPrimary, style: StrokeStyle(lineWidth: DS.Border.width * 2, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Text("\(max(0, Int(ceil(endsAt.timeIntervalSince(ctx.date)))))")
+                            .dsFont(.badge)
+                            .monospacedDigit()
+                    }
+                }
+                .frame(width: DS.Icon.row, height: DS.Icon.row)
+                .accessibilityHidden(true)
+
+                Text(L10n.t("إلغاء صلة القرابة", "Exit kinship"))
+                    .dsFont(.chip)
+                Image(systemName: "xmark")
+                    .dsGlyph(DS.Glyph.sm)
+            }
+            .foregroundColor(DS.Color.textOnPrimary)
+            .padding(.leading, DS.Spacing.xs)
+            .padding(.trailing, DS.Spacing.md)
+            .padding(.vertical, DS.Spacing.xs)
+            .background(Capsule().fill(DS.Color.warning.dsSolidFill))
+            .modifier(DSClaySkin(onFill: true, shadow: true, section: .tree))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(DSPressStyle())
+        .onAppear {
+            remaining = CGFloat(max(0, endsAt.timeIntervalSinceNow) / duration)
+            withAnimation(.linear(duration: max(0, endsAt.timeIntervalSinceNow))) { remaining = 0 }
+        }
+    }
+}
+
+private struct TreeToolPop: ViewModifier {
+    let shown: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(shown || reduceMotion ? 1 : DSMotion.iconFromScale)
+            .opacity(shown ? 1 : 0)
+            .animation(reduceMotion ? DSMotion.fade : DSMotion.iconPop.delay(0.4), value: shown)
+    }
+}
+
+
+// MARK: - محرّك تخطيط شجرة العائلة — مكان واحد لتبويب الشجرة ومعاينة «مكانه في الشجرة» (٢٠٢٦-١١-١٣)
+/// الفهرس (من يظهر، الجذور، الأبناء بترتيب العرض) والتخطيط والخطوط: كان داخل `TreeView` — نُقل كما هو حرفياً
+/// ليقرأه `TreePlaceMenCanvas` (المعاينة قبل التنفيذ) فترسم الشجرة الحقيقية نفسها بلا نسخة ثانية.
+enum FamilyTreeLayoutEngine {
+    nonisolated struct Index: Sendable {
+        let visible: [FamilyMember]
+        let byId: [UUID: FamilyMember]
+        let roots: [FamilyMember]
+        let children: [UUID: [FamilyMember]]
+    }
+
+    /// الفهرس — دالة نقية، تعمل على أي خيط.
+    nonisolated static func index(_ members: [FamilyMember]) -> Index {
+        // المعيار القانوني الموحّد لـ"عضو في العائلة" — نفسه في الويب وكل العدّادات
+        let visible = members.filter(\.isCountable)
+        let byId = Dictionary(uniqueKeysWithValues: visible.map { ($0.id, $0) })
+
+        // مجموعة الأعضاء اللي عندهم أبناء (آباء حقيقيين)
+        let fatherIds = Set(visible.compactMap(\.fatherId))
+
+        let roots = visible.filter { member in
+            guard let fatherId = member.fatherId else {
+                // عضو بدون أب: يظهر كجذر فقط إذا عنده أبناء (جد/أب أصلي)
+                return fatherIds.contains(member.id)
+            }
+            return byId[fatherId] == nil
+        }.sortedForDisplay()
+
+        let childrenMap = Dictionary(
+            grouping: visible.compactMap { m in m.fatherId.map { (m, $0) } },
+            by: { $0.1 }
+        ).mapValues { pairs in pairs.map(\.0).sortedForDisplay() }
+
+        return Index(visible: visible, byId: byId, roots: roots, children: childrenMap)
+    }
+
+
+    /// أبناء لكل صف قبل الالتفاف: عمودياً ٣ · أفقياً صف واحد حتى ١٠، وإذا كثروا فسطران متساويان (طلب المالك)
+    static func perRow(for count: Int, landscape: Bool) -> Int {
+        guard landscape else { return 3 }
+        if count <= 10 { return max(1, count) }
+        return Int(ceil(Double(count) / 2.0))
+    }
+
+    /// يحسب مواضع كل العقد المرئية بإحداثيات مطلقة (أبوي، صفوف بحدّ `perRow`، بلا فصل جنسين).
+    static func layout(rootId: UUID?, children cOf: [UUID: [FamilyMember]], byId: [UUID: FamilyMember],
+                       activePath: Set<UUID>, kinship kinshipHighlightedIds: Set<UUID>,
+                       landscape: Bool, k treeScale: CGFloat) -> FamilyLayout {
         // المقاسات بمعامل «حجم النص» — مرة لكل تخطيط
         let M = FamilyTreeMetrics(k: treeScale)
         var L = FamilyLayout()
         L.m = M
-        guard let root = primaryRootMember else { return L }
+        guard let rootId else { return L }
+        func perRow(for count: Int) -> Int { Self.perRow(for: count, landscape: landscape) }
         let NODE_W = M.nodeW, H_GAP = M.hGap, V_GAP = M.vGap, ROW_GAP = M.rowGap
         let SPINE_ROOM = M.spineRoom, CANVAS_PAD = M.canvasPad
-        let cOf = cachedChildrenByFatherId
-        let byId = cachedMemberById
         var sizeCache: [UUID: CGSize] = [:]
         var seen = Set<UUID>()
 
@@ -1197,14 +1837,14 @@ struct TreeView: View {
             L.childRows[id] = rows
         }
 
-        let rootBox = measure(root.id)
-        place(root.id, CANVAS_PAD + rootBox.width / 2, CANVAS_PAD, 0)
+        let rootBox = measure(rootId)
+        place(rootId, CANVAS_PAD + rootBox.width / 2, CANVAS_PAD, 0)
         let width = rootBox.width + CANVAS_PAD * 2
         let height = rootBox.height + CANVAS_PAD * 2
         // مرآة أفقية → ترتيب الإخوة يمين‑لليسار (RTL) مثل تبويب النساء
         for (id, p) in L.positions { L.positions[id] = CGPoint(x: width - p.x - NODE_W, y: p.y) }
         L.size = CGSize(width: width, height: height)
-        L.connectors = buildConnectors(L)
+        L.connectors = connectors(L, kinship: kinshipHighlightedIds)
         return L
     }
 
@@ -1213,7 +1853,7 @@ struct TreeView: View {
     ///  • صف واحد بثلاثة أبناء أو أقل: الأقواس القديمة من أسفل الأب إلى كل ابن.
     ///  • صف واحد أطول (أفقياً): خط أفقي في منتصف الفجوة ونزول لكل ابن.
     ///  • صفوف ملتفّة — «العمود»: خط أفقي فوق كل صف، وعمود على جهة الأكبر يصل الصفوف بخط الأب.
-    private func buildConnectors(_ L: FamilyLayout) -> [ConnectorGroup] {
+    static func connectors(_ L: FamilyLayout, kinship kinshipHighlightedIds: Set<UUID>) -> [ConnectorGroup] {
         typealias Kid = (id: UUID, x: CGFloat, top: CGFloat)
         // نفس مقاسات التخطيط (× معامل «حجم النص»)
         let M = L.m, k = M.k
@@ -1331,311 +1971,7 @@ struct TreeView: View {
         return groups
     }
 
-    /// دخول أبناء الأب المفتوح للتو: يكبرون من موضعهم تباعاً بعد امتداد الخط إليهم.
-    private func nodeEntrance(for m: FamilyMember) -> AnyTransition {
-        guard !reduceMotion, let fid = m.fatherId, fid == drawOnId,
-              let idx = layout.childRows[fid]?.flatMap({ $0 }).firstIndex(of: m.id),
-              let p = layout.positions[m.id], layout.size.width > 0, layout.size.height > 0
-        else { return .opacity }
-        let anchor = UnitPoint(x: (p.x + layout.m.nodeW / 2) / layout.size.width, y: p.y / layout.size.height)
-        return .asymmetric(
-            insertion: AnyTransition.scale(scale: 0.5, anchor: anchor)
-                .combined(with: .opacity)
-                .animation(.spring(response: 0.45, dampingFraction: 0.72).delay(0.3 + Double(idx) * 0.07)),
-            removal: .opacity)
-    }
-
-    /// عقدة واحدة بشكل TreeMemberNode الدائري، موضوعة بإحداثيات مطلقة.
-    @ViewBuilder
-    private func canvasNode(_ m: FamilyMember) -> some View {
-        let M = layout.m
-        let p = layout.positions[m.id] ?? .zero
-        let h = layout.heights[m.id] ?? M.nodeHDefault
-        TreeMemberNode(
-            member: m,
-            isExpanded: activePath.contains(m.id),
-            searchedMemberID: $searchedMemberID,
-            hasChildren: !((cachedChildrenByFatherId[m.id] ?? []).isEmpty),
-            childrenCount: (cachedChildrenByFatherId[m.id] ?? []).count,
-            showName: true,
-            level: layout.depth[m.id] ?? 0,
-            currentLocationMemberID: currentLocationMemberID,
-            isKinshipHighlighted: kinshipHighlightedIds.contains(m.id),
-            searchedSnapshot: searchedMemberID,
-            // العقدة كلها × معامل «حجم النص» (نفس معامل التخطيط) — نصوصها بحجم ثابت فلا تكبر مرتين
-            k: M.k,
-            onTap: { selectedMember = m },
-            onToggle: { toggleNode(m) }
-        )
-        // العقدة لا يُعاد بناؤها مع كل إطار سحب/تكبير ما لم تتغيّر بياناتها (فحص «اللاق»)
-        .equatable()
-        .frame(width: M.nodeW, height: h, alignment: .top)
-        .position(x: p.x + M.nodeW / 2, y: p.y + h / 2)
-    }
-
-    /// فتح/طيّ عقدة (نفس منطق التفرّع السابق) ثم تحريك الكاميرا.
-    private func toggleNode(_ member: FamilyMember) {
-        let kids = cachedChildrenByFatherId[member.id] ?? []
-        guard !kids.isEmpty else { return }
-        let wasExpanded = activePath.contains(member.id)
-        let hasDeeper = kids.contains { activePath.contains($0.id) }
-        if !wasExpanded {
-            activePath.insert(member.id)
-        } else if hasDeeper {
-            var rm = Set<UUID>(); collectDescendants(of: member.id, into: &rm)
-            activePath.subtract(rm); searchedMemberID = nil
-        } else {
-            var rm: Set<UUID> = [member.id]; collectDescendants(of: member.id, into: &rm)
-            activePath.subtract(rm); searchedMemberID = nil
-        }
-        userInteracted = true
-        let opening = !wasExpanded || hasDeeper
-        let drawOn = !wasExpanded && !reduceMotion
-        if drawOn { drawOnId = member.id; drawProgress = 0 }
-        defer {
-            if drawOn { withAnimation(.easeInOut(duration: 0.7).delay(0.15)) { drawProgress = 1 } }
-        }
-        withAnimation(DS.Anim.smooth) {
-            let L = rebuildLayout()
-            // التمركز على العقدة بعد كل توسيع/طي — الشجرة تبقى بالمنتصف دائماً.
-            // عند الفتح يرتفع الأب حسب عدد صفوف أبنائه: صف واحد 42%،
-            // صفّان 34%، ثلاثة صفوف وأكثر (٧+ أبناء) 26% — ليظهر الصف الأخير.
-            if opening {
-                let per = perRow(for: kids.count)
-                let rowCount = (kids.count + per - 1) / per
-                adaptiveCenter(on: member.id, rowCount: rowCount, in: L)
-            } else {
-                // عند الطي: تمركز على الأب بنفس المنطق التكيّفي حسب صفوف أبنائه —
-                // الشجرة تنزل ويظهر جميع الإخوة (طلب المالك)
-                let pid = member.fatherId ?? member.id
-                let sibs = cachedChildrenByFatherId[pid] ?? []
-                let per2 = perRow(for: sibs.count)
-                let rowCount = max(1, (sibs.count + per2 - 1) / per2)
-                adaptiveCenter(on: pid, rowCount: rowCount, in: L)
-            }
-        }
-    }
-
-    private func collectDescendants(of parentId: UUID, into set: inout Set<UUID>) {
-        for child in cachedChildrenByFatherId[parentId] ?? [] where child.id != parentId {
-            if set.insert(child.id).inserted {
-                collectDescendants(of: child.id, into: &set)
-            }
-        }
-    }
-
-    /// تمركز تكيّفي بعد التوسيع/الطي — يراعي اتجاه الشاشة:
-    /// عمودي: نفس النقاط المعتادة · أفقي: زوم أبعد + نقاط أعلى ليظهر الأب وكل صفوف
-    /// الأبناء داخل الارتفاع القصير (طلب المالك)
-    private func adaptiveCenter(on id: UUID, rowCount: Int, in L: FamilyLayout) {
-        if viewport.width > viewport.height {
-            let s: CGFloat = rowCount >= 3 ? 0.45 : (rowCount == 2 ? 0.55 : 0.7)
-            scale = s; baseScale = s
-            let anchor: CGFloat = rowCount >= 3 ? 0.18 : (rowCount == 2 ? 0.24 : 0.32)
-            centerOn(id, in: L, verticalAnchor: anchor)
-        } else {
-            let anchor: CGFloat = rowCount >= 3 ? 0.26 : (rowCount == 2 ? 0.34 : 0.42)
-            centerOn(id, in: L, verticalAnchor: anchor)
-        }
-    }
-
-    // ─── الكاميرا (offset) ───
-
-    /// يُمركز عقدة في الشاشة — أفقياً بالمنتصف دائماً، وعمودياً عند `verticalAnchor`
-    /// (0.5 = منتصف تماماً، 0.42 = أعلى قليلاً لتظهر الأبناء تحتها بعد التوسيع).
-    private func centerOn(_ id: UUID, in L: FamilyLayout, verticalAnchor: CGFloat = 0.5) {
-        guard let p = L.positions[id], viewport.width > 0 else { return }
-        userInteracted = true
-        let s = scale
-        let h = L.heights[id] ?? L.m.nodeHDefault
-        let cx = (p.x + L.m.nodeW / 2) * s
-        // أعلى العقدة حيث يكون بالمقاس الافتراضي، والزيادة مع «حجم النص» تمتدّ للأسفل — لا تختفي تحت شريط الأدوات
-        let cy = (p.y + h / (2 * L.m.k)) * s
-        offset = clampOffset(CGSize(width: viewport.width / 2 - cx, height: viewport.height * verticalAnchor - cy))
-        baseOffset = offset
-    }
-
-    /// يلائم الشجرة للشاشة ويوسّطها أفقياً وعمودياً (بمنتصف المساحة تحت الهيدر).
-    private func fitCanvas(in size: CGSize, layout L: FamilyLayout) {
-        guard L.size.width > 0, size.width > 0 else { return }
-        // الوضع الأفقي: سقف زوم أصغر — الارتفاع قصير فلازم يبان الجذر وأبناؤه
-        // بأسمائهم كاملة فوق البار السفلي
-        let maxS: CGFloat = size.width > size.height ? 0.65 : 1.1
-        // الملاءمة بوحدات العقدة الافتراضية (العرض ÷ معامل «حجم النص»): مع الخط الأكبر تظهر الشجرة أكبر
-        // وتمتدّ خارج الشاشة للسحب (اختيار المالك ٢٠٢٦-١٠-٠٨) — بدل أن تصغّرها الملاءمة فيضيع التكبير
-        let s = max(0.28, min(maxS, (size.width - 48) / (L.size.width / L.m.k)))
-        scale = s; baseScale = s; fittedScale = s
-        TreeSharedZoom.familyFit = size.width > size.height ? nil : s   // شجرة النساء تفتح بنفس المستوى
-        offset = centeredOffset(scale: s, in: size, layout: L)
-        baseOffset = offset
-    }
-
-    /// إزاحة التوسيط: الكانفس بالمنتصف أفقياً، والجذر بمنتصف الشاشة عمودياً
-    /// (نفس سلوك المحرّك السابق — scrollTo(root, anchor: .center)).
-    private func centeredOffset(scale s: CGFloat, in size: CGSize, layout L: FamilyLayout) -> CGSize {
-        // أعلى الجذر حيث يكون بالمقاس الافتراضي — العقدة الأكبر مع «حجم النص» تمتدّ للأسفل لا تحت الشريط
-        var rootCY: CGFloat = L.m.canvasPad + L.m.nodeHDefault / (2 * L.m.k)
-        if let root = primaryRootMember, let p = L.positions[root.id] {
-            rootCY = p.y + (L.heights[root.id] ?? L.m.nodeHDefault) / (2 * L.m.k)
-        }
-        // عمودي: 0.37 (رفع الجذر — طلب المالك) · أفقي: 0.30 ليتّسع الجيل الأول بأسمائه
-        let rootAnchor: CGFloat = size.width > size.height ? 0.30 : 0.37
-        let y = size.height * rootAnchor - rootCY * s
-        return CGSize(width: (size.width - L.size.width * s) / 2, height: y)
-    }
-
-    /// يُبقي الشجرة داخل حدود معقولة مع هامش overscroll.
-    private func clampOffset(_ o: CGSize) -> CGSize {
-        guard viewport.width > 0, viewport.height > 0 else { return o }
-        let overscroll: CGFloat = 120
-        let contentW = layout.size.width * scale
-        let contentH = layout.size.height * scale
-        func clampAxis(_ v: CGFloat, content: CGFloat, view: CGFloat, topHi: CGFloat) -> CGFloat {
-            if content <= view {
-                let slack = view - content
-                return min(max(v, -overscroll), slack + overscroll)
-            }
-            let lo = view - content - overscroll
-            return min(max(v, lo), topHi)
-        }
-        return CGSize(
-            width: clampAxis(o.width, content: contentW, view: viewport.width, topHi: overscroll),
-            height: clampAxis(o.height, content: contentH, view: viewport.height, topHi: viewport.height * 0.5)
-        )
-    }
-
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { v in
-                userInteracted = true
-                TreeTapGuard.moved()
-                offset = clampOffset(CGSize(width: baseOffset.width + v.translation.width,
-                                            height: baseOffset.height + v.translation.height))
-            }
-            .onEnded { v in
-                TreeTapGuard.moved()
-                // زخم مثل ScrollView: يكمل حسب السرعة ثم يستقر داخل الحدود.
-                let projected = CGSize(width: baseOffset.width + v.predictedEndTranslation.width,
-                                       height: baseOffset.height + v.predictedEndTranslation.height)
-                let target = clampOffset(projected)
-                withAnimation(.easeOut(duration: 0.4)) { offset = target }
-                baseOffset = target
-            }
-    }
-
-    // MARK: - حالة فارغة
-    @ViewBuilder
-    private var emptyStateView: some View {
-        // الحالات الثلاث بالعُدّة الواحدة (أسلوب واحد ٢٠٢٦-١٠-٠٧): مجسّم قسم الشجرة (الغافة) + عنوان + سطر،
-        // والتحميل نفس المجسّم يتنفّس — مثل باقي الأقسام وشجرة النساء
-        if memberVM.membersLoadFailed {
-            DSEmptyView(L10n.t("تعذّر تحميل البيانات", "Couldn't load data"),
-                        message: L10n.t("تحقّق من اتصالك وحاول مرة أخرى", "Check your connection and try again"),
-                        section: .tree, icon: "exclamationmark.triangle.fill", tint: DS.Color.error,
-                        actionTitle: L10n.t("إعادة المحاولة", "Retry"), actionIcon: "arrow.clockwise") {
-                memberVM.membersLoadFailed = false
-                Task {
-                    await memberVM.fetchAllMembers(force: true)
-                    guard !Task.isCancelled else { return }
-                    await rebuildCacheBackground()
-                    resetToTopRoot()
-                }
-            }
-        } else if memberVM.membersVersion > 0 && !memberVM.isLoading {
-            // التحميل تم فعلاً لكن لا يوجد أعضاء — رسالة مختلفة عن "جاري المزامنة"
-            DSEmptyView(L10n.t("لا يوجد أفراد في الشجرة بعد", "No family members yet"),
-                        message: L10n.t("اسحب للتحديث أو تواصل مع الإدارة", "Pull to refresh or contact the admin"),
-                        section: .tree,
-                        actionTitle: L10n.t("تحديث", "Refresh"), actionIcon: "arrow.clockwise") {
-                Task {
-                    await memberVM.fetchAllMembers(force: true)
-                    guard !Task.isCancelled else { return }
-                    await rebuildCacheBackground()
-                    resetToTopRoot()
-                }
-            }
-        } else {
-            DSPageLoader(L10n.t("جاري مزامنة الشجرة...", "Syncing tree..."), section: .tree)
-        }
-    }
-
 }
-
-/// زر الشجرة العائم يقفز آخراً — نفس قفزة DSIconPop (تكبير بنابض من ٠٫٥٥) وتأخير أزرار «+»
-/// العائمة، لكن يقوده علم ظهور التبويب فلا يتكرر مع التبديل «العائلة/النساء».
-/// «تقليل الحركة»: تلاشٍ فقط.
-/// مكان الشجرة (الفروع المفتوحة + التكبير + الموضع) — يُحفظ قبل صلة القرابة ويُرجَع له عند «إلغاء»
-private struct TreeCameraSnapshot {
-    let activePath: Set<UUID>
-    let scale: CGFloat
-    let baseScale: CGFloat
-    let offset: CGSize
-    let baseOffset: CGSize
-    let fittedScale: CGFloat
-    let searchedMemberID: UUID?
-    let userInteracted: Bool
-}
-
-/// شريط صلة القرابة السفلي — كبسولة صغيرة بلون صلة القرابة (`DS.Color.warning`، لون تمييز المسار وشريحة
-/// «صلة القرابة»): حلقة تعدّ تنازلياً (تفرغ خلال المدة والثواني داخلها) + «إلغاء صلة القرابة» ×، والكبسولة كلها زرّ.
-/// الحلقة حركة خطية واحدة (لا تكرار)، والرقم يتحدّث مرة كل ثانية فقط.
-private struct KinshipExitBar: View {
-    let endsAt: Date
-    let duration: Double
-    let onCancel: () -> Void
-    @State private var remaining: CGFloat = 1
-
-    var body: some View {
-        Button(action: onCancel) {
-            HStack(spacing: DS.Spacing.sm) {
-                ZStack {
-                    Circle().stroke(DS.Color.textOnPrimary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width * 2)
-                    Circle()
-                        .trim(from: 0, to: remaining)
-                        .stroke(DS.Color.textOnPrimary, style: StrokeStyle(lineWidth: DS.Border.width * 2, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Text("\(max(0, Int(ceil(endsAt.timeIntervalSince(ctx.date)))))")
-                            .dsFont(.badge)
-                            .monospacedDigit()
-                    }
-                }
-                .frame(width: DS.Icon.row, height: DS.Icon.row)
-                .accessibilityHidden(true)
-
-                Text(L10n.t("إلغاء صلة القرابة", "Exit kinship"))
-                    .dsFont(.chip)
-                Image(systemName: "xmark")
-                    .dsGlyph(DS.Glyph.sm)
-            }
-            .foregroundColor(DS.Color.textOnPrimary)
-            .padding(.leading, DS.Spacing.xs)
-            .padding(.trailing, DS.Spacing.md)
-            .padding(.vertical, DS.Spacing.xs)
-            .background(Capsule().fill(DS.Color.warning.dsSolidFill))
-            .modifier(DSClaySkin(onFill: true, shadow: true, section: .tree))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(DSPressStyle())
-        .onAppear {
-            remaining = CGFloat(max(0, endsAt.timeIntervalSinceNow) / duration)
-            withAnimation(.linear(duration: max(0, endsAt.timeIntervalSinceNow))) { remaining = 0 }
-        }
-    }
-}
-
-private struct TreeToolPop: ViewModifier {
-    let shown: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(shown || reduceMotion ? 1 : DSMotion.iconFromScale)
-            .opacity(shown ? 1 : 0)
-            .animation(reduceMotion ? DSMotion.fade : DSMotion.iconPop.delay(0.4), value: shown)
-    }
-}
-
 
 // MARK: - 3. عقدة الفرد — Liquid Glass
 struct TreeMemberNode: View, Equatable {
@@ -1647,6 +1983,10 @@ struct TreeMemberNode: View, Equatable {
     let showName: Bool
     var level: Int = 0
     let currentLocationMemberID: UUID?
+    /// «موقعك» ضُغط للتو على هذه العقدة — نبضة قصيرة لحلقة «أنت هنا»
+    var isLocating: Bool = false
+    /// المشاهد ليس مالكاً: المالك يظهر بلون المدير
+    var ownerShowsAsAdmin: Bool = true
     var isKinshipHighlighted: Bool = false
     /// قيمة البحث وقت بناء العقدة — للمقارنة (الربط يقرأ القيمة الحالية دائماً فلا يصلح لها)
     var searchedSnapshot: UUID? = nil
@@ -1660,12 +2000,14 @@ struct TreeMemberNode: View, Equatable {
         a.member == b.member && a.isExpanded == b.isExpanded && a.hasChildren == b.hasChildren
             && a.childrenCount == b.childrenCount && a.showName == b.showName && a.level == b.level
             && a.currentLocationMemberID == b.currentLocationMemberID
+            && a.isLocating == b.isLocating && a.ownerShowsAsAdmin == b.ownerShowsAsAdmin
             && a.isKinshipHighlighted == b.isKinshipHighlighted && a.searchedSnapshot == b.searchedSnapshot
             && a.k == b.k
     }
     @State private var shouldLoadImage = false
-    @State private var isPulsing = false
-    @State private var arrowGlow = false
+    /// قفزة الضغطة المكتملة — حالة العقدة نفسها (لا تُعيد بناء غيرها)
+    @State private var popped = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isCurrentLocationMember: Bool {
         member.id == currentLocationMemberID
@@ -1680,7 +2022,7 @@ struct TreeMemberNode: View, Equatable {
             return DS.Color.deceased
         }
         switch member.role {
-        case .owner: return DS.Color.ownerRole
+        case .owner: return ownerShowsAsAdmin ? DS.Color.adminRole : DS.Color.ownerRole
         case .admin: return DS.Color.adminRole
         case .monitor: return DS.Color.monitorRole
         case .supervisor: return DS.Color.supervisorRole
@@ -1713,6 +2055,7 @@ struct TreeMemberNode: View, Equatable {
                 // الصورة: توسيع/طي الأبناء — وبلا أبناء تفتح التفاصيل (طلب المالك)
                 Button {
                     guard TreeTapGuard.allowsTap else { return }
+                    DSTreeNodePop.fire($popped, reduceMotion: reduceMotion)
                     if hasChildren {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         onToggle()
@@ -1754,40 +2097,27 @@ struct TreeMemberNode: View, Equatable {
                             .frame(width: interactiveNodeSize + 6 * k, height: interactiveNodeSize + 6 * k)
                     }
                 }
+                // ضغطة العقدة: قفزة صغيرة بعد الضغطة المكتملة فقط (لا عند بدء سحب فوق العقدة)، وحالتها في العقدة
+                // نفسها — «تقليل الحركة»: لا شيء
+                .scaleEffect(popped ? DSMotion.nodePressScale : 1)
+                .buttonStyle(DSTreeNodeButtonStyle())
                 .overlay {
-                    // «أنت هنا» — حلقة زرقاء ثابتة دائمة حول عقدتك
+                    // «أنت هنا» — حلقة واحدة ثابتة دائمة حول عقدتك (كانت ثلاث: ثابتة + نابضة + حلقة البحث).
+                    // بعد «موقعك» تنبض قليلاً على الساعة المشتركة (لا `repeatForever`)، وساكنة مع «تقليل الحركة»
                     if isCurrentLocationMember {
                         Circle()
                             .stroke(DS.Color.currentLocation.opacity(0.9), lineWidth: 3 * k)
                             .frame(width: interactiveNodeSize + 16 * k, height: interactiveNodeSize + 16 * k)
-                    }
-                }
-                .overlay {
-                    // حلقة البحث المتوهجة
-                    if searchedMemberID == member.id {
+                            .modifier(TreeLocatePulse(color: DS.Color.currentLocation, active: isLocating,
+                                                      diameter: interactiveNodeSize + 16 * k, lineWidth: 3 * k))
+                    } else if searchedMemberID == member.id {
+                        // علامة الشخص المبحوث عنه — ذهبي الإطارات (`accentLight`) يُرى على العقدة الكحلية،
+                        // ويتلاشى بعد ٥ ثوانٍ (`TreeView.markSearched`)
                         Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [AppSection.tree.ink, AppSection.tree.ink],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 5 * k
-                            )
+                            .stroke(DS.Color.accentLight, lineWidth: 5 * k)
                             .frame(width: interactiveNodeSize + 14 * k, height: interactiveNodeSize + 14 * k)
-                            .dsGlowShadow()
-                    }
-                }
-                .overlay {
-                    // وميض الموقع (الدائرة الزرقاء — يجب أن يكون تحت شريط المتوفى)
-                    if isCurrentLocationMember {
-                        Circle()
-                            .stroke(DS.Color.currentLocation, lineWidth: 4.2 * k)
-                            .frame(width: interactiveNodeSize + 10 * k, height: interactiveNodeSize + 10 * k)
-                            .scaleEffect(isPulsing ? 1.35 : 1.0)
-                            .opacity(isPulsing ? 0.0 : 0.9)
-                            .shadow(color: DS.Color.currentLocation.opacity(0.5), radius: 12 * k)
-                            .animation(Animation.easeOut(duration: 1.25).repeatCount(4, autoreverses: false), value: isPulsing)
-                            .onAppear { isPulsing = true }
+                            .shadow(color: DS.Color.accentLight.opacity(0.55), radius: 8 * k)
+                            .transition(.opacity)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
@@ -1797,7 +2127,7 @@ struct TreeMemberNode: View, Equatable {
                             .fill(DS.Color.background)
                             .frame(width: 30 * k, height: 30 * k)
                             .overlay(
-                                Image(systemName: "heart.slash.fill")
+                                Image(systemName: "leaf.fill")
                                     .dsTreeGlyph(DS.Glyph.md, k)
                                     .foregroundColor(DS.Color.textTertiary)
                             )
@@ -1855,7 +2185,7 @@ struct TreeMemberNode: View, Equatable {
                 .accessibilityLabel(nodeAccessibilityLabel)
                 .accessibilityHint(hasChildren
                     ? L10n.t("توسيع أو طي الأبناء", "Expand or collapse children")
-                    : L10n.t("افتح التفاصيل", "Open details"))
+                    : L10n.t("يفتح التفاصيل", "Open details"))
 
                 // الاسم — كبسولة مستقلة، وتحتها مربع التاريخ المنفصل للمتوفى.
                 // نموذج تفاعل موحّد: كل ما يخص الشخص (دائرة/اسم/تواريخ) يفتح تفاصيله،
@@ -1872,7 +2202,9 @@ struct TreeMemberNode: View, Equatable {
                                     .dsTreeFont(.title3Tree, k)
                                     .foregroundColor(DS.Color.textPrimary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.55)
+                                    // الطويل يصغر حتى ٧٥٪ ثم يُقصّ بنقاط — كان ٥٥٪ فينزل لنحو ٧ نقاط بالتكبير الافتراضي
+                                    // (مراجعة ٢٠٢٦-١١-٢٧ #3). سطر واحد: الكبسولة بارتفاع ثابت لا يتّسع لسطرين
+                                    .minimumScaleFactor(TreeNodeText.minScale)
                                     // هامش ثابت على الجانبين في كل الصفوف — الطويل يصغر داخل الكبسولة
                                     .padding(.horizontal, 10 * k)
                                     .padding(.vertical, DS.Spacing.xs * k)
@@ -1884,7 +2216,7 @@ struct TreeMemberNode: View, Equatable {
                                     .dsTreeFont(.treeYears, k)
                                     .foregroundColor(DS.Color.textOnPrimary)
                                     .lineLimit(1)
-                                    .minimumScaleFactor(0.6)
+                                    .minimumScaleFactor(TreeNodeText.minScale)
                                     .padding(.horizontal, 12 * k)
                                     .frame(width: interactiveLabelWidth, height: 26 * k)
                                     .background(DS.Color.deceasedStrip)   // عنّابي بدرجة خفيفة (طلب المالك)
@@ -1900,7 +2232,7 @@ struct TreeMemberNode: View, Equatable {
                 .buttonStyle(DSScaleButtonStyle())
                 .zIndex(1)
                 .accessibilityLabel(displayName)
-                .accessibilityHint(L10n.t("افتح التفاصيل", "Open details"))
+                .accessibilityHint(L10n.t("يفتح التفاصيل", "Open details"))
                 // (شريحة التوسيع أُزيلت — العدّاد شارة فوق الصورة والصورة تتوسّع)
             }.fixedSize()
     }
@@ -1911,12 +2243,12 @@ struct TreeMemberNode: View, Equatable {
             return L10n.t(member.isFemale ? "متوفية" : "متوفى", "Deceased")
         }
         // سنة الوفاة أولاً ثم الميلاد (طلب المالك)
-        // «م» تسبق الرقم (م1947)، والمجهولة «م0000» — طلب المالك
+        // «م» بعد الرقم (1947م)، والمجهولة «0000م» — طلب المالك (٢٠٢٦-١١-٢٧؛ كانت تسبقه)
         // كل سنة داخل عزل LTR (U+2066…U+2069) فتبقى «م» ملتصقة بيمين رقمها
         // ولا تنتقل لجهة السنة الأخرى مهما كان اتجاه الواجهة (طلب المالك)
         func iso(_ y: String?) -> String {
             let v = (y == nil || y == "") ? "0000" : y!
-            return "\u{2066}م\(v)\u{2069}"
+            return "\u{2066}\(v)م\u{2069}"   // «م» بعد الرقم (1947م، والمجهولة 0000م) — طلب المالك ٢٠٢٦-١١-٢٧
         }
         // الوفاة أولاً ثم الميلاد (معكوس — طلب المالك)
         return "\(iso(death.map(String.init))) - \(iso(birth.map(String.init)))"
@@ -2029,3 +2361,61 @@ struct TreeAvatarArt: View, Equatable {
 }
 
 // لمسة الطين على عناصر الشجرة صارت الواحدة `DSClaySkin` (ArtTrial.swift) — كانت `TreeArtSkin` هنا (أسلوب واحد ٢٠٢٦-١٠-٠٧)
+
+
+/// أصغر نسبة تصغير لنصوص العقدة (الاسم والسنوات) — مكان واحد (مراجعة ٢٠٢٦-١١-٢٧ #3)
+enum TreeNodeText {
+    static let minScale: CGFloat = 0.75
+}
+
+/// نبضة «أنت هنا» بعد «موقعك»: حلقة بلون الموقع تتّسع من حلقة العقدة وتتلاشى، على الساعة الهادئة المشتركة
+/// (`FTAmbientClock`، مثل `DSUrgentPulse`) — لا `repeatForever` ولا مؤقّت. تسكن وتختفي حين لا تكون نشطة، خارج الشاشة،
+/// خلف مربّع (`ftAnimationsPaused`) ومع «تقليل الحركة» (الحلقة الثابتة تبقى)
+struct TreeLocatePulse: ViewModifier {
+    let color: Color
+    let active: Bool
+    let diameter: CGFloat
+    let lineWidth: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.ftAnimationsPaused) private var paused
+    @State private var onScreen = false
+    @State private var start: TimeInterval?
+    @State private var now: TimeInterval = 0
+    @State private var token = FTAmbientClock.Token()
+    private var clock: FTAmbientClock { FTAmbientClock.shared }
+    private static let grow: CGFloat = 0.35
+
+    func body(content: Content) -> some View {
+        let q = phase
+        content
+            .overlay {
+                Circle()
+                    .stroke(color, lineWidth: lineWidth * 1.4)
+                    .frame(width: diameter, height: diameter)
+                    .scaleEffect(1 + Self.grow * CGFloat(1 - (1 - q) * (1 - q)))
+                    .opacity(start == nil ? 0 : 0.9 * (1 - q))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .onAppear { onScreen = true; sync() }
+            .onDisappear { onScreen = false; sync() }
+            // القيمة الجديدة تُمرَّر صراحةً: داخل `onChange` قد تُقرأ الخصائص من نسخة العرض السابقة
+            // (كانت النبضة لا تقف بعد انتهاء «موقعك» — فحص المحاكي ٢٠٢٦-١١-٢٧)
+            .onChange(of: active) { v in sync(active: v) }
+            .onChange(of: paused) { v in sync(paused: v) }
+            .onChange(of: reduceMotion) { v in sync(reduceMotion: v) }
+            .onReceive(clock.$time) { t in if start != nil { now = t } }
+    }
+
+    private var phase: Double {
+        guard let start else { return 0 }
+        return max(0, now - start).truncatingRemainder(dividingBy: DS.Pulse.period) / DS.Pulse.period
+    }
+
+    private func sync(active: Bool? = nil, paused: Bool? = nil, reduceMotion: Bool? = nil) {
+        let run = (active ?? self.active) && onScreen && !(reduceMotion ?? self.reduceMotion) && !(paused ?? self.paused)
+        clock.hold(ObjectIdentifier(token), run)
+        start = run ? clock.time : nil
+        now = clock.time
+    }
+}

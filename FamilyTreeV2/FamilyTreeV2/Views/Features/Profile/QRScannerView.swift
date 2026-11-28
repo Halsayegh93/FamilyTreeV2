@@ -55,7 +55,7 @@ struct QRScannerView: View {
                 Text(scanErrorMessage ?? "")
             }
             // الرأس الملوّن الموحّد للصفحات الفرعية (بدل شريط النظام فوق الكاميرا) — × في الطرف لأنها غطاء
-            .dsSubPageHeader(L10n.t("رمز QR", "QR Code"), section: .profile, nav: .close)
+            .dsSubPageHeader(L10n.t("مسح رمز العضو", "Scan member code"), section: .profile, nav: .close)
             .onAppear {
                 checkCameraPermission()
             }
@@ -67,7 +67,7 @@ struct QRScannerView: View {
         VStack {
             Spacer()
 
-            Text(L10n.t("وجّه الكاميرا نحو رمز QR", "Point camera at QR code"))
+            Text(L10n.t("وجّه الكاميرا نحو رمز العضو", "Point the camera at the member code"))
                 .dsFont(.rowTitle)
                 .foregroundColor(DS.Color.textOnPrimary)
                 .padding(.horizontal, DS.Spacing.xl)
@@ -105,7 +105,7 @@ struct QRScannerView: View {
                     .dsFont(.caption)
                     .foregroundColor(DS.Color.textTertiary)
 
-                Text(result.relationship)
+                Text(KinshipCalculator.displayText(result))
                     .dsFont(.pageTitle)
                     .foregroundStyle(AppSection.profile.gradient)
                     .multilineTextAlignment(.center)
@@ -190,7 +190,7 @@ struct QRScannerView: View {
         }
 
         // حساب صلة القرابة
-        let result = KinshipCalculator.calculate(
+        let result = await KinshipCalculator.familyTree(
             from: currentUser,
             to: member,
             lookup: memberVM._memberById
@@ -216,7 +216,8 @@ struct QRScannerView: View {
                     userInfo: [
                         "memberId": member.id,
                         "relationship": result.relationship,
-                        "pathIds": allPathIds
+                        "pathIds": allPathIds,
+                        "viaMother": result.viaMother
                     ]
                 )
             }

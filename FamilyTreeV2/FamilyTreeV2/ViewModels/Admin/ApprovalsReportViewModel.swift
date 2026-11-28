@@ -27,7 +27,7 @@ final class ApprovalsReportViewModel: ObservableObject {
         state = .loading
         let range = period.range()
         nonisolated struct Params: Encodable { let p_from: String; let p_to: String }
-        let iso = ISO8601DateFormatter()
+        let iso = DateParsing.isoPlain
         do {
             let result: ApprovalsReport = try await supabase
                 .rpc("approvals_report", params: Params(p_from: iso.string(from: range.from), p_to: iso.string(from: range.to)))

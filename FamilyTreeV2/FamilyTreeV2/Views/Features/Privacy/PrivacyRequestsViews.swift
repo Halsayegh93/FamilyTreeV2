@@ -18,9 +18,9 @@ enum TreeDataRequestKind: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .hide: return L10n.t("إخفاء بياناتي", "Hide my data")
-        case .delete: return L10n.t("حذف بياناتي من الشجرة", "Delete my data from the tree")
-        case .correct: return L10n.t("تصحيح بياناتي", "Correct my data")
+        case .hide: return L10n.t("إخفاء البيانات", "Hide my data")
+        case .delete: return L10n.t("حذف البيانات من الشجرة", "Delete my data from the tree")
+        case .correct: return L10n.t("تصحيح البيانات", "Correct my data")
         }
     }
 
@@ -278,12 +278,9 @@ struct GuardianRequestsCard: View {
         // VStack لا Group: يبقى موجوداً وهو فارغ فيعمل `.task`
         VStack(spacing: 0) {
             if !requests.isEmpty {
-                DSFormCard(L10n.t("موافقة ولي الأمر", "Guardian consent"), icon: "person.2.fill",
-                           color: DS.Color.info) {
-                    Text("\(requests.count)")
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                } content: {
+                // قسم بعنوانه الموحّد (طلب المالك ٢٠٢٦-١١-١٠ «التصاميم مو موحدة»)
+                DSComposerSection(title: L10n.t("موافقة ولي الأمر", "Guardian consent"), icon: "person.2.fill",
+                                  tint: DS.Color.primary, trailing: "\(requests.count)", index: 0) {
                     VStack(spacing: DS.Spacing.sm) {
                         ForEach(requests) { request in
                             row(request)
@@ -293,7 +290,7 @@ struct GuardianRequestsCard: View {
                         }
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 .padding(.top, DS.Spacing.md)
             }
         }
@@ -304,7 +301,7 @@ struct GuardianRequestsCard: View {
         .dsAlert(L10n.t("رفض الطلب؟", "Reject the request?"),
                  isPresented: Binding(get: { rejectTarget != nil }, set: { if !$0 { rejectTarget = nil } })) {
             Button(L10n.t("إلغاء", "Cancel"), role: .cancel) { rejectTarget = nil }
-            Button(L10n.t("أرفض", "Reject"), role: .destructive) {
+            Button(L10n.t("رفض", "Reject"), role: .destructive) {
                 if let r = rejectTarget { decide(r, approve: false) }
                 rejectTarget = nil
             }
@@ -321,14 +318,22 @@ struct GuardianRequestsCard: View {
                 .dsFont(.rowTitle)
                 .foregroundColor(DS.Color.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: DS.Spacing.sm) {
-                DSButton(L10n.t("أوافق", "Approve"), icon: "checkmark", tint: DS.Color.success,
-                         isLoading: busyId == request.id) {
+            // تذييل المربّعات الموحّد: «موافقة» بتعبئة القسم، و«رفض» سطراً أحمر هادئاً تحته (بتأكيده كما كان)
+            VStack(spacing: DS.Spacing.xs) {
+                DSButton(L10n.t("موافقة", "Approve"), icon: "checkmark", isLoading: busyId == request.id) {
                     decide(request, approve: true)
                 }
-                DSButton(L10n.t("أرفض", "Reject"), icon: "xmark", role: .destructive, tint: DS.Color.reject) {
-                    rejectTarget = request
+                Button { rejectTarget = request } label: {
+                    HStack(spacing: DS.Spacing.xs) {
+                        Image(systemName: "xmark").dsGlyph(DS.Glyph.sm)
+                        Text(L10n.t("رفض", "Reject")).dsFont(.chip)
+                    }
+                    .foregroundColor(DS.Color.error)
+                    .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(DSPressStyle())
+                .accessibilityLabel(L10n.t("رفض", "Reject"))
             }
             .disabled(busyId != nil)
         }
@@ -369,14 +374,20 @@ struct GuardianRequestsCard: View {
 
 // MARK: - «الوارد»: طلبات حذف الحساب والخصوصية
 
-/// بطاقات مستقلّة فوق طلبات «الوارد» — للمالك/المدير (الحذف) والمالك/المدير/المراقب (الخصوصية)
+/// بطاقات مستقلّة فوق طلبات «الوارد» — للمالك/المدير (الحذف) والمالك/المدير/المراقب (الخصوصية)،
+/// و«إضافة قريبة» و«طلب حذف من الشجرة» (§9، المالك والمدير) بمربّع تفاصيلها
 struct AdminPolicyRequestsSection: View {
     @ObservedObject var adminRequestVM: AdminRequestViewModel
+    /// طلب يُفتح مربّعه بعد التحميل (من الإشعار) — مرة واحدة
+    var focusId: UUID? = nil
 
     @State private var confirmDelete: AdminRequest?
     @State private var rejectTarget: AdminRequest?
     @State private var rejectReason = ""
     @State private var busyId: UUID?
+    /// مربّع «إضافة قريبة» / «طلب حذف من الشجرة»
+    @State private var openRelative: AdminRequest?
+    @State private var focusHandled = false
 
     var body: some View {
         Group {
@@ -389,6 +400,23 @@ struct AdminPolicyRequestsSection: View {
             ForEach(adminRequestVM.relativeAddRequests) { request in
                 card(request, isDeletion: false)
             }
+            // «طلب حذف من الشجرة» (§9)
+            ForEach(adminRequestVM.relativeRemoveRequests) { request in
+                card(request, isDeletion: false)
+            }
+            // «طلب النسب» — صفّا الأم والأب وموافقة/رفض (أبناء البنات من خارج العائلة)
+            ForEach(adminRequestVM.lineageRequests) { request in
+                AdminLineageRequestCard(request: request, adminRequestVM: adminRequestVM)
+            }
+        }
+        .onAppear(perform: openFocusIfNeeded)
+        .onChange(of: relativeIds) { _ in openFocusIfNeeded() }
+        .dsCenterBox(item: $openRelative) { request in
+            AnyView(AdminRelativeRequestBox(
+                request: request, adminRequestVM: adminRequestVM, isBusy: busyId == request.id,
+                onApprove: { openRelative = nil; approve(request) },
+                onReject: { reason in openRelative = nil; reject(request, reason: reason) },
+                onClose: { openRelative = nil }))
         }
         .dsAlert(L10n.t("حذف نهائي للحساب؟", "Delete the account permanently?"),
                  isPresented: Binding(get: { confirmDelete != nil }, set: { if !$0 { confirmDelete = nil } })) {
@@ -415,32 +443,73 @@ struct AdminPolicyRequestsSection: View {
         }
     }
 
+    private var relativeIds: [UUID] {
+        (adminRequestVM.relativeAddRequests + adminRequestVM.relativeRemoveRequests).map(\.id)
+    }
+
+    private func openFocusIfNeeded() {
+        guard let focusId, !focusHandled else { return }
+        guard let r = (adminRequestVM.relativeRemoveRequests + adminRequestVM.relativeAddRequests)
+            .first(where: { $0.id == focusId }) else { return }
+        focusHandled = true
+        openRelative = r
+    }
+
     private func name(_ r: AdminRequest?) -> String {
         r?.member?.fullName ?? L10n.t("العضو", "the member")
     }
 
+    private static func isRelative(_ r: AdminRequest) -> Bool {
+        r.requestType == RequestType.relativeAdd.rawValue || r.requestType == RequestType.relativeRemove.rawValue
+    }
+
+    private static func isRemoval(_ r: AdminRequest) -> Bool {
+        r.requestType == RequestType.relativeRemove.rawValue
+    }
+
+    /// عنوان البطاقة (§10): «طلب إضافة زوجة» · «طلب حذف ابن» … لا «إضافة قريبة» وحدها
+    static func title(_ request: AdminRequest) -> String {
+        switch request.requestType {
+        case RequestType.accountDelete.rawValue: return L10n.t("طلب حذف حساب", "Account deletion request")
+        case RequestType.relativeAdd.rawValue:
+            return RelativeAddDetails.parse(request.details)?.requestTitle ?? AdminRequestFactText.relativeAddGeneric
+        case RequestType.relativeRemove.rawValue:
+            return RelativeRemoveDetails.parse(request.details)?.requestTitle ?? RelativeRemoveDetails.genericTitle
+        default:
+            let kind = PrivacyRequestDetails.parse(request.details)?.kindTitle ?? ""
+            return L10n.t("طلب خصوصية: \(kind)", "Privacy request: \(kind)")
+        }
+    }
+
     private func card(_ request: AdminRequest, isDeletion: Bool) -> some View {
-        let isRelative = request.requestType == RequestType.relativeAdd.rawValue
+        let isRelative = Self.isRelative(request)
+        let isRemoval = Self.isRemoval(request)
         let details = isDeletion || isRelative ? nil : PrivacyRequestDetails.parse(request.details)
-        let tint = isDeletion ? DS.Color.error : DS.Color.palm
-        let title = isDeletion ? L10n.t("طلب حذف حساب", "Account deletion request")
-                  : isRelative ? L10n.t("إضافة قريبة", "Add a relative")
-                  : L10n.t("طلب خصوصية: \(details?.kindTitle ?? "")", "Privacy request: \(details?.kindTitle ?? "")")
-        // «إضافة قريبة»: ملخّص السيرفر («إضافة زوجة: …») مكان الملاحظة
-        let note = isRelative ? RelativeAddDetails.parse(request.details)?.summaryText
-                              : details?.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tint = isDeletion || isRemoval ? DS.Color.error : DS.Color.palm
+        let title = Self.title(request)
+        // «إضافة قريبة»/«حذف»: ملخّص السيرفر («حذف ابن: …») مكان الملاحظة
+        let note = isRemoval ? RelativeRemoveDetails.parse(request.details)?.summary
+                 : isRelative ? RelativeAddDetails.parse(request.details)?.summaryText
+                 : details?.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lookup: (UUID) -> FamilyMember? = { adminRequestVM.memberVM?.member(byId: $0) }
+        let facts = AdminRequestFacts.of(request, member: lookup)
+        let approveTitle = isRemoval ? L10n.t("موافقة على الحذف", "Approve removal")
+                         : isDeletion ? L10n.t("تنفيذ الحذف", "Delete account") : L10n.t("موافقة", "Approve")
         return VStack(alignment: .leading, spacing: DS.Spacing.sm) {
             HStack(spacing: DS.Spacing.sm) {
-                DSFieldIcon(name: isDeletion ? "person.crop.circle.badge.xmark" : isRelative ? "person.badge.plus" : "lock.shield.fill",
+                DSFieldIcon(name: isDeletion ? "person.crop.circle.badge.xmark"
+                                : isRemoval ? "person.badge.minus"
+                                : isRelative ? "person.badge.plus" : "lock.shield.fill",
                             tint: tint)
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title)
-                        .dsFont(.rowTitle)
-                        .foregroundColor(DS.Color.textPrimary)
-                    Text(name(request))
-                        .dsFont(.footnote)
-                        .foregroundColor(DS.Color.textSecondary)
-                        .dsNameLines()
+                    // §10: شريحة النوع قبل العنوان، ثم «مقدّم الطلب: …»
+                    HStack(alignment: .firstTextBaseline, spacing: DS.Spacing.xsm) {
+                        if let kind = facts?.kind { AdminRequestKindChip(kind: kind) }
+                        Text(title)
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                    }
+                    AdminRequestCardLine(kind: nil, requester: facts?.requesterShort ?? name(request))
                 }
                 Spacer(minLength: 0)
                 if let created = request.createdAt {
@@ -460,11 +529,21 @@ struct AdminPolicyRequestsSection: View {
                     .dsFont(.footnote)
                     .foregroundColor(DS.Color.textTertiary)
             }
+            // «مكانه في الشجرة» (طلب المالك ٢٠٢٦-١١-١٣) — زرّ المعاينة الرئيسي = زرّ البطاقة نفسه
+            if let place = treePlace(request, title: title) {
+                AnyView(TreePlaceSection(place: place, men: adminRequestVM.memberVM?.allMembers ?? [],
+                                         primary: TreePlacePrimary(
+                                            title: approveTitle,
+                                            icon: isDeletion || isRemoval ? "trash" : "checkmark") {
+                                                if isDeletion { confirmDelete = request } else { approve(request) }
+                                            })
+                    .environment(\.dsFlatComposerSections, true))
+            }
             HStack(spacing: DS.Spacing.sm) {
-                DSButton(isDeletion ? L10n.t("تنفيذ الحذف", "Delete account") : L10n.t("موافقة", "Approve"),
-                         icon: isDeletion ? "trash" : "checkmark",
-                         role: isDeletion ? .destructive : nil,
-                         tint: isDeletion ? nil : DS.Color.success,
+                DSButton(approveTitle,
+                         icon: isDeletion || isRemoval ? "trash" : "checkmark",
+                         role: isDeletion || isRemoval ? .destructive : nil,
+                         tint: isDeletion || isRemoval ? nil : DS.Color.success,
                          isLoading: busyId == request.id) {
                     if isDeletion { confirmDelete = request } else { approve(request) }
                 }
@@ -474,12 +553,30 @@ struct AdminPolicyRequestsSection: View {
                 }
             }
             .disabled(busyId != nil)
+            // «إضافة قريبة» و«حذف»: التفاصيل كاملة في مربّع (بيانات الطلب، المكان، المرسل)
+            if isRelative {
+                DSChipButton(L10n.t("تفاصيل الطلب", "Request details"), icon: "doc.text.magnifyingglass",
+                             tint: DS.Color.primary, size: .small) {
+                    openRelative = request
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
         .padding(DS.Spacing.md)
         .dsCard(padding: nil, radius: DS.Hub.tileRadius)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: DS.Spacing.xsm, leading: DS.Spacing.lg, bottom: DS.Spacing.xsm, trailing: DS.Spacing.lg))
+    }
+
+    /// مكان الطلب: «إضافة قريبة»/«حذف» بنوعها، والحذف والخصوصية تعريف بالعضو
+    private func treePlace(_ request: AdminRequest, title: String) -> TreePlace? {
+        let data = TreePlaceData(men: adminRequestVM.memberVM?.allMembers ?? [], women: WomenStore.cache)
+        switch request.requestType {
+        case RequestType.relativeAdd.rawValue: return TreePlace.relativeAdd(request, kindLabel: title)
+        case RequestType.relativeRemove.rawValue: return TreePlace.relativeRemove(request, kindLabel: title, data: data)
+        default: return TreePlace.subject(memberId: request.memberId, kindLabel: title, data: data)
+        }
     }
 
     private func approve(_ request: AdminRequest) {
@@ -490,11 +587,14 @@ struct AdminPolicyRequestsSection: View {
             switch request.requestType {
             case RequestType.accountDelete.rawValue: ok = await adminRequestVM.approveAccountDeletion(request)
             case RequestType.relativeAdd.rawValue: ok = await adminRequestVM.decideRelativeAdd(request, approve: true, reason: nil)
+            case RequestType.relativeRemove.rawValue:
+                ok = await adminRequestVM.decideRelativeRemove(request, approve: true, reason: nil)
             default: ok = await adminRequestVM.decidePrivacyRequest(request, approve: true, reason: nil)
             }
             busyId = nil
             if ok {
                 DSMomentToast.show(request.requestType == RequestType.accountDelete.rawValue
+                                   || request.requestType == RequestType.relativeRemove.rawValue
                                    ? L10n.t("تم التنفيذ", "Carried out") : L10n.t("تمت الموافقة", "Approved"))
             }
         }
@@ -504,14 +604,120 @@ struct AdminPolicyRequestsSection: View {
         guard busyId == nil else { return }
         busyId = request.id
         Task {
-            if request.requestType == RequestType.accountDelete.rawValue {
+            switch request.requestType {
+            case RequestType.accountDelete.rawValue:
                 _ = await adminRequestVM.rejectAccountDeletion(request, reason: reason)
-            } else if request.requestType == RequestType.relativeAdd.rawValue {
+            case RequestType.relativeAdd.rawValue:
                 _ = await adminRequestVM.decideRelativeAdd(request, approve: false, reason: reason)
-            } else {
+            case RequestType.relativeRemove.rawValue:
+                _ = await adminRequestVM.decideRelativeRemove(request, approve: false, reason: reason)
+            default:
                 _ = await adminRequestVM.decidePrivacyRequest(request, approve: false, reason: reason)
             }
             busyId = nil
         }
+    }
+}
+
+// MARK: - مربّع «إضافة قريبة» / «طلب حذف من الشجرة» (§9/§10)
+
+/// بيانات الطلب (نوع الطلب · القرابة · مقدّم الطلب · الاسم) ← «مكانه في الشجرة» ← «المرسل»، والقرار بأزراره
+struct AdminRelativeRequestBox: View {
+    let request: AdminRequest
+    @ObservedObject var adminRequestVM: AdminRequestViewModel
+    let isBusy: Bool
+    let onApprove: () -> Void
+    let onReject: (String) -> Void
+    let onClose: () -> Void
+
+    @State private var askReason = false
+    @State private var reason = ""
+
+    private var isRemoval: Bool { request.requestType == RequestType.relativeRemove.rawValue }
+
+    private var nameValue: String? {
+        if isRemoval { return RelativeRemoveDetails.parse(request.details)?.trimmedName }
+        let n = RelativeAddDetails.parse(request.details)?.name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return n.isEmpty ? nil : n
+    }
+
+    var body: some View {
+        let title = AdminPolicyRequestsSection.title(request)
+        let approveTitle = isRemoval ? L10n.t("موافقة على الحذف", "Approve removal") : L10n.t("موافقة", "Approve")
+        let men = adminRequestVM.memberVM?.allMembers ?? []
+        let data = TreePlaceData(men: men, women: WomenStore.cache)
+        let place = isRemoval ? TreePlace.relativeRemove(request, kindLabel: title, data: data)
+                              : TreePlace.relativeAdd(request, kindLabel: title)
+        return DSComposer(
+            title: title,
+            subtitle: DateHelper.displayDateTime(request.createdAt) ?? L10n.t("تفاصيل الطلب", "Request Details"),
+            icon: isRemoval ? "person.badge.minus" : "person.badge.plus",
+            tint: DS.Color.actionNavy,
+            // أزرار الطلبات الموحّدة: الإضافة «موافقة» كحلي + «رفض»؛ والحذف «موافقة على الحذف» أحمر (هدّام) و«رفض» فوقه
+            actionTitle: approveTitle,
+            actionIcon: "checkmark",
+            showsAction: !isRemoval,
+            cancelTitle: L10n.t("إغلاق", "Close"),
+            canSubmit: !isBusy,
+            extraActions: isRemoval ? [
+                DSComposerAction(id: "reject", title: L10n.t("رفض", "Reject"), icon: "xmark", isEnabled: !isBusy) {
+                    reason = ""
+                    askReason = true
+                },
+                DSComposerAction(id: "approve", title: approveTitle, icon: "trash", role: .destructive,
+                                 tint: DS.Color.error, isEnabled: !isBusy, action: onApprove),
+            ] : [
+                DSComposerAction(id: "reject", title: L10n.t("رفض", "Reject"), icon: "xmark",
+                                 role: .destructive, tint: DS.Color.reject, isEnabled: !isBusy) {
+                    reason = ""
+                    askReason = true
+                },
+            ],
+            decisionFooter: true,
+            onSubmit: onApprove,
+            onCancel: onClose
+        ) {
+            DSComposerSection(title: L10n.t("بيانات الطلب", "Request Info"), icon: "doc.text.fill",
+                              tint: AppSection.admin.ink, index: 1) {
+                if let facts = AdminRequestFacts.of(request, member: { adminRequestVM.memberVM?.member(byId: $0) }) {
+                    AdminRequestFactRows(facts: facts)
+                }
+                if let nameValue {
+                    DSTileGrid([.wide(DSFieldTileFace(label: L10n.t("الاسم", "Name"), value: nameValue, glyph: .none))])
+                }
+            }
+            if let place {
+                AnyView(TreePlaceSection(place: place, index: 2, men: men,
+                                         primary: TreePlacePrimary(title: approveTitle,
+                                                                   icon: isRemoval ? "trash" : "checkmark",
+                                                                   action: onApprove)))
+            }
+            AdminSenderSection(info: senderInfo, index: place == nil ? 2 : 3)
+        }
+        .dsAlert(L10n.t("سبب الرفض", "Rejection Reason"), isPresented: $askReason) {
+            TextField(L10n.t("اكتب السبب (اختياري)", "Reason (optional)"), text: $reason)
+                .dsAlertField()
+            Button(L10n.t("إرسال الرفض", "Send Rejection"), role: .destructive) { onReject(reason) }
+            Button(L10n.t("إلغاء", "Cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.t("سيصل السبب كرسالة إلى مقدّم الطلب.", "The reason will be sent as a message to the requester."))
+        }
+    }
+
+    /// «المرسل»: المسار («الملف الشخصي ← الأسرة ← …»)، ومن أرسله، والجهاز والوقت
+    private var senderInfo: AdminSenderInfo {
+        let arrow = L10n.t(" ← ", " → ")
+        let what = AdminPolicyRequestsSection.title(request)
+        let inferred = L10n.t("الملف الشخصي", "Profile") + arrow + L10n.t("الأسرة", "Family") + arrow + what
+        let sender = adminRequestVM.memberVM?.member(byId: request.requesterId)
+        let line = sender.map { m in
+            [m.fourPartName, AdminTrailText.roleName(m.role)].compactMap { $0 }.joined(separator: " · ")
+        }
+        let via = request.sentVia
+        return AdminSenderInfo(
+            steps: AdminTrailText.pathSteps(recorded: request.sentFrom, inferred: inferred),
+            sender: line, device: AdminTrailText.device(via), deviceRecorded: via != nil,
+            time: DateHelper.displayDateTime(via?.at) ?? DateHelper.displayDateTime(request.createdAt) ?? AdminTrailText.notRecorded,
+            senderId: sender?.id)
     }
 }

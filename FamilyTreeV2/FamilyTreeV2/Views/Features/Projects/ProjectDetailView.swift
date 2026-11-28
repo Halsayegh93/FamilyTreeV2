@@ -921,11 +921,17 @@ struct ProjectDetailView: View {
 
     // MARK: - Delete
     private var deleteSection: some View {
-        // الزرّ الواحد بدور الحذف (أحمر)
-        DSButton(L10n.t("حذف المشروع", "Delete Project"), icon: "trash.fill", role: .destructive) {
-            showDeleteAlert = true
+        // حبّة «حذف» الحمراء الموحّدة (نفس وجه حذف تذييل المربّعات — `DSSoftDestructiveFace`)
+        Button { showDeleteAlert = true } label: {
+            HStack(spacing: DSBox.buttonSpacing) {
+                Image(systemName: "trash").dsGlyph(DSButtonSize.regular.glyph)
+                Text(L10n.t("حذف المشروع", "Delete Project"))
+            }
+            .modifier(DSSoftDestructiveFace())
         }
-        .padding(.top, DS.Spacing.sm)
+        .buttonStyle(DSPressStyle())
+        .accessibilityLabel(L10n.t("حذف المشروع", "Delete Project"))
+        .padding(.top, DS.Spacing.xs)
     }
     
     // MARK: - Helpers

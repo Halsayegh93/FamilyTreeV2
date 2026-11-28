@@ -9,7 +9,12 @@ enum OccasionChoices {
 
     // MARK: الصفة (لمن التهنئة)
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func honorifics(_ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("honorifics", gender: g) ?? baseHonorifics(g)
+    }
+
+    private static func baseHonorifics(_ g: OccasionGender) -> [String] {
         g == .male
             ? ["الأخ العزيز", "الابن العزيز", "العم العزيز", "الخال العزيز", "الجد العزيز", "الحاج", "الدكتور", "المهندس", "الأستاذ", "الشاب"]
             : ["الأخت العزيزة", "الابنة العزيزة", "العمة العزيزة", "الخالة العزيزة", "الجدة العزيزة", "الحاجة", "الدكتورة", "المهندسة", "الأستاذة", "الشابة"]
@@ -38,7 +43,12 @@ enum OccasionChoices {
         "graduation": ["نتقدم بالتهنئة {d}", "ألف مبروك {d}", "تهنئة وتبريك {d}", "تتقدم عائلة المحمدعلي بالتهنئة {d}"],
     ]
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func openings(_ templateId: String) -> [String] {
+        OccasionDesignerConfig.list("openings", template: templateId) ?? baseOpenings(templateId)
+    }
+
+    private static func baseOpenings(_ templateId: String) -> [String] {
         openingsById[templateId] ?? openingsById["wedding"] ?? []
     }
 
@@ -51,7 +61,12 @@ enum OccasionChoices {
 
     // MARK: سطر المناسبة
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func occasions(_ templateId: String, _ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("occasions", template: templateId, gender: g) ?? baseOccasions(templateId, g)
+    }
+
+    private static func baseOccasions(_ templateId: String, _ g: OccasionGender) -> [String] {
         let m = g == .male
         switch templateId {
         case "newborn":
@@ -71,9 +86,11 @@ enum OccasionChoices {
 
     // MARK: التخرج: المرحلة + الجهة
 
-    static let degrees = ["الثانوية العامة", "الدبلوم", "البكالوريوس", "الماجستير", "الدكتوراه"]
+    static var degrees: [String] { OccasionDesignerConfig.list("degrees") ?? baseDegrees }
+    private static let baseDegrees = ["الثانوية العامة", "الدبلوم", "البكالوريوس", "الماجستير", "الدكتوراه"]
 
-    static let institutions = [
+    static var institutions: [String] { OccasionDesignerConfig.list("institutions") ?? baseInstitutions }
+    private static let baseInstitutions = [
         "جامعة الكويت",
         "الهيئة العامة للتعليم التطبيقي والتدريب",
         "جامعة عبدالله السالم",
@@ -96,7 +113,12 @@ enum OccasionChoices {
 
     // MARK: الدعاء
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func duas(_ templateId: String, _ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("duas", template: templateId, gender: g) ?? baseDuas(templateId, g)
+    }
+
+    private static func baseDuas(_ templateId: String, _ g: OccasionGender) -> [String] {
         let m = g == .male
         switch templateId {
         case "newborn":
@@ -148,6 +170,10 @@ enum OccasionChoices {
 
     /// دعاء إعلان الوفاة: سطرين
     static func deathDuas(_ g: OccasionGender) -> [(String, String)] {
+        OccasionDesignerConfig.pairs("deathDuas", gender: g) ?? baseDeathDuas(g)
+    }
+
+    private static func baseDeathDuas(_ g: OccasionGender) -> [(String, String)] {
         g == .male
             ? [("نسأل الله تعالى أن يتغمده برحمته الواسعة وأن يلهم ذويه الصبر والسلوان", "وأن يحشره مع النبي المصطفى وآله الطاهرين"),
                ("تغمده الله بواسع رحمته وأسكنه فسيح جناته", "وألهم أهله وذويه الصبر والسلوان"),
@@ -159,21 +185,34 @@ enum OccasionChoices {
 
     // MARK: الوفاة
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func deathLeads(_ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("deathLeads", gender: g) ?? baseDeathLeads(g)
+    }
+
+    private static func baseDeathLeads(_ g: OccasionGender) -> [String] {
         g == .male
             ? ["انتقل إلى رحمة الله تعالى", "انتقل إلى جوار ربه", "توفي إلى رحمة الله تعالى"]
             : ["انتقلت إلى رحمة الله تعالى", "انتقلت إلى جوار ربها", "توفيت إلى رحمة الله تعالى"]
     }
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func deathTitles(_ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("deathTitles", gender: g) ?? baseDeathTitles(g)
+    }
+
+    private static func baseDeathTitles(_ g: OccasionGender) -> [String] {
         g == .male
             ? ["المرحوم الحاج", "المرحوم", "المرحوم الشاب", "المرحوم الطفل", "المغفور له بإذن الله"]
             : ["المرحومة الحاجة", "المرحومة", "المرحومة الشابة", "المرحومة الطفلة", "المغفور لها بإذن الله"]
     }
 
-    static let funeralDays = ["اليوم", "غداً", "يوم السبت", "يوم الأحد", "يوم الاثنين", "يوم الثلاثاء", "يوم الأربعاء", "يوم الخميس", "يوم الجمعة"]
-    static let funeralTimes = ["بعد صلاة الظهر", "بعد صلاة العصر", "بعد صلاة المغرب", "بعد صلاة العشاء", "صباحاً", "عصراً"]
-    static let cemeteries = ["المقبرة الجعفرية", "مقبرة الصليبيخات", "مقبرة صبحان", "مقبرة الجهراء"]
+    static var funeralDays: [String] { OccasionDesignerConfig.list("funeralDays") ?? baseFuneralDays }
+    private static let baseFuneralDays = ["اليوم", "غداً", "يوم السبت", "يوم الأحد", "يوم الاثنين", "يوم الثلاثاء", "يوم الأربعاء", "يوم الخميس", "يوم الجمعة"]
+    static var funeralTimes: [String] { OccasionDesignerConfig.list("funeralTimes") ?? baseFuneralTimes }
+    private static let baseFuneralTimes = ["بعد صلاة الظهر", "بعد صلاة العصر", "بعد صلاة المغرب", "بعد صلاة العشاء", "صباحاً", "عصراً"]
+    static var cemeteries: [String] { OccasionDesignerConfig.list("cemeteries") ?? baseCemeteries }
+    private static let baseCemeteries = ["المقبرة الجعفرية", "مقبرة الصليبيخات", "مقبرة صبحان", "مقبرة الجهراء"]
 
     static func composeFuneral(day: String, time: String, cemetery: String) -> String {
         let cem = cemetery.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -202,16 +241,23 @@ enum OccasionChoices {
 
     // MARK: أماكن العزاء
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func venuePresets(_ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("venuePresets", gender: g) ?? baseVenuePresets(g)
+    }
+
+    private static func baseVenuePresets(_ g: OccasionGender) -> [String] {
         g == .male ? ["ديوان العائلة", "منزل الفقيد"] : ["ديوان العائلة", "منزل الفقيدة"]
     }
 
     // MARK: أوقات العزاء — بصيغة النعي الرسمية في الكويت (صفحات «وفيات» في الجرايد مثل الراي)، طلب المالك ٢٠٢٦-١٠-١٧:
     // الأيام والوقت اختياران منفصلان (+ «نص آخر»)، وفي البوست «<الأيام>، <الوقت>»: «اليوم وغداً وبعد غد، عقب صلاة العصر»
 
-    static let condolenceDays = ["اليوم فقط", "هذا اليوم فقط", "اليوم وغداً فقط", "اليوم وغداً وبعد غد",
+    static var condolenceDays: [String] { OccasionDesignerConfig.list("condolenceDays") ?? baseCondolenceDays }
+    private static let baseCondolenceDays = ["اليوم فقط", "هذا اليوم فقط", "اليوم وغداً فقط", "اليوم وغداً وبعد غد",
                                  "خلال الأيام الثلاثة القادمة", "يومياً"]
-    static let condolenceTimes = ["عقب صلاة العصر", "بعد صلاة العصر مباشرة", "عصراً فقط", "بعد صلاة المغرب",
+    static var condolenceTimes: [String] { OccasionDesignerConfig.list("condolenceTimes") ?? baseCondolenceTimes }
+    private static let baseCondolenceTimes = ["عقب صلاة العصر", "بعد صلاة العصر مباشرة", "عصراً فقط", "بعد صلاة المغرب",
                                   "بعد صلاة الظهر حتى العصر", "من الساعة ٧:٣٠ مساءً", "صباحاً ومساءً"]
     /// الافتراضي: «اليوم وغداً وبعد غد» + «عقب صلاة العصر»
     static let defaultCondolenceDay = 3
@@ -314,8 +360,10 @@ enum OccasionChoices {
 
     // MARK: مشاركة العزاء
 
-    static let solaceFrom = ["تتقدم عائلة المحمدعلي", "يتقدم أبناء عائلة المحمدعلي", "تتقدم أسرة المحمدعلي"]
-    static let solaceToFormats = ["عائلة {x} الكرام", "آل {x} الكرام", "أسرة {x} الكريمة"]
+    static var solaceFrom: [String] { OccasionDesignerConfig.list("solaceFrom") ?? baseSolaceFrom }
+    private static let baseSolaceFrom = ["تتقدم عائلة المحمدعلي", "يتقدم أبناء عائلة المحمدعلي", "تتقدم أسرة المحمدعلي"]
+    static var solaceToFormats: [String] { OccasionDesignerConfig.list("solaceToFormats") ?? baseSolaceToFormats }
+    private static let baseSolaceToFormats = ["عائلة {x} الكرام", "آل {x} الكرام", "أسرة {x} الكريمة"]
 
     /// اسم العائلة بدون «عائلة/آل/أسرة» و«الكرام/الكريمة» (لو انكتبت مع الاسم)
     static func solaceFamily(_ family: String) -> String {
@@ -341,7 +389,12 @@ enum OccasionChoices {
         return x.isEmpty ? "" : format.replacingOccurrences(of: "{x}", with: x)
     }
 
+    /// من السيرفر (`occasion_designer.lists`) وإلا المكتوب هنا
     static func solaceLeads(_ g: OccasionGender) -> [String] {
+        OccasionDesignerConfig.list("solaceLeads", gender: g) ?? baseSolaceLeads(g)
+    }
+
+    private static func baseSolaceLeads(_ g: OccasionGender) -> [String] {
         g == .male
             ? ["بوفاة المغفور له بإذن الله تعالى", "بوفاة فقيدهم الغالي", "بوفاة المرحوم"]
             : ["بوفاة المغفور لها بإذن الله تعالى", "بوفاة فقيدتهم الغالية", "بوفاة المرحومة"]

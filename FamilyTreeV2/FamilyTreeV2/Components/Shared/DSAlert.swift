@@ -69,10 +69,11 @@ extension View {
             .foregroundColor(DS.Color.textPrimary)
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.sm)
-            .frame(minHeight: 38, alignment: .topLeading)
+            .frame(minHeight: DSBox.fieldMinHeight, alignment: .topLeading)
             // مملوء بخلفية هادئة (نفس رمادي زرّ «إلغاء») بدل الأبيض المحدّد — طلب المالك ٢٠٢٦-١٠-٠٧
-            .background(DS.Color.mutedBackground.opacity(0.8))
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+            // تعبئة حقول المربّعات الموحّدة (`fieldFill`، زوايا `Radius.md`) — طلب المالك ٢٠٢٦-١١-١٠ «موحّد وخفيف»
+            .background(DS.Color.fieldFill)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous))
             .layoutValue(key: DSAlertIsFieldKey.self, value: true)
     }
 }
@@ -156,6 +157,9 @@ struct DSCenterCard<Content: View>: View {
     /// وضع العرض: المحتوى كله يتمرّر داخل البطاقة إن لم يتّسع — false لمحتوى يمرّر جزءه الطويل بنفسه
     /// (رسائل dsAlert: النص يتمرّر والأزرار ثابتة)
     var scrollsContent: Bool = true
+    /// أقصى عرض للبطاقة — nil = عرض التنبيه (`DSBox.alertMaxWidth`). مربّع التاريخ أعرض لأن عجلة التاريخ
+    /// لا تصغر عن عرضها الطبيعي (كانت تدفع الأزرار عن المنتصف)
+    var maxWidth: CGFloat? = nil
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     /// لون القسم للشريط الرفيع — من الواجهة التي فتحتها، واحتياطاً القسم المختار ثم كحلي العلامة
@@ -185,7 +189,7 @@ struct DSCenterCard<Content: View>: View {
                     cardBody
                 }
             }
-            .frame(maxWidth: landscape ? DS.Landscape.alertMaxWidth : DSBox.alertMaxWidth)
+            .frame(maxWidth: landscape ? DS.Landscape.alertMaxWidth : (maxWidth ?? DSBox.alertMaxWidth))
             .background(DS.Color.background)
             // بلا رأس: شريط رفيع بلون القسم أعلى البطاقة
             .overlay(alignment: .top) {
@@ -231,6 +235,34 @@ enum DSCenterPanelDim {
 
 /// لوح كبير بمنتصف الشاشة — لمحتوى طويل (نموذج) بدل الورقة السفلية.
 /// نفس روح `DSCenterCard` لكنه أوسع وأطول، ومحتواه يتمرّر داخله.
+/// «يظهر من مكان الضغط» (طلب المالك ٢٠٢٦-١١-١٧، قواعد Emil Kowalski): الشاشة التي تفتح مربّعاً تسجّل مكان
+/// آخر ضغطة (`dsRecordsTapOrigin()`)، و`DSCenterPanel` يكبر منه — المربّع يبقى في المنتصف، الذي يتغيّر هو نقطة
+/// بدء التكبير فقط. الضغطة صالحة ثانية واحدة، وتُستهلك مرة واحدة.
+enum DSTapOrigin {
+    private static var point: UnitPoint?
+    private static var at = Date.distantPast
+
+    static func record(_ location: CGPoint) {
+        let bounds = UIScreen.main.bounds
+        guard bounds.width > 0, bounds.height > 0 else { return }
+        point = UnitPoint(x: min(max(location.x / bounds.width, 0), 1), y: min(max(location.y / bounds.height, 0), 1))
+        at = Date()
+    }
+
+    static func take() -> UnitPoint? {
+        defer { point = nil }
+        guard let point, Date().timeIntervalSince(at) < 1 else { return nil }
+        return point
+    }
+}
+
+extension View {
+    /// يسجّل مكان كل ضغطة في هذه الشاشة دون أن يعطّل أزرارها أو سحبها
+    func dsRecordsTapOrigin() -> some View {
+        simultaneousGesture(SpatialTapGesture(coordinateSpace: .global).onEnded { DSTapOrigin.record($0.location) })
+    }
+}
+
 struct DSCenterPanel<Content: View>: View {
     /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -243,6 +275,8 @@ struct DSCenterPanel<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var appeared = false
     @State private var contentHeight: CGFloat = 0
+    /// نقطة الضغط التي فتحت المربّع (`DSTapOrigin`) — يكبر منها بدل المنتصف، ويصغر نحوها عند الإغلاق
+    @State private var origin: UnitPoint = DSTapOrigin.take() ?? .center
     /// لون القسم داخل المربّع — من الواجهة التي فتحته، واحتياطاً القسم المختار
     @Environment(\.dsSection) private var section
     /// وضع العرض: المربّع أعرض ويأخذ الارتفاع كله تقريباً (الشاشة ~٤٠٠ نقطة)
@@ -283,7 +317,8 @@ struct DSCenterPanel<Content: View>: View {
                     .dsBoxChrome(strong: true)
                     // يكبر من ٠٫٩٤ صاعداً قليلاً مع تلاشٍ — ثم يبدأ تسلسل محتواه (DSMotion)؛
                     // وعند الإغلاق يصغر وينزل قليلاً
-                    .scaleEffect(appeared || reduceMotion ? 1 : (dismissing ? DSMotion.panelOutScale : DSMotion.panelScale))
+                    .scaleEffect(appeared || reduceMotion ? 1 : (dismissing ? DSMotion.panelOutScale : DSMotion.panelScale),
+                                 anchor: origin)
                     .offset(y: appeared || reduceMotion ? 0 : (dismissing ? DSMotion.panelOutDrop : DSMotion.panelRise))
                     .opacity(appeared ? 1 : 0)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -362,6 +397,8 @@ struct DSExpandableCenterPanel<Content: View>: View {
     /// «تقليل الحركة» (توصية أبل): تلاشٍ فقط بلا تكبير ولا انزلاق
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isExpanded: Bool
+    /// لا يُغلق (بالضغط خارجه أو ✕) ما دام صحيحاً — قرار يُرسل في مربّع الطلب
+    var closeLocked: Bool = false
     let onClose: () -> Void
     @ViewBuilder let content: () -> Content
 
@@ -431,7 +468,7 @@ struct DSExpandableCenterPanel<Content: View>: View {
     /// يصغّر المربّع ويخفيه ثم يغلقه — والإغلاق نفسه بلا انزلاق النظام من
     /// الأسفل (كانت الطبقة الفارغة تنزلق بعد اختفاء المربّع فيبدو الإغلاق مكسوراً)
     private func animatedClose() {
-        guard appeared else { return }
+        guard appeared, !closeLocked else { return }
         closing = true
         // هادئة وأوضح (طلب المالك): تلاشٍ مع تصغير ونزول ملحوظين
         withAnimation(.easeInOut(duration: 0.42)) { appeared = false }

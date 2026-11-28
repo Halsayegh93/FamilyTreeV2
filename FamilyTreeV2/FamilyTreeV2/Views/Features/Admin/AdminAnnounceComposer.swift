@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import Supabase
 
 // MARK: - «إعلان» — أول أنواع المنشئ الواحد «إنشاء» (`AdminCreateComposer.swift`)
@@ -13,6 +14,8 @@ import Supabase
 // الإشعار = `NotificationViewModel.sendNotification` / `scheduleNotification` بنوع `admin_broadcast` — والدفع من مشغّل جدول
 // الإشعارات على السيرفر كما هو. تعديل المجدول (من «الإشعارات المجدولة») = نفس الشاشة بالمسودّة → `updateScheduledNotification`.
 // الصلاحية `canSendNotifications` (المالك والمدير)، وحارس السيرفر يبقى الحَكَم.
+// إعادة التصميم ٢٠٢٦-١١-٢٦ (U14): الشكل من العُدّة فقط — شرائح «لمن؟»/«متى؟» صارت شريحة اللوحة الواحدة (spec A.9) تلتفّ
+// ولا مسار رمادي يشبه المبدّل؛ والإرسال يمرّ بـ`DebugAdminProbe.dryRun` (T0). هذا المربّع بيت الإعلان عند فتح التطبيق الوحيد.
 
 /// زرّ مكبّر الصوت في رأس «اليوم» (لمن يرسل للأعضاء فقط — يقرّر من يضعه): المنشئ الواحد على «إعلان»
 struct AdminAnnounceLauncher: View {
@@ -117,7 +120,7 @@ enum AdminAnnounceKit {
         let days = cal.dateComponents([.day], from: cal.startOfDay(for: now), to: cal.startOfDay(for: date)).day ?? 0
         switch days {
         case ...0: return L10n.t("اليوم", "today")
-        case 1:    return L10n.t("بكرة", "tomorrow")
+        case 1:    return L10n.t("غداً", "tomorrow")
         case 2..<DeceasedMemorial.weekDays:
             let f = DateFormatter()
             f.locale = LanguageManager.shared.locale
@@ -146,11 +149,14 @@ struct AdminAnnounceDraft {
     var when: When = .now
     /// تعديل إشعار مجدول — معرّف صفّه (nil = جديد)
     var editingId: UUID? = nil
+    /// «＋ إعلان جديد» من بطاقة «الإعلانات عند الفتح»: صفّ `launch_announcements` وحده — بلا إشعار ولا خبر
+    var launchOnly = false
 
-    init(text: String = "", audience: Audience = .all, when: When = .now) {
+    init(text: String = "", audience: Audience = .all, when: When = .now, launchOnly: Bool = false) {
         self.text = text
         self.audience = audience
         self.when = when
+        self.launchOnly = launchOnly
     }
 
     /// إشعار مجدول ← مسودّة تعديل: نصّه، مستلموه (دولة إن طابقوا أعضاءها بالضبط)، وموعده
@@ -185,6 +191,8 @@ struct AdminAnnounceComposer: View {
 
     /// تعديل إشعار مجدول (nil = جديد)
     private let editingId: UUID?
+    /// إعلان عند الفتح وحده (`AdminAnnounceDraft.launchOnly`) — بلا العنوان والنص و«متى»، والمفتاح مفعّل ضمناً
+    private let launchOnly: Bool
 
     /// العنوان — مكتوب مسبقاً «عائلة المحمدعلي» ويتعدّل (المالك ٢٠٢٦-١٠-٢٣ «خل مساحة للنص و العنوان»)
     @State private var title: String
@@ -208,11 +216,24 @@ struct AdminAnnounceComposer: View {
     @State private var failure: String? = nil
     /// ملخّص ما تمّ — ثم يُغلق المربّع
     @State private var done: String? = nil
+    /// السؤال الرابع «يظهر عند فتح التطبيق؟» (طلب المالك ٢٠٢٦-١١-١٢) — مطفأ افتراضياً، وليس في تعديل المجدول
+    @State private var launchOn = false
+    @State private var launchImage: UIImage? = nil
+    @State private var launch = AdminLaunchChoice(duration: .twoDays,
+                                                  untilDay: Date().addingTimeInterval(7 * 24 * 3600),
+                                                  button: .update, link: "")
+    /// «صورة للإشعار» (موافقة المالك ٢٠٢٦-١١-٢٥، الخيار ب): صورة اختيارية تظهر داخل إشعار الجوال —
+    /// منفصلة عن صورة «يظهر عند فتح التطبيق»، وليست في تعديل المجدول
+    @State private var pushImage: UIImage? = nil
+    @State private var pushImageItem: PhotosPickerItem? = nil
+    @State private var loadingPushImage = false
 
     init(chooser: AnyView? = nil, draft: AdminAnnounceDraft = AdminAnnounceDraft(), onClose: @escaping () -> Void) {
         self.chooser = chooser
         self.onClose = onClose
         editingId = draft.editingId
+        launchOnly = draft.launchOnly && draft.editingId == nil
+        _launchOn = State(initialValue: draft.launchOnly && draft.editingId == nil)
         _title = State(initialValue: draft.title)
         _customTitle = State(initialValue: !AdminAnnounceKit.presetTitles.contains(draft.title))
         _text = State(initialValue: draft.text)
@@ -278,19 +299,27 @@ struct AdminAnnounceComposer: View {
     /// موعد الإرسال — nil = الآن
     private var sendDate: Date? { when == .now ? nil : customDate }
 
+    /// إعلان الفتح مطلوب (المفتاح أو الوضع الخاص، وليس تعديل إشعار مجدول)
+    private var wantsLaunch: Bool { (launchOn || launchOnly) && !isEditing }
+    /// فيه نصّ ← الإشعار كما اليوم؛ بلا نصّ مع إعلان الفتح ← إعلان الفتح وحده؛ الوضع الخاص لا إشعار أبداً
+    private var wantsPush: Bool { !launchOnly && (!trimmed(text).isEmpty || !wantsLaunch) }
+
     /// ما يمنع الإرسال (سطر فوق الزرّ) — nil = جاهز
     private func blocker(_ active: [FamilyMember]) -> String? {
-        if trimmed(text).isEmpty { return L10n.t("اكتب نص الإشعار", "Write the message") }
+        if trimmed(text).isEmpty && !wantsLaunch { return L10n.t("اكتب نص الإشعار", "Write the message") }
         switch audience {
         case .all: break
         case .country:
             if country == nil { return L10n.t("اختر الدولة", "Pick the country") }
-            if targetIds(active)?.isEmpty ?? false { return L10n.t("ما في أعضاء في هذي الدولة", "No members in this country") }
+            if targetIds(active)?.isEmpty ?? false { return L10n.t("لا يوجد أعضاء في هذه الدولة", "No members in this country") }
         case .members:
             if selected.isEmpty { return L10n.t("اختر عضواً واحداً على الأقل", "Pick at least one member") }
         }
         if when == .scheduled && customDate <= Date().addingTimeInterval(30) {
             return L10n.t("اختر وقتاً بعد الآن", "Pick a time after now")
+        }
+        if wantsLaunch, let launchBlocker = launch.blocker(hasImage: launchImage != nil, start: sendDate ?? Date()) {
+            return launchBlocker
         }
         return nil
     }
@@ -299,7 +328,9 @@ struct AdminAnnounceComposer: View {
     /// فعل فقط — «لمن» و«متى» ظاهرتان في بطاقتيهما (المالك ٢٠٢٦-١٠-٢٣ «في تكرر بالوقت بمتى و بالارسال»)
     private func actionTitle(_ active: [FamilyMember]) -> String {
         if isEditing { return L10n.t("احفظ", "Save") }
-        return sendDate == nil ? L10n.t("أرسل الآن", "Send now") : L10n.t("جدولة", "Schedule")
+        if launchOnly { return launch.publishTitle }
+        let base = sendDate == nil ? L10n.t("أرسل الآن", "Send now") : L10n.t("جدولة", "Schedule")
+        return wantsLaunch ? base + launch.sendSuffix : base
     }
 
     // MARK: المربّع
@@ -342,12 +373,41 @@ struct AdminAnnounceComposer: View {
     }
 
     private var composer: some View {
+        launchOnly ? AnyView(launchOnlyComposer) : AnyView(fullComposer)
+    }
+
+    /// «إعلان عند فتح التطبيق» وحده: الصورة · لمن؟ · لين: · الزر: — نفس الحالة والإرسال (`send()` يحفظ الصفّ ويقف)
+    private var launchOnlyComposer: some View {
+        let active = self.active
+        let blocker = self.blocker(active)
+        return DSComposer(
+            title: L10n.t("إعلان عند فتح التطبيق", "Shown when the app opens"),
+            subtitle: L10n.t("صورة تظهر للأعضاء عند فتح التطبيق — بلا إشعار", "An image members see on opening the app — no push"),
+            icon: "rectangle.portrait.on.rectangle.portrait.fill",
+            tint: tint,
+            actionTitle: actionTitle(active),
+            actionIcon: "paperplane.fill",
+            canSubmit: blocker == nil && !isSending,
+            isBusy: isSending,
+            note: blocker,
+            hasUnsavedChanges: launchImage != nil,
+            actionFullRow: true,
+            onSubmit: submit,
+            onCancel: { onClose() }
+        ) {
+            AnyView(AdminLaunchComposerSection(isOn: $launchOn, image: $launchImage, choice: $launch, tint: tint,
+                                               index: 0, launchOnly: true,
+                                               audience: AnyView(audienceBlock(active))))
+        }
+    }
+
+    private var fullComposer: some View {
         let active = self.active
         let blocker = self.blocker(active)
         return DSComposer(
             title: isEditing ? L10n.t("تعديل الإشعار المجدول", "Edit scheduled push")
                 : (chooser == nil ? L10n.t("إرسال إشعار", "Send a push") : L10n.t("ماذا تنشئ؟", "What to create?")),
-            subtitle: isEditing ? L10n.t("يوصل في موعده الجديد", "Goes out at the new time")
+            subtitle: isEditing ? L10n.t("يُرسل في موعده الجديد", "Goes out at the new time")
                 : L10n.t("عنوان ونص — للكل أو لدولة أو لأعضاء", "Title and text — everyone, a country or people"),
             icon: isEditing ? "clock.arrow.circlepath" : "megaphone.fill",
             tint: tint,
@@ -356,14 +416,17 @@ struct AdminAnnounceComposer: View {
             canSubmit: blocker == nil && !isSending,
             isBusy: isSending,
             note: blocker,
-            hasUnsavedChanges: !isEditing && !trimmed(text).isEmpty,
-            // «إرسال» و«إلغاء» جنب بعض (المالك ٢٠٢٦-١٠-٢٣)
-            actionFullRow: false,
+            hasUnsavedChanges: !isEditing && (!trimmed(text).isEmpty || launchImage != nil || pushImage != nil),
+            // «إرسال» و«إلغاء» جنب بعض (المالك ٢٠٢٦-١٠-٢٣) — ومع إعلان الفتح الزرّ بعرض الشريط (نصّه أطول)
+            actionFullRow: wantsLaunch,
             onSubmit: submit,
             onCancel: { onClose() }
         ) {
             if let chooser { chooser }
             AnyView(formSection(active))
+            if !isEditing {
+                AnyView(AdminLaunchComposerSection(isOn: $launchOn, image: $launchImage, choice: $launch, tint: tint))
+            }
         }
     }
 
@@ -379,24 +442,38 @@ struct AdminAnnounceComposer: View {
 
     private var confirmTitle: String {
         if isEditing { return L10n.t("حفظ التعديل للكل؟", "Save for everyone?") }
+        if launchOnly { return L10n.t("نشر للكل؟", "Publish to everyone?") }
         return sendDate == nil ? L10n.t("إرسال للكل؟", "Send to everyone?") : L10n.t("جدولة للكل؟", "Schedule for everyone?")
     }
 
     private var confirmButton: String {
         if isEditing { return L10n.t("احفظ", "Save") }
+        if launchOnly { return L10n.t("انشر", "Publish") }
         return sendDate == nil ? L10n.t("أرسل", "Send") : L10n.t("جدول", "Schedule")
     }
 
     private var confirmText: String {
+        guard wantsLaunch else { return pushConfirmText }
+        let launchLine = L10n.t("ويظهر الإعلان عند فتح التطبيق \(launch.durationWords).",
+                                "The image shows when the app opens for \(launch.durationWords).")
+        guard wantsPush else {
+            return L10n.t("يظهر الإعلان لجميع الأعضاء عند فتح التطبيق \(launch.durationWords)، بلا إشعار.",
+                          "The image shows to every member when the app opens for \(launch.durationWords), no push.")
+        }
+        return pushConfirmText + "\n" + launchLine
+    }
+
+    private var pushConfirmText: String {
         if let date = sendDate {
-            return L10n.t("يوصل الإشعار لكل الأعضاء \(AdminAnnounceKit.when(date)).",
+            return L10n.t("يُرسل الإشعار إلى جميع الأعضاء \(AdminAnnounceKit.when(date)).",
                           "The push reaches every member \(AdminAnnounceKit.when(date)).")
         }
-        return L10n.t("يوصل الإشعار لكل الأعضاء الآن.", "The push reaches every member now.")
+        return L10n.t("يُرسل الإشعار إلى جميع الأعضاء الآن.", "The push reaches every member now.")
     }
 
     private var doneTitle: String {
         if isEditing { return L10n.t("تم الحفظ", "Saved") }
+        if launchOnly { return L10n.t("تم النشر", "Published") }
         return sendDate == nil ? L10n.t("تم الإرسال", "Sent") : L10n.t("تمت الجدولة", "Scheduled")
     }
 
@@ -413,7 +490,100 @@ struct AdminAnnounceComposer: View {
             DSComposerField(icon: "text.alignright", label: L10n.t("النص", "Text"),
                             placeholder: L10n.t("اكتب الإشعار…", "Write the message…"),
                             text: $text, tint: tint, multiline: true, lines: 2...4, limit: 500)
+            if !isEditing { AnyView(pushImageBlock) }
             AnyView(toWhenBlock(active))
+        }
+    }
+
+    // MARK: صورة للإشعار (اختيارية)
+
+    /// فارغة: شريحة «+ صورة للإشعار» المتقطّعة (وجه `DSExtraChip`)؛ مختارة: مصغّرة + سطر + «تغيير» و«إزالة»
+    private var pushImageBlock: some View {
+        Group {
+            if let pushImage {
+                HStack(spacing: DS.Spacing.md) {
+                    pushThumbnail(pushImage)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(L10n.t("صورة الإشعار", "Push photo"))
+                            .dsFieldFont(.rowTitle)
+                            .foregroundColor(DS.Color.fieldLabel)
+                        Text(L10n.t("تظهر داخل الإشعار على شاشة القفل", "Shows inside the push on the lock screen"))
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: DS.Spacing.sm)
+                    PhotosPicker(selection: $pushImageItem, matching: .images) {
+                        Image(dsSymbol: "arrow.triangle.2.circlepath")
+                            .dsGlyph(DS.Glyph.md)
+                            .foregroundColor(tint.dsReadableGlyph)
+                            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    }
+                    .disabled(loadingPushImage || isSending)
+                    .accessibilityLabel(L10n.t("تغيير صورة الإشعار", "Change the push photo"))
+                    Button {
+                        UISelectionFeedbackGenerator().selectionChanged()
+                        withAnimation(DS.Anim.snappy) { self.pushImage = nil; pushImageItem = nil }
+                    } label: {
+                        Image(dsSymbol: "trash")
+                            .dsGlyph(DS.Glyph.md)
+                            .foregroundColor(DS.Color.error)
+                            .dsTapArea(width: DS.Icon.tapTarget, height: DS.Icon.tapTarget)
+                    }
+                    .buttonStyle(DSPressStyle())
+                    .disabled(isSending)
+                    .accessibilityLabel(L10n.t("إزالة صورة الإشعار", "Remove the push photo"))
+                }
+                .dsRowBox()
+                .transition(.opacity)
+            } else {
+                HStack(spacing: 0) {
+                    PhotosPicker(selection: $pushImageItem, matching: .images) {
+                        DSAddChipLabel(icon: "photo", title: L10n.t("صورة للإشعار", "Photo for the push"),
+                                       isLoading: loadingPushImage)
+                    }
+                    .disabled(loadingPushImage || isSending)
+                    .accessibilityLabel(L10n.t("إضافة صورة للإشعار", "Add a photo to the push"))
+                    .accessibilityHint(L10n.t("اختيارية — تظهر داخل الإشعار على شاشة القفل",
+                                              "Optional — shows inside the push on the lock screen"))
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .onChange(of: pushImageItem) { item in
+            guard let item else { return }
+            loadPushImage(item)
+        }
+    }
+
+    /// مصغّرة مربّعة بزوايا مدوّرة — كما تظهر صورة الإشعار المصغّرة في الشريط
+    private func pushThumbnail(_ image: UIImage) -> some View {
+        let side = DS.Icon.sizeLg
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+        return Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: side, height: side)
+            .clipShape(shape)
+            .overlay(shape.strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.fieldStroke), lineWidth: DS.Border.width))
+            .accessibilityElement()
+            .accessibilityLabel(L10n.t("صورة الإشعار", "Push photo"))
+            .accessibilityAddTraits(.isImage)
+    }
+
+    private func loadPushImage(_ item: PhotosPickerItem) {
+        loadingPushImage = true
+        Task {
+            // فكّ مصغّر خارج الخيط الرئيسي (مثل صور الأخبار وصورة إعلان الفتح)
+            var loaded: UIImage? = nil
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                loaded = await Task.detached(priority: .userInitiated) { ImageProcessor.downsampled(data) }.value
+            }
+            loadingPushImage = false
+            if let loaded {
+                UISelectionFeedbackGenerator().selectionChanged()
+                withAnimation(DS.Anim.snappy) { pushImage = loaded }
+            }
         }
     }
 
@@ -553,7 +723,7 @@ struct AdminAnnounceComposer: View {
                 }
                 .buttonStyle(DSPressStyle())
                 .accessibilityAddTraits(audience == .members ? .isSelected : [])
-                .accessibilityHint(L10n.t("يفتح قائمة الأعضاء — تقدر تختار أكثر من عضو", "Opens the member list — pick several"))
+                .accessibilityHint(L10n.t("يفتح قائمة الأعضاء، ويمكن اختيار أكثر من عضو", "Opens the member list — pick several"))
             }
         }
     }
@@ -740,6 +910,12 @@ struct AdminAnnounceComposer: View {
     private func send() async {
         let active = self.active
         guard blocker(active) == nil, !isSending else { return }
+        // تجربة دور (`-tmpAdminRole`/`-tmpRoleMatrix`): لا إشعار ولا جدولة ولا إعلان فتح — نجاح مصطنع (T0)
+        if DebugAdminProbe.dryRun("announce \(isEditing ? "edit scheduled" : (sendDate == nil ? "send" : "schedule")) → \(audienceLabel(active))\(wantsLaunch ? " + launch" : "")") {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            done = L10n.t("تجربة: لم يُرسل شيء.", "Dry run: nothing was sent.")
+            return
+        }
         isSending = true
         defer { isSending = false }
         let ids = targetIds(active)
@@ -753,8 +929,8 @@ struct AdminAnnounceComposer: View {
             case .saved:
                 await notificationVM.fetchScheduledNotifications()
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                done = sendDate.map { L10n.t("يوصل الإشعار \(AdminAnnounceKit.when($0)) ← \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
-                    ?? L10n.t("يوصل الإشعار ← \(to) خلال دقيقة.", "The push goes → \(to) within a minute.")
+                done = sendDate.map { L10n.t("يُرسل الإشعار \(AdminAnnounceKit.when($0)) إلى \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
+                    ?? L10n.t("يُرسل الإشعار إلى \(to) خلال دقيقة.", "The push goes → \(to) within a minute.")
             case .gone:
                 await notificationVM.fetchScheduledNotifications()
                 failure = L10n.t("هذا الإشعار أُرسل أو أُلغي قبل الحفظ.", "This push was already sent or cancelled.")
@@ -764,29 +940,70 @@ struct AdminAnnounceComposer: View {
             return
         }
 
+        // صورة الإشعار تُرفع قبل أي حفظ — إن تعذّر رفعها لا يُرسل شيء فتُعاد المحاولة نظيفة
+        let pushToo = wantsPush
+        var pushImagePath: String? = nil
+        if pushToo, let image = pushImage {
+            guard let path = await PushImageService.upload(image) else {
+                failure = L10n.t("تعذّر رفع صورة الإشعار. حاول مرة أخرى.", "Couldn't upload the push photo. Try again.")
+                return
+            }
+            pushImagePath = path
+        }
+
+        // إعلان الفتح أولاً (الرفع أكثر ما يفشل) — إن تعذّر لا يُرسل شيء فتُعاد المحاولة نظيفة
+        var launchDone: String? = nil
+        if wantsLaunch, let image = launchImage {
+            let start = sendDate ?? Date()
+            guard let path = await LaunchAnnouncementsService.uploadImage(image) else {
+                failure = L10n.t("تعذّر رفع صورة الإعلان. حاول مرة أخرى.", "Couldn't upload the image. Try again.")
+                return
+            }
+            let saved = await LaunchAnnouncementsService.create(
+                imagePath: path, kind: launch.button, url: launch.button == .link ? trimmed(launch.link) : nil,
+                memberIds: ids, startsAt: start, endsAt: launch.endsAt(start: start))
+            guard saved else {
+                failure = L10n.t("تعذّر حفظ الإعلان عند الفتح. حاول مرة أخرى.", "Couldn't save the announcement. Try again.")
+                return
+            }
+            launchDone = L10n.t("يظهر عند فتح التطبيق ← \(to) · \(launch.durationWords).",
+                                "Shows when the app opens → \(to) · \(launch.durationWords).")
+        }
+        guard pushToo else {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            done = launchDone
+            return
+        }
+
         let ok: Bool
         if let date = sendDate {
             ok = await notificationVM.scheduleNotification(title: noticeTitle, body: noticeBody, targetMemberIds: ids,
-                                                           scheduledFor: date, kind: "admin_broadcast")
+                                                           scheduledFor: date, kind: "admin_broadcast",
+                                                           imagePath: pushImagePath)
             if ok { await notificationVM.fetchScheduledNotifications() }
         } else {
             ok = await notificationVM.sendNotification(title: noticeTitle, body: noticeBody, targetMemberIds: ids,
-                                                       kind: "admin_broadcast")
+                                                       kind: "admin_broadcast", imagePath: pushImagePath)
         }
         guard ok else {
-            failure = L10n.t("تعذّر إرسال الإشعار. حاول مرة أخرى.", "Couldn't send the push. Try again.")
+            failure = launchDone == nil
+                ? L10n.t("تعذّر إرسال الإشعار. حاول مرة أخرى.", "Couldn't send the push. Try again.")
+                : L10n.t("حُفظ الإعلان عند الفتح، وتعذّر إرسال الإشعار.", "The announcement was saved, but the push failed.")
             return
         }
         // لحظة النجاح الموجودة (`dsAlert(…, moment: .success)`) + اهتزاز نجاح خفيف (الدفعة ١٠)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        done = sendDate.map { L10n.t("يوصل الإشعار \(AdminAnnounceKit.when($0)) ← \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
+        let pushDone = sendDate.map { L10n.t("يُرسل الإشعار \(AdminAnnounceKit.when($0)) إلى \(to).", "The push goes \(AdminAnnounceKit.when($0)) → \(to).") }
             ?? L10n.t("وصل الإشعار ← \(to).", "Push sent → \(to).")
+        done = launchDone.map { pushDone + "\n" + $0 } ?? pushDone
     }
 }
 
-// MARK: - شرائح الاختيار
+// MARK: - شرائح الاختيار (إعادة التصميم ٢٠٢٦-١١-٢٦ — spec A.9، الوحدة U14)
 
-/// شريحة اختيار بشكل `DSFilterChips` (المختار ممتلئ بتدرّج القسم، والباقي بإطار خفيف)، و⌄ لما يفتح قائمة أو منتقياً.
+/// شريحة اختيار بشكل شريحة اللوحة الواحد (`DSAdminChipLabel`): تُرسم ٣٦ (`DS.Hub.filterChipHeight`) ولمسها ٤٤، كبسولة،
+/// ١٣ متوسط، إطار `frameStroke` على الأبيض؛ المختارة بتعبئة القسم الكحلية ونصّ أبيض و✓ ١٢ قبل الاسم (اللون ليس الإشارة
+/// الوحيدة)، و⌄ بعد النص حين تفتح قائمة أو منتقياً. الاسم الطويل مع الخط الكبير يلتفّ لسطرين ولا يُقصّ.
 /// وجه فقط — يُلبس `Button` أو `Menu`
 struct AdminChoiceChip: View {
     let title: String
@@ -794,47 +1011,56 @@ struct AdminChoiceChip: View {
     let isSelected: Bool
     /// ⌄ بعد النص: يفتح قائمة/منتقياً/حقلاً
     var expands: Bool = false
+    /// باقٍ للتوافق (شريحة «الفرع» في «العائلة») — الشكلان صارا شريحة A.9 الواحدة
+    var inTrack: Bool = true
+    @Environment(\.dsSection) private var section
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        HStack(spacing: DS.Spacing.xs) {
-            if let icon {
-                Image(dsSymbol: icon).dsGlyph(DS.Glyph.smCompact)
+        // تعبئة القسم الكحلية (`primaryFill` في الإدارة) — النص الأبيض ≥ ٦:١ في الوضعين
+        let fill = section?.fill ?? DS.Color.primaryFill
+        let shape = RoundedRectangle(cornerRadius: DS.Hub.filterChipHeight / 2, style: .continuous)
+        return HStack(spacing: DS.Spacing.xsm) {
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .dsGlyph(DS.Glyph.sm, weight: .semibold)
+                    .accessibilityHidden(true)
+            } else if let icon {
+                Image(dsSymbol: icon)
+                    .dsGlyph(DS.Glyph.smCompact)
+                    .foregroundColor(DS.Color.textTertiary)
+                    .accessibilityHidden(true)
             }
             Text(title)
-                .dsFont(.sectionTitle)
-                .lineLimit(1)
+                .dsFont(.chip)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
             if expands {
                 Image(systemName: "chevron.down")
-                    .dsGlyph(DS.Glyph.xs, weight: .bold)
-                    .opacity(0.8)
+                    .dsGlyph(DS.Glyph.xs, weight: .semibold)
+                    .foregroundColor(isSelected ? DS.Hub.onBandMuted : DS.Color.textTertiary)
                     .accessibilityHidden(true)
             }
         }
-        .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textSecondary)
-        .padding(.horizontal, DSBox.chipPadding)
-        .frame(minHeight: DSBox.chipHeight)
-        .background {
-            if isSelected {
-                Capsule().fill(DSActionFill.style())
-            } else {
-                Capsule().strokeBorder(DS.Color.textTertiary.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width)
-            }
-        }
-        // مساحة ضغط ٤٤ (حدّ أبل) والشكل كما هو
-        .padding(.vertical, (DS.Icon.tapTarget - DSBox.chipHeight) / 2)
+        .foregroundColor(isSelected ? DS.Color.textOnPrimary : DS.Color.textPrimary)
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(minHeight: DS.Hub.filterChipHeight)
+        .background(shape.fill(isSelected ? fill : DS.Color.surface))
+        .overlay(shape.strokeBorder(isSelected ? fill : DS.Hub.frameStroke, lineWidth: DS.Border.width))
+        // مساحة ضغط ٤٤ تدخل في التخطيط: السطران الملتفّان يبعدان ٨ مرسومة و٠ بين مساحتي اللمس
+        .padding(.vertical, (DS.Icon.tapTarget - DS.Hub.filterChipHeight) / 2)
         .contentShape(Rectangle())
     }
 }
 
-/// صفّ الشرائح: أفقي إن اتّسع، وإلا عمودي (الخط الكبير جداً) — بلا تمرير أفقي يخفي خياراً
+/// صفّ شرائح الاختيار: يلتفّ لسطر جديد عند امتلاء العرض — لا تمرير جانبي يخفي خياراً ولا قصّ (spec A.9، `DSChipFlow`)
 struct AdminChoiceRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: DS.Spacing.sm) { content() }
-            VStack(alignment: .leading, spacing: 0) { content() }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        DSChipFlow(spacing: DS.Spacing.sm) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

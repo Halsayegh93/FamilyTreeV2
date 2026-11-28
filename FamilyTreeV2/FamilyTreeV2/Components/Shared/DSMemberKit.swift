@@ -230,13 +230,15 @@ struct DSDetailsToggle: View {
     let isExpanded: Bool
     /// مستطيل صغير بجانب زرّ الدور (رأس تفاصيل العضو) — السهم فوق والاسم تحته
     var tile: Bool = false
+    /// لون التعبئة — nil = لون المعلومة؛ بطاقة العضو «AB» كحلي القسم (`DS.Color.actionNavy`)
+    var tint: Color? = nil
     let action: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var nudge: CGFloat = 0
     @State private var played = false
 
     var body: some View {
-        let ink = DSMemberKit.detailsTint
+        let ink = tint ?? DSMemberKit.detailsTint
         Button {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             action()
@@ -399,14 +401,46 @@ struct DSActionTile: View {
     var subtitle: String? = nil
     let icon: String
     let tint: Color
+    /// النصّ في المنتصف والقرص فوقه (طلب المالك ٢٠٢٦-١١-١٧ «نص الحقول في المنتصف في طلب تعديل»)
+    var centered: Bool = false
     let action: () -> Void
 
-    init(_ title: String, subtitle: String? = nil, icon: String, tint: Color, action: @escaping () -> Void) {
+    init(_ title: String, subtitle: String? = nil, icon: String, tint: Color, centered: Bool = false,
+         action: @escaping () -> Void) {
         self.title = title
         self.subtitle = subtitle
         self.icon = icon
         self.tint = tint
+        self.centered = centered
         self.action = action
+    }
+
+    private var disc: some View {
+        // قرص ممتلئ بلون النوع ورمز أبيض — التعبئة الثابتة (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
+        Image(dsSymbol: icon)
+            .dsGlyph(DS.Glyph.sm)
+            .foregroundColor(DS.Color.textOnPrimary)
+            .frame(width: DSMemberKit.chipDisc, height: DSMemberKit.chipDisc)
+            .background(Circle().fill(tint.dsSolidFill))
+            .accessibilityHidden(true)
+    }
+
+    private var texts: some View {
+        VStack(alignment: centered ? .center : .leading, spacing: DS.Spacing.xxs) {
+            Text(title)
+                .dsFieldFont(.chip)
+                .foregroundColor(DS.Color.textPrimary)
+                .lineLimit(2)
+                .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            if let subtitle {
+                Text(subtitle)
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            }
+        }
+        .multilineTextAlignment(centered ? .center : .leading)
     }
 
     var body: some View {
@@ -416,30 +450,19 @@ struct DSActionTile: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             action()
         } label: {
-            HStack(spacing: DS.Spacing.sm) {
-                // قرص ممتلئ بلون النوع ورمز أبيض — التعبئة الثابتة (`dsSolidFill`) تبقي الأبيض مقروءاً في الوضعين
-                Image(dsSymbol: icon)
-                    .dsGlyph(DS.Glyph.sm)
-                    .foregroundColor(DS.Color.textOnPrimary)
-                    .frame(width: DSMemberKit.chipDisc, height: DSMemberKit.chipDisc)
-                    .background(Circle().fill(tint.dsSolidFill))
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(title)
-                        .dsFieldFont(.chip)
-                        .foregroundColor(DS.Color.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(DSBox.buttonLabelMinScale)
-                    if let subtitle {
-                        Text(subtitle)
-                            .dsFont(.caption)
-                            .foregroundColor(DS.Color.textSecondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(DSBox.buttonLabelMinScale)
+            Group {
+                if centered {
+                    VStack(spacing: DS.Spacing.xs) {
+                        disc
+                        texts
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    HStack(spacing: DS.Spacing.sm) {
+                        disc
+                        texts.frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal, DS.Spacing.sm)
             .padding(.vertical, DS.Spacing.xsm)
@@ -533,6 +556,381 @@ struct DSPhoneCountryBadge: View {
                                             lineWidth: DS.Border.width))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(L10n.t("رقم من \(origin.name)", "Phone from \(origin.name)"))
+        }
+    }
+}
+
+// MARK: - العائلة داخل «عرض التفاصيل» بالشجرتين (طلب المالك ٢٠٢٦-١١-٠٦: «الشكل القديم افضل بس ابى عرض
+// التفاصيل نفس الحالي الام و الزوجة و العائلة») — المربّع كما كان، والعائلة أول قسم: الأب/الأم/الزوجة بطاقات
+// بصورة واسم وعمر، والأبناء مرقّمون من الأكبر بشبكة ثابتة (الذكور ثم الإناث في شجرة النساء).
+
+extension DSMemberKit {
+    /// صورة بطاقة الأب (صفّ أفقي)
+    static let parentAvatar: CGFloat = 44
+    /// صورة بطاقتي الأم والزوجة (فوق الاسم)
+    static let relationAvatar: CGFloat = 52
+    /// صورة الابن في الشبكة
+    static let childAvatar: CGFloat = 30
+    /// قرص رقم الابن
+    static let childNumber: CGFloat = 18
+    /// عمودا شبكة الأبناء
+    static let childColumns = 2
+}
+
+/// العمر من سنة الميلاد (حتى سنة الوفاة للمتوفى) — نفس قاعدة حبّة العمر السابقة
+enum DSMemberAge {
+    static func year(_ s: String?) -> Int? {
+        guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty,
+              let r = s.range(of: "\\d{4}", options: .regularExpression) else { return nil }
+        return Int(s[r])
+    }
+
+    static func years(birth: String?, death: String?, deceased: Bool) -> Int? {
+        guard let by = year(birth) else { return nil }
+        let end: Int? = deceased ? year(death) : Calendar.current.component(.year, from: Date())
+        guard let end, end >= by, end - by < 130 else { return nil }
+        return end - by
+    }
+
+    /// «46 سنة»
+    static func text(_ m: FamilyMember) -> String? {
+        years(birth: m.birthDate, death: m.deathDate, deceased: m.isDeceased == true)
+            .map { "\($0) " + L10n.t("سنة", "yrs") }
+    }
+
+    static func deceasedWord(_ m: FamilyMember) -> String {
+        m.isFemale ? L10n.t("متوفّاة", "Deceased") : L10n.t("متوفّى", "Deceased")
+    }
+
+    /// سطر تحت اسم فرد العائلة: «متوفّى» للمتوفى، وإلا العمر
+    static func detail(_ m: FamilyMember) -> String? {
+        m.isDeceased == true ? deceasedWord(m) : text(m)
+    }
+
+}
+
+/// بطاقة فرد بصورة كبيرة فوق الاسم (الأم، الزوجة، الزوج) — الضغط يفتح صاحبها
+struct DSFamilyPersonCard<Avatar: View>: View {
+    let role: String
+    let icon: String
+    let tint: Color
+    let name: String
+    var detail: String? = nil
+    var onTap: (() -> Void)? = nil
+    @ViewBuilder let avatar: () -> Avatar
+
+    var body: some View {
+        let card = VStack(spacing: DS.Spacing.xs) {
+            avatar()
+            HStack(spacing: DS.Spacing.xxs) {
+                Text(role).dsFont(.caption)
+                Image(systemName: icon).dsGlyph(DS.Glyph.xs).accessibilityHidden(true)
+            }
+            .foregroundColor(tint)
+            Text(name)
+                .dsFont(.rowTitle)
+                .foregroundColor(DS.Color.textPrimary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+            if let detail {
+                Text(detail).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+            }
+        }
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(maxWidth: .infinity)
+        .dsRowBox()
+        .overlay(alignment: .topLeading) {
+            if onTap != nil { DSChevron(size: DS.Glyph.xs).padding(DS.Spacing.sm) }
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        if let onTap {
+            Button(action: onTap) { card }.buttonStyle(DSPressStyle())
+        } else {
+            card
+        }
+    }
+}
+
+/// صفّ فرد بصورته جنب الاسم (الأب) — الضغط يفتح صاحبه
+struct DSFamilyPersonRow<Avatar: View>: View {
+    let role: String
+    let tint: Color
+    let name: String
+    var detail: String? = nil
+    let onTap: () -> Void
+    @ViewBuilder let avatar: () -> Avatar
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: DS.Spacing.md) {
+                avatar()
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                    Text(role).dsFont(.caption).foregroundColor(tint)
+                    Text(name)
+                        .dsFont(.rowTitle)
+                        .foregroundColor(DS.Color.textPrimary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                    if let detail {
+                        Text(detail).dsFont(.caption).foregroundColor(DS.Color.textTertiary)
+                    }
+                }
+                Spacer(minLength: 0)
+                DSChevron()
+            }
+            .frame(maxWidth: .infinity)
+            .dsRowBox()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(DSPressStyle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// الأبناء مرقّمون من الأكبر بشبكة عمودين ثابتة — مجموعة واحدة (شجرة العائلة) أو الذكور ثم الإناث (شجرة النساء)
+struct DSFamilyChildrenBlock<Avatar: View>: View {
+    struct ChildGroup: Identifiable {
+        let id: String
+        /// nil = بلا عنوان فرعي (مجموعة واحدة)
+        let title: String?
+        let tint: Color
+        let members: [FamilyMember]
+    }
+
+    let groups: [ChildGroup]
+    let avatar: (FamilyMember) -> Avatar
+    var onTap: ((FamilyMember) -> Void)? = nil
+
+    private var total: Int { groups.reduce(0) { $0 + $1.members.count } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
+            HStack {
+                Text(L10n.t("الأبناء", "Children") + " · \(total)")
+                    .dsFont(.familyLabel)
+                    .foregroundColor(DS.Color.fieldLabel)
+                Spacer(minLength: DS.Spacing.sm)
+                Text(L10n.t("الأكبر أولاً", "Eldest first"))
+                    .dsFont(.caption)
+                    .foregroundColor(DS.Color.textTertiary)
+            }
+            ForEach(groups) { group in
+                groupView(group)
+            }
+        }
+        .padding(.vertical, DS.Spacing.xs)
+        .frame(maxWidth: .infinity)
+        .dsRowBox()
+    }
+
+    private func groupView(_ group: ChildGroup) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xsm) {
+            if let title = group.title {
+                HStack(spacing: DS.Spacing.xs) {
+                    Circle().fill(group.tint).frame(width: DS.Icon.legendDotSmall, height: DS.Icon.legendDotSmall)
+                    Text(title + " · \(group.members.count)")
+                        .dsFont(.boxSectionTitle)
+                        .foregroundColor(DS.Color.textSecondary)
+                }
+            }
+            let cols = DSMemberKit.childColumns
+            ForEach(Array(stride(from: 0, to: group.members.count, by: cols)), id: \.self) { start in
+                let end = min(start + cols, group.members.count)
+                HStack(spacing: DS.Spacing.xsm) {
+                    ForEach(start..<end, id: \.self) { i in
+                        DSNumberedChildCell(number: i + 1, member: group.members[i], tint: group.tint,
+                                            avatar: { avatar(group.members[i]) },
+                                            onTap: onTap.map { tap in { tap(group.members[i]) } })
+                    }
+                    ForEach(0..<(cols - (end - start)), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// خانة ابن: رقمه (من الأكبر) + صورته + اسمه الأول + عمره أو «متوفّى»
+struct DSNumberedChildCell<Avatar: View>: View {
+    let number: Int
+    let member: FamilyMember
+    let tint: Color
+    @ViewBuilder let avatar: () -> Avatar
+    var onTap: (() -> Void)? = nil
+
+    var body: some View {
+        let name = member.firstName.isEmpty ? member.fullName : member.firstName
+        let cell = HStack(spacing: DS.Spacing.xsm) {
+            Text(verbatim: "\(number)")
+                .dsFont(.badge)
+                .foregroundColor(tint)
+                .frame(width: DSMemberKit.childNumber, height: DSMemberKit.childNumber)
+                .background(Circle().fill(tint.opacity(DS.Opacity.tintFill)))
+            avatar()
+            VStack(alignment: .leading, spacing: 0) {
+                Text(name)
+                    .dsFont(.chipCompact)
+                    .foregroundColor(DS.Color.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let detail = DSMemberAge.detail(member) {
+                    Text(detail).dsFont(.micro).foregroundColor(DS.Color.textTertiary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, DS.Spacing.xsm)
+        .padding(.vertical, DS.Spacing.xsm)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous).fill(DS.Color.background))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(number). " + name + (member.isDeceased == true ? "، " + DSMemberAge.deceasedWord(member) : ""))
+        if let onTap {
+            Button(action: onTap) { cell }
+                .buttonStyle(DSScaleButtonStyle())
+                .accessibilityAddTraits(.isButton)
+        } else {
+            cell
+        }
+    }
+}
+
+// MARK: - «حذف» الخفيف في مربّع تعديل فرد من «عائلتي» (اختيار المالك ٢٠٢٦-١١-٠٦ «أ»: حفظ · إلغاء · حذف بصفّ واحد
+// وبنفس المقاس، والحذف أحمر خفيف) — نفس وجه الزرّ الواحد بتعبئة الخطأ الخفيفة ونصّ أحمر
+
+struct DSSoftDestructiveFace: ViewModifier {
+    var enabled: Bool = true
+
+    func body(content: Content) -> some View {
+        content
+            .font(DSButtonSize.regular.font)
+            .foregroundColor(DS.Color.error)
+            .dsButtonLabelFit()
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: DSButtonSize.regular.height)
+            // حبّة «حذف» الحمراء: تعبئة حمراء خفيفة بلا إطار + نصّ ورمز أحمران (قرار المالك ٢٠٢٦-١١-١١ «بدون إطار»)
+            .background(DSBox.buttonShape.fill(DS.Color.error.opacity(DS.Opacity.tintFill)))
+            .contentShape(DSBox.buttonShape)
+            .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
+    }
+}
+
+/// «حذف» في صفّ أزرار المربّع: دائرة حمراء ممتلئة بقطر الزرّ ورمز أبيض (قرار المالك ٢٠٢٦-١١-١١ «زر أحمر وحجمه دائري»)
+struct DSDeleteCircleFace: ViewModifier {
+    var enabled: Bool = true
+    /// `.compact` (٣٦ بمساحة لمس ٤٤) في بطاقات القوائم — نفس `DSButtonSize`
+    var size: DSButtonSize = .regular
+    /// دائرة رمادية فاتحة بنصّ أساسي (زرّ «⋯» للإجراءات الأخرى) بدل الأحمر
+    var muted: Bool = false
+    /// لون معنى بدل الأحمر الافتراضي — «رفض/إلغاء» (✕) بلون `DS.Color.reject`
+    var tint: Color? = nil
+    /// خفيفة: تعبئة اللون بشفافية `tintFill` والرمز بلونه (بدل الأبيض على الممتلئ)
+    var soft: Bool = false
+
+    func body(content: Content) -> some View {
+        let ink = tint ?? DS.Color.error
+        content
+            .foregroundColor(muted ? DS.Color.textPrimary : soft ? ink.dsReadableGlyph : .white)
+            .frame(width: size.height, height: size.height)
+            .background(Circle().fill(muted ? DS.Color.fieldFill
+                                      : soft ? ink.opacity(DS.Opacity.tintFill)
+                                      : (tint?.dsSolidFill ?? DS.Color.errorFill)))
+            // المدمج: مساحة لمس ٤٤ رغم القطر الأصغر
+            .padding(size.hitInset)
+            .contentShape(Rectangle())
+            .opacity(enabled ? 1 : DSActionFill.disabledOpacity)
+    }
+}
+
+// MARK: - صفّ القرار الموحّد (طلب المالك ٢٠٢٦-١١-١١ «أزرار الطلبات على التصميم الجديد»)
+//
+// حبّات متساوية بصفّ واحد: الأساسي كحلي («قبول/موافقة/اعتماد»)، الثانوي رمادي فاتح بلا إطار («التفاصيل/إغلاق»)،
+// والهدّام دائرة حمراء ممتلئة برمز أبيض واسمه للقارئ الصوتي. بأحجام إمكانية الوصول: فوق بعض بعرض السطر
+// (والهدّام حبّة حمراء باسمه). `size: .compact` للبطاقات (٣٦، لمس ٤٤)، و`.regular` للمربّعات.
+struct DSDecisionItem: Identifiable {
+    /// `.reject` حبّة «رفض» برتقالية بجانب الإجراء، و`.dismiss` دائرة رمادية ✕ للإغلاق آخر الصفّ
+    /// (طلب المالك ٢٠٢٦-١١-١١: «الرفض مكان الإغلاق، والإغلاق علامة»)
+    enum Kind { case primary, secondary, destructive, reject, dismiss }
+    let id: String
+    let title: String
+    var icon: String? = nil
+    var kind: Kind = .secondary
+    /// لون معنى صلب للأساسي (نجاح…) — nil = تعبئة القسم
+    var tint: Color? = nil
+    /// الدائرة الهدّامة خفيفة: تعبئة اللون الخفيفة ورمزه بلونه (بطاقة طلب الانضمام — العيّنة ١٨)
+    var soft: Bool = false
+    var isEnabled: Bool = true
+    let action: () -> Void
+}
+
+struct DSDecisionRow: View {
+    let items: [DSDecisionItem]
+    var size: DSButtonSize = .compact
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(spacing: DSBox.buttonSpacing) {
+                ForEach(items) { pill($0) }
+            }
+            .buttonStyle(DSPressStyle())
+        } else {
+            HStack(spacing: DSBox.buttonSpacing) {
+                ForEach(items.filter { $0.kind != .destructive && $0.kind != .dismiss }) { pill($0) }
+                ForEach(items.filter { $0.kind == .destructive || $0.kind == .dismiss }) { circle($0) }
+            }
+            .buttonStyle(DSPressStyle())
+        }
+    }
+
+    private func pill(_ item: DSDecisionItem) -> some View {
+        let role: ButtonRole? = switch item.kind {
+        case .destructive, .reject: .destructive
+        case .secondary, .dismiss: .cancel
+        case .primary: nil
+        }
+        let tint: Color? = switch item.kind {
+        case .secondary, .dismiss: nil
+        case .reject: item.tint ?? DS.Color.reject
+        default: item.tint
+        }
+        return Button(action: item.action) {
+            HStack(spacing: DS.Spacing.xs) {
+                if let icon = item.icon, item.kind != .reject { Image(dsSymbol: icon).dsGlyph(size.glyph) }
+                Text(item.title)
+            }
+            .modifier(DSButtonFace(role: role, size: size, tint: tint, enabled: item.isEnabled))
+        }
+        .disabled(!item.isEnabled)
+        .accessibilityLabel(item.title)
+    }
+
+    private func circle(_ item: DSDecisionItem) -> some View {
+        Button(action: item.action) {
+            Image(dsSymbol: item.icon ?? "xmark")
+                .dsGlyph(size.glyph, weight: .bold)
+                .modifier(DSDeleteCircleFace(enabled: item.isEnabled, size: size, muted: item.kind == .dismiss,
+                                             tint: item.tint, soft: item.soft))
+        }
+        .disabled(!item.isEnabled)
+        .accessibilityLabel(item.title)
+    }
+}
+
+/// وجه الزرّ الواحد أو «الحذف الخفيف» — يختار `DSComposer` بينهما لإجراءات صفّه
+struct DSButtonFaceSwitch: ViewModifier {
+    let soft: Bool
+    let face: DSButtonFace
+
+    func body(content: Content) -> some View {
+        if soft {
+            content.modifier(DSSoftDestructiveFace(enabled: face.enabled))
+        } else {
+            content.modifier(face)
         }
     }
 }

@@ -20,15 +20,21 @@ struct TreeTabContainer: View {
     static var openWomenOnAppear = false
 
     /// «شجرة النساء» ظاهرة؟ — مفتاح في «الإدارة ← إعدادات التطبيق ← الميزات» (طلب المالك ٢٠٢٦-١٠-٠٧)
-    private var womenTreeEnabled: Bool { appSettingsVM.settings.womenTreeEnabled ?? true }
+    /// «صلاحيات محدودة» (R1): شجرة النساء ومبدّلها مخفيان إن كانت مقفولة عليه
+    private var womenTreeEnabled: Bool { (appSettingsVM.settings.womenTreeEnabled ?? true) && !lineage.hides(.womenTree) }
 
     /// حساب امرأة: موقعها في شجرة النساء لا شجرة الرجال
-    private var isWomanAccount: Bool { authVM.currentUser?.isWomanAccount ?? false }
+    /// وابن البنت المكتمل: موقعه عقدته في شجرة النساء (طلب المالك ٢٠٢٦-١١-٠٨ «ظهور ابناء البنات فقط في شجرة النساء»)
+    private var isWomanAccount: Bool {
+        (authVM.currentUser?.isWomanAccount ?? false) || (lineage.status?.flagged == true && !lineage.isLimited)
+    }
+    @ObservedObject private var lineage = LineageGateStore.shared
 
     var body: some View {
         Group {
             // أول رسم قبل `onAppear`: حساب المرأة يرى النساء مباشرة بلا ومضة شجرة الرجال
-            if (treeTab == 1 || (!pickedDefaultTab && isWomanAccount)) && womenTreeEnabled {
+            // طلب «في الشجرة» منتظر (V36) يغلب بداية حساب المرأة بشجرة النساء
+            if (treeTab == 1 || (!pickedDefaultTab && isWomanAccount && TreeFocusRequest.pending == nil)) && womenTreeEnabled {
                 WomenTreeView(selectedTab: $selectedTab, treeTab: $treeTab)
             } else {
                 // مخفية: شجرة العائلة وحدها بلا مبدّل «العائلة/النساء»
@@ -39,6 +45,10 @@ struct TreeTabContainer: View {
         .onChange(of: womenTreeEnabled) { enabled in
             if !enabled { treeTab = 0 }
         }
+        // رجع لشجرة العائلة قبل أن تُبنى شجرة النساء (تحميل فشل) — طلب «موقعك» المعلّق لا يفاجئه في فتح لاحق
+        .onChange(of: treeTab) { tab in
+            if tab == 0 { WomenLocateRequest.pending = false }
+        }
         .environment(\.treeChromeAppeared, chromeAppeared)
         // قسم الشجرة دائماً (العُدّة المشتركة تأخذ لونها من البيئة — هنا مرة لكل الشجرتين)
         .dsSection(.tree)
@@ -46,12 +56,13 @@ struct TreeTabContainer: View {
             if !pickedDefaultTab {
                 pickedDefaultTab = true
                 // حساب المرأة يبدأ بشجرة النساء (والشجرة تتمركز على عقدتها — `autoLocate`)، والرجال كما كانوا
-                if isWomanAccount && womenTreeEnabled { treeTab = 1 }
+                if isWomanAccount && womenTreeEnabled && TreeFocusRequest.pending == nil { treeTab = 1 }
             }
             if Self.openWomenOnAppear {
                 Self.openWomenOnAppear = false
-                if womenTreeEnabled { treeTab = 1 }
+                if womenTreeEnabled && TreeFocusRequest.pending == nil { treeTab = 1 }
             }
+            if TreeFocusRequest.pending != nil { treeTab = 0 }
             guard !chromeAppeared else { return }
             chromeAppeared = true
         }
@@ -61,6 +72,11 @@ struct TreeTabContainer: View {
         }
         // طلب صلة القرابة يُرسم في شجرة العائلة — من تبويب النساء نرجع لها أولاً
         .onReceive(NotificationCenter.default.publisher(for: .requestKinshipPath)) { _ in
+            if treeTab != 0 { treeTab = 0 }
+        }
+        // «في الشجرة» من ورقة العضو: العضو في شجرة العائلة
+        .onReceive(NotificationCenter.default.publisher(for: .requestMemberInTree)) { _ in
+            Self.openWomenOnAppear = false
             if treeTab != 0 { treeTab = 0 }
         }
     }
@@ -88,7 +104,7 @@ struct FamilyTreeTabBar: View {
     }
 }
 
-/// نفس التبويب في الشريط الجانبي العمودي (الوضع الأفقي) — شريحتان مصغّرتان من العُدّة (`DSChipButton(.mini)`)
+/// نفس التبويب في الشريط الجانبي العمودي (الوضع الأفقي) — شريحتان صغيرتان من العُدّة (`DSChipButton(.small)` — قابلة للضغط)
 /// فوق بعض بالعنوانين القصيرين «العائلة» / «النساء»
 struct FamilyTreeSideTabs: View {
     @Binding var selection: Int
@@ -96,7 +112,7 @@ struct FamilyTreeSideTabs: View {
     var body: some View {
         VStack(spacing: DS.Spacing.xs) {
             ForEach(FamilyTreeTabs.shortOptions) { option in
-                DSChipButton(option.title, isSelected: selection == option.id, size: .mini) {
+                DSChipButton(option.title, isSelected: selection == option.id, size: .small) {
                     guard selection != option.id else { return }
                     UISelectionFeedbackGenerator().selectionChanged()
                     // الشجرتان شاشتان — تذوب إحداهما في الأخرى (`DSScreenCrossfade`)

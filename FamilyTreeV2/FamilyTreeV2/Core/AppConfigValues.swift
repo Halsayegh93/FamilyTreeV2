@@ -39,6 +39,37 @@ final class AppConfigValues: ObservableObject {
         return t.isEmpty ? nil : t
     }
 
+    /// حسابات مراجعة أبل (`review_account_ids` على السيرفر) — «حساب فاضي» لا يُحسب في أي عدد (طلب المالك ٢٠٢٦-١١-٠٩)
+    var reviewAccountIds: Set<UUID> {
+        Set((values["review_account_ids"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(UUID.init(uuidString:)) })
+    }
+
+    /// سطر في «عن التطبيق»: الصفة (اختيارية) والاسم
+    struct AboutCredit: Hashable {
+        let role: String
+        let name: String
+    }
+
+    /// أسماء «عن التطبيق» بالترتيب (`about_credits` على السيرفر: `[{"role": "فكرة وتنفيذ", "name": "…",
+    /// "role_en": "…", "name_en": "…"}]` — الإنجليزي اختياري ويرجع للعربي) — طلب المالك ٢٠٢٦-١١-١٤ «أضيف أكثر من
+    /// اسم»؛ مفتاح غائب أو فارغ = اسم المالك وحده كما كان
+    var aboutCredits: [AboutCredit] {
+        func text(_ row: [String: Any], _ key: String) -> String {
+            let ar = (row[key] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !L10n.isArabic else { return ar }
+            let en = (row[key + "_en"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return en.isEmpty ? ar : en
+        }
+        let rows = (values["about_credits"] as? [Any] ?? []).compactMap { $0 as? [String: Any] }
+        let credits = rows.compactMap { row -> AboutCredit? in
+            let name = text(row, "name")
+            return name.isEmpty ? nil : AboutCredit(role: text(row, "role"), name: name)
+        }
+        if !credits.isEmpty { return credits }
+        return [AboutCredit(role: L10n.t("فكرة وتنفيذ", "Idea and development"),
+                            name: L10n.t("حسن الصايغ", "Hasan Al-Sayegh"))]
+    }
+
     /// رقم صحيح من السيرفر — وإلا `fallback`
     func int(_ key: String, default fallback: Int) -> Int {
         if let n = values[key] as? NSNumber { return n.intValue }

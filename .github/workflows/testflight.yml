@@ -90,6 +90,24 @@ jobs:
             --apiKey "$API_KEY_ID" \
             --apiIssuer "$API_ISSUER_ID"
 
+      # رموز الأعطال (dSYM) إلى Sentry — لتظهر الأعطال بأسماء الدوال والأسطر.
+      # يعمل فقط بعد إضافة السر SENTRY_AUTH_TOKEN والمتغيّرين SENTRY_ORG و SENTRY_PROJECT
+      # في إعدادات المستودع؛ بدونها يتخطّى بهدوء، وفشله لا يوقف الرفع لـ TestFlight.
+      - name: Upload dSYMs to Sentry
+        continue-on-error: true
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+            echo "Sentry not configured — skipping dSYM upload."
+            exit 0
+          fi
+          npx --yes @sentry/cli@3 debug-files upload \
+            --org "$SENTRY_ORG" --project "$SENTRY_PROJECT" \
+            "$RUNNER_TEMP/FamilyTreeV2.xcarchive/dSYMs"
+
       - name: Cleanup
         if: always()
         run: |

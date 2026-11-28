@@ -10,6 +10,10 @@ struct AppSettings: Codable {
     var newsRequiresApproval: Bool
     var allowNewRegistrations: Bool
     var maintenanceMode: Bool
+    /// سبب الصيانة الظاهر للأعضاء (`maintenance_message`، ≤ ٢٠٠ حرف، ٢٠٢٦-١١-٢٨) — nil/فارغ = السطر الافتراضي
+    var maintenanceMessage: String? = nil
+    /// يوقف إشعارات الجوال عن التطبيق كله (السيرفر يمنع الإرسال) — الإشعار يبقى داخل التطبيق
+    var notificationsPaused: Bool? = nil
     var maxDevicesPerUser: Int
     var pollsEnabled: Bool?
     var diwaniyasEnabled: Bool?
@@ -57,6 +61,8 @@ struct AppSettings: Codable {
         case newsRequiresApproval = "news_requires_approval"
         case allowNewRegistrations = "allow_new_registrations"
         case maintenanceMode = "maintenance_mode"
+        case maintenanceMessage = "maintenance_message"
+        case notificationsPaused = "notifications_paused"
         case maxDevicesPerUser = "max_devices_per_user"
         case pollsEnabled = "polls_enabled"
         case diwaniyasEnabled = "diwaniyas_enabled"
@@ -178,6 +184,52 @@ class AppSettingsViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
         isSaving = false
+    }
+
+    // MARK: - وضع الصيانة وسببه (طلب المالك ٢٠٢٦-١١-٢٨)
+
+    /// يكتب الصيانة (إن مُرّرت) وسببها معاً في تحديث واحد — «يُحفظ مع المفتاح». للمالك وحده.
+    /// يطلب الصف المحدّث ويعدّه (صفر صفوف = لم يُحفظ، كالحدود). false = لم يُحفظ (الإعدادات تُعاد من السيرفر).
+    func updateMaintenance(on: Bool?, message: String?, updatedBy: UUID?) async -> Bool {
+        guard canManageSettings else {
+            Log.warning("[AUTH] Unauthorized updateMaintenance attempt — owner only")
+            return false
+        }
+        nonisolated struct Row: Decodable { let id: UUID }
+        isSaving = true
+        defer { isSaving = false }
+        var updateData: [String: AnyEncodable] = [
+            "maintenance_message": AnyEncodable(MaintenanceLogic.sanitized(message)),
+            "updated_at": AnyEncodable(DateHelper.now)
+        ]
+        if let on { updateData["maintenance_mode"] = AnyEncodable(on) }
+        if let updatedBy {
+            updateData["updated_by"] = AnyEncodable(updatedBy.uuidString)
+        }
+        do {
+            let rows: [Row]
+            do {
+                rows = try await supabase.from("app_settings").update(updateData)
+                    .eq("id", value: settings.id.uuidString).select("id").execute().value
+            } catch where on != nil && error.localizedDescription.contains("maintenance_message") {
+                // قبل ترحيل 20261128100000 (لا عمود للسبب): المفتاح وحده كما كان
+                updateData["maintenance_message"] = nil
+                rows = try await supabase.from("app_settings").update(updateData)
+                    .eq("id", value: settings.id.uuidString).select("id").execute().value
+            }
+            await fetchSettings()
+            guard !rows.isEmpty else {
+                Log.warning("وضع الصيانة: لم يُحدَّث أي صف (صلاحية)")
+                return false
+            }
+            Log.info("تم حفظ وضع الصيانة وسببه")
+            return true
+        } catch {
+            Log.error("خطأ في حفظ وضع الصيانة: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+            await fetchSettings()
+            return false
+        }
     }
 
     // MARK: - تنبيه رصيد رسائل الدخول (KWT SMS، ٢٠٢٦-١٠-٢٠)
@@ -341,6 +393,7 @@ class AppSettingsViewModel: ObservableObject {
                 "news_requires_approval": AnyEncodable(true),
                 "allow_new_registrations": AnyEncodable(true),
                 "maintenance_mode": AnyEncodable(false),
+                "notifications_paused": AnyEncodable(false),
                 "max_devices_per_user": AnyEncodable(3),
                 "polls_enabled": AnyEncodable(true),
                 "diwaniyas_enabled": AnyEncodable(true),

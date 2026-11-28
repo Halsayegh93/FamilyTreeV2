@@ -4,6 +4,7 @@ import Supabase
 struct LoginView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @FocusState private var isFieldFocused: Bool
+    @Environment(\.scenePhase) private var scenePhase
 
 #if DEBUG
     /// معاينة شاشة تسجيل البيانات بلا رقم جديد — نسخة التطوير فقط
@@ -307,6 +308,7 @@ struct LoginView: View {
                                     .symbolRenderingMode(.palette)
                                     .foregroundStyle(DS.Color.textOnPrimary, DS.Color.shadowHeavy)
                             }
+                            .accessibilityLabel(L10n.t("إغلاق المعاينة", "Close preview"))
 
                             Text(L10n.t("شاشة معاينة", "Preview"))
                                 .dsFont(.badge)
@@ -365,6 +367,12 @@ struct LoginView: View {
     }
 
     // MARK: - Phone Input — Compact Card
+    /// يُسقط التركيز ثم يعيده في الدورة التالية — يجبر حقل الرمز المخفي على أن يصير المستجيب الأول
+    private func refocusOTP() {
+        isFieldFocused = false
+        DispatchQueue.main.async { isFieldFocused = true }
+    }
+
     @ViewBuilder
     var phoneInputSection: some View {
         let isPhoneValid = authVM.phoneNumber.count >= 6
@@ -450,6 +458,7 @@ struct LoginView: View {
                             .dsGlyph(DS.Glyph.lg, weight: .regular)
                             .foregroundColor(DS.Color.textSecondary)
                     }
+                    .accessibilityLabel(L10n.t("تعديل رقم الهاتف", "Edit phone number"))
                     .padding(.leading, DS.Spacing.xs)
                 }
 
@@ -465,15 +474,6 @@ struct LoginView: View {
 
             // حقل OTP — ستة مربّعات فوق حقل مخفي يحافظ على AutoFill
             ZStack {
-                TextField("", text: $otpText)
-                    .keyboardType(.numberPad)
-                    .textContentType(.oneTimeCode)
-                    .focused($isFieldFocused)
-                    // مخفي بصرياً لا وظيفياً — يبقى مستقبِلاً للوحة المفاتيح
-                    .opacity(0.001)
-                    .frame(height: DS.Icon.sizeLg)
-                    .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
-
                 HStack(spacing: DS.Spacing.sm) {
                     ForEach(0..<6, id: \.self) { i in
                         otpBox(at: i)
@@ -482,15 +482,45 @@ struct LoginView: View {
                 // الرمز يُملأ من اليسار لليمين حتى مع واجهة عربية
                 .environment(\.layoutDirection, .leftToRight)
                 .allowsHitTesting(false)
+
+                // الحقل الحقيقي فوق المربّعات بعرضها وارتفاعها، شفاف كلياً (نصّه ومؤشّره بلا لون): لمس المربّعات
+                // لمسٌ للحقل نفسه فيفتح iOS لوحة المفاتيح مباشرة — كان تحتها والإيماءة فوقه تعتمد على حالة التركيز،
+                // فلا تظهر لوحة المفاتيح على iPhone (٢٠٢٦-١١-١٧). يبقى مستقبِل AutoFill للرمز
+                TextField("", text: $otpText)
+                    .keyboardType(.numberPad)
+                    .textContentType(.oneTimeCode)
+                    .focused($isFieldFocused)
+                    .foregroundStyle(Color.clear)
+                    .tint(Color.clear)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: DS.Icon.sizeLg)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(L10n.t("رمز التحقق", "Verification Code"))
             }
-            .contentShape(Rectangle())
-            .onTapGesture { isFieldFocused = true }
                 .onAppear {
                     isFieldFocused = true
+                    // التركيز أثناء انتقال الشاشة قد يضيع فلا تفتح لوحة المفاتيح، وبدونها لا يظهر اقتراح الرمز
+                    Task {
+                        try? await Task.sleep(nanoseconds: 400_000_000)
+                        if otpText.isEmpty { refocusOTP() }
+                        // الأجهزة الأبطأ: محاولة ثانية بعد انتهاء الانتقال
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                        if otpText.isEmpty { refocusOTP() }
+                    }
                     otpText = ""
                     authVM.otpCode = ""
                     // الرجوع لخانة رمز محفوظ يبدأ من الوقت الباقي له (`restorePendingOTPIfAny`)
                     if otpTimeRemaining == 0 { otpTimeRemaining = 300 }
+                }
+                // الرجوع من تطبيق الرسائل: لوحة المفاتيح جاهزة لاقتراح الرمز
+                .onChange(of: scenePhase) { phase in
+                    if phase == .active, otpText.count < 6 { isFieldFocused = true }
+                }
+                // رمز خاطئ: تفرّغ المربّعات وترجع لوحة المفاتيح (كانت تبقى مغلقة فلا يظهر اقتراح الرمز الجديد)
+                .onChange(of: authVM.otpErrorMessage) { message in
+                    guard message != nil else { return }
+                    if authVM.otpCode.isEmpty { otpText = "" }
+                    isFieldFocused = true
                 }
                 .onChange(of: otpText) { newValue in
                     // يقبل الأرقام العربية والفارسية ويحوّلها إنجليزية — نفس حقل الهاتف
@@ -533,6 +563,7 @@ struct LoginView: View {
                              icon: "message.fill",
                              tint: timeRemaining > 0 ? DS.Color.textTertiary : DS.Color.primary) {
                     authVM.otpCode = ""; otpText = ""
+                    isFieldFocused = true
                     authVM.otpErrorMessage = nil
                     authVM.otpStatusMessage = ""
                     otpTimeRemaining = 300
@@ -550,6 +581,7 @@ struct LoginView: View {
                                  icon: "bubble.left.and.bubble.right.fill",
                                  tint: authVM.isLoading ? DS.Color.textTertiary : DS.Color.sea) {
                         authVM.otpCode = ""; otpText = ""
+                        isFieldFocused = true
                         authVM.otpErrorMessage = nil
                         authVM.otpStatusMessage = ""
                         otpTimeRemaining = 300

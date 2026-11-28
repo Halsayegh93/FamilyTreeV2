@@ -35,7 +35,7 @@ enum AppUsageScreen: String, CaseIterable {
         case .news:          return L10n.t("الأخبار", "News")
         case .tree:          return L10n.t("الشجرة", "Tree")
         case .diwaniyas:     return L10n.t("الديوانيات", "Diwaniyas")
-        case .profile:       return L10n.t("حسابي", "Profile")
+        case .profile:       return L10n.t("الملف الشخصي", "Profile")
         case .admin:         return L10n.t("الإدارة", "Admin")
         case .library:       return L10n.t("المكتبة", "Library")
         case .projects:      return L10n.t("المشاريع", "Projects")

@@ -273,7 +273,7 @@ struct SmsAdminError: Error, Equatable {
         case "bad_msgid":
             return L10n.t("رقم الرسالة غير صالح.", "Invalid message ID.")
         case "network":
-            return L10n.t("تعذّر الاتصال — تأكد من الإنترنت وجرّب مرة ثانية.", "Couldn't connect — check the internet and retry.")
+            return L10n.t("تعذّر الاتصال، يرجى التحقق من الإنترنت والمحاولة مرة أخرى.", "Couldn't connect — check the internet and retry.")
         default:
             return L10n.t("حدث خطأ غير متوقع — حدّث التطبيق أو جرّب لاحقاً.", "Something went wrong — update the app or try later.")
         }
@@ -321,7 +321,7 @@ final class SmsBalanceStore: ObservableObject {
     static let defaultLowThreshold: Double = 50
     static let defaultUrgentThreshold: Double = 10
     /// مرجع مقياس الرصيد في رأس الصفحة («من ١٠٠»)
-    static let gaugeReference: Double = 100
+    static let gaugeReference: Double = SmsPageLogic.gaugeReference
     /// صفحة شراء الرصيد في حساب KWT SMS (تحوّل لتسجيل الدخول عند المزوّد إن لم يكن مسجّلاً) — الرابط الوحيد للشحن
     static let rechargeURL = URL(string: "https://www.kwtsms.com/cportal/buy/")!
 
@@ -354,6 +354,9 @@ final class SmsBalanceStore: ObservableObject {
         lastFetch = Date()
         state = .loading
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.sms, hasLoaded: overview != nil || status != nil)   // `-tmpFailStores sms`
+            #endif
             let data = try await SupabaseConfig.client.rpc("sms_admin_overview").execute().data
             let o = try SmsOverview.decode(data)
             overview = o
@@ -377,6 +380,9 @@ final class SmsBalanceStore: ObservableObject {
             let at: String?
         }
         do {
+            #if DEBUG
+            try DebugAdminProbe.failIfAsked(.sms, hasLoaded: status != nil)   // الاحتياط يفشل معه (انقطاع كامل)
+            #endif
             let row: Row = try await SupabaseConfig.client.rpc("sms_balance_status").execute().value
             status = Status(balance: row.balance, at: ApprovalWorkflow.date(row.at))
             state = .loaded
@@ -460,6 +466,12 @@ final class SmsBalanceStore: ObservableObject {
 
     private func call<B: Encodable, T: Decodable>(_ action: String, body: B, as type: T.Type) async throws -> T {
         do {
+            #if DEBUG
+            // تجربة الأدوار: لا رسالة تجريبية ولا حفظ اسم مرسل ولا فك قفل رقم — نجاح مصطنع (الردود كل حقولها اختيارية)
+            if ["test_send", "set_sender", "unlock"].contains(action), DebugAdminProbe.dryRun("kwtsms-admin \(action)") {
+                return try JSONDecoder().decode(T.self, from: Data("{}".utf8))
+            }
+            #endif
             let data: Data = try await SupabaseConfig.client.functions.invoke(
                 "kwtsms-admin",
                 options: FunctionInvokeOptions(method: .post, body: body)
@@ -534,6 +546,16 @@ extension SmsBalanceStore.Level {
         }
     }
 
+    /// حلقة الرصيد وكلمة حاله فوق الكحلي (رأس صفحة الرسائل v2): ألوان سطر الحالة فوق الكحلي — ثابتة في الوضعين
+    var bandRing: Color {
+        switch self {
+        case .unknown: return DS.Hub.lineZero
+        case .good:    return DS.Hub.statusOk
+        case .low:     return DS.Hub.statusWarn
+        case .urgent:  return DS.Hub.kpiHot
+        }
+    }
+
     /// لون الرقم الكبير فوق الكحلي
     var bandTint: Color {
         switch self {
@@ -585,7 +607,7 @@ enum SmsText {
         case "ERR024": return L10n.t("عنوان السيرفر غير مسموح في الحساب", "Server IP not allowed")
         case "ERR025": return L10n.t("رقم غير صالح", "Invalid number")
         case "ERR026": return L10n.t("الدولة غير مفعّلة في الحساب", "Country not activated")
-        case "ERR028": return L10n.t("إرسال متكرر لنفس الرقم — انتظر قليلاً", "Repeat send to the same number — wait")
+        case "ERR028": return L10n.t("إرسال متكرر للرقم نفسه، يرجى الانتظار قليلاً", "Repeat send to the same number — wait")
         case "ERR029": return L10n.t("الرسالة غير موجودة عند المزوّد", "Message not found at the provider")
         case "ERR030": return L10n.t("عالقة في الطابور بخطأ", "Stuck in the queue with an error")
         case "TIMEOUT": return L10n.t("انتهت المهلة", "Timed out")

@@ -52,7 +52,7 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         id            = try c.decode(UUID.self, forKey: .id)
         title         = try c.decode(String.self, forKey: .title)
         body          = try c.decode(String.self, forKey: .body)
-        kind          = try c.decode(String.self, forKey: .kind)
+        let rawKind   = try c.decode(String.self, forKey: .kind)
         createdAt     = try c.decode(String.self, forKey: .createdAt)
         targetMemberId = try? c.decodeIfPresent(UUID.self, forKey: .targetMemberId)
         createdBy     = try? c.decodeIfPresent(UUID.self, forKey: .createdBy)
@@ -60,6 +60,8 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         requestId     = try? c.decodeIfPresent(UUID.self, forKey: .requestId)
         requestType   = try? c.decodeIfPresent(String.self, forKey: .requestType)
         details       = try? c.decodeIfPresent(NotificationDetails.self, forKey: .details)
+        // السيرفر يكتب «تغييرات الأعضاء» باسم admin_edit لأن نسخة 49 لا تعرف member_change (20261105100000)
+        kind          = (rawKind == "admin_edit" && details?.v == 2) ? "member_change" : rawKind
         subjectMemberId = try? c.decodeIfPresent(UUID.self, forKey: .subjectMemberId)
     }
 
@@ -87,14 +89,8 @@ nonisolated struct AppNotification: Identifiable, Codable, Sendable {
         )
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
     var createdDate: Date {
-        Self.isoFormatter.date(from: createdAt) ?? Date()
+        DateParsing.isoRequiringFraction(createdAt) ?? Date()
     }
 }
 
@@ -124,9 +120,17 @@ extension AppNotification {
         let subject: Person?
         /// من نفّذ التغيير (للإدارة فقط — لا يصل العضو)
         let actor: Person?
+        /// العضو أضاف ابنه بنفسه («تمت إضافة ابن»): `subject_member_id` = الابن، `created_by` = الأب
+        let selfChild: Bool?
+        /// السيرفر يشكّ في الابن المضاف (اسم كامل أو ميلاد يطابق غيره) — «راجعه»
+        let review: Bool?
+        /// «أضف صورتك الشخصية» (`photo_change_request` لعضو بلا صورة — P1) — التسمية «طلب إضافة صورة» (F4، S-3)
+        let photoAdd: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case v, changes, type, sender, action, tree, subject, actor
+            case v, changes, type, sender, action, tree, subject, actor, review
+            case selfChild = "self_child"
+            case photoAdd = "photo_add"
             case memberId = "member_id"
             case newsId = "news_id"
             case workflowRequestId = "request_id"
@@ -248,6 +252,9 @@ extension AppNotification {
             self.tree = nil
             self.subject = nil
             self.actor = nil
+            self.selfChild = nil
+            self.review = nil
+            self.photoAdd = nil
         }
 
         /// حمولة «ما الذي تغيّر» أو حمولة نوع خاص (إعلان وفاة) — الغائب يأخذ قيمة فارغة
@@ -264,6 +271,9 @@ extension AppNotification {
             tree = try? c.decodeIfPresent(String.self, forKey: .tree)
             subject = try? c.decodeIfPresent(Person.self, forKey: .subject)
             actor = try? c.decodeIfPresent(Person.self, forKey: .actor)
+            selfChild = try? c.decodeIfPresent(Bool.self, forKey: .selfChild)
+            review = try? c.decodeIfPresent(Bool.self, forKey: .review)
+            photoAdd = try? c.decodeIfPresent(Bool.self, forKey: .photoAdd)
             if let version = try? c.decodeIfPresent(Int.self, forKey: .v) {
                 v = version
             } else if type != nil || sender != nil || !changes.isEmpty {

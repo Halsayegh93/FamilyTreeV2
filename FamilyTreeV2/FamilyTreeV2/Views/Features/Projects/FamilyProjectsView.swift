@@ -2,13 +2,14 @@ import SwiftUI
 
 struct FamilyProjectsView: View {
     @EnvironmentObject var authVM: AuthViewModel
+    /// «صلاحيات الأعضاء حسب الفئة» (`MemberAccess`) — يُعاد الرسم حين تتغيّر الفئة أو الجدول
+    @ObservedObject private var memberAccess = MemberAccessStore.shared
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var notificationVM: NotificationViewModel
 
     @State private var showingAddProject = false
     @State private var selectedProject: Project?
-    @State private var showAddedAlert = false
 
     // Filter
     @State private var filter: ProjectsFilter = .approved
@@ -23,6 +24,7 @@ struct FamilyProjectsView: View {
     @State private var projectToReport: Project? = nil
     @State private var reportReason = ""
     @State private var reportSent = false
+    @State private var reportFailed = false
     /// دخول البطاقات مرة واحدة عند ظهور الشبكة (نمط الأخبار والديوانيات)
     @State private var appeared = false
 
@@ -55,14 +57,14 @@ struct FamilyProjectsView: View {
                 // شريط التحديد العلوي يحلّ محل صف الفلاتر في وضع التحديد
                 if selectionMode {
                     selectionTopBar
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 } else if hasToolbarRow {
                     // التصنيفات أُزيلت (طلب المالك) — يبقى فقط زر الطلبات المعلّقة إن وُجدت؛
                     // زر التحديد انتقل لهيدر الصفحة
                     toolbarRow
-                        .padding(.horizontal, DS.Spacing.lg)
+                        .dsPageMargin()
                         .padding(.top, DS.Spacing.sm)
                         .padding(.bottom, DS.Spacing.xs)
                 }
@@ -70,8 +72,8 @@ struct FamilyProjectsView: View {
                 contentArea
             }
 
-            // FAB رفع — للجميع، يختفي في وضع التحديد
-            if !selectionMode {
+            // FAB رفع — للجميع، يختفي في وضع التحديد (و«إضافة مشروع» مطفأة لفئته — `MemberAccess`)
+            if !selectionMode && authVM.memberSees(.projectsAdd) {
                 HStack {
                     Spacer()
                     DSFloatingButton(icon: "plus", color: DS.Color.primary) {
@@ -110,30 +112,12 @@ struct FamilyProjectsView: View {
             }
         }
         // الإضافة مربّع بمنتصف الشاشة لا ورقة سفلية (طلب المالك)
-        .fullScreenCover(isPresented: $showingAddProject) {
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                AddProjectView(showAddedAlert: $showAddedAlert)
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
-                    .environmentObject(memberVM)
-                    .dsSectionPage(.projects)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
-            }
-            .background(ClearPresentationBackground())
-        }
-        .transaction { t in
-            if showingAddProject { t.disablesAnimations = true }
-        }
-        .dsAlert(
-            L10n.t("تم إرسال المشروع", "Project Submitted"),
-            isPresented: $showAddedAlert,
-            moment: .sentForApproval
-        ) {
-            Button(L10n.t("حسناً", "OK")) {}
-        } message: {
-            Text(L10n.t(
-                "تم إرسال مشروعك للمراجعة. سيظهر بعد موافقة الإدارة.",
-                "Your project has been submitted for review. It will appear after admin approval."
-            ))
+        .dsCenterBox(isPresented: $showingAddProject) {
+            AddProjectView()
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .dsSectionPage(.projects)   // الصفحة تحته «تختفي» — المربّع يبقي القسم الحالي
         }
         // تفاصيل المشروع — مربّع كبير بالمنتصف (طلب المالك ٢٠٢٦-١٠-٢٣، مثل تفاصيل العضو):
         // يتمرّر داخله، يُغلق بـ× أو بالضغط خارجه
@@ -145,17 +129,13 @@ struct FamilyProjectsView: View {
                 .environmentObject(authVM)
                 .environmentObject(memberVM)
         }
-        .fullScreenCover(item: $projectToEdit) { project in
-            DSCenterPanel(onBackgroundTap: nil, hugsContent: true) {
-                EditProjectView(project: project, didEdit: $didEditProject)
-                    .environmentObject(projectsVM)
-                    .environmentObject(authVM)
-                    .environmentObject(memberVM)
-                    .dsSectionPage(.projects)
-            }
-            .background(ClearPresentationBackground())
+        .dsCenterBox(item: $projectToEdit) { project in
+            EditProjectView(project: project, didEdit: $didEditProject)
+                .environmentObject(projectsVM)
+                .environmentObject(authVM)
+                .environmentObject(memberVM)
+                .dsSectionPage(.projects)
         }
-        .transaction { t in if projectToEdit != nil { t.disablesAnimations = true } }
         .dsAlert(L10n.t("إبلاغ عن مشروع", "Report Project"), isPresented: Binding(
             get: { projectToReport != nil },
             set: { if !$0 { projectToReport = nil } }
@@ -173,9 +153,12 @@ struct FamilyProjectsView: View {
                             contentKind: L10n.t("مشروع", "project"),
                             contentLabel: target.title,
                             contentId: target.id,
-                            reason: reason
+                            reason: reason,
+                            source: RequestSource(RequestSourceStep("briefcase.fill", "مشاريع العائلة"),
+                                                  RequestSourceStep("briefcase", target.title),
+                                                  RequestSourceStep("flag.fill", "بلاغ عن مشروع"))
                         )
-                        if ok { await MainActor.run { reportSent = true } }
+                        if ok { await MainActor.run { reportSent = true } } else { await MainActor.run { reportFailed = true } }
                     }
                 }
             }
@@ -183,6 +166,23 @@ struct FamilyProjectsView: View {
         } message: {
             Text(L10n.t("اكتب سبب الإبلاغ، وسيتم إرساله للإدارة لمراجعة هذا المشروع.",
                        "Enter a reason; it will be sent to the admins to review this project."))
+        }
+        .dsAlert(L10n.t("تعذّر الإبلاغ", "Couldn't report"), isPresented: $reportFailed) {
+            Button(L10n.t("حسناً", "OK")) {}
+        } message: {
+            Text(L10n.t("تعذّر الإبلاغ. حاول مرة أخرى.", "Couldn't send the report. Please try again."))
+        }
+        // خطأ اعتماد/رفض مشروع من زر النقاط
+        .dsAlert(
+            L10n.t("تنبيه", "Notice"),
+            isPresented: Binding(
+                get: { projectsVM.decisionError != nil },
+                set: { if !$0 { projectsVM.decisionError = nil } }
+            )
+        ) {
+            Button(L10n.t("حسناً", "OK")) { projectsVM.decisionError = nil }
+        } message: {
+            Text(projectsVM.decisionError ?? "")
         }
         .dsAlert(L10n.t("تم الإبلاغ", "Reported"), isPresented: $reportSent) {
             Button(L10n.t("حسناً", "OK")) {}
@@ -277,7 +277,7 @@ struct FamilyProjectsView: View {
                         .dsCardCascade(index, appeared: appeared)
                     }
                 }
-                .padding(.horizontal, DS.Spacing.lg)
+                .dsPageMargin()
                 // البطاقات تبدأ تحت الرأس بمسافة (طلب المالك ٢٠٢٦-١٠-٢٣ — كانت ملاصقة له)، مثل المكتبة
                 .padding(.top, hasToolbarRow ? DS.Spacing.xs : DS.Spacing.md)
                 .padding(.bottom, DS.Spacing.xxxxl)
@@ -411,7 +411,7 @@ struct FamilyProjectsView: View {
             if pendingCount > 0 || filter == .pending {
                 let on = filter == .pending
                 // الشريحة الموحّدة بلون المعنى (بانتظار = تحذير) والعدد بعد النص
-                DSChipButton(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("طلباتي", "Mine"),
+                DSChipButton(authVM.isAdmin ? L10n.t("بانتظار", "Pending") : L10n.t("الطلبات", "Mine"),
                              icon: "clock.fill", tint: DS.Color.warning, isSelected: on, count: pendingCount) {
                     // تبديل القائمة بنابض هادئ مثل فلتر الديوانيات — «تقليل الحركة»: تلاشٍ قصير
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.15)
@@ -467,7 +467,7 @@ struct FamilyProjectsView: View {
             }
             .disabled(selectedIDs.isEmpty)
         }
-        .padding(.horizontal, DS.Spacing.lg)
+        .dsPageMargin()
         .padding(.vertical, DS.Spacing.sm)
         .dsGlass(Rectangle())
         .overlay(
@@ -611,7 +611,6 @@ struct AddProjectView: View {
     @EnvironmentObject var projectsVM: ProjectsViewModel
     @EnvironmentObject var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
-    @Binding var showAddedAlert: Bool
 
     @State private var title = ""
     @State private var description = ""
@@ -702,7 +701,7 @@ struct AddProjectView: View {
             Button(L10n.t("لا", "No")) { Task { await saveProject(isOwner: false) } }
             Button(L10n.t("رجوع", "Back"), role: .cancel) {}
         } message: {
-            Text(L10n.t("إذا اخترت «لا» ما يظهر اسمك على المشروع، والإدارة تحدّد صاحبه.",
+            Text(L10n.t("عند اختيار «لا» لا يظهر الاسم على المشروع، وتحدّد الإدارة صاحبه.",
                         "If you choose No, your name won't show on the project; the admins can set its owner."))
         }
     }
@@ -759,8 +758,11 @@ struct AddProjectView: View {
                 await projectsVM.fetchMyPendingProjects(ownerId: userId)
             }
             isSaving = false
-            showAddedAlert = true
             dismiss()
+            // لحظة النجاح نفسها كالديوانيات والأخبار والمكتبة (بدل تنبيه «تم إرسال المشروع» بزرّ «حسناً»).
+            // قاعدة النشر نفسها: `addProject` يحفظ المشروع «معلّقاً» دائماً (للإدارة أيضاً) ← «أُرسل للمراجعة»؛
+            // إن صار يُنشر مباشرة لأحد فهنا «تمت الإضافة» بـ`.success`
+            DSMomentToast.show(L10n.t("أُرسل للمراجعة", "Sent for review"), moment: .sentForApproval, section: .projects)
         } else {
             isSaving = false
         }

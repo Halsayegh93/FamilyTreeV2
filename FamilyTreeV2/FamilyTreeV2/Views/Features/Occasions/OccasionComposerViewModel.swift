@@ -14,6 +14,9 @@ final class OccasionComposerViewModel: ObservableObject {
     @Published var form = OccasionForm()
     /// العضو المختار من شجرة العائلة (رجال)
     @Published private(set) var member: FamilyMember?
+    /// الاسم بعد تعديله يدوياً فوق اختيار الشجرة — nil = اسم الشجرة كما هو (طلب المالك ٢٠٢٦-١١-٢٤ «ابى احرر الاسم بعد
+    /// الاختيار»). الصورة وصلة القرابة تبقى من العضو المختار
+    @Published var nameEdited: String?
     /// الصيغة المطلوبة لكل عنصر اسم (عدد الأسماء) — الافتراضي الأطول؛ اللي ما يدخل بسطر يختصر تلقائياً
     @Published var nameCounts: [String: Int] = [:]
     /// نموذج ١ (صورة دائرية فوق)، نموذج ٢ (صورة سداسية جانبية)، أو نموذج ٣ (صورة بقوس فوق بطاقة) —
@@ -41,15 +44,20 @@ final class OccasionComposerViewModel: ObservableObject {
     private var avatarTask: Task<Void, Never>?
 
     let kit = OccasionKit.shared
-    let templates = OccasionTemplate.all
+    /// الإعلانات الظاهرة (إعداد السيرفر `occasion_designer`)
+    var templates: [OccasionTemplate] { OccasionTemplate.available }
     let placements = OccasionPlacement.all
 
     /// سطور القرابة اللي تتعبّى من الشجرة (الزوج/الزوجة كتابة)
     static let relationKeys = ["relation", "rel2", "rel3"]
 
-    init() {
-        template = OccasionTemplate.all[0]
+    /// `startTemplateId`: الإعلان المختار في «تصميم إعلان» — المصمّم يبدأ عليه
+    init(startTemplateId: String? = nil) {
+        template = startTemplateId.flatMap { id in
+            OccasionTemplate.available.first(where: { $0.id == id }) ?? OccasionTemplate.all.first(where: { $0.id == id })
+        } ?? OccasionTemplate.available.first ?? OccasionTemplate.all[0]
         placement = OccasionPlacement.all[0]
+        if template.kind == .death { photo.gray = true }
     }
 
     var size: OccasionSize { placement.size }
@@ -75,14 +83,36 @@ final class OccasionComposerViewModel: ObservableObject {
 
     /// الاسم كامل: من الشجرة (مع العائلة) أو المكتوب — الصيغة تنختار بعدين حسب السطر (OccasionNames)
     var name: String {
-        if let member { return member.nameUnitsWithFamily.joined(separator: " ") }
+        if let member {
+            if let e = nameEdited?.trimmingCharacters(in: .whitespacesAndNewlines), !e.isEmpty { return e }
+            return member.nameUnitsWithFamily.joined(separator: " ")
+        }
         return form.txt("nameTyped")
+    }
+
+    /// الاسم المعدّل فيه نص (الفاضي = اسم الشجرة)
+    var hasEditedName: Bool {
+        !(nameEdited?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
+    }
+
+    /// يبدأ تعديل الاسم المختار من الشجرة بالصيغة الظاهرة الحين (ثلاثي/رباعي…) — بعدها يُكتب كما يريد
+    func beginEditingName() {
+        let shown = nameResolution("name")?.option.name ?? name
+        nameCounts["name"] = nil
+        nameEdited = shown
+    }
+
+    /// يرجع لاسم الشجرة كما هو
+    func resetEditedName() {
+        nameCounts["name"] = nil
+        nameEdited = nil
     }
 
     /// وحدات الأسماء من الشجرة (PersonName القاعدة ٢): العضو المختار واسم أبوه في «ابن …» —
     /// «محمد باقر» يبقى اسماً واحداً لما ينختصر الاسم. النص المكتوب يتقسّم بالقاعدة ٣.
     var nameHints: OccasionNames.Hints {
-        guard let member else { return [:] }
+        // الاسم المعدّل يدوياً يتقسّم مثل المكتوب (القاعدة ٣) — وحدات الشجرة ما تطابقه
+        guard let member, !hasEditedName else { return [:] }
         var lists = [member.nameUnitsWithFamily]
         if let fid = member.fatherId, let father = family.byId[fid] { lists.append(father.shortNameUnits) }
         return OccasionNames.hints(lists)
@@ -216,6 +246,7 @@ final class OccasionComposerViewModel: ObservableObject {
 
     func pickMember(_ m: FamilyMember) {
         member = m
+        nameEdited = nil
         // عضو جديد: الاسم يرجع لأطول صيغة تدخل
         nameCounts["name"] = nil
         let sons = family.sonsLine(m)
@@ -249,6 +280,7 @@ final class OccasionComposerViewModel: ObservableObject {
 
     func clearMember() {
         member = nil
+        nameEdited = nil
         for key in Self.relationKeys {
             if let auto = autoRelations[key], !auto.isEmpty, form.txt(key) == auto { form.texts[key] = "" }
         }
@@ -300,7 +332,7 @@ final class OccasionComposerViewModel: ObservableObject {
             // العضو تغيّر، أو المستخدم اختار صورة بنفسه أثناء التحميل
             guard self.member?.id == memberId, self.photo.image == nil || self.photoFromMember else { return }
             guard let image else {
-                self.message = L10n.t("ما قدرنا نحمّل صورة العضو — تقدر تختار صورة بنفسك.",
+                self.message = L10n.t("تعذّر تحميل صورة العضو، ويمكن اختيار صورة أخرى.",
                                       "Couldn't load the member's photo — you can choose one yourself.")
                 return
             }
@@ -327,7 +359,7 @@ final class OccasionComposerViewModel: ObservableObject {
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
                   let image = await Task.detached(priority: .userInitiated, operation: { Self.downscaled(data, maxPixel: 1600) }).value else {
-                message = L10n.t("ما قدرنا نفتح الصورة — جرّب صورة ثانية.", "Couldn't open the photo — try another one.")
+                message = L10n.t("تعذّر فتح الصورة، يرجى اختيار صورة أخرى.", "Couldn't open the photo — try another one.")
                 return
             }
             avatarTask?.cancel()
@@ -339,7 +371,7 @@ final class OccasionComposerViewModel: ObservableObject {
             photoFromMember = false
         } catch {
             Log.error("Occasion photo load failed: \(error.localizedDescription)")
-            message = L10n.t("ما قدرنا نفتح الصورة — جرّب صورة ثانية.", "Couldn't open the photo — try another one.")
+            message = L10n.t("تعذّر فتح الصورة، يرجى اختيار صورة أخرى.", "Couldn't open the photo — try another one.")
         }
     }
 
@@ -407,10 +439,10 @@ final class OccasionComposerViewModel: ObservableObject {
                 let request = PHAssetCreationRequest.forAsset()
                 request.addResource(with: .photo, data: data, options: nil)
             }
-            message = L10n.t("انحفظ المنشور في الصور ✓", "Saved to Photos ✓")
+            message = L10n.t("حُفظ المنشور في الصور ✓", "Saved to Photos ✓")
         } catch {
             Log.error("Occasion save to Photos failed: \(error.localizedDescription)")
-            message = L10n.t("ما انحفظت الصورة — حاول مرة ثانية.", "Couldn't save the image — please try again.")
+            message = L10n.t("لم تُحفظ الصورة، يرجى المحاولة مرة أخرى.", "Couldn't save the image — please try again.")
         }
     }
 
@@ -443,8 +475,8 @@ final class OccasionComposerViewModel: ObservableObject {
 
     private var renderFailedMessage: String {
         kit.failed
-            ? L10n.t("تعذّر تحميل ملفات التصميم — تأكد من الاتصال وحاول مرة ثانية.", "Couldn't download the design files — check your connection and try again.")
-            : L10n.t("صار خطأ أثناء تجهيز الصورة — حاول مرة ثانية.", "Something went wrong while preparing the image — please try again.")
+            ? L10n.t("تعذّر تحميل ملفات التصميم، يرجى التحقق من الاتصال والمحاولة مرة أخرى.", "Couldn't download the design files — check your connection and try again.")
+            : L10n.t("حدث خطأ أثناء تجهيز الصورة، يرجى المحاولة مرة أخرى.", "Something went wrong while preparing the image — please try again.")
     }
 }
 

@@ -75,7 +75,7 @@ struct BranchPickerSheet: View {
                 DSNoteCard(canRename
                            ? L10n.t("الاسم يظهر في قائمة «اختر فرعاً» فقط، ولا يغيّر أسماء الأعضاء.",
                                     "The name shows only in the «Pick branch» list; member names stay as they are.")
-                           : L10n.t("تقدر تتصفّح الأسماء. التسمية متاحة للمالك فقط.",
+                           : L10n.t("يمكنك تصفّح الأسماء، والتسمية متاحة للمالك فقط.",
                                     "You can browse the names. Only the owner can rename."),
                            icon: canRename ? "info.circle.fill" : "eye.fill")
                     .dsStaggerIn(0)
@@ -305,7 +305,7 @@ struct BranchPickerSheet: View {
             if canExpand {
                 expandButton(for: node)
                     // الدائرة في مكانها السابق (هامش الصف ١٠ + نصف ٣٠) ومنطقة الضغط ٤٤ حولها
-                    .padding(.trailing, DS.Spacing.sm + 2 - (Self.expandHitSize - Self.expandButtonSize) / 2)
+                    .padding(.trailing, DS.Spacing.smd - (Self.expandHitSize - Self.expandButtonSize) / 2)
             }
         }
     }

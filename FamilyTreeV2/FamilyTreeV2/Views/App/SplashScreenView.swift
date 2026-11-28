@@ -28,7 +28,7 @@ struct SplashScreenView: View {
                 Image("FamilyLogoNavy")
                     .resizable()
                     .scaledToFit()
-                    .frame(height: DS.Icon.familyLogo)
+                    .frame(height: DS.Icon.splashLogo)
                     .padding(DS.Icon.appLogo / 4)
                     .scaleEffect(logoScale)
                     .opacity(logoOpacity)

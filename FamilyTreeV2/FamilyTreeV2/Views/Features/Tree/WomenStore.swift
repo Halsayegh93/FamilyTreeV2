@@ -21,6 +21,19 @@ private struct WomenRow: Decodable {
     let isMarried: Bool?
     /// وقت إضافة السجل — «المضافة حديثاً» تُستبعد من مرشّحات الزوجة (`WifeCandidateRules`)
     let createdAt: String?
+    /// ترتيب الزوجة بين زوجات زوجها (`wife_order`) — مستقلّ عن `sort_order` (ترتيبها بين أبناء أبيها).
+    /// اختياري: قبل ترحيل السيرفر لا يوجد العمود فيُقرأ nil بلا خطأ (`select()` = كل الأعمدة)
+    let wifeOrder: Int?
+    /// «زوج من خارج العائلة» (`is_outside_family`، ٢٠٢٦-١١-٠٧) — اختياري: قبل ترحيل السيرفر لا يوجد فيُقرأ nil
+    let isOutsideFamily: Bool?
+    /// «ما يظهر في الشجرة» عند البنت (`20261109200000`) — اختيارية: قبل الترحيل nil
+    let spouseShown: Bool?
+    let childrenShown: Bool?
+    let hiddenChildren: [UUID]?
+    /// من أخفاها ومتى، وهل أخفاها أهلها (`20261112130000_women_hide_by_family`) — اختيارية: قبل الترحيل nil
+    let hiddenBy: UUID?
+    let hiddenAt: String?
+    let hiddenByFamily: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -40,6 +53,14 @@ private struct WomenRow: Decodable {
         case linkedUserId = "linked_user_id"
         case isMarried = "is_married"
         case createdAt = "created_at"
+        case wifeOrder = "wife_order"
+        case isOutsideFamily = "is_outside_family"
+        case spouseShown = "spouse_shown"
+        case childrenShown = "children_shown"
+        case hiddenChildren = "hidden_children"
+        case hiddenBy = "hidden_by"
+        case hiddenAt = "hidden_at"
+        case hiddenByFamily = "hidden_by_family"
     }
 }
 
@@ -55,6 +76,29 @@ enum WomenStore {
     /// ربط حساب التطبيق ↔ اسم في شجرة النساء (مرجع إداري + زر موقعي).
     static var womanByLinkedUser: [UUID: UUID] = [:]   // userId → womanId
     static var linkedUserByWoman: [UUID: UUID] = [:]   // womanId → userId
+    /// ترتيب الزوجات (`wife_order`) من آخر جلب — womanId → ترتيبها بين زوجات زوجها
+    static var wifeOrderByWoman: [UUID: Int] = [:]
+    /// «أبناء البنات من خارج العائلة»: أزواج البنات من خارج العائلة (`is_outside_family`) — يُرسمون تحت زوجاتهم
+    static var outsideFamilyIds: Set<UUID> = []
+    /// المخفيّة: من أخفاها ومتى، وهل أخفاها أهلها (الإظهار منهم وحدهم) — تراها الإدارة فقط
+    struct HiddenInfo: Equatable { let by: UUID?; let at: String?; let byFamily: Bool }
+    static var hiddenInfo: [UUID: HiddenInfo] = [:]
+    /// العمود موجود على السيرفر (الترحيل طُبّق) — قبله تختفي «زوج من خارج العائلة»
+    static var outsideFamilySupported = false
+    /// «ما يظهر في الشجرة» عند البنت (اختيارها هي، ٢٠٢٦-١١-٠٩): بنات زوجهن ظاهر جنبهن، وبنات عيالهن
+    /// (من زوج من خارج العائلة) ظاهرون تحتهن، وعيال بعينهم أخفتهم أمهاتهم. الافتراضي (nil) = مخفي.
+    static var spouseShownIds: Set<UUID> = []
+    static var childrenShownIds: Set<UUID> = []
+    static var hiddenChildIds: Set<UUID> = []
+    /// الأعمدة موجودة على السيرفر (الترحيل طُبّق) — قبله يبقى السلوك القديم (مسعود وعياله ظاهرون)
+    static var visibilitySupported = false
+
+    /// ترتيب زوجات الرجل الواحد: `wife_order` أولاً (ما رتّبته الإدارة)، ثم `sort_order` كما كان
+    /// (القاموس يُمرَّر — المستدعون يقرؤون `wifeOrderByWoman` مرة ثم يرتّبون في سياق غير معزول)
+    nonisolated static func wifeOrdered(_ a: FamilyMember, _ b: FamilyMember, orders: [UUID: Int]) -> Bool {
+        let oa = orders[a.id] ?? Int.max, ob = orders[b.id] ?? Int.max
+        return oa != ob ? oa < ob : a.sortOrder < b.sortOrder
+    }
 
     /// عقدة حساب المرأة في شجرة النساء (`linked_user_id` = معرّف حسابها) — من آخر جلب؛ nil = غير مربوطة بعد
     static func node(forAccount userId: UUID) -> FamilyMember? {
@@ -80,6 +124,18 @@ enum WomenStore {
         }
         womanByLinkedUser = byUser
         linkedUserByWoman = byWoman
+        var wifeOrders: [UUID: Int] = [:]
+        for r in rows { if let o = r.wifeOrder { wifeOrders[r.id] = o } }
+        wifeOrderByWoman = wifeOrders
+        outsideFamilyIds = Set(rows.lazy.filter { $0.isOutsideFamily == true }.map(\.id))
+        hiddenInfo = Dictionary(uniqueKeysWithValues: rows.lazy.filter { $0.isHiddenFromTree == true }.map {
+            ($0.id, HiddenInfo(by: $0.hiddenBy, at: $0.hiddenAt, byFamily: $0.hiddenByFamily == true))
+        })
+        outsideFamilySupported = rows.contains { $0.isOutsideFamily != nil }
+        spouseShownIds = Set(rows.lazy.filter { $0.spouseShown == true }.map(\.id))
+        childrenShownIds = Set(rows.lazy.filter { $0.childrenShown == true }.map(\.id))
+        hiddenChildIds = Set(rows.lazy.flatMap { $0.hiddenChildren ?? [] })
+        visibilitySupported = rows.contains { $0.spouseShown != nil || $0.childrenShown != nil }
         let mapped = rows.map { r in
             FamilyMember(
                 id: r.id,
@@ -216,12 +272,14 @@ enum WomenStore {
         }
     }
 
-    static func update(id: UUID, fullName: String, isDeceased: Bool, deathDate: String?,
+    /// `storedFirst`: الاسم الأول المحفوظ (يبقى كما هو ولو مركّباً)؛ `fatherFullName`: أبوها في الشجرة —
+    /// اسم كُتب كلمة واحدة (أو الاسم الأول وحده) يُكمَّل «الاسم + اسم الأب الكامل» (طلب المالك ٢٠٢٦-١١-٢٨)
+    static func update(id: UUID, fullName: String, storedFirst: String? = nil, fatherFullName: String? = nil,
+                       isDeceased: Bool, deathDate: String?,
                        birthDate: String?, gender: String? = nil, isHidden: Bool) async throws {
-        // أول وحدة لا أول كلمة (PersonName القاعدة ١-ج) — «زين العابدين»/«فاطمة الزهراء» وحدة واحدة
-        let first = PersonName.firstUnit(fullName)
+        let (first, full) = PersonName.savedNames(fullName, storedFirst: storedFirst, fatherFullName: fatherFullName)
         var payload: [String: AnyEncodable] = [
-            "full_name": AnyEncodable(fullName),
+            "full_name": AnyEncodable(full),
             "first_name": AnyEncodable(first),
             "is_deceased": AnyEncodable(isDeceased),
             "death_date": AnyEncodable(isDeceased ? deathDate : Optional<String>.none),
@@ -251,6 +309,24 @@ enum WomenStore {
             .eq("id", value: id.uuidString).execute()
     }
 
+    /// «ظهور الزوج» و«ظهور الأبناء» للبنت التي زوجها من خارج العائلة — الإدارة (قرار المالك ٢٠٢٦-١١-٢٨): كتابة مباشرة
+    /// بسياسة `women_members_update` (مالك، مدير، مراقب). nil = بلا تغيير. بعد النجاح تُحدَّث المجموعتان بالذاكرة
+    static func setVisibilityAsAdmin(id: UUID, spouse: Bool? = nil, children: Bool? = nil) async throws {
+        var payload: [String: AnyEncodable] = [:]
+        if let spouse { payload["spouse_shown"] = AnyEncodable(spouse) }
+        if let children { payload["children_shown"] = AnyEncodable(children) }
+        guard !payload.isEmpty else { return }
+        try await SupabaseConfig.client.from("women_members").update(payload)
+            .eq("id", value: id.uuidString).execute()
+        rememberVisibility(id: id, spouse: spouse, children: children)
+    }
+
+    /// تحديث مجموعتي الظهور بالذاكرة بعد حفظ ناجح (الإدارة، أو ابن البنت لأمّه)
+    static func rememberVisibility(id: UUID, spouse: Bool?, children: Bool?) {
+        if let spouse { if spouse { spouseShownIds.insert(id) } else { spouseShownIds.remove(id) } }
+        if let children { if children { childrenShownIds.insert(id) } else { childrenShownIds.remove(id) } }
+    }
+
     /// تعديل تاريخ الميلاد وحده — يُستخدم في تفاصيل العضو بشجرة النساء.
     static func setBirthDate(id: UUID, _ date: String?) async throws {
         try await SupabaseConfig.client.from("women_members")
@@ -262,6 +338,27 @@ enum WomenStore {
         try await SupabaseConfig.client.from("women_members")
             .update(["mother_id": AnyEncodable(motherId?.uuidString)])
             .eq("id", value: childId.uuidString).execute()
+    }
+
+    /// «تغيير الأب» (الإدارة، طلب المالك ٢٠٢٦-١١-١٣) — كتابة مباشرة بسياسة `women_members_update` (مالك، مدير، مراقب):
+    /// البنت تحت الأب الجديد باسمها الكامل الجديد وآخر بناته، والأم تُمسح إن لم تكن من زوجات الأب الجديد (`clearsMother`).
+    /// لها حساب (`linkedUserId`) ← اسم الحساب الكامل نفسه في `profiles` (الاسم الأول باقٍ)
+    static func changeFather(womanId: UUID, newFatherId: UUID, fullName: String, sortOrder: Int,
+                             clearsMother: Bool, linkedUserId: UUID?) async throws {
+        var payload: [String: AnyEncodable] = [
+            "parent_id": AnyEncodable(newFatherId.uuidString),
+            "full_name": AnyEncodable(fullName),
+            "sort_order": AnyEncodable(sortOrder)
+        ]
+        if clearsMother { payload["mother_id"] = AnyEncodable(Optional<String>.none) }
+        try await SupabaseConfig.client.from("women_members")
+            .update(payload)
+            .eq("id", value: womanId.uuidString).execute()
+        if let linkedUserId {
+            try await SupabaseConfig.client.from("profiles")
+                .update(["full_name": AnyEncodable(fullName)])
+                .eq("id", value: linkedUserId.uuidString).execute()
+        }
     }
 
     /// ربط أنثى موجودة في الشجرة كزوجة لعقدة (اختيار زوجة من العائلة).
@@ -353,10 +450,10 @@ enum WomenStore {
             case "family_links_protected": return pg.message
             // أخطاء «إضافة أخت» (add_or_link_self_relative)
             case "no_own_father", "no_father":
-                return L10n.t("أبوك غير مسجّل في الشجرة — اطلب ربطك من الإدارة.",
+                return L10n.t("الوالد غير مسجّل في الشجرة — اطلب ربطك من الإدارة.",
                               "Your father isn't in the tree — ask the administration to link you.")
             case "not_daughter":
-                return L10n.t("الأخت تُضاف تحت أبيك أنت فقط.", "A sister can only be added under your own father.")
+                return L10n.t("تُضاف الأخت تحت الوالد فقط.", "A sister can only be added under your own father.")
             case "name_required":
                 return L10n.t("اكتب الاسم.", "Enter the name.")
             case "not_allowed":
@@ -390,6 +487,22 @@ enum WomenStore {
         }
     }
 
+    /// ترتيب زوجات رجل (إدارة فقط) — يكتب `wife_order` حسب الترتيب الجديد، معاً لا بالتسلسل.
+    /// يحتاج العمود من ترحيل `20261107000000_women_wife_order.sql`
+    static func reorderWives(orderedIds: [UUID]) async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for (i, id) in orderedIds.enumerated() {
+                group.addTask {
+                    try await SupabaseConfig.client.from("women_members")
+                        .update(["wife_order": AnyEncodable(i)])
+                        .eq("id", value: id.uuidString).execute()
+                }
+            }
+            try await group.waitForAll()
+        }
+        for (i, id) in orderedIds.enumerated() { wifeOrderByWoman[id] = i }
+    }
+
     /// ربط/فكّ ربط اسم في شجرة النساء بحساب مستخدم (للإدارة فقط عبر RLS).
     static func linkAccount(womanId: UUID, userId: UUID?) async throws {
         try await SupabaseConfig.client.from("women_members")
@@ -417,5 +530,24 @@ enum WomenStore {
             .update(["husband_id": AnyEncodable(keepId.uuidString)])
             .eq("husband_id", value: removeId.uuidString).execute()
         try await c.from("women_members").delete().eq("id", value: removeId.uuidString).execute()
+    }
+}
+
+// MARK: - صلة القرابة في شجرة العائلة بالجهتين (K1، ٢٠٢٦-١١-٢٧)
+
+extension KinshipCalculator {
+    /// صلة القرابة لشجرة العائلة: جهة الأب كما كانت، وجهة الأم من آخر جلب لشجرة النساء (يُجلب مرة إن كان فارغاً؛
+    /// فشل الجلب = جهة الأب وحدها). حساب المرأة يُحسب من عقدتها المربوطة.
+    @MainActor
+    static func familyTree(from me: FamilyMember, to member: FamilyMember,
+                           lookup: [UUID: FamilyMember]) async -> KinshipResult {
+        if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+        return calculateInFamilyTree(from: me, to: member, lookup: lookup, women: WomenStore.cache,
+                                     viewerNodeId: WomenStore.womanByLinkedUser[me.id])
+    }
+
+    /// الكلمة كما تُعرض خارج الشجرة: «ابن خالك — عن طريق الأم»
+    static func displayText(_ result: KinshipResult) -> String {
+        result.viaMother ? "\(result.relationship) — \(motherNote)" : result.relationship
     }
 }

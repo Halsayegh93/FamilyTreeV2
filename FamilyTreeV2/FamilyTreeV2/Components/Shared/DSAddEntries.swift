@@ -88,40 +88,44 @@ struct DSAddEntriesSection: View {
                     .accessibilityLabel(L10n.t("حذف ", "Remove ") + label)
                 }
             }
-            // اختيارات الاسم في سطر واحد يلتفّ إن ضاق: ذكر/أنثى، «متوفّى/متوفّاة» (تبديل)، الميلاد، «متزوجة»
-            // اختيارات الاسم بطاقات متساوية في سطر واحد — المقاس والزوايا والخط نفسها (طلب المالك ٢٠٢٦-١٠-٢٥):
-            // الجنس (يتبدّل بالضغط)، «متوفّى/متوفّاة»، الميلاد (مربّع التاريخ الموحّد)، و«متزوجة» حيث تُكتب
-            HStack(spacing: DS.Spacing.sm) {
-                if showsGender {
-                    DSEntryOptionCard(title: entry.isFemale ? L10n.t("أنثى", "Female") : L10n.t("ذكر", "Male"),
-                                      icon: entry.isFemale ? "figure.stand.dress" : "figure.stand",
-                                      tint: entry.isFemale ? DS.Color.female : DS.Color.male, isOn: true,
-                                      hint: L10n.t("يبدّل بين ذكر وأنثى", "Switches between male and female")) {
-                        withAnimation(DS.Anim.snappy) { edit(entry.id) { $0.gender = $0.isFemale ? "male" : "female" } }
-                    }
-                }
-                DSEntryOptionCard(title: entry.isFemale ? L10n.t("متوفّاة", "Deceased") : L10n.t("متوفّى", "Deceased"),
-                                  icon: entry.deceased ? "checkmark" : "heart.slash",
-                                  tint: DS.Color.textSecondary, isOn: entry.deceased) {
-                    withAnimation(DS.Anim.snappy) { edit(entry.id) { $0.deceased.toggle() } }
-                }
-                if showsBirth { birthCard(entry) }
-                if showsMarried && entry.isFemale {
-                    DSEntryOptionCard(title: L10n.t("متزوجة", "Married"), icon: entry.married ? "checkmark" : "heart",
-                                      tint: DS.Color.female, isOn: entry.married) {
-                        edit(entry.id) { $0.married.toggle() }
-                    }
-                }
-            }
+            // خلايا البيانات المتجاورة (`DSTileGrid`، قرار المالك ٢٠٢٦-١١-١١): الجنس والحالة والميلاد و«الحالة الاجتماعية» —
+            // كل واحدة خلية بقائمة أو بقلم، ونفس القيم المحفوظة
+            DSTileGrid(tiles(entry))
         }
     }
 
-    /// الميلاد (اختياري) — بطاقة تفتح مربّع التاريخ الموحّد (`DSDateCard`)، والمحدَّد يُمسح منه
-    private func birthCard(_ entry: DSAddEntry) -> some View {
+    private func tiles(_ entry: DSAddEntry) -> [DSTileItem] {
+        var items: [DSTileItem] = []
+        if showsGender {
+            items.append(.half(DSGenderPicker(selection: field(entry.id, \.gender, default: "male"))))
+        }
+        items.append(.half(DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+            DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+            DSChoiceOption(id: true, title: entry.isFemale ? L10n.t("متوفّاة", "Deceased") : L10n.t("متوفّى", "Deceased"),
+                           icon: "leaf.fill")
+        ], selection: field(entry.id, \.deceased, default: false))))
+        if showsBirth { items.append(.half(birthRow(entry))) }
+        if showsMarried && entry.isFemale {
+            items.append(.half(DSMenuTile(icon: "heart.fill", label: L10n.t("الحالة الاجتماعية", "Marital status"), options: [
+                DSChoiceOption(id: false, title: L10n.t("عزباء", "Single"), icon: "person.fill"),
+                DSChoiceOption(id: true, title: L10n.t("متزوجة", "Married"), icon: "heart.fill")
+            ], selection: field(entry.id, \.married, default: false))))
+        }
+        return items
+    }
+
+    /// ربط حقل واحد من صفّ الاسم (بالمعرّف — الصفوف تُحذف وتُضاف)
+    private func field<V>(_ id: UUID, _ key: WritableKeyPath<DSAddEntry, V>, default value: V) -> Binding<V> {
+        Binding(get: { entries.first { $0.id == id }?[keyPath: key] ?? value },
+                set: { new in withAnimation(DS.Anim.snappy) { edit(id) { $0[keyPath: key] = new } } })
+    }
+
+    /// الميلاد (اختياري) — صفّ التاريخ الموحّد يفتح مربّع التاريخ، و«بدون تاريخ» يمسحه
+    private func birthRow(_ entry: DSAddEntry) -> some View {
         let id = entry.id
-        return DSEntryOptionCard(title: entry.hasBirth ? Self.shortDay(entry.birth) : L10n.t("الميلاد", "Birth"),
-                                 icon: "gift.fill", tint: DS.Color.warning, isOn: entry.hasBirth,
-                                 hint: L10n.t("تاريخ الميلاد (اختياري)", "Birth date (optional)")) {
+        return DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                              hasDate: entry.hasBirth, dateText: Self.shortDay(entry.birth)) {
+            // «بدون تاريخ» داخل المنتقي
             dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
                                 initial: entry.hasBirth ? entry.birth : nil, allowClear: entry.hasBirth) { picked in
                 edit(id) { e in
@@ -131,15 +135,8 @@ struct DSAddEntriesSection: View {
         }
     }
 
-    /// تاريخ قصير يتّسع في البطاقة
-    private static let shortFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy/M/d"
-        return f
-    }()
-    private static func shortDay(_ date: Date) -> String { shortFormatter.string(from: date) }
+    /// تاريخ قصير يتّسع في البطاقة — الصيغة الموحّدة
+    private static func shortDay(_ date: Date) -> String { DateHelper.displayDate(date) }
 
     // MARK: التعديل بالمعرّف (لا بالموضع — الصفوف تُحذف وتُضاف)
 

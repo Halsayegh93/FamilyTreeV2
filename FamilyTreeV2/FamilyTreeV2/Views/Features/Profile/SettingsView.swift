@@ -28,67 +28,63 @@ struct SettingsView: View {
     /// «أيقونة التطبيق» (طلب المالك ٢٠٢٦-١٠-٣١)
     @State private var showAppIcon = false
     @State private var showAbout = false
+    /// «ما الجديد» — يرجع له العضو متى ما بغى (طلب المالك ٢٠٢٦-١١-٢٦ «وين مكانه؟»)؛ يظهر وحده مرة بعد كل تحديث
+    @State private var showWhatsNew = false
     @State private var showTerms = false
     @State private var showPrivacyDoc = false
     @State private var showDeleteConfirmation = false
     @State private var showCancelDeletion = false
     /// حذف الحساب جارٍ — طبقة انتظار حتى يكتمل ويُسجَّل الخروج
     @State private var isDeletingAccount = false
-    /// وضع العرض: المربّعات الصغيرة بشبكة تكيّفية (`DS.Landscape.compactTileMinWidth`) — العمودي ثلاثة في الصف
-    @Environment(\.dsLandscape) private var landscape
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
-
-    /// ثلاثة مربّعات صغيرة في الصف عمودياً (طلب المالك ٢٠٢٦-١٠-٠٧ «صغّر المربّعات») — كثافة مربّعات
-    /// أدوات لوحة الإدارة الصغيرة
-    private static let portraitColumns = 3
 
     var body: some View {
         // «مربّعات بمجموعات» (اختيار المالك ٢٠٢٦-١٠-٠٧): بطاقة الهوية أعلى، ثم ثلاث مجموعات قصيرة
         // (التفضيلات · الحساب · المساعدة) كل مربّع فيها يعرض قيمته الحالية ويفتح جزءه وحده،
         // وحذف الحساب زر في الأسفل.
+        // قوائم مجمّعة (العيّنة «هـ» بلا البحث، اختيار المالك ٢٠٢٦-١١-١١): صفّ الملف، ثم «التفضيلات» و«الحساب»
+        // و«عن التطبيق» — كل صفّ بمربّع رمز ممتلئ وعنوان وقيمته الحالية وسهم، ثم «حذف الحساب» صفّاً أحمر وحده
         ScrollView {
-            VStack(spacing: DS.Spacing.xl) {
-                profileCard
+            VStack(alignment: .leading, spacing: DS.Spacing.lg) {
+                profileRow
+                    .dsStaggerIn(0)
+                settingsGroup(t("التفضيلات", "Preferences"), preferenceTiles)
+                    .dsStaggerIn(1)
+                settingsGroup(t("الحساب", "Account"), accountTiles)
+                    .dsStaggerIn(2)
+                settingsGroup(t("عن التطبيق", "About"), helpTiles)
+                    .dsStaggerIn(3)
 
-                // الحركة (طلب المالك ٢٠٢٦-٠٩-٢٧): عنوان المجموعة ثم مربّعاتها واحداً بعد الآخر
-                // — نفس إيقاع المربّعات. «تقليل الحركة»: تلاشٍ فقط
-                // شبكة واحدة بلا مجموعات، ٣ بالسطر، من الأكثر استخداماً للأقل (طلب المالك ٢٠٢٦-١٠-١٠؛
-                // «دليل الاستخدام» أُزيل من هنا — يُفتح من زرّ (i) في الرئيسية)
-                tileGrid(allTiles, startIndex: 1)
-
-                // حذف الحساب — آخر الصفحة بعيداً عن الاستعمال اليومي: نصّ أحمر صغير بلا تعبئة مع سطر تحذير،
-                // لا زرّ أحمر عريض مثبّت (كان يشبه «تسجيل الخروج» — طلب المالك ٢٠٢٦-١٠-١٠ «نفرّق بالشكل والحجم والمكان»)
-                VStack(spacing: DS.Spacing.xxs) {
-                    // حذف الحساب طلبٌ تنفّذه الإدارة خلال سبعة أيام (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
+                // حذف الحساب — آخر الصفحة وحده (طلب المالك ٢٠٢٦-١٠-١٠ «نفرّق بالشكل والحجم والمكان»)،
+                // طلبٌ تنفّذه الإدارة خلال سبعة أيام (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
+                VStack(spacing: DS.Spacing.xs) {
                     if let pending = authVM.pendingDeletionRequest {
                         Text(t("طلب حذف حسابك قيد المعالجة منذ \(pending.dateText)",
                                "Your account deletion request is being processed since \(pending.dateText)"))
                             .dsFont(.footnote)
                             .foregroundColor(DS.Color.textSecondary)
                             .multilineTextAlignment(.center)
-                        DSDangerTextButton(t("إلغاء طلب الحذف", "Cancel deletion request"), icon: "arrow.uturn.backward") {
-                            showCancelDeletion = true
-                        }
+                            .frame(maxWidth: .infinity)
+                        deleteRow(t("إلغاء طلب الحذف", "Cancel deletion request")) { showCancelDeletion = true }
                     } else {
-                        DSDangerTextButton(t("حذف الحساب", "Delete Account")) {
-                            showDeleteConfirmation = true
-                        }
+                        deleteRow(t("حذف الحساب", "Delete Account")) { showDeleteConfirmation = true }
                     }
                     Text(t("يُنفَّذ الحذف خلال سبعة أيام من طلبك.", "Deletion is carried out within seven days of your request."))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                         .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                     versionLabel
-                        .padding(.top, DS.Spacing.sm)
+                        .padding(.top, DS.Spacing.xs)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top, DS.Spacing.lg)
-                .dsStaggerIn(allTiles.count + 1)
+                .padding(.top, DS.Spacing.xs)
+                .dsStaggerIn(4)
             }
-            .padding(.horizontal, DS.Spacing.lg)
+            .dsPageMargin()
             .padding(.top, DS.Spacing.md)
             .padding(.bottom, DS.Spacing.xxxl)
+            .dsLandscapeReadable()
         }
         // الرأس الملوّن الموحّد للصفحات الفرعية (بدل بطاقة الرأس و«إغلاق») — × في الطرف لأنها ورقة
         .dsSubPageHeader(t("الإعدادات", "Settings"), nav: .close)
@@ -121,6 +117,9 @@ struct SettingsView: View {
         }
         .dsCenterBox(isPresented: $showAppIcon, onBackgroundTap: { showAppIcon = false }) { AppIconSettingsView() }
         .dsCenterBox(isPresented: $showAbout, onBackgroundTap: { showAbout = false }) { AboutView() }
+        .dsCenterBox(isPresented: $showWhatsNew, onBackgroundTap: { showWhatsNew = false }) {
+            WhatsNewBox(items: WhatsNewStore.shared.items) { showWhatsNew = false }
+        }
         // قراءة طويلة — مربّع طويل (توصية أبل)؛ وثيقتان منفصلتان (طلب المالك ٢٠٢٦-١٠-٢٨)
         .dsTallBox(isPresented: $showPrivacyDoc) { PrivacyPolicyView(only: "privacy") }
         .dsTallBox(isPresented: $showTerms) { PrivacyPolicyView(only: "terms") }
@@ -176,13 +175,11 @@ struct SettingsView: View {
         .task { await authVM.loadAccountDeletionRequest() }
     }
 
-    /// بطاقة هوية العائلة (طلب المالك): الصورة، الاسم والدور والرقم، وقلم التعديل في الطرف،
-    /// وسطر سفلي: عضو منذ + الميلاد. صارت البطاقة الواحدة (`.dsCard`) تحت الرأس الملوّن الموحّد —
-    /// عنوان الصفحة و× الإغلاق انتقلا إلى الرأس.
-    private var profileCard: some View {
+    /// صفّ الملف أعلى الإعدادات (العيّنة «هـ»): الصورة الدائرية، الاسم، و«تعديل الملف الشخصي» — الصفّ كله يفتح التعديل
+    private var profileRow: some View {
         let user = authVM.currentUser
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: DS.Spacing.md) {
+        return Button { showEditProfile = true } label: {
+            HStack(spacing: DS.Spacing.md) {
                 Group {
                     if let avatar = user?.avatarUrl, let url = URL(string: avatar) {
                         CachedAsyncImage(url: url) { img in
@@ -192,77 +189,44 @@ struct SettingsView: View {
                         ZStack {
                             chromeInk.opacity(DS.Opacity.tintFill)
                             Image(systemName: "person.fill")
-                                .dsGlyph(DS.Glyph.xxl)
+                                .dsGlyph(DS.Glyph.xl)
                                 .foregroundColor(chromeInk)
                         }
                     }
                 }
-                .frame(width: DS.Icon.avatarLarge, height: DS.Icon.avatarLarge)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .strokeBorder(chromeInk.opacity(DS.Opacity.tintStroke), lineWidth: DS.Border.width))
+                .frame(width: DS.Icon.avatar + DS.Spacing.md, height: DS.Icon.avatar + DS.Spacing.md)
+                .clipShape(Circle())
+                .overlay(Circle().strokeBorder(DS.Color.accentLight, lineWidth: DS.Border.width))
                 .accessibilityHidden(true)   // الصورة زخرفة — الاسم مكتوب بجانبها
 
-                VStack(alignment: .leading, spacing: DS.Spacing.xs) {
-                    Text(L10n.t("عائلة المحمدعلي", "Al-Mohammad Ali family"))
-                        .dsFont(.micro)
-                        .foregroundColor(DS.Color.textTertiary)
+                VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                     Text(user?.displayName ?? "")
-                        .dsFont(.title)
+                        .dsFont(.headline)
                         .foregroundColor(DS.Color.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    HStack(spacing: DS.Spacing.sm) {
-                        if let user {
-                            DSStatusChip(text: user.roleName, tint: DS.Color.primary, size: .mini)
-                        }
-                        if let phone = user?.phoneNumber, !phone.isEmpty {
-                            Text(KuwaitPhone.display(phone))
-                                .dsFont(.caption)
-                                .foregroundColor(DS.Color.textSecondary)
-                                .monospacedDigit()
-                                .environment(\.layoutDirection, .leftToRight)
-                        }
-                    }
+                    Text(t("تعديل الملف الشخصي", "Edit profile"))
+                        .dsFont(.footnote)
+                        .foregroundColor(DS.Color.textTertiary)
                 }
-                Spacer(minLength: 0)
-
-                // زرّ التعديل بشكل أزرار الرجوع/الإغلاق الموحّدة فوق السطح
-                DSHeaderButton(symbol: "pencil", label: t("تعديل الملف الشخصي", "Edit Profile"),
-                               context: .surface, size: .toolbar) { showEditProfile = true }
+                Spacer(minLength: DS.Spacing.sm)
+                SettingsChevron()
             }
-            .padding(DS.Spacing.lg)
-
-            // الشريط السفلي — مثل ظهر البطاقة
-            HStack(spacing: DS.Spacing.xl) {
-                cardFact(icon: "calendar", title: t("عضو منذ", "Member since"), value: shortDate(user?.createdAt))
-                cardFact(icon: "gift.fill", title: t("الميلاد", "Born"), value: shortDate(user?.birthDate))
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, DS.Spacing.lg)
-            .padding(.vertical, DS.Spacing.sm)
-            .background(DS.Color.background)
+            .padding(DS.Spacing.md)
+            .contentShape(Rectangle())
+            .dsGroupedRow(.single, dividerInset: 0)
         }
-        // البطاقة الواحدة
-        .dsCard(padding: nil)
-        .scaleEffect(heroAppeared || reduceMotion ? 1 : 0.94)
-        .opacity(heroAppeared ? 1 : 0)
-        .onAppear {
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2)
-                                       : .spring(response: 0.55, dampingFraction: 0.72)) { heroAppeared = true }
-        }
+        .buttonStyle(DSNoticePressStyle())
     }
 
-    @State private var heroAppeared = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // MARK: - المجموعات: عنوان صغير + بطاقة صفوف
 
-    // MARK: - المجموعات: عنوان + شبكة مربّعات
-
-    /// مربّع إعداد واحد في مجموعة
+    /// صفّ إعداد واحد في مجموعة
     private struct SettingsTile: Identifiable {
         let id: String
         let icon: String
-        let color: Color
+        /// لون تعبئة مربّع الرمز (`DS.Color.*Fill`)
+        let fill: Color
         let title: String
         let value: String
         /// قيمة رقمية تصل بعد الظهور (عدد الأجهزة) — تتبدّل بلفّة أرقام
@@ -270,117 +234,83 @@ struct SettingsView: View {
         let action: () -> Void
     }
 
-    /// شبكة المربّعات وحدها (بلا عنوان مجموعة) — نفس مقاس وأسلوب مربّعات المجموعات
-    private func tileGrid(_ tiles: [SettingsTile], startIndex: Int) -> some View {
-        LazyVGrid(columns: landscape
-                    ? [GridItem(.adaptive(minimum: DS.Landscape.compactTileMinWidth), spacing: DS.Spacing.sm)]
-                    : Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.sm), count: Self.portraitColumns),
-                  spacing: DS.Spacing.sm) {
-            ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
-                Button(action: tile.action) {
-                    valueTile(icon: tile.icon, color: tile.color, title: tile.title, value: tile.value,
-                              liveNumber: tile.liveNumber)
+    /// مجموعة: عنوانها الصغير ثم صفوفها في بطاقة واحدة (كل صفّ جزء منها بخطّ فاصل رفيع)
+    private func settingsGroup(_ title: String, _ tiles: [SettingsTile]) -> some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.xs) {
+            Text(title)
+                .dsFont(.sectionTitle)
+                .foregroundColor(DS.Color.textTertiary)
+                .padding(.horizontal, DS.Spacing.sm)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: 0) {
+                ForEach(Array(tiles.enumerated()), id: \.element.id) { index, tile in
+                    Button(action: tile.action) {
+                        SettingsGroupRow(icon: tile.icon, fill: tile.fill, title: tile.title) {
+                            Text(tile.value)
+                                .dsFont(.footnote)
+                                .foregroundColor(DS.Color.textTertiary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .modifier(SettingsLiveNumber(active: tile.liveNumber, value: tile.value))
+                            SettingsChevron()
+                        }
+                        .dsGroupedRow(DSGroupPosition(index: index, count: tiles.count),
+                                      dividerInset: SettingsGroupRow<EmptyView>.dividerInset)
+                    }
+                    .buttonStyle(DSNoticePressStyle())
                 }
-                .buttonStyle(DSScaleButtonStyle())
-                .dsStaggerIn(startIndex + index)
             }
         }
     }
 
-    /// كل المربّعات بترتيب الاستعمال (طلب المالك ٢٠٢٦-١٠-١٠ «بدون مجموعات»)
-    private var allTiles: [SettingsTile] {
-        let byId = Dictionary(uniqueKeysWithValues: (preferenceTiles + accountTiles + helpTiles).map { ($0.id, $0) })
-        // «تعديل الملف» أُزيل ٢٠٢٦-١٠-١٠ — يبقى من قلم بطاقة الهوية أعلى الإعدادات
-        let order = ["notifications", "privacy", "appearance", "language", "appIcon", "devices", "privacyDoc", "terms", "about"]
-        return order.compactMap { byId[$0] }
+    /// صفّ «حذف الحساب» / «إلغاء طلب الحذف» — أحمر وحده في آخر الصفحة
+    private func deleteRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .dsFont(.rowTitle)
+                .foregroundColor(DS.Color.error)
+                .frame(maxWidth: .infinity, minHeight: DSBox.commandRowHeight)
+                .contentShape(Rectangle())
+                .dsGroupedRow(.single, dividerInset: 0)
+        }
+        .buttonStyle(DSNoticePressStyle())
     }
 
     /// «التفضيلات»: الإشعارات · الخصوصية · المظهر · اللغة — كلٌّ يفتح جزءه من مربّعه
     private var preferenceTiles: [SettingsTile] {
-        [SettingsTile(id: "notifications", icon: "bell.badge.fill", color: DS.Color.warning,
+        [SettingsTile(id: "notifications", icon: "bell.badge.fill", fill: DS.Color.goldFill,
                       title: t("الإشعارات", "Notifications"),
                       value: notificationsEnabled ? t("مفعّلة", "On") : t("موقوفة", "Off")) { showNotifications = true },
-         SettingsTile(id: "privacy", icon: "lock.fill", color: DS.Color.secondary,
+         SettingsTile(id: "privacy", icon: "lock.fill", fill: DS.Color.palmFill,
                       title: t("الخصوصية", "Privacy"), value: privacyLabel) { showPrivacy = true },
-         SettingsTile(id: "appearance", icon: "circle.lefthalf.filled", color: DS.Color.accent,
+         SettingsTile(id: "appearance", icon: "circle.lefthalf.filled", fill: DS.Color.navyFill,
                       title: t("المظهر", "Appearance"), value: appearanceLabel) { showAppearance = true },
-         SettingsTile(id: "language", icon: "character.bubble.fill", color: chromeInk,
-                      title: t("اللغة", "Language"), value: languageLabel) { showLanguage = true },
-         SettingsTile(id: "appIcon", icon: "apps.iphone", color: DS.Color.accent,
+         SettingsTile(id: "language", icon: "character.bubble.fill", fill: DS.Color.seaFill,
+                      title: t("اللغة", "Language"), value: languageLabel) { showLanguage = true }]
+    }
+
+    /// «الحساب»: الأجهزة المرتبطة · أيقونة التطبيق («تعديل الملف» من صفّ الملف أعلى الصفحة)
+    private var accountTiles: [SettingsTile] {
+        [SettingsTile(id: "devices", icon: "iphone.gen3", fill: DS.Color.seaFill,
+                      title: t("الأجهزة المرتبطة", "Linked Devices"),
+                      value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"),
+                      // العدد يصل بعد الجلب — يتبدّل بلفّة أرقام بدل القفز
+                      liveNumber: true) { showLinkedDevices = true },
+         SettingsTile(id: "appIcon", icon: "apps.iphone", fill: DS.Color.saduFill,
                       title: t("أيقونة التطبيق", "App Icon"),
                       value: AppIconChoice.current.title) { showAppIcon = true }]
     }
 
-    /// «الحساب»: الأجهزة المرتبطة («تعديل الملف» من قلم بطاقة الهوية)
-    private var accountTiles: [SettingsTile] {
-        [SettingsTile(id: "devices", icon: "iphone.gen3", color: DS.Color.info,
-                      title: t("الأجهزة المرتبطة", "Linked Devices"),
-                      value: t("\(notificationVM.linkedDevices.count) جهاز", "\(notificationVM.linkedDevices.count) devices"),
-                      // العدد يصل بعد الجلب — يتبدّل بلفّة أرقام بدل القفز
-                      liveNumber: true) { showLinkedDevices = true }]
-    }
-
-    /// عن التطبيق · الخصوصية والشروط («دليل الاستخدام» و«تواصل مع الإدارة» أُزيلا ٢٠٢٦-١٠-١٠ —
-    /// الدليل من زرّ (i) والتواصل من مربّع «التواصل» في الرئيسية)
+    /// «عن التطبيق»: ما الجديد · سياسة الخصوصية · قواعد الاستخدام · عن التطبيق
     private var helpTiles: [SettingsTile] {
-        [SettingsTile(id: "about", icon: "app.badge.fill", color: DS.Color.secondary,
-                      title: t("عن التطبيق", "About"), value: AppVersion.string) { showAbout = true },
-         SettingsTile(id: "privacyDoc", icon: "hand.raised.fill", color: chromeInk,
-                      title: t("سياسة الخصوصية", "Privacy Policy"),
-                      value: t("بياناتك وحقوقك", "Your data and rights")) { showPrivacyDoc = true },
-         SettingsTile(id: "terms", icon: "doc.text.fill", color: chromeInk,
-                      title: t("قواعد الاستخدام", "Terms of Use"),
-                      value: t("القواعد والشروط", "Rules and terms")) { showTerms = true }]
-    }
-
-    private func cardFact(icon: String, title: String, value: String) -> some View {
-        HStack(spacing: DS.Spacing.xsm) {
-            Image(dsSymbol: icon)
-                .dsGlyph(DS.Glyph.smCompact)
-                .foregroundColor(chromeInk)
-                .accessibilityHidden(true)   // زخرفة
-            VStack(alignment: .leading, spacing: 0) {
-                Text(title)
-                    .dsFont(.microCompact)
-                    .foregroundColor(DS.Color.textTertiary)
-                Text(value)
-                    .dsFont(.chip)
-                    .foregroundColor(DS.Color.textPrimary)
-            }
-        }
-    }
-
-    /// مربّع إعداد صغير (طلب المالك ٢٠٢٦-١٠-٠٧ «صغّر المربّعات»): الأيقونة، العنوان بدور مضغوط، والقيمة
-    /// الحالية تحته بدور التلميح — حشوة أضيق، نفس كثافة مربّعات أدوات لوحة الإدارة.
-    /// الأيقونة مربّع عادي بلون خفيف ورمز رفيع بدل القرص المجسّم (طلب المالك ٢٠٢٦-١١-٠١ «بالاعدادات الملف
-    /// الشخصي يكون المربع عادي» + «نرد بتعديل السابق بشكل بسيط»).
-    /// `liveNumber`: قيمة رقمية تصل بعد الظهور (مثل عدد الأجهزة) — تتبدّل بلفّة أرقام
-    private func valueTile(icon: String, color: Color, title: String, value: String,
-                           liveNumber: Bool = false) -> some View {
-        VStack(spacing: DS.Spacing.xs) {
-            SettingsIconSquare(icon: icon, tint: color.dsChrome(in: section).dsReadableGlyph, side: DS.Icon.row)
-            Text(title)
-                .dsFont(.rowTitleCompact)
-                .foregroundColor(DS.Color.textPrimary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.8)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            // القيمة تلتفّ لسطرين بالخط الكبير في الجهاز بدل «…» (والمربّعات في الصف بارتفاع أطولها)
-            Text(value)
-                .dsFont(.caption)
-                .foregroundColor(color.dsChrome(in: section).dsReadableGlyph)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
-                .fixedSize(horizontal: false, vertical: true)
-                .modifier(SettingsLiveNumber(active: liveNumber, value: value))
-        }
-        .padding(.horizontal, DS.Spacing.xs)
-        .padding(.vertical, DS.Spacing.sm)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .dsCard(padding: nil)
+        [SettingsTile(id: "whatsNew", icon: "sparkles", fill: DS.Color.goldFill,
+                      title: t("ما الجديد", "What's new"), value: WhatsNewStore.version) { showWhatsNew = true },
+         SettingsTile(id: "privacyDoc", icon: "hand.raised.fill", fill: DS.Color.slateFill,
+                      title: t("سياسة الخصوصية", "Privacy Policy"), value: "") { showPrivacyDoc = true },
+         SettingsTile(id: "terms", icon: "doc.text.fill", fill: DS.Color.slateFill,
+                      title: t("قواعد الاستخدام", "Terms of Use"), value: "") { showTerms = true },
+         SettingsTile(id: "about", icon: "info.circle.fill", fill: DS.Color.slateFill,
+                      title: t("عن التطبيق", "About"), value: AppVersion.string) { showAbout = true }]
     }
 
     // MARK: - القيم الحالية (كل مربّع يعرض قيمته — بنفس أسماء الاختيارات داخل مربّعه)
@@ -396,29 +326,27 @@ struct SettingsView: View {
         langManager.selectedLanguage == "ar" ? "العربية" : "English"
     }
 
-    /// ملخّص الخصوصية: ما المخفي عن الأعضاء (الرقم، الميلاد) — يتحدّث مع المفتاح لأن الحفظ يحدّث الحساب
+    /// ملخّص الخصوصية: المفاتيح الأربعة نفسها (الرقم · الصورة · الميلاد · آخر ظهور) — يتحدّث مع المفتاح لأن الحفظ يحدّث الحساب
     private var privacyLabel: String {
-        let phoneHidden = authVM.currentUser?.isPhoneHidden ?? false
-        let birthHidden = authVM.currentUser?.isBirthDateHidden ?? false
-        switch (phoneHidden, birthHidden) {
-        case (true, true): return t("الرقم والميلاد مخفيان", "Phone & birth date hidden")
-        case (true, false): return t("رقمك مخفي", "Phone hidden")
-        case (false, true): return t("ميلادك مخفي", "Birth date hidden")
-        case (false, false): return t("رقمك ظاهر", "Phone visible")
+        let u = authVM.currentUser
+        let hidden: [String] = [
+            (u?.isPhoneHidden ?? false) ? t("الرقم", "Phone") : nil,
+            (u?.isPhotoHidden ?? false) ? t("الصورة", "Photo") : nil,
+            (u?.isBirthDateHidden ?? false) ? t("الميلاد", "Birth date") : nil,
+            (u?.activityVisible ?? true) ? nil : t("آخر ظهور", "Last seen")
+        ].compactMap { $0 }
+        switch hidden.count {
+        case 0: return t("الكل ظاهر", "All visible")
+        case 1: return t("\(hidden[0]) مخفي", "\(hidden[0]) hidden")
+        case 4: return t("الكل مخفي", "All hidden")
+        default: return t("\(hidden.count) مخفية", "\(hidden.count) hidden")
         }
     }
 
-    /// «١٩٩٣/٠٣/٢٥» → «مارس ١٩٩٣» — التاريخ مختصر بالشهر نصاً
+    /// «1993-03-25» → «25/03/1993» — الصيغة الموحّدة (`DateHelper.displayDate`)
     private func shortDate(_ raw: String?) -> String {
         guard let raw, raw.count >= 10 else { return "—" }
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        f.locale = Locale(identifier: "en_US_POSIX")
-        guard let d = f.date(from: String(raw.prefix(10))) else { return "—" }
-        let out = DateFormatter()
-        out.locale = LanguageManager.shared.locale
-        out.dateFormat = "MMMM yyyy"
-        return out.string(from: d)
+        return DateHelper.displayDate(raw) ?? "—"
     }
 
     private var versionLabel: some View {
@@ -506,9 +434,9 @@ struct NotificationsAndPrivacyView: View {
 
     private var boxSubtitle: String {
         switch focus {
-        case .all: return t("تحكّم بالتنبيهات ومن يشوف بياناتك", "Control alerts and who sees your data")
+        case .all: return t("التحكم بالتنبيهات ومن يرى البيانات", "Control alerts and who sees your data")
         case .notifications: return t("تحكّم بالتنبيهات التي تصلك", "Control the alerts you get")
-        case .privacy: return t("من يشوف بياناتك ومن حظرته", "Who sees your data, and who you blocked")
+        case .privacy: return t("ما يراه الأعضاء، وطلبات بياناتك، والمحظورون", "What members see, data requests and blocked members")
         }
     }
 
@@ -531,9 +459,9 @@ struct NotificationsAndPrivacyView: View {
             Kind(key: "likes", icon: "heart.fill", color: DS.Color.sadu,
                  title: t("الإعجابات", "Likes"), subtitle: t("عند إعجاب أحد بخبرك", "When someone likes your post")),
             Kind(key: "requests", icon: "checkmark.seal.fill", color: DS.Color.success,
-                 title: t("الرد على طلباتي", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
+                 title: t("الرد على الطلبات", "Replies to my requests"), subtitle: t("قبول أو رفض طلباتك، تفعيل حسابك", "Approvals, rejections, activation")),
             Kind(key: "profile", icon: "person.crop.circle.badge.checkmark", color: DS.Color.palm,
-                 title: t("تحديثات ملفي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
+                 title: t("تحديثات الملف الشخصي", "My profile updates"), subtitle: t("عند تعديل الإدارة لبياناتك", "When admins edit your profile"))
         ]
         if authVM.canModerate {
             list.append(Kind(key: "admin_activity", icon: "sparkles", color: DS.Color.primary,
@@ -748,46 +676,159 @@ struct NotificationsAndPrivacyView: View {
     }
 
     @ViewBuilder private var privacySection: some View {
-        DSComposerSection(title: t("الخصوصية", "Privacy"), icon: "lock.fill",
-                          tint: DS.Color.accent, index: privacyIndex) {
+        // مفتاح واحد لكل معلومة (العيّنة «هـ»، اختيار المالك ٢٠٢٦-١١-١١ «نبي ابسط»): مفعّل = ظاهر لأفراد العائلة،
+        // مطفأ = مخفي — نفس القيم المخزّنة والحفظ كما كان (عند تغيّر القيمة)
+        DSComposerSection(title: t("يظهر لأفراد العائلة", "Shown to family members"), icon: "eye.fill",
+                          tint: DS.Color.primary, index: privacyIndex) {
             VStack(spacing: DS.Spacing.sm) {
-                switchRow(icon: "phone.down.fill", color: DS.Color.accent,
-                          title: t("إخفاء رقم الهاتف", "Hide phone number"),
-                          subtitle: t("ما يظهر رقمك للأعضاء", "Members won't see your number"),
-                          isOn: $isPhoneHidden)
-                switchRow(icon: "person.crop.circle.badge.xmark", color: DS.Color.accent,
-                          title: t("إخفاء صورتي عن الأعضاء", "Hide my photo from members"),
-                          subtitle: t("لا تظهر صورتك للأعضاء", "Members won't see your photo"),
-                          isOn: $isPhotoHidden)
-                switchRow(icon: "calendar.badge.minus", color: DS.Color.accent,
-                          title: t("إخفاء تاريخ ميلادي عن الأعضاء", "Hide my birth date from members"),
-                          subtitle: t("لا يظهر تاريخ ميلادك للأعضاء", "Members won't see your birth date"),
-                          isOn: $isBirthDateHidden)
-                switchRow(icon: "clock.fill", color: DS.Color.accent,
-                          title: t("إظهار آخر ظهوري ونشاطي", "Show my last seen and activity"),
-                          subtitle: t("عند الإيقاف لا يرى الأعضاء متى كنت متصلاً", "When off, members won't see when you were online"),
-                          isOn: $isActivityVisible)
-                sectionNote(t("بياناتك تبقى محفوظة في الشجرة، بس ما تظهر للأعضاء. الإدارة تشوفها.",
-                              "Your data stays in the tree but is hidden from members. Admins can still see it."))
+                switchGroup([
+                    PrivacySwitch(id: "phone", icon: "phone.fill", title: t("رقم الهاتف", "Phone number"),
+                                  shown: Binding(get: { !isPhoneHidden }, set: { isPhoneHidden = !$0 })),
+                    PrivacySwitch(id: "photo", icon: "camera.fill", title: t("الصورة الشخصية", "Profile photo"),
+                                  shown: Binding(get: { !isPhotoHidden }, set: { isPhotoHidden = !$0 })),
+                    PrivacySwitch(id: "birth", icon: "calendar", title: t("تاريخ الميلاد", "Birth date"),
+                                  shown: Binding(get: { !isBirthDateHidden }, set: { isBirthDateHidden = !$0 })),
+                    // المخزّن «إظهار» نفسه
+                    PrivacySwitch(id: "activity", icon: "person.badge.clock.fill", title: t("آخر ظهور", "Last seen"),
+                                  shown: $isActivityVisible)
+                ])
+                sectionNote(t("المطفأ لا يراه الأعضاء، ويبقى ظاهراً لك وللإدارة.",
+                              "Members don't see what's off; you and the admins still do."))
             }
         }
+        if DaughterFamilyAPI.enabled && isFemaleUser { treeShowSection }
         treeDataSection
     }
 
-    /// «بياناتي في الشجرة» — طلب إخفاء أو حذف أو تصحيح تراجعه الإدارة (سياسة الخصوصية ٢٠٢٦-١٠-٢٨)
-    private var treeDataSection: some View {
-        DSComposerSection(title: t("بياناتي في الشجرة", "My data in the tree"), icon: "tree.fill",
-                          tint: DS.Color.palm, index: privacyIndex + 1) {
+    // MARK: - «ما يظهر في الشجرة» (طلب المالك ٢٠٢٦-١١-٠٩ «كله اختياري») — عيّنة قبل دوال السيرفر
+
+    @State private var showSpouse = false
+    @State private var showMyself = true
+    @State private var showChildren = false
+    /// القيم وصلت من السيرفر — قبلها التغيير لا يُحفظ (فلا يكتب التحميل نفسه)
+    @State private var treeShowLoaded = false
+
+    /// عقدتها في شجرة النساء (من آخر جلب، أو عقدة التجربة في نسخة التطوير)
+    private var myTreeNode: FamilyMember? {
+        #if DEBUG
+        if let raw = ProcessInfo.processInfo.environment["DAUGHTER_PROFILE_TEST"], let id = UUID(uuidString: raw) {
+            return WomenStore.cache.first { $0.id == id }
+        }
+        #endif
+        guard let uid = authVM.currentUser?.id else { return nil }
+        return WomenStore.node(forAccount: uid)
+    }
+
+    private func loadTreeShow() async {
+        if WomenStore.cache.isEmpty { _ = try? await WomenStore.fetch() }
+        guard let node = myTreeNode else { return }
+        showMyself = !node.isHiddenFromTree
+        showSpouse = WomenStore.spouseShownIds.contains(node.id)
+        showChildren = WomenStore.childrenShownIds.contains(node.id)
+        treeShowLoaded = true
+    }
+
+    private func saveTreeShow(me: Bool? = nil, spouse: Bool? = nil, children: Bool? = nil) {
+        guard treeShowLoaded, WomenStore.visibilitySupported, let node = myTreeNode else { return }
+        // نفس المحفوظ (التحميل نفسه، أو الرجوع بعد خطأ) — لا كتابة
+        if let me, me == !node.isHiddenFromTree { return }
+        if let spouse, spouse == WomenStore.spouseShownIds.contains(node.id) { return }
+        if let children, children == WomenStore.childrenShownIds.contains(node.id) { return }
+        Task {
+            do {
+                try await DaughterFamilyAPI.setVisibility(me: me, spouse: spouse, children: children)
+                _ = try? await WomenStore.fetch()
+            } catch {
+                Log.warning("[DaughterFamily] privacy: \(error.localizedDescription)")
+                await loadTreeShow()   // يرجع المفتاح لحالته المحفوظة
+            }
+        }
+    }
+
+    private var isFemaleUser: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["DAUGHTER_PROFILE_TEST"] != nil { return true }
+        #endif
+        return authVM.currentUser?.isWomanAccount ?? false
+    }
+
+    private var treeShowSection: some View {
+        // نفس كتل «الخصوصية» الموحّدة — «ظاهر في الشجرة / مخفي» (المخزّن «يظهر»، والمخفي عكسه)
+        DSComposerSection(title: t("الظهور في شجرة النساء", "What shows in the women's tree"), icon: "eye.fill",
+                          tint: DS.Color.primary, index: privacyIndex + 1) {
             VStack(spacing: DS.Spacing.sm) {
-                ForEach(TreeDataRequestKind.allCases) { kind in
-                    DSButton(kind.title, icon: kind.icon,
-                             role: kind == .delete ? .destructive : nil,
-                             tint: kind == .delete ? nil : kind.tint) {
-                        treeDataRequest = kind
+                // مفاتيح بسيطة كبقية «الخصوصية» (العيّنة «هـ»): مفعّل = يظهر في شجرة النساء.
+                // البنت تتحكم في ظهورها هي في الشجرة (طلب المالك ٢٠٢٦-١١-٠٩)
+                switchGroup((isFemaleUser ? [PrivacySwitch(id: "me", icon: "person.fill", title: t("الاسم", "Name"),
+                                                           shown: $showMyself)] : [])
+                            + [PrivacySwitch(id: "spouse", icon: "heart.fill",
+                                             title: isFemaleUser ? t("الزوج", "Husband") : t("الزوجة", "Wife"),
+                                             shown: $showSpouse)]
+                            + (isFemaleUser ? [PrivacySwitch(id: "children", icon: "person.2.fill",
+                                                             title: t("الأبناء", "Children"), shown: $showChildren)] : []))
+                sectionNote(t("جميع الخيارات اختيارية ويمكن تغييرها في أي وقت.",
+                              "All optional and can be changed at any time."))
+            }
+        }
+        .task { await loadTreeShow() }
+        .onChange(of: showMyself) { v in saveTreeShow(me: v) }
+        .onChange(of: showSpouse) { v in saveTreeShow(spouse: v) }
+        .onChange(of: showChildren) { v in saveTreeShow(children: v) }
+    }
+
+    /// «بياناتك في الشجرة» — طلب إخفاء أو حذف تراجعه الإدارة (سياسة الخصوصية ٢٠٢٦-١٠-٢٨).
+    /// «تصحيح البيانات» أُزيل (طلب المالك ٢٠٢٦-١١-١١)؛ صفوف القائمة المجمّعة نفسها (العيّنة «هـ»)
+    private var treeDataSection: some View {
+        let kinds: [TreeDataRequestKind] = [.hide, .delete]
+        return DSComposerSection(title: t("بياناتك في الشجرة", "Your data in the tree"),
+                                 icon: "tree.fill", tint: DS.Color.primary, index: privacyIndex + 1) {
+            VStack(spacing: DS.Spacing.sm) {
+                VStack(spacing: 0) {
+                    ForEach(Array(kinds.enumerated()), id: \.element) { index, kind in
+                        Button { treeDataRequest = kind } label: {
+                            SettingsGroupRow(icon: kind.icon,
+                                             fill: kind == .delete ? DS.Color.errorFill : DS.Color.slateFill,
+                                             title: kind == .delete ? t("حذف بياناتي من الشجرة", "Delete my data from the tree")
+                                                                    : t("إخفاء بياناتي", "Hide my data"),
+                                             titleColor: kind == .delete ? DS.Color.error : DS.Color.textPrimary) {
+                                SettingsChevron()
+                            }
+                            .dsGroupedRow(DSGroupPosition(index: index, count: kinds.count),
+                                          dividerInset: SettingsGroupRow<EmptyView>.dividerInset)
+                        }
+                        .buttonStyle(DSNoticePressStyle())
+                        .accessibilityHint(kind.subtitle)
                     }
                 }
-                sectionNote(t("ترسل طلبك إلى الإدارة، ويصلك الرد في الإشعارات.",
+                sectionNote(t("يصل طلبك إلى الإدارة، ويصلك الرد في الإشعارات.",
                               "Your request goes to the administration; the reply arrives in notifications."))
+            }
+        }
+    }
+
+    /// مفتاح خصوصية واحد في مجموعة
+    private struct PrivacySwitch: Identifiable {
+        let id: String
+        let icon: String
+        let title: String
+        /// مفعّل = ظاهر
+        let shown: Binding<Bool>
+    }
+
+    /// مفاتيح الخصوصية في بطاقة واحدة — كل صفّ جزء منها بخطّ فاصل رفيع (العيّنة «هـ»)
+    private func switchGroup(_ items: [PrivacySwitch]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                SettingsGroupRow(icon: item.icon, fill: DS.Color.navyFill, title: item.title) {
+                    Toggle(item.title, isOn: item.shown)
+                        .labelsHidden()
+                        .tint(DS.Color.toggleOn)
+                        .accessibilityLabel(item.title)
+                        .accessibilityValue(item.shown.wrappedValue ? t("ظاهر لأفراد العائلة", "Shown to family")
+                                                                    : t("مخفي عن أفراد العائلة", "Hidden from family"))
+                }
+                .dsGroupedRow(DSGroupPosition(index: index, count: items.count),
+                              dividerInset: SettingsGroupRow<EmptyView>.dividerInset)
             }
         }
     }
@@ -806,18 +847,18 @@ struct NotificationsAndPrivacyView: View {
                 DSFieldIcon(name: on ? "bell.badge.fill" : "bell.slash.fill", tint: tint)
                     .accessibilityHidden(true)   // زخرفة
                 VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-                    Text(on ? t("الإشعارات شغّالة", "Notifications are on")
+                    Text(on ? t("الإشعارات مفعّلة", "Notifications are on")
                             : (systemBlocked ? t("موقوفة من إعدادات الجهاز", "Blocked in device settings")
                                              : t("الإشعارات موقوفة", "Notifications are off")))
                         .dsFieldFont(.rowTitle)
                         .foregroundColor(DS.Color.fieldLabel)
-                    Text(on ? t("توصلك تنبيهات العائلة على هذا الجهاز", "Family alerts reach this device")
-                            : t("ما توصلك تنبيهات على هذا الجهاز", "No alerts on this device"))
+                    Text(on ? t("تصل تنبيهات العائلة إلى هذا الجهاز", "Family alerts reach this device")
+                            : t("لا تصل التنبيهات إلى هذا الجهاز", "No alerts on this device"))
                         .dsFont(.footnote)
                         .foregroundColor(DS.Color.textTertiary)
                 }
                 Spacer(minLength: DS.Spacing.sm)
-                Toggle("", isOn: $notificationsEnabled)
+                Toggle(t("الإشعارات", "Notifications"), isOn: $notificationsEnabled)
                     .labelsHidden()
                     .tint(DS.Color.primary)
                     // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
@@ -854,8 +895,8 @@ struct NotificationsAndPrivacyView: View {
         switch testState {
         case .idle: return t("جرّب الإشعار", "Send a test notification")
         case .sending: return t("جاري الإرسال…", "Sending…")
-        case .sent: return t("أُرسل — يوصلك خلال ثواني", "Sent — it should arrive in seconds")
-        case .failed: return t("تعذّر الإرسال، حاول مرة ثانية", "Couldn't send, try again")
+        case .sent: return t("أُرسل، ويصل خلال ثوانٍ", "Sent — it should arrive in seconds")
+        case .failed: return t("تعذّر الإرسال، يرجى المحاولة مرة أخرى", "Couldn't send, try again")
         }
     }
 
@@ -866,7 +907,7 @@ struct NotificationsAndPrivacyView: View {
             let row: [String: AnyEncodable] = [
                 "target_member_id": AnyEncodable(me.uuidString),
                 "title": AnyEncodable(t("إشعار تجربة ✓", "Test notification ✓")),
-                "body": AnyEncodable(t("إذا وصلك هذا، فالإشعارات شغّالة على جهازك.",
+                "body": AnyEncodable(t("عند وصول هذا الإشعار، تكون الإشعارات مفعّلة على هذا الجهاز.",
                                        "If you got this, notifications work on your device.")),
                 "kind": AnyEncodable("test"),
                 "created_by": AnyEncodable(me.uuidString)
@@ -902,7 +943,7 @@ struct NotificationsAndPrivacyView: View {
             // يُقرأ اسماً ووصفاً للمفتاح نفسه (لا يُكرَّر)
             .accessibilityHidden(true)
             Spacer(minLength: DS.Spacing.sm)
-            Toggle("", isOn: isOn)
+            Toggle(title, isOn: isOn)
                 .labelsHidden()
                 .tint(chromeInk)
                 // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه ووصفه صراحةً
@@ -911,6 +952,7 @@ struct NotificationsAndPrivacyView: View {
         }
         .dsRowBox()
     }
+
 
     private func sectionNote(_ text: String) -> some View {
         Text(text)
@@ -1016,21 +1058,6 @@ struct AppearanceSettingsView: View {
 
     private func t(_ ar: String, _ en: String) -> String { L10n.t(ar, en) }
 
-    private var appearanceOptions: [DSOptionTile<String>] {
-        // كل خيار بلون مشهده (نفس لون المربّع حين يُختار)
-        [DSOptionTile("system", title: t("حسب الجهاز", "System"), icon: "iphone",
-                      tint: AppearanceSkyScene.tint(for: "system")),
-         DSOptionTile("light", title: t("فاتح", "Light"), icon: "sun.max.fill",
-                      tint: AppearanceSkyScene.tint(for: "light")),
-         DSOptionTile("dark", title: t("داكن", "Dark"), icon: "moon.stars.fill",
-                      tint: AppearanceSkyScene.tint(for: "dark"))]
-    }
-
-    private var languageOptions: [DSOptionTile<String>] {
-        [DSOptionTile("ar", title: "العربية", icon: "character.book.closed.fill"),
-         DSOptionTile("en", title: "English", icon: "textformat.abc")]
-    }
-
     /// اختيار المستخدم يثبّت لغته — ولا تغيّرها اللغة الرسمية بعدها
     /// (اختيار اللغة الحالية لا يغيّر شيئاً — المربّعات لا تعيد اختيار المختار)
     private var languageSelection: Binding<String> {
@@ -1058,7 +1085,12 @@ struct AppearanceSettingsView: View {
                         // مشهد صباح / ليل متحرّك يتبع الاختيار (طلب المالك ٢٠٢٦-١٠-١٠)
                         AppearanceSkyScene(mode: appearanceMode)
                         // مربّعات الاختيار الواحد المشتركة
-                        DSOptionTiles(appearanceOptions, selection: $appearanceMode, columns: 3)
+                        // ثلاثة خيارات = الاختيار الموحّد (`DSChoiceTiles`، طلب المالك ٢٠٢٦-١١-١٠)
+                        DSChoiceTiles(options: [
+                            DSChoiceOption(id: "system", title: t("حسب الجهاز", "System"), icon: "iphone"),
+                            DSChoiceOption(id: "light", title: t("فاتح", "Light"), icon: "sun.max.fill"),
+                            DSChoiceOption(id: "dark", title: t("داكن", "Dark"), icon: "moon.stars.fill")
+                        ], selection: $appearanceMode)
                             // التغيير لحظي على كل النوافذ — لا ينتظر إغلاق المربّع (طلب المالك ٢٠٢٦-١٠-٠٧)
                             .onChange(of: appearanceMode) { mode in AppAppearance.apply(mode) }
                         note(appearanceDescription)
@@ -1070,7 +1102,10 @@ struct AppearanceSettingsView: View {
                 DSComposerSection(title: t("اللغة", "Language"), icon: "character.bubble.fill",
                                   tint: DS.Color.primary, index: showsAppearance ? 1 : 0) {
                     VStack(spacing: DS.Spacing.sm) {
-                        DSOptionTiles(languageOptions, selection: languageSelection, columns: 2)
+                        DSChoiceTiles(options: [
+                            DSChoiceOption(id: "ar", title: "العربية", icon: "character.book.closed.fill"),
+                            DSChoiceOption(id: "en", title: "English", icon: "textformat.abc")
+                        ], selection: languageSelection)
                         note(langManager.languageChosenByUser
                              ? t("اخترت لغتك بنفسك — لا تتأثر بلغة التطبيق الرسمية.",
                                  "You chose your language — the app's official language won't change it.")
@@ -1763,24 +1798,7 @@ struct LinkedDevicesSettingsSheet: View {
     }
 
     private func formattedDate(_ isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: isoString) {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: isArabic ? "ar" : "en")
-            df.dateStyle = .medium
-            df.timeStyle = .short
-            return df.string(from: date)
-        }
-        return isoString
+        DateHelper.displayDateTime(isoString) ?? isoString
     }
 }
 
@@ -1795,13 +1813,56 @@ struct SettingsIconSquare: View {
     let icon: String
     let tint: Color
     var side: CGFloat = DS.Icon.rowLarge
+    /// مربّع ممتلئ بلونه ورمز أبيض (قوائم الإعدادات المجمّعة — العيّنة «هـ»، اختيار المالك ٢٠٢٦-١١-١١)؛
+    /// `tint` هنا لون التعبئة (`DS.Color.*Fill`)
+    var filled: Bool = false
     var body: some View {
         RoundedRectangle(cornerRadius: side * 0.28, style: .continuous)
-            .fill(tint.opacity(DS.Opacity.tintFill))
+            .fill(filled ? tint : tint.opacity(DS.Opacity.tintFill))
             .frame(width: side, height: side)
-            .overlay(Image(dsSymbol: icon.dsLightSymbol)
-                .dsGlyph(side * 0.5, weight: .light)
-                .foregroundColor(tint))
+            .overlay(Image(dsSymbol: filled ? icon : icon.dsLightSymbol)
+                .dsGlyph(side * (filled ? 0.48 : 0.5), weight: filled ? .medium : .light)
+                .foregroundColor(filled ? DS.Color.textOnPrimary : tint))
+            .accessibilityHidden(true)
+    }
+}
+
+/// صفّ في قائمة مجمّعة (الإعدادات والخصوصية — العيّنة «هـ»): مربّع الرمز الممتلئ + العنوان + القيمة/المفتاح في الطرف.
+/// يُلبس `.dsGroupedRow` ليصير جزءاً من بطاقة مجموعته
+struct SettingsGroupRow<Trailing: View>: View {
+    let icon: String
+    let fill: Color
+    let title: String
+    var titleColor: Color = DS.Color.textPrimary
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: DS.Spacing.md) {
+            SettingsIconSquare(icon: icon, tint: fill, side: DS.Icon.row, filled: true)
+            Text(title)
+                .dsFont(.rowTitle)
+                .foregroundColor(titleColor)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: DS.Spacing.sm)
+            trailing()
+        }
+        .padding(.horizontal, DS.Spacing.md)
+        .padding(.vertical, DS.Spacing.sm)
+        .frame(minHeight: DSBox.commandRowHeight)
+        .contentShape(Rectangle())
+    }
+
+    /// بداية الخطّ الفاصل تحت الصفّ — من بعد مربّع الرمز
+    static var dividerInset: CGFloat { DS.Spacing.md + DS.Icon.row + DS.Spacing.md }
+}
+
+/// سهم «فتح» في طرف الصفّ باتجاه القراءة
+struct SettingsChevron: View {
+    var body: some View {
+        Image(systemName: L10n.isArabic ? "chevron.left" : "chevron.right")
+            .dsGlyph(DS.Glyph.xs, weight: .semibold)
+            .foregroundColor(DS.Color.textTertiary)
             .accessibilityHidden(true)
     }
 }

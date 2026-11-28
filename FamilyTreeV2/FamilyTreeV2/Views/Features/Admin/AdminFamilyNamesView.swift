@@ -212,7 +212,7 @@ struct AdminFamilyNamesView: View {
                     } label: {
                         Label(option.isActive ? L10n.t("إخفاء من الاختيار", "Hide from the picker")
                                               : L10n.t("إظهار في الاختيار", "Show in the picker"),
-                              systemImage: option.isActive ? "eye.slash" : "eye")
+                              systemImage: option.isActive ? "eye.slash.fill" : "eye.fill")
                     }
 
                     Button(role: .destructive) { deleting = option } label: {

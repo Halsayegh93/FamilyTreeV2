@@ -74,7 +74,7 @@ struct TreeSearchOverlay: View {
             switch self {
             case .all: return "person.3.fill"
             case .alive: return "heart.fill"
-            case .deceased: return "heart.slash.fill"
+            case .deceased: return "leaf.fill"
             }
         }
     }
@@ -300,7 +300,8 @@ struct TreeSearchOverlay: View {
             .dsCard(padding: nil)
             .padding(.top, DS.Spacing.xs)
         } else if !debouncedSearchText.isEmpty && searchText == debouncedSearchText {
-            DSEmptyView(L10n.t("لا توجد نتائج", "No results found"), section: .tree, style: .inline)
+            DSEmptyView(Self.waitsForMoreName(debouncedSearchText) ? NamePrivacy.hint : L10n.t("لا توجد نتائج", "No results found"),
+                        section: .tree, style: .inline)
                 .dsCard(padding: nil)
                 .padding(.top, DS.Spacing.xs)
         }
@@ -312,23 +313,37 @@ struct TreeSearchOverlay: View {
         searchTask?.cancel()
         let raw = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if raw.isEmpty { searchResults = []; return }
+        // العضو العادي: لا أسماء قبل اسمين متتاليين، والرقم ٨ أرقام فأكثر (`NamePrivacy`، طلب المالك ٢٠٢٦-١١-١٤)
+        if Self.waitsForMoreName(raw) { searchResults = []; return }
 
         // snapshot البيانات مرة وحدة — isCountable يستثني المعلّق/المجمّد/المخفي (يُبقي المتوفّى)
         let members = memberVM.allMembers.filter { $0.isCountable }
         let lookup = memberVM._memberById
 
         searchTask = Task {
-            let results = await Self.computeResults(raw: raw, members: members, lookup: lookup)
+            // العضو العادي: أول ١٠ فقط (`NamePrivacy`)
+            let limit = NamePrivacy.isStrict ? NamePrivacy.maxResults : 500
+            let results = await Self.computeResults(raw: raw, members: members, lookup: lookup, limit: limit)
             if !Task.isCancelled {
                 searchResults = results
             }
         }
     }
 
+    /// اسم ناقص عند العضو العادي (ليس رقماً) — لا نتائج بعد
+    private static func waitsForMoreName(_ raw: String) -> Bool {
+        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard NamePrivacy.isStrict else { return false }
+        // الرقم: كاملاً تقريباً (٨ أرقام فأكثر) لا بدايته
+        if NameSearch.isPhoneQuery(q) { return NameSearch.digits(q).count < 8 }
+        return !NamePrivacy.isSpecific(q)
+    }
+
     private static func computeResults(
         raw: String,
         members: [FamilyMember],
-        lookup: [UUID: FamilyMember]
+        lookup: [UUID: FamilyMember],
+        limit: Int
     ) async -> [SearchResult] {
         // البحث الدقيق الواحد (`NameSearch`): كل كلمة بداية كلمة بالترتيب — لا تطابق جزئي داخل الكلمة
         let searchWords = NameSearch.words(raw)
@@ -384,7 +399,7 @@ struct TreeSearchOverlay: View {
                     }
                     return $0.displayName.localizedCompare($1.displayName) == .orderedAscending
                 }
-                .prefix(500)
+                .prefix(limit)
         )
     }
 
@@ -465,7 +480,7 @@ struct TreeSearchOverlay: View {
                            size: DS.Icon.avatarRow, roleColor: result.member.roleColor)
                 .overlay(alignment: .bottomTrailing) {
                     if result.member.isDeceased ?? false {
-                        Image(systemName: "heart.slash.fill")
+                        Image(systemName: "leaf.fill")
                             .dsGlyph(DS.Glyph.micro)
                             .foregroundColor(DS.Color.onTint) // نص فوق لون الدور: داكن في الوضع الداكن
                             .frame(width: DS.Icon.avatarBadge, height: DS.Icon.avatarBadge)

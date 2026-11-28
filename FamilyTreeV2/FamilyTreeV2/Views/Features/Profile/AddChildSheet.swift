@@ -2,6 +2,76 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+/// فحص محلي قبل الحفظ — تنبيه يقدر العضو يتجاوزه. التطابق التام يرفضه السيرفر (`child_duplicate`) فلا يُكرَّر هنا
+enum AddChildChecks {
+    /// أقل فرق سنوات بين ميلاد الأب وابنه قبل التنبيه — من السيرفر متى أُضيف مفتاحه (قاعدة الإعدادات من السيرفر)
+    static let minFatherGapKey = "child_father_min_gap_years"
+    static var minFatherGapYears: Int { AppConfigValues.shared.int(minFatherGapKey, default: 12) }
+
+    /// نفس `child_name_key` على السيرفر: بلا مسافات وتشكيل وتطويل، والهمزات والتاء المربوطة والألف المقصورة موحّدة
+    static func serverNameKey(_ name: String) -> String {
+        let folded: [Character: Character] = ["أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ة": "ه", "ى": "ي"]
+        let kept = name.lowercased().unicodeScalars.filter { scalar in
+            !CharacterSet.whitespacesAndNewlines.contains(scalar)
+                && !(0x064B...0x0652).contains(scalar.value)
+                && scalar.value != 0x0640
+        }
+        return String(String(kept).map { folded[$0] ?? $0 })
+    }
+
+    /// أكثر عدد وحدات مقبول في خانة الاسم الأول — من السيرفر متى أُضيف مفتاحه
+    static let firstNameMaxUnitsKey = "child_first_name_max_units"
+    static var firstNameMaxUnits: Int { AppConfigValues.shared.int(firstNameMaxUnitsKey, default: 2) }
+
+    /// وحدات الاسم المكتوب: «زين العابدين» و«عبد الله» وحدة واحدة.
+    /// `PersonName.units` لا يدمج الكلمة الأخيرة (يعتبرها العائلة)، فتُضاف كلمة وهمية ثم تُطرح.
+    static func firstNameUnits(_ name: String) -> Int {
+        let cleaned = PersonName.clean(name)
+        guard !cleaned.isEmpty else { return 0 }
+        return max(PersonName.units(cleaned + " ـ").count - 1, 1)
+    }
+
+    /// مكتوب فيه أكثر من اسم أول (الاسم الكامل مثلاً) — يُرفض
+    static func isMoreThanFirstName(_ name: String) -> Bool {
+        firstNameUnits(name) > firstNameMaxUnits
+    }
+
+    static var firstNameOnlyMessage: String {
+        L10n.t("يُكتب الاسم الأول فقط، ويُضاف باقي الاسم تلقائياً من اسم الأب.",
+               "Enter the first name only. The rest is added from the father's name.")
+    }
+
+    /// كلمتان: قد يكون اسماً مركّباً مثل «محمد رضا» — تنبيه يقدر يتجاوزه
+    static func compoundNameWarning(_ name: String) -> String? {
+        guard firstNameUnits(name) >= 2 else { return nil }
+        let cleaned = PersonName.clean(name)
+        return L10n.t("«\(cleaned)» أكثر من كلمة. إذا هو اسم مركّب اضغط متابعة، وإذا تضمّن اسم الأب يرجى تعديله وكتابة الاسم الأول فقط.",
+                      "«\(cleaned)» has more than one word. If it is a compound name, continue. Otherwise enter the first name only.")
+    }
+
+    /// ابن مسجّل اسمه قريب من المكتوب (لا مطابق تماماً) — الأول فقط
+    static func nearSon(name: String, among sons: [FamilyMember]) -> FamilyMember? {
+        let typed = NameMatcher.tokens(name).joined(separator: " ")
+        let typedKey = serverNameKey(name)
+        guard !typed.isEmpty else { return nil }
+        return sons.first { son in
+            guard serverNameKey(son.firstName) != typedKey else { return false }
+            let other = NameMatcher.tokens(son.firstName).joined(separator: " ")
+            return other == typed || NameMatcher.isTypo(typed, other)
+        }
+    }
+
+    /// ميلاد الابن قبل مرور الحدّ على ميلاد الأب (أو قبل ميلاده) — سنة الأب الهجرية المكتوبة كميلادية لا تُقارن
+    static func isTooCloseToFather(childBirth: Date, fatherBirth raw: String?) -> Bool {
+        guard let father = NameMatcher.linkBirth(raw) else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        guard calendar.component(.year, from: father) >= DeceasedMemorial.minGregorianYear,
+              let earliest = calendar.date(byAdding: .year, value: minFatherGapYears, to: father) else { return false }
+        return childBirth < earliest
+    }
+}
+
 struct AddChildSheet: View {
     @EnvironmentObject var memberVM: MemberViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -27,17 +97,25 @@ struct AddChildSheet: View {
     @State private var approvalRequestWarning: String? = nil
     @State private var showErrorAlert = false
     @State private var errorMessage = ""
+    /// تنبيهات الفحص المحلي — الحفظ بعد «متابعة»
+    @State private var localWarnings: [String] = []
+    @State private var showLocalWarnings = false
+    /// «أنثى» اختيرت — شجرة العائلة للرجال فقط (`FamilyTreeMenOnly`، طلب المالك ٢٠٢٦-١١-٢٧)
+    @State private var showMenOnly = false
+    /// «إضافة» → فحص الاسم: اسم بنت ينتقل تلقائياً لشجرة النساء (`FamilyTreeMenOnly.namesToMove`)
+    @State private var nameCheck: FamilyTreeNameCheck? = nil
 
     var body: some View {
         // نفس هيكل مربّعات الإضافة وحركتها (طلب المالك)
         DSComposer(
             title: L10n.t("إضافة فرد", "Add Member"),
-            subtitle: L10n.t("ابن أو بنت لعائلتك", "A son or daughter to your family"),
+            subtitle: L10n.t("ابن لشجرة العائلة — البنات في شجرة النساء", "A son to the family tree — daughters are in the women's tree"),
             icon: "person.crop.circle.badge.plus",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("إضافة", "Add"),
             actionIcon: "plus",
-            canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting),
+            canSubmit: !(firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || memberVM.isLoading || isSubmitting)
+                && FamilyTreeMenOnly.genderChosen(selectedGender),
             isBusy: memberVM.isLoading || isSubmitting,
             hasUnsavedChanges: hasUnsavedChanges,
             onSubmit: saveChild,
@@ -59,6 +137,16 @@ struct AddChildSheet: View {
         } message: {
             Text(errorMessage)
         }
+        .dsAlert(L10n.t("تأكد قبل الحفظ", "Check before saving"), isPresented: $showLocalWarnings, icon: "exclamationmark.triangle.fill") {
+            Button(L10n.t("متابعة", "Continue")) { performSave() }
+            Button(L10n.t("تعديل", "Edit"), role: .cancel) {}
+        } message: {
+            Text(localWarnings.joined(separator: "\n\n"))
+        }
+        // «إضافة بنت في شجرة النساء» تحت الأب نفسه — وبعد إغلاقها يُغلق هذا المربّع (الطلب انتقل هناك)
+        // واسم بنت عند «إضافة» ينتقل تلقائياً هناك («هو ولد؟ ارجع» يرجع لهذا المربّع كما هو)
+        .familyTreeMenOnly(isPresented: $showMenOnly, father: member, typedName: firstName,
+                           nameCheck: $nameCheck, onSon: continueAsSon) { dismiss() }
         .onAppear {
             if !lastAuthDialingCode.isEmpty {
                 selectedPhoneCountry = KuwaitPhone.countryForDialingCode(lastAuthDialingCode)
@@ -109,82 +197,105 @@ struct AddChildSheet: View {
 
     /// البيانات — نفس أقسام وحقول مربّعات الإضافة («أسلوب واحد»): الاسم، الجنس، الهاتف، التواريخ
     private var basicInfoSection: some View {
-        DSComposerSection(title: L10n.t("المعلومات الشخصية", "Personal Info"),
+        DSComposerSection(title: L10n.t("البيانات الشخصية", "Personal Info"),
                           icon: "person.text.rectangle", tint: DS.Color.primary, index: 1) {
             DSComposerField(icon: "person.fill", label: L10n.t("الاسم الأول", "First Name"),
-                            placeholder: L10n.t("اسم الابن", "Child's name"),
+                            placeholder: L10n.t("الاسم الأول فقط", "First name only"),
                             text: $firstName, tint: DS.Color.primary, limit: 50)
 
-            // اختيار الجنس — أنثى تُضاف لشجرة النساء، ذكر للشجرة العامة
-            DSGenderPicker(selection: $selectedGender)
+            // الجنس زرّان، ثم الميلاد والحالة متجاوران (وتاريخ الوفاة بعدها) — قرار المالك ٢٠٢٦-١١-١١
+            // شجرة العائلة للرجال فقط: «أنثى» لا تُقبل — تنبيه وزرّ «إضافة بنت» في شجرة النساء (طلب المالك ٢٠٢٦-١١-٢٧)
+            DSGenderPicker(selection: $selectedGender.menOnly(alert: $showMenOnly), buttons: true)
+            DSTileGrid(dataTiles)
 
             // الهاتف — للابن (الذكر) فقط
             if selectedGender == "male" {
-                DSFieldBox(L10n.t("رقم الهاتف", "Phone Number")) {
-                    DSPhoneField(
-                        country: $selectedPhoneCountry,
-                        digits: $phoneNumber,
-                        placeholder: L10n.t("اختياري", "Optional"),
-                        compact: true,
-                        bordered: false
-                    )
-                }
-            }
-
-            // تاريخ الميلاد (اختياري: يُرسل فقط إذا حدّده المستخدم)
-            dateRow(icon: "gift.fill", tint: DS.Color.warning,
-                    title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                    value: birthDateProvided ? DSDateText.display(birthDate) : L10n.t("بدون تاريخ", "No date")) {
-                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
-                                    initial: birthDateProvided ? birthDate : nil, allowClear: false) { picked in
-                    guard let picked else { return }
-                    birthDate = picked
-                    birthDateProvided = true
-                }
-            }
-
-            // متوفى — صفّ بإطار حقول المربّعات
-            DSRow(icon: "leaf.fill", tint: DS.Color.error, title: L10n.t("متوفى", "Deceased")) {
-                Toggle("", isOn: $isDeceased.animation(DS.Anim.snappy))
-                    .labelsHidden()
-                    .tint(DS.Color.error)
-                    // القارئ الصوتي: المفتاح بلا نص ظاهر — اسمه صراحةً
-                    .accessibilityLabel(L10n.t("متوفى", "Deceased"))
-            }
-
-            if isDeceased {
-                dateRow(icon: "calendar", tint: DS.Color.error,
-                        title: L10n.t("تاريخ الوفاة", "Death Date"),
-                        value: DSDateText.display(deathDate)) {
-                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                                        initial: deathDate, allowClear: false) { picked in
-                        if let picked { deathDate = picked }
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                DSPhoneFieldRow(country: $selectedPhoneCountry, digits: $phoneNumber,
+                                placeholder: L10n.t("اختياري", "Optional"))
             }
         }
     }
 
-    /// صفّ تاريخ يفتح مربّع التاريخ الموحّد بالمنتصف
-    private func dateRow(icon: String, tint: Color, title: String, value: String,
-                         action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            DSRow(icon: icon, tint: tint, title: title, subtitle: value) {
-                DSStateIcon("pencil", tint: DS.Color.primary, size: DSBox.fieldIcon)
-            }
-            .contentShape(Rectangle())
+    private var dataTiles: [DSTileItem] {
+        var items: [DSTileItem] = [
+            // تاريخ الميلاد (اختياري: يُرسل فقط إذا حدّده المستخدم) — «بدون تاريخ» داخل المنتقي
+            .half(DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                 hasDate: birthDateProvided, dateText: DSDateText.display(birthDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                    initial: birthDateProvided ? birthDate : nil, allowClear: birthDateProvided) { picked in
+                    if let picked { birthDate = picked; birthDateProvided = true } else { birthDateProvided = false }
+                }
+            }),
+            .half(DSMenuTile(icon: "leaf.fill", label: L10n.t("الحالة", "Status"), options: [
+                DSChoiceOption(id: false, title: L10n.t("على قيد الحياة", "Alive"), icon: "heart.fill"),
+                DSChoiceOption(id: true, title: selectedGender == "female" ? L10n.t("متوفاة", "Deceased") : L10n.t("متوفى", "Deceased"),
+                               icon: "leaf.fill")
+            ], selection: $isDeceased.animation(DS.Anim.snappy)))
+        ]
+        if isDeceased {
+            items.append(.half(DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                              hasDate: true, dateText: DSDateText.display(deathDate)) {
+                dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                    initial: deathDate, allowClear: false) { picked in
+                    if let picked { deathDate = picked }
+                }
+            }))
         }
-        .buttonStyle(.plain)
-        .accessibilityHint(L10n.t("يفتح اختيار التاريخ", "Opens the date picker"))
+        return items
     }
 
     /// حارس محلي يمنع الإضافة المكرّرة — isLoading في الـ VM يتأخر لحظة
     /// بعد الضغط، فكانت النقرات السريعة تنشئ أكثر من سجل.
     @State private var isSubmitting = false
 
+    /// الفحص المحلي: اسم قريب من ابن مسجّل، أو ميلاد قريب جداً من ميلاد الأب — والعضو يقدر يكمل
+    private var currentWarnings: [String] {
+        var list: [String] = []
+        let name = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let compound = AddChildChecks.compoundNameWarning(name) { list.append(compound) }
+        if selectedGender != "female" {
+            let sons = memberVM.allMembers.filter { $0.fatherId == member.id && !$0.isFemale }
+            if let son = AddChildChecks.nearSon(name: name, among: sons) {
+                list.append(L10n.t("«\(name)» قريب من اسم ابنك «\(son.firstName)». هل هو شخص ثاني؟",
+                                   "«\(name)» is close to your son's name «\(son.firstName)». Is this a different person?"))
+            }
+        }
+        if birthDateProvided, AddChildChecks.isTooCloseToFather(childBirth: birthDate, fatherBirth: member.birthDate) {
+            list.append(L10n.t("ميلاد الابن قريب جداً من ميلاد الأب.", "The birth date is very close to the father's."))
+        }
+        return list
+    }
+
     private func saveChild() {
         guard !isSubmitting else { return }
+        guard !AddChildChecks.isMoreThanFirstName(firstName) else {
+            errorMessage = AddChildChecks.firstNameOnlyMessage
+            showErrorAlert = true
+            return
+        }
+        // اسم بنت → شجرة النساء تلقائياً؛ غيره يكمل هنا (`continueAsSon`)
+        nameCheck = FamilyTreeNameCheck(names: [firstName])
+    }
+
+    private func continueAsSon() {
+        guard !isSubmitting else { return }
+        let warnings = currentWarnings
+        if warnings.isEmpty {
+            performSave()
+        } else {
+            localWarnings = warnings
+            showLocalWarnings = true
+        }
+    }
+
+    private func performSave() {
+        guard !isSubmitting else { return }
+        // آخر حارس: لا أنثى في شجرة العائلة من هنا
+        guard FamilyTreeMenOnly.mayWriteToFamilyTree(gender: selectedGender) else {
+            showMenOnly = true
+            return
+        }
+        guard FamilyTreeMenOnly.genderChosen(selectedGender) else { return }
         isSubmitting = true
         Task {
             defer { isSubmitting = false }
@@ -214,6 +325,7 @@ struct AddChildSheet: View {
                 }
             } else {
                 // ذكر → الشجرة العامة (profiles) مع هاتف/صورة، وينعكس تلقائياً لشجرة النساء
+                memberVM.errorMessage = nil   // لا تظهر رسالة قديمة إن رجع بلا محاولة (بلا اتصال)
                 let childId = await memberVM.addChild(
                     firstNameOnly: name,
                     phoneNumber: KuwaitPhone.normalizedForStorage(
@@ -227,7 +339,8 @@ struct AddChildSheet: View {
                     gender: "male"
                 )
                 guard let childId else {
-                    errorMessage = L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
+                    errorMessage = memberVM.errorMessage
+                        ?? L10n.t("فشل في إضافة الابن. حاول مرة أخرى.", "Failed to add child. Please try again.")
                     showErrorAlert = true
                     return
                 }

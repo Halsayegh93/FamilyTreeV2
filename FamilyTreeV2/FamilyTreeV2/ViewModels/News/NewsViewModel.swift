@@ -129,7 +129,8 @@ class NewsViewModel: ObservableObject {
 
     func fetchNews(force: Bool = false) async {
         if allNews.isEmpty, feedSearch.isEmpty, feedType == nil,
-           let cached = CacheManager.shared.load([NewsPost].self, for: .news, in: cacheSession) {
+           let cached = await CacheManager.shared.loadAsync([NewsPost].self, for: .news, in: cacheSession),
+           allNews.isEmpty {
             allNews = Array(cached.prefix(newsPageSize))
         }
         guard force || (!isLoadingNews && throttler.canFetch(key: "news", interval: 10)) || allNews.isEmpty else { return }
@@ -262,6 +263,11 @@ class NewsViewModel: ObservableObject {
             var aggregated: [UUID: [NewsCommentRecord]] = [:]
             var counts: [UUID: Int] = [:]
 
+            // خبر صار بلا تعليقات لا يرجع في النتيجة — نصفّره صراحة حتى لا يبقى القديم
+            for id in postIds {
+                aggregated[id] = []
+                counts[id] = 0
+            }
             for comment in commentsData {
                 aggregated[comment.news_id, default: []].append(comment)
                 counts[comment.news_id, default: 0] += 1
@@ -318,12 +324,12 @@ class NewsViewModel: ObservableObject {
                 if let postAuthorId = postAuthorIdSnapshot, postAuthorId != memberId {
                     // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
                     let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
-                    let likerName = fromAdmin ? L10n.t("الإدارة", "The admins") : (currentUser?.displayFullName ?? "")
+                    let likerName = fromAdmin ? L10n.stored("الإدارة", "The admins") : (currentUser?.displayFullName ?? "")
                     await notificationVM?.sendPushToMembers(
-                        title: L10n.t("إعجاب جديد", "New Like"),
+                        title: L10n.stored("إعجاب جديد", "New Like"),
                         body: fromAdmin
-                            ? L10n.t("الإدارة أعجبت بمنشورك", "The admins liked your post")
-                            : L10n.t(
+                            ? L10n.stored("الإدارة أعجبت بمنشورك", "The admins liked your post")
+                            : L10n.stored(
                                 "\(likerName) أعجب بمنشورك",
                                 "\(likerName) liked your post"
                             ),
@@ -335,8 +341,8 @@ class NewsViewModel: ObservableObject {
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("إعجاب جديد", "New Like")),
                         "body": AnyEncodable(fromAdmin
-                            ? L10n.t("الإدارة أعجبت بخبرك", "The admins liked your post")
-                            : L10n.t("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
+                            ? L10n.stored("الإدارة أعجبت بخبرك", "The admins liked your post")
+                            : L10n.stored("\(likerName) أعجب بخبرك", "\(likerName) liked your post")),
                         "kind": AnyEncodable(NotificationKind.newsLike.rawValue),
                         "created_by": AnyEncodable(memberId.uuidString)
                     ]
@@ -400,10 +406,10 @@ class NewsViewModel: ObservableObject {
                 // عضو الإدارة يظهر للعضو باسم «الإدارة» لا باسمه (طلب المالك)
                 let fromAdmin = authVM?.canModerate == true && isRegularMember(postAuthorId)
                 await notificationVM?.sendPushToMembers(
-                    title: L10n.t("تعليق جديد", "New Comment"),
+                    title: L10n.stored("تعليق جديد", "New Comment"),
                     body: fromAdmin
-                        ? L10n.t("الإدارة علّقت على منشورك", "The admins commented on your post")
-                        : L10n.t(
+                        ? L10n.stored("الإدارة علّقت على منشورك", "The admins commented on your post")
+                        : L10n.stored(
                             "\(authorName) علّق على منشورك",
                             "\(authorName) commented on your post"
                         ),
@@ -416,8 +422,8 @@ class NewsViewModel: ObservableObject {
                         "target_member_id": AnyEncodable(postAuthorId.uuidString),
                         "title": AnyEncodable(L10n.t("تعليق جديد", "New Comment")),
                         "body": AnyEncodable(fromAdmin
-                            ? L10n.t("الإدارة علّقت على خبرك", "The admins commented on your post")
-                            : L10n.t("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
+                            ? L10n.stored("الإدارة علّقت على خبرك", "The admins commented on your post")
+                            : L10n.stored("\(authorName) علّق على خبرك", "\(authorName) commented on your post")),
                         "kind": AnyEncodable(NotificationKind.newsComment.rawValue),
                         "created_by": AnyEncodable(creator.uuidString)
                     ]
@@ -592,10 +598,10 @@ class NewsViewModel: ObservableObject {
         // هوية النشر: باسم العضو، أو باسم الإدارة إذا اختار ذلك (وله صلاحية)
         let useAdminIdentity = asAdminIdentity && (authVM?.canModerate ?? false)
         let postAuthorName = useAdminIdentity
-            ? L10n.t("إدارة العائلة", "Family Admin")
+            ? L10n.stored("إدارة العائلة", "Family Admin")
             : user.displayFullName
         let postAuthorRole = useAdminIdentity
-            ? L10n.t("الإدارة", "Admin")
+            ? L10n.stored("الإدارة", "Admin")
             : user.roleName
 
         // author_id فارغ في منشور الإدارة: أي عميل قديم يبحث عن العضو فلا يجده
@@ -621,8 +627,8 @@ class NewsViewModel: ObservableObject {
             let posterName = currentUser?.displayFullName ?? ""
             if !shouldAutoApprove, currentUser?.role == .member {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("منشور بانتظار الموافقة", "Post Pending Approval"),
-                    body: L10n.t(
+                    title: L10n.stored("منشور بانتظار الموافقة", "Post Pending Approval"),
+                    body: L10n.stored(
                         "\(posterName) أرسل منشوراً جديداً يحتاج موافقتكم",
                         "\(posterName) submitted a new post for review"
                     ),
@@ -632,8 +638,8 @@ class NewsViewModel: ObservableObject {
             }
             if shouldAutoApprove && notifyAdmins {
                 await notificationVM?.notifyAdminsWithPush(
-                    title: L10n.t("منشور جديد", "New Post"),
-                    body: L10n.t(
+                    title: L10n.stored("منشور جديد", "New Post"),
+                    body: L10n.stored(
                         "\(posterName) نشر منشوراً جديداً",
                         "\(posterName) published a new post"
                     ),
@@ -803,8 +809,8 @@ class NewsViewModel: ObservableObject {
 
                 if let authorId {
                     await self?.notificationVM?.sendNotification(
-                        title: L10n.t("تم نشر منشورك", "Your Post is Published"),
-                        body: L10n.t("منشورك تمت الموافقة عليه وأصبح مرئياً للجميع", "Your post was approved and is now visible to everyone"),
+                        title: L10n.stored("تم نشر منشورك", "Your Post is Published"),
+                        body: L10n.stored("منشورك تمت الموافقة عليه وأصبح مرئياً للجميع", "Your post was approved and is now visible to everyone"),
                         targetMemberIds: [authorId]
                     )
                 }
@@ -872,8 +878,8 @@ class NewsViewModel: ObservableObject {
             // صاحب المنشور يُبلَّغ شخصياً في إشعاراته — إلا إذا كان هو من حذفه
             if let deletedAuthorId, deletedAuthorId != currentUser?.id {
                 await notificationVM?.sendNotification(
-                    title: L10n.t("تم حذف منشورك", "Your Post Was Removed"),
-                    body: L10n.t("قامت الإدارة بحذف أحد منشوراتك من الأخبار",
+                    title: L10n.stored("تم حذف منشورك", "Your Post Was Removed"),
+                    body: L10n.stored("قامت الإدارة بحذف أحد منشوراتك من الأخبار",
                                  "The administration removed one of your posts"),
                     targetMemberIds: [deletedAuthorId]
                 )
@@ -881,8 +887,8 @@ class NewsViewModel: ObservableObject {
 
             // حركة إدارية — مكانها «إشعارات الإدارة»، مربوطة بصاحب المنشور
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("حذف منشور", "Post Deleted"),
-                body: L10n.t("تم حذف منشور من الأخبار", "A news post has been deleted"),
+                title: L10n.stored("حذف منشور", "Post Deleted"),
+                body: L10n.stored("تم حذف منشور من الأخبار", "A news post has been deleted"),
                 kind: "news_deleted",
                 subjectMemberId: deletedAuthorId
             )
@@ -897,7 +903,7 @@ class NewsViewModel: ObservableObject {
 
     /// يرجع true عند وصول البلاغ — لتأكيد «تم الإبلاغ» في الواجهة
     @discardableResult
-    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر") async -> Bool {
+    func reportNewsPost(postId: UUID, reason: String = "بلاغ على محتوى خبر", source: RequestSource? = nil) async -> Bool {
         // الإبلاغ متاح لجميع المستخدمين (أعضاء وإدارة) — سياسة Apple
         guard let userId = currentUser?.id else { return false }
         self.isLoading = true
@@ -914,19 +920,22 @@ class NewsViewModel: ObservableObject {
             ]
 
             // إدراج + جلب id الصف لإرفاقه بإشعار الـ push (يفعّل أزرار قبول/رفض)
-            let inserted: AdminRequest = try await supabase
-                .from("admin_requests")
-                .insert(payload)
-                .select()
-                .single()
-                .execute()
-                .value
+            let path = source ?? RequestSource(.home, RequestSourceStep("flag.fill", "بلاغ عن منشور"))
+            let inserted: AdminRequest = try await AdminRequestSource.send(path) { path in
+                try await supabase
+                    .from("admin_requests")
+                    .insert(AdminRequestSource.payload(payload, path))
+                    .select()
+                    .single()
+                    .execute()
+                    .value
+            }
 
             delivered = true
             let reporterName = currentUser?.displayFullName ?? ""
             await notificationVM?.notifyAdminsWithPush(
-                title: L10n.t("بلاغ على منشور", "Post Report"),
-                body: L10n.t(
+                title: L10n.stored("بلاغ على منشور", "Post Report"),
+                body: L10n.stored(
                     "\(reporterName) أبلغ عن منشور يحتاج مراجعتكم",
                     "\(reporterName) reported a post that needs your review"
                 ),
@@ -936,8 +945,8 @@ class NewsViewModel: ObservableObject {
             )
 
             await notificationVM?.sendNotification(
-                title: L10n.t("تم استلام بلاغك", "Report Received"),
-                body: L10n.t("بلاغك وصلنا وسيتم مراجعته من الإدارة خلال ٢٤ ساعة",
+                title: L10n.stored("تم استلام بلاغك", "Report Received"),
+                body: L10n.stored("بلاغك وصلنا وسيتم مراجعته من الإدارة خلال ٢٤ ساعة",
                              "Your report was received and will be reviewed within 24 hours"),
                 targetMemberIds: [userId]
             )

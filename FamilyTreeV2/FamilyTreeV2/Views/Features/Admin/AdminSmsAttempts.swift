@@ -10,7 +10,10 @@ import Combine
 // يُحفظ ٣٠ يوماً. العدّ بدأ ٢٠ أكتوبر ٢٠٢٦.
 // رموز الدخول لا تُحفظ ولا تُعرض لأحد (٢٠٢٦-١٠-٢٩: حُذفت دوال عرض الرمز من السيرفر وواجهتها من هنا).
 // للمالك: ضغط صفّ الرقم يفتح «تفاصيل الرقم» (`AdminSmsNumberDetails.swift`، وقت الإرسال وحالة التسليم لكل طلب).
-// حارس المكدس: البطاقة نوع مستقل خلف `AnyView` في `AdminSmsView`، والصفحة الكاملة خلف `AdminLazyPage`.
+// ٢٠٢٦-١١-٢٧ («ما زر ان اسوي شي»): أعلى الصفحة «محاولات دخول مريبة» و«تم الاطلاع على الكل»، ثم بطاقة لكل رقم مريب بمعناه
+// و«لمن الرقم؟» وأزرار ظاهرة (AdminSmsSuspicious.swift)، ثم بقية الأرقام صفوفاً. صفحة الرسائل تفتح هذه الصفحة من صفّ واحد
+// (`SmsAttemptsDoorSection`) — لم تعد فيها بطاقة معاينة.
+// حارس المكدس: الصفحة خلف `AdminLazyPage`، وكل قسم فيها نوع مستقل خلف `AnyView`.
 
 /// ما ترجعه `sms_login_attempts(p_days)` — فكّ متسامح كالنظرة
 struct SmsLoginAttempts: Equatable {
@@ -156,8 +159,8 @@ enum SmsAttemptsText {
     /// آخر نتيجة بكلام مفهوم
     static func outcome(_ raw: String) -> (title: String, icon: String, tint: Color) {
         switch raw {
-        case "sent":    return (L10n.t("انرسل", "Sent"), "paperplane.fill", DS.Color.success)
-        case "blocked": return (L10n.t("انرفض لكثرة الطلب", "Refused: too many requests"), "hand.raised.fill", DS.Color.warning)
+        case "sent":    return (L10n.t("أُرسل", "Sent"), "paperplane.fill", DS.Color.success)
+        case "blocked": return (L10n.t("رُفض لكثرة الطلبات", "Refused: too many requests"), "hand.raised.fill", DS.Color.warning)
         case "failed":  return (L10n.t("فشل", "Failed"), "xmark.circle.fill", DS.Color.error)
         case "test":    return (L10n.t("تجريبي", "Test"), "flask.fill", DS.Color.info)
         default:        return (L10n.t("غير معروف", "Unknown"), "questionmark.circle.fill", DS.Color.slate)
@@ -181,67 +184,16 @@ enum SmsAttemptsText {
     }()
 }
 
-// MARK: - البطاقة
-
-/// «طلبات رمز الدخول» في الصفحة (تبسيط ٢٠٢٦-١٠-٢٢): الأرقام المشبوهة + أحدث ٣ فقط، ثم «الكل (N)» ← الصفحة الكاملة
-/// (مبدّل الفترة، المجاميع، البحث)
-struct SmsAttemptsCard: View {
-    @ObservedObject private var store = SmsLoginAttemptsStore.shared
-    /// قسم صفحة الرسائل — يُمرَّر لصفحة «الكل»
-    @Environment(\.adminArea) private var area
-    /// أحدث الأرقام الظاهرة مع المشبوهة
-    private static let recentCount = 3
-
-    /// المشبوهة كلها + أحدث ٣ — بترتيب الرد (الأحدث أولاً)
-    static func preview(_ items: [SmsLoginAttempts.Item]) -> [SmsLoginAttempts.Item] {
-        let recent = Set(items.prefix(recentCount).map(\.id))
-        return items.filter { $0.suspicious || recent.contains($0.id) }
-    }
-
-    var body: some View {
-        let result = store.current
-        VStack(alignment: .leading, spacing: DS.Spacing.sm) {
-            AdminCardHeader(title: L10n.t("طلبات رمز الدخول", "Sign-in code requests"),
-                            badge: result?.totals.suspicious, badgeTint: DS.Color.warning) {
-                if let result {
-                    Text(SmsAttemptsText.period(result.days))
-                        .dsFont(.caption)
-                        .foregroundColor(DS.Color.textTertiary)
-                        .lineLimit(1)
-                }
-            }
-            if let result {
-                if result.items.isEmpty {
-                    SmsAttemptsEmpty()
-                } else {
-                    SmsAttemptsRows(items: Self.preview(result.items), days: result.days, backTitle: SmsText.pageTitle)
-                    NavigationLink { AdminLazyPage { AnyView(SmsAttemptsListPage().adminArea(area)) } } label: {
-                        AdminPillLabel(title: L10n.t("الكل (\(result.items.count))", "All (\(result.items.count))"),
-                                       icon: "list.bullet", style: .soft, height: DS.Hub.pillHeightCard, fullWidth: true)
-                    }
-                    .buttonStyle(DSPressStyle())
-                    .padding(.top, DS.Spacing.xs)
-                }
-            } else {
-                SmsAttemptsStatus(store: store)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
-        .task { await store.refresh() }
-    }
-}
-
-/// اليوم / ٧ أيام / ٣٠ يوماً
-private struct SmsAttemptsPeriodSwitch: View {
+/// اليوم / ٧ أيام / ٣٠ يوماً — شرائح فلتر تلتفّ (spec A.9 — لا مبدّل في الإدارة)
+private struct SmsAttemptsPeriodChips: View {
     @ObservedObject var store: SmsLoginAttemptsStore
 
     var body: some View {
-        DSSegmentedSwitch(options: [
-            DSSegmentOption(id: 1, title: SmsAttemptsText.period(1), icon: "sun.max.fill"),
-            DSSegmentOption(id: 7, title: SmsAttemptsText.period(7), icon: "calendar"),
-            DSSegmentOption(id: 30, title: SmsAttemptsText.period(30), icon: "calendar.badge.clock")
-        ], selection: Binding(get: { store.days }, set: { store.select($0) }), size: .regular)
+        DSFilterChips(options: [
+            DSFilterOption(id: 1, title: SmsAttemptsText.period(1)),
+            DSFilterOption(id: 7, title: SmsAttemptsText.period(7)),
+            DSFilterOption(id: 30, title: SmsAttemptsText.period(30))
+        ], selection: Binding(get: { store.days }, set: { store.select($0) }), style: .admin)
     }
 }
 
@@ -305,7 +257,8 @@ private struct SmsAttemptsStat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
-            Text(verbatim: "\(value)")
+            // يعدّ مرة عند الظهور، ثم يتبدّل بلا حركة إلا لتغيّر واضح (تغيير الفترة) — «تقليل الحركة»: ثابت
+            DSCountText(value: value)
                 .dsFont(.statValue)
                 .monospacedDigit()
                 .foregroundColor(warns ? DS.Color.warning.dsReadableGlyph : DS.Color.textPrimary)
@@ -364,9 +317,13 @@ private struct SmsAttemptsRows: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(items) { item in
-                SmsAttemptRow(item: item, days: days, backTitle: backTitle)
-                if item.id != items.last?.id { AdminRowDivider() }
+            ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
+                // الصفوف تصعد تباعاً مرة (أول ثمانية بترتيبها، والباقي معها) — «تقليل الحركة»: تلاشٍ
+                VStack(spacing: 0) {
+                    SmsAttemptRow(item: item, days: days, backTitle: backTitle)
+                    if item.id != items.last?.id { AdminRowDivider() }
+                }
+                .dsStaggerIn(i)
             }
         }
     }
@@ -446,7 +403,7 @@ private struct SmsAttemptRowMain: View {
             Spacer(minLength: 0)
             if navigates { DSChevron().padding(.top, DS.Spacing.sm) }
         }
-        .padding(.vertical, DS.Spacing.sm + 2)
+        .padding(.vertical, DS.Spacing.smd)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -515,19 +472,30 @@ private struct SmsPhoneContextMenu<Actions: View>: ViewModifier {
 
 // MARK: - الصفحة الكاملة
 
-/// كل الأرقام في الفترة مع بحث بالاسم أو الرقم
+/// كل الأرقام في الفترة مع بحث بالاسم أو الرقم — والمريبة أولاً بأفعالها
 struct SmsAttemptsListPage: View {
     @ObservedObject private var store = SmsLoginAttemptsStore.shared
+    @StateObject private var suspicious = SmsSuspiciousActions()
+    @EnvironmentObject private var authVM: AuthViewModel
     @State private var query = ""
 
     var body: some View {
         AdminHubPage {
             AnyView(SmsAttemptsListHeader(query: $query, store: store))
         } content: {
-            AnyView(SmsAttemptsListContent(store: store, query: query))
+            AnyView(SmsAttemptsListContent(store: store, query: query, actions: suspicious))
         }
-        .refreshable { await store.refresh(force: true) }
-        .task { await store.refresh() }
+        .refreshable { await reload(force: true) }
+        .task { await reload(force: false) }
+        .modifier(SmsSuspiciousAlerts(actions: suspicious))
+        .debugStackProbe("SmsAttemptsListPage", limitKB: DebugStackLimit.page)
+    }
+
+    /// المحاولات + الأرقام الممنوعة (لـ«ممنوع من التسجيل» على البطاقة — لمن يمنع فقط)
+    private func reload(force: Bool) async {
+        async let attempts: Void = store.refresh(force: force)
+        if authVM.canManageBannedPhones { await authVM.fetchBannedPhones() }
+        await attempts
     }
 }
 
@@ -552,30 +520,27 @@ private struct SmsAttemptsListHeader: View {
 private struct SmsAttemptsListContent: View {
     @ObservedObject var store: SmsLoginAttemptsStore
     let query: String
+    @ObservedObject var actions: SmsSuspiciousActions
     @EnvironmentObject var memberVM: MemberViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            SmsAttemptsPeriodSwitch(store: store)
-            if let result = store.current {
-                SmsAttemptsTotalsView(totals: result.totals)
-                let rows = filtered(result.items)
-                if result.items.isEmpty {
-                    SmsAttemptsEmpty()
-                } else if rows.isEmpty {
-                    DSEmptyView(L10n.t("لا نتائج", "No results"), message: L10n.t("جرّب اسماً أو رقماً آخر", "Try another name or number"),
-                                icon: "magnifyingglass", style: .inline)
-                } else {
-                    SmsAttemptsRows(items: rows, days: result.days,
-                                    backTitle: L10n.t("طلبات رمز الدخول", "Sign-in code requests"))
+        let result = store.current
+        let rows = result.map { filtered($0.items) } ?? []
+        let flagged = rows.filter(\.suspicious)
+        let others = rows.filter { !$0.suspicious }
+        VStack(alignment: .leading, spacing: DS.Hub.sectionGap) {
+            // أعلى الصفحة: المعنى و«تم الاطلاع على الكل» (التنبيهات لا الفترة — تبقى ولو لم تُحمَّل المحاولات)
+            AnyView(SmsSuspiciousBanner(suspiciousInPeriod: result?.items.filter(\.suspicious).count ?? 0))
+            AnyView(SmsAttemptsPeriodCard(store: store))
+            if let result {
+                if !flagged.isEmpty {
+                    AnyView(SmsSuspiciousSection(items: flagged, days: result.days, actions: actions))
                 }
-                SmsAttemptsNote(result: result)
-            } else {
-                SmsAttemptsStatus(store: store)
+                AnyView(SmsAttemptsOthersSection(result: result, rows: others, hasFlagged: !flagged.isEmpty,
+                                                 searching: !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .adminCard()
     }
 
     /// بالاسم (من الرد أو من الشجرة) أو بخانات الرقم الظاهرة
@@ -590,6 +555,58 @@ private struct SmsAttemptsListContent: View {
         return items.filter { item in
             let names = [item.name, item.profileId.flatMap { memberVM.member(byId: $0)?.fullName }].compactMap { $0 }
             return NameSearch.matches(query: q, any: names)
+        }
+    }
+}
+
+/// الفترة والمجاميع (أرقام · طلبات · غير مسجّلة · مشبوهة) — أو حال التحميل
+private struct SmsAttemptsPeriodCard: View {
+    @ObservedObject var store: SmsLoginAttemptsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.md) {
+            SmsAttemptsPeriodChips(store: store)
+            if let result = store.current {
+                SmsAttemptsTotalsView(totals: result.totals)
+            } else {
+                SmsAttemptsStatus(store: store)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adminCard()
+    }
+}
+
+/// بقية الأرقام صفوفاً (المريبة فوق ببطاقاتها) + ملاحظة الحفظ
+private struct SmsAttemptsOthersSection: View {
+    let result: SmsLoginAttempts
+    let rows: [SmsLoginAttempts.Item]
+    let hasFlagged: Bool
+    let searching: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Hub.sectionHeadingGap) {
+            AdminSectionLabel(title: hasFlagged ? L10n.t("بقية الأرقام", "Other numbers") : L10n.t("الأرقام", "Numbers"))
+            VStack(alignment: .leading, spacing: DS.Spacing.md) {
+                if result.items.isEmpty {
+                    SmsAttemptsEmpty()
+                } else if rows.isEmpty {
+                    if searching && !hasFlagged {
+                        DSEmptyView(L10n.t("لا نتائج", "No results"), message: L10n.t("جرّب اسماً أو رقماً آخر", "Try another name or number"),
+                                    icon: "magnifyingglass", style: .inline)
+                    } else {
+                        Text(L10n.t("لا أرقام غير المريبة في هذه الفترة.", "No other numbers in this period."))
+                            .dsFont(.subtitle)
+                            .foregroundColor(DS.Color.textTertiary)
+                    }
+                } else {
+                    SmsAttemptsRows(items: rows, days: result.days,
+                                    backTitle: L10n.t("طلبات رمز الدخول", "Sign-in code requests"))
+                }
+                SmsAttemptsNote(result: result)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .adminCard()
         }
     }
 }

@@ -11,14 +11,28 @@ import PhotosUI
 struct OccasionComposerView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @EnvironmentObject var memberVM: MemberViewModel
-    @StateObject private var vm = OccasionComposerViewModel()
-    /// القالب المختار في «تصميم بطاقة» (نافذة «إنشاء») — nil = الافتراضي
-    var startTemplateId: String? = nil
+    @StateObject private var vm: OccasionComposerViewModel
+    /// المصمّم على الإعلان المختار وحده: بلا قائمة الإعلانات، والعنوان اسمه (المالك ٢٠٢٦-١١-٠٨)
+    var lockedTemplate = false
+
+    /// `startTemplateId`: الإعلان المختار في «تصميم إعلان» (نافذة «إنشاء») — nil = الأول
+    init(startTemplateId: String? = nil, lockedTemplate: Bool = false) {
+        _vm = StateObject(wrappedValue: OccasionComposerViewModel(startTemplateId: startTemplateId))
+        self.lockedTemplate = lockedTemplate && startTemplateId != nil
+    }
     @StateObject private var diwaniyasVM = DiwaniyasViewModel()
     @StateObject private var familyNamesVM = FamilyNamesViewModel()
     @ObservedObject private var kit = OccasionKit.shared
     @State private var pickerItem: PhotosPickerItem?
     @State private var showMemberPicker = false
+    /// نص البحث في مربّع اختيار العضو
+    @State private var memberSearch = ""
+    /// المرشّحون: في الوفاة والتعزية المتوفون أولاً (كما كان البحث القديم)
+    private var memberPickerCandidates: [FamilyMember] {
+        let all = vm.family.members
+        guard vm.isDeath || vm.template.kind == .solace else { return all }
+        return all.filter { $0.isDeceased == true } + all.filter { $0.isDeceased != true }
+    }
     /// «إعلان عزاء»: قسم «بيانات العزاء» (التشييع، بداية العزاء، العزاءان، الدعاء) مطوي افتراضياً
     @State private var condolenceExpanded = false
     /// المعاينة مكبّرة لفحص التصميم (طلب المالك ٢٠٢٦-١٠-١٧ «لمن انزل تحت يكبر القالب»)
@@ -61,19 +75,17 @@ struct OccasionComposerView: View {
             if authVM.canModerate {
                 composer
             } else {
-                DSEmptyView(L10n.t("هذي الصفحة للإدارة والمشرفين", "Admins and moderators only"),
+                DSEmptyView(L10n.t("هذه الصفحة للإدارة والمشرفين", "Admins and moderators only"),
                             icon: "lock.fill")
             }
         }
         // الرأس الموحّد: العنوان، وفي الطرف حفظ الصورة (الأساسي) والمشاركة
-        .dsSubPageHeader(L10n.t("بطاقات التهنئة والتعزية", "Greeting & condolence cards"), icon: "") {
+        .dsSubPageHeader(lockedTemplate ? vm.template.title : L10n.t("بطاقات التهنئة والتعزية", "Greeting & condolence cards"),
+                         icon: "") {
             if authVM.canModerate { headerActions }
         }
         .task(id: vm.assetKey) { await vm.prepareAssets() }
         .task { await loadData() }
-        .onAppear {
-            if let id = startTemplateId, let t = OccasionTemplate.all.first(where: { $0.id == id }) { vm.select(t) }
-        }
         .onChange(of: memberVM.membersVersion) { _ in
             vm.updateFamily(memberVM.allMembers)
         }
@@ -83,12 +95,30 @@ struct OccasionComposerView: View {
         .sheet(item: $vm.shareItem) { item in
             OccasionShareSheet(items: [item.url])
         }
-        .sheet(isPresented: $showMemberPicker) {
-            OccasionMemberPickerSheet(family: vm.family, preferDeceased: vm.isDeath || vm.template.kind == .solace) { m in
-                withAnimation(DS.Anim.quick) { vm.pickMember(m) }
-            }
+        // مربّع اختيار العضو الموحّد (`DSMemberPickerBox`) بدل صفحة النظام السفلية (طلب المالك ٢٠٢٦-١١-١١)
+        .dsCenterBox(isPresented: $showMemberPicker) {
+            DSMemberPickerBox(
+                title: L10n.t("اختيار من الشجرة", "Pick from the tree"),
+                subtitle: L10n.t("صاحب المناسبة", "The person of the occasion"),
+                icon: "magnifyingglass",
+                candidates: memberPickerCandidates,
+                search: $memberSearch,
+                listsAllWhenEmpty: false,
+                hintTitle: L10n.t("اكتب الاسم للبحث في شجرة العائلة", "Type a name to search the family tree"),
+                noMatchTitle: L10n.t("لم يُعثر على أحد بهذا الاسم", "No one with this name"),
+                emptyMessage: L10n.t("يمكن كتابة الاسم يدوياً.", "You can type the name yourself."),
+                onPick: { m in
+                    withAnimation(DS.Anim.quick) { vm.pickMember(m) }
+                    showMemberPicker = false
+                    memberSearch = ""
+                },
+                onCancel: {
+                    showMemberPicker = false
+                    memberSearch = ""
+                })
         }
-        .alert(vm.message ?? "", isPresented: Binding(
+        // التنبيه الموحّد (`dsAlert`) بدل تنبيه النظام
+        .dsAlert(vm.message ?? "", isPresented: Binding(
             get: { vm.message != nil },
             set: { if !$0 { vm.message = nil } }
         )) {
@@ -98,6 +128,8 @@ struct OccasionComposerView: View {
 
     /// أعضاء الشجرة + الديوانيات + أسماء العوائل (للاختيارات)
     private func loadData() async {
+        // الإعلانات والنماذج والنصوص من السيرفر (`occasion_designer`)
+        await AppConfigValues.shared.refresh()
         vm.updateFamily(memberVM.allMembers)
         if memberVM.allMembers.isEmpty {
             await memberVM.fetchAllMembers()
@@ -133,10 +165,8 @@ struct OccasionComposerView: View {
                         }
                     // «رابط الموقع» — روابط عامة لمولّد المنشورات على الموقع (المالك والمدير، نفس صلاحية
                     // جدول occasion_links). من النسخة المحلية (٢٠٢٦-١٠-١٢)؛ main ما فيه مقابل في التطبيق.
-                    if authVM.isAdmin {
-                        OccasionLinksSection()
-                    }
-                    templateSection
+                    // «رابط الموقع» انتقل لمربّع «تصميم إعلان» في «المناسبات والإعلانات» (المالك ٢٠٢٦-١١-٠٨)
+                    if !lockedTemplate { templateSection }
                     if vm.template.models.count > 1 { modelSection }
                     placementSection
                     detailsSection
@@ -268,7 +298,7 @@ struct OccasionComposerView: View {
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(L10n.t("معاينة المنشور", "Post preview"))
-                    .accessibilityHint(L10n.t("اسحب لتحت أو لفوق لتكبير المعاينة أو تصغيرها — تبقى بالحجم اللي تختاره",
+                    .accessibilityHint(L10n.t("اسحب للأسفل أو للأعلى لتكبير المعاينة أو تصغيرها، وتبقى بالحجم المختار",
                                               "Drag down or up to resize the preview — it stays at the size you choose"))
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { setPreviewExpanded(!previewExpanded) }
@@ -352,7 +382,7 @@ struct OccasionComposerView: View {
 
     private var templateSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("القالب", "Template"), icon: "square.grid.2x2.fill")
+            DSBoxSectionTitle(title: L10n.t("القالب", "Template"), icon: "square.grid.2x2.fill")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: DS.Spacing.sm) {
                     ForEach(vm.templates) { t in
@@ -363,7 +393,7 @@ struct OccasionComposerView: View {
                         .frame(width: 104)
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, DS.Spacing.xxs)
             }
         }
     }
@@ -372,7 +402,7 @@ struct OccasionComposerView: View {
 
     private var modelSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("النموذج", "Design"), icon: "rectangle.on.rectangle")
+            DSBoxSectionTitle(title: L10n.t("النموذج", "Design"), icon: "rectangle.on.rectangle")
             HStack(spacing: DS.Spacing.sm) {
                 ForEach(vm.template.models) { m in
                     modelCard(m)
@@ -395,29 +425,46 @@ struct OccasionComposerView: View {
 
     private var placementSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("مكان النشر", "Where to post"), icon: "paperplane.fill")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: DS.Spacing.sm)], spacing: DS.Spacing.sm) {
+            DSBoxSectionTitle(title: L10n.t("مكان النشر", "Where to post"), icon: "paperplane.fill")
+            // قائمة منسدلة (المالك ٢٠٢٦-١١-٠٨) بدل مربعات الأماكن العشرة: الاسم والمقاس، والمختار عليه علامة
+            Menu {
                 ForEach(vm.placements) { p in
-                    let on = p.id == vm.placement.id
                     Button {
                         withAnimation(DS.Anim.quick) { vm.placement = p }
                     } label: {
-                        // نفس عائلة مربعات القالب والنموذج: حدّ شعري، والمختار ذهبي
+                        // الاسم وتحته المقاس (سطر ثانٍ في القائمة)، والمختار عليه علامة
                         Text(p.title)
-                            .dsFont(.chip)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .foregroundColor(DS.Color.textPrimary)
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .padding(.horizontal, DS.Spacing.sm)
-                            .occasionTile(isOn: on)
+                        Text(p.size.label)
+                        if p.id == vm.placement.id { Image(systemName: "checkmark") }
                     }
-                    .buttonStyle(DSScaleButtonStyle())
-                    .accessibilityAddTraits(on ? .isSelected : [])
                 }
+            } label: {
+                HStack(spacing: DS.Spacing.sm) {
+                    Image(systemName: "paperplane.fill")
+                        .dsGlyph(DS.Glyph.sm)
+                        .foregroundColor(DS.Color.accent)
+                    VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
+                        Text(vm.placement.title)
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.textPrimary)
+                            .lineLimit(1)
+                        Text(vm.size.label)
+                            .dsFont(.caption)
+                            .foregroundColor(DS.Color.textSecondary)
+                    }
+                    Spacer(minLength: DS.Spacing.sm)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .dsGlyph(DS.Glyph.xs)
+                        .foregroundColor(DS.Color.textTertiary)
+                }
+                .padding(.horizontal, DS.Spacing.md)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .occasionTile(isOn: false)
+                .contentShape(Rectangle())
             }
+            .accessibilityLabel(L10n.t("مكان النشر: \(vm.placement.title)", "Where to post: \(vm.placement.title)"))
             if vm.size == .story {
-                Text(L10n.t("الستوري فيه هوامش أمان فوق وتحت حتى ما تغطيها أزرار التطبيقات.",
+                Text(L10n.t("في الستوري هوامش أمان أعلى وأسفل حتى لا تغطيها أزرار التطبيقات.",
                             "Stories keep safe margins at the top and bottom so app buttons don't cover the content."))
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.textTertiary)
@@ -429,7 +476,7 @@ struct OccasionComposerView: View {
 
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("التفاصيل", "Details"), icon: "checklist")
+            DSBoxSectionTitle(title: L10n.t("التفاصيل", "Details"), icon: "checklist")
             // «الألوان» أول شي في التفاصيل (مثل الموقع)
             if vm.template.hasPalette { paletteCard }
             HStack(spacing: DS.Spacing.sm) {
@@ -478,6 +525,34 @@ struct OccasionComposerView: View {
         OccasionFormCard(title: title, hint: L10n.t("سطر واحد — إذا طال ينختصر تلقائياً", "One line — shortened automatically if long")) {
             if let m = vm.member {
                 selectedMember(m)
+                // تعديل الاسم بعد اختياره من الشجرة (طلب المالك ٢٠٢٦-١١-٢٤ «ابى احرر الاسم بعد الاختيار»):
+                // يبدأ بالصيغة الظاهرة، والصورة وصلة القرابة تبقى من العضو
+                if vm.nameEdited != nil {
+                    OccasionTextInput(
+                        text: Binding(get: { vm.nameEdited ?? "" }, set: { vm.nameEdited = $0 }),
+                        placeholder: L10n.t("اكتب الاسم كما تبيه يطلع", "Type the name as it should appear")
+                    )
+                    Button {
+                        withAnimation(DS.Anim.quick) { vm.resetEditedName() }
+                    } label: {
+                        Label(L10n.t("رجوع لاسم الشجرة", "Back to the tree name"), systemImage: "arrow.uturn.backward")
+                            .dsFont(.label)
+                            .foregroundColor(DS.Color.primary)
+                            .frame(minHeight: DS.Icon.tapTarget)
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    Button {
+                        withAnimation(DS.Anim.quick) { vm.beginEditingName() }
+                    } label: {
+                        Label(L10n.t("تعديل الاسم", "Edit the name"), systemImage: "pencil")
+                            .dsFont(.rowTitle)
+                            .foregroundColor(DS.Color.primary)
+                            .frame(maxWidth: .infinity, minHeight: DS.Icon.tapTarget)
+                            .background(Capsule().stroke(DS.Color.primary.opacity(DS.Opacity.tintStroke), lineWidth: 1))
+                    }
+                    .buttonStyle(DSScaleButtonStyle())
+                }
             } else {
                 if vm.gender == .male && !vm.family.isEmpty {
                     Button {
@@ -519,7 +594,7 @@ struct OccasionComposerView: View {
     private func selectedMember(_ m: FamilyMember) -> some View {
         HStack(spacing: DS.Spacing.md) {
             OccasionMemberAvatar(member: m, size: 44)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
                 Text(vm.nameResolution("name")?.option.name ?? vm.name)
                     .dsFont(.rowTitle)
                     .foregroundColor(DS.Color.textPrimary)
@@ -528,6 +603,9 @@ struct OccasionComposerView: View {
                     Text(m.isDeceased == true
                          ? L10n.t("من شجرة العائلة · متوفى", "From the family tree · deceased")
                          : L10n.t("من شجرة العائلة", "From the family tree"))
+                    if vm.hasEditedName {
+                        Text(L10n.t("· الاسم معدّل", "· name edited"))
+                    }
                     if vm.isLoadingMemberPhoto {
                         ProgressView().controlSize(.mini)
                     }
@@ -668,7 +746,7 @@ struct OccasionComposerView: View {
             deceasedCard
             nameSection(vm.gender == .male ? L10n.t("اسم الفقيد", "Name of the deceased") : L10n.t("اسم الفقيدة", "Name of the deceased"))
             OccasionFormCard(title: L10n.t("صلة القرابة", "Relation"),
-                             hint: vm.showsPhoto ? L10n.t("اتركها فاضية لتختفي", "Leave empty to hide") : onlyWithPhotoHint) {
+                             hint: vm.showsPhoto ? L10n.t("اتركها فارغة لتختفي", "Leave empty to hide") : onlyWithPhotoHint) {
                 OccasionQuickText(text: vm.text("relation"), suggestions: vm.relationSuggestions,
                                   placeholder: L10n.t("مثال: والد كل من: الأسماء", "e.g. والد كل من: الأسماء"))
                 formatPicker("relation")
@@ -765,7 +843,7 @@ struct OccasionComposerView: View {
     private var relationsCard: some View {
         let male = vm.gender == .male
         return OccasionFormCard(title: L10n.t("القرابة", "Relatives"),
-                                hint: noPhotoOnlyHint ?? L10n.t("أي سطر فاضي يختفي", "Empty lines are hidden")) {
+                                hint: noPhotoOnlyHint ?? L10n.t("أي سطر فارغ يختفي", "Empty lines are hidden")) {
             OccasionFieldLabel(L10n.t("الزوج / الزوجة", "Spouse"))
             OccasionTextInput(text: vm.text("rel1"), placeholder: male ? "زوج: الاسم" : "زوجة: الاسم")
             formatPicker("rel1")
@@ -828,7 +906,7 @@ struct OccasionComposerView: View {
             OccasionQuickText(
                 text: vm.venuePlace(side),
                 suggestions: vm.diwaniyas.map(\.title) + OccasionChoices.venuePresets(vm.gender),
-                placeholder: L10n.t("ديوان العائلة (إذا تركته فاضي)", "Family diwaniya (if left empty)")
+                placeholder: L10n.t("ديوان العائلة (إذا تُرك فارغاً)", "Family diwaniya (if left empty)")
             )
             OccasionFieldLabel(L10n.t("المنطقة", "Area"))
             OccasionAreaField(text: vm.text("\(side)Area"))
@@ -918,7 +996,7 @@ struct OccasionComposerView: View {
 
     private var photoSection: some View {
         VStack(alignment: .leading, spacing: DS.Spacing.md) {
-            DSSectionHeader(title: L10n.t("الصورة", "Photo"), icon: "photo.fill")
+            DSBoxSectionTitle(title: L10n.t("الصورة", "Photo"), icon: "photo.fill")
             if vm.template.photoOptional {
                 OccasionChips(options: [L10n.t("مع صورة", "With photo"), L10n.t("بدون صورة", "No photo")],
                               selected: vm.withPhoto ? 0 : 1) { i in
@@ -926,9 +1004,9 @@ struct OccasionComposerView: View {
                 }
                 if !vm.showsPhoto {
                     Text(vm.isDeath
-                         ? L10n.t("مكان الصورة يروح للآية والقرابة والتشييع وبداية العزاء — بخط أكبر.",
+                         ? L10n.t("تُعطى مساحة الصورة للآية والقرابة والتشييع وبداية العزاء بخط أكبر.",
                                   "The photo's space goes to the verse, relatives, funeral and condolence start, in larger type.")
-                         : L10n.t("مكان الصورة يروح للآية والاسم — بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
+                         : L10n.t("تُعطى مساحة الصورة للآية والاسم بخط أكبر.", "The photo's space goes to the verse and the name, in larger type."))
                         .font(DS.Font.caption1)
                         .foregroundColor(DS.Color.textTertiary)
                 }
@@ -949,7 +1027,7 @@ struct OccasionComposerView: View {
                         .dsFont(.rowTitle)
                         .foregroundColor(DS.Color.textOnPrimary)
                         .padding(.horizontal, DS.Spacing.lg)
-                        .padding(.vertical, DS.Spacing.sm + 2)
+                        .padding(.vertical, DS.Spacing.smd)
                         .background(Capsule().fill(DS.Color.primary))
                 }
                 if vm.photo.image != nil {
@@ -963,7 +1041,7 @@ struct OccasionComposerView: View {
                 Spacer(minLength: 0)
             }
             if vm.photoFromMember {
-                Label(L10n.t("صورة العضو من شجرة العائلة — تقدر تغيّرها", "The member's photo from the family tree — you can change it"),
+                Label(L10n.t("صورة العضو من شجرة العائلة، ويمكن تغييرها", "The member's photo from the family tree — you can change it"),
                       systemImage: "checkmark.circle.fill")
                     .font(DS.Font.caption1)
                     .foregroundColor(DS.Color.success)
@@ -976,14 +1054,14 @@ struct OccasionComposerView: View {
                 photoSlider(L10n.t("يمين / يسار", "Left / right"), value: $vm.photo.x, range: 0...100)
                 photoSlider(L10n.t("فوق / تحت", "Up / down"), value: $vm.photo.y, range: 0...100)
             }
-            Text(L10n.t("الصورة تبقى على جهازك — ما تنرفع لأي مكان.", "The photo stays on your device — it isn't uploaded anywhere."))
+            Text(L10n.t("تبقى الصورة على الجهاز، ولا تُرفع إلى أي مكان.", "The photo stays on your device — it isn't uploaded anywhere."))
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textTertiary)
         }
     }
 
     private func photoSlider(_ title: String, value: Binding<CGFloat>, range: ClosedRange<CGFloat>) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: DS.Spacing.xxs) {
             Text(title)
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textSecondary)
@@ -1009,7 +1087,7 @@ struct OccasionComposerView: View {
                 OccasionRequiredHint(L10n.t("قبل الحفظ أكمل: ", "Before saving, fill in: ") + vm.missing.joined(separator: "، "))
                     .frame(maxWidth: .infinity)
             }
-            Text(L10n.t("الصورة تطلع ", "Exports at ") + "\(Int(vm.size.canvas.width))×\(Int(vm.size.canvas.height)) "
+            Text(L10n.t("الصورة بمقاس ", "Exports at ") + "\(Int(vm.size.canvas.width))×\(Int(vm.size.canvas.height)) "
                  + L10n.t("بكسل — جاهزة لـ ", "px — ready for ") + vm.placement.title)
                 .font(DS.Font.caption1)
                 .foregroundColor(DS.Color.textTertiary)

@@ -6,6 +6,8 @@ import PhotosUI
 // تفتحها «ورقة العضو» (`AdminMemberSheet`) من أزرار «بيانات ناقصة» و«مشكلات الشجرة» وصفوف «البيانات» و«النسب»:
 // ربط الأب، تاريخ الميلاد، الجنس، تاريخ الوفاة، الصورة، والاسم (كان في «صحة الشجرة»). صفحة المحطة نفسها حُذفت
 // (٢٠٢٦-١٠-٢٠) — «التالي ›» في الورقة يمشي في القائمة عضواً عضواً. المربّعات ونداءاتها كما هي.
+// إعادة تصميم الإدارة (٢٠٢٦-١١-٢٦، U13): كل حفظ يمرّ بـ`DebugAdminProbe.dryRun` (تجربة دور = نجاح مصطنع بلا كتابة)،
+// وما يُبلغ فشله (الوفاة، الصورة، الجنس) يبقى المربّع مفتوحاً بسطر الخطأ داخله (spec C.10) بدل الإغلاق بصمت.
 
 // MARK: - Link Father Sheet
 
@@ -19,6 +21,8 @@ struct LinkFatherSheet: View {
     @State private var isSaving = false
     @State private var selectedFather: FamilyMember?
     @State private var cache = ResultsCache()
+    /// نقد V3 م-ج٤: رفض السيرفر (حارس روابط العائلة…) سطر داخل المربّع، والمربّع يبقى مفتوحاً
+    @State private var failure: String?
 
     /// نتائج البحث محفوظة لكل (نص بحث + نسخة الأعضاء): المربّع يعيد بناء محتواه كلما
     /// تغيّر ارتفاعه، وفرز آلاف الأعضاء مع كل مرة يثقّل الفتح والتمرير
@@ -70,6 +74,9 @@ struct LinkFatherSheet: View {
             onCancel: { dismiss() }
         ) {
             StationMemberCard(member: member).dsStaggerIn(0)
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+            }
             fatherSection
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
@@ -147,13 +154,22 @@ struct LinkFatherSheet: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
+    /// نقد V3 م-ج٤: يغلق بعد النجاح فقط — الفشل برسالة السيرفر (`errorMessage`) داخل المربّع، ثم تُمسح
     private func save() {
-        guard let father = selectedFather else { return }
+        guard let father = selectedFather, !isSaving else { return }
+        if DebugAdminProbe.dryRun("updateMemberFather \(member.id) → \(father.id)") { dismiss(); return }
         isSaving = true
-        Task {
-            await memberVM.updateMemberFather(memberId: member.id, fatherId: father.id)
+        failure = nil
+        memberVM.errorMessage = nil
+        Task { @MainActor in
+            let ok = await memberVM.updateMemberFather(memberId: member.id, fatherId: father.id)
             isSaving = false
-            dismiss()
+            if ok {
+                dismiss()
+            } else {
+                failure = memberVM.errorMessage ?? L10n.t("تعذّر الحفظ. حاول مرة أخرى.", "Couldn't save. Try again.")
+                memberVM.errorMessage = nil
+            }
         }
     }
 }
@@ -212,14 +228,21 @@ struct EditBirthDateSheet: View {
 
             DSComposerSection(title: L10n.t("تاريخ الميلاد", "Birth Date"),
                               icon: "calendar", tint: DS.Color.palm, index: 1) {
-                StableWheelDatePicker(selection: $selectedDate, in: ...Date())
-                    .dsRowBox()
+                // صفّ التاريخ الموحّد + منتقي التاريخ الموحّد (بدل العجلة داخل المربّع)
+                DSDateFieldRow(icon: "calendar", title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                               hasDate: true, dateText: DSDateText.display(selectedDate)) {
+                    dsPresentDatePicker(title: L10n.t("تاريخ الميلاد", "Birth Date"),
+                                        initial: selectedDate, allowClear: false) { picked in
+                        if let picked { selectedDate = picked }
+                    }
+                }
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func save() {
+        if DebugAdminProbe.dryRun("updateMemberBirthDate \(member.id)") { dismiss(); return }
         isSaving = true
         Task {
             let dateString = Self.formatter.string(from: selectedDate)
@@ -359,6 +382,36 @@ struct EditGenderSheet: View {
     private static let startGender = "male"
     @State private var gender: String = EditGenderSheet.startGender
     @State private var isSaving = false
+    /// نقد V3 ح١: «أنثى» نقلٌ بين الشجرتين (`move_child_gender` يحذف ملفه) — لا يُنقل من له حساب
+    @ObservedObject private var accounts = AdminAccountsStore.shared
+    /// م-ج٢: جواب السيرفر `profile_has_login` — nil حتى يصل (أو إن فشل)
+    @State private var serverLogin: Bool?
+    @State private var checkingLogin = true
+
+    /// له حساب في التطبيق؟ nil = لا يُعرف بعد (السؤال جارٍ أو فشل)
+    private var account: Bool? {
+        AdminMemberCardLogic.appAccount(serverLogin: serverLogin, role: member.role.rawValue,
+                                        isViewer: member.id == memberVM.authVM?.currentUser?.id,
+                                        frozen: member.status == .frozen, linkedLogin: false,
+                                        inAccountsStore: accounts.info(member.id) != nil)
+    }
+
+    /// ما يمنع «أنثى» — nil = لا مانع (و«ذكر» يكتب العمود فقط)
+    private var femaleBlock: String? {
+        guard gender == "female" else { return nil }
+        switch account {
+        case true?:
+            return L10n.t("له حساب في التطبيق — لا يُنقل إلى شجرة النساء: النقل يحذف ملفه ويبقى حسابه بلا ملف.",
+                          "Has an app account — can't move to the women's tree: the move deletes the profile and orphans the account.")
+        case nil:
+            return checkingLogin
+                ? L10n.t("يتحقق من حسابه في التطبيق…", "Checking the app account…")
+                : L10n.t("تعذّر التحقق من حسابه في التطبيق — حاول بعد قليل.",
+                         "Couldn't check the app account — try again shortly.")
+        case false?:
+            return nil
+        }
+    }
 
     var body: some View {
         DSComposer(
@@ -367,7 +420,7 @@ struct EditGenderSheet: View {
             icon: "person.fill.questionmark",
             tint: DS.Color.actionNavy,
             actionTitle: L10n.t("حفظ", "Save"),
-            canSubmit: true,
+            canSubmit: femaleBlock == nil,
             isBusy: isSaving,
             hasUnsavedChanges: gender != Self.startGender,
             onSubmit: save,
@@ -381,7 +434,12 @@ struct EditGenderSheet: View {
                 .dsStaggerIn(1)
 
             // الأنثى مكانها شجرة النساء — كان الحفظ يكتب العمود فقط فتبقى في شجرة الرجال
-            if gender == "female" {
+            if let femaleBlock {
+                // السؤال جارٍ: سطر محايد لا خطأ
+                DSNoteCard(femaleBlock, icon: account == nil && checkingLogin ? "hourglass" : "person.crop.circle.badge.exclamationmark",
+                           tint: account == nil && checkingLogin ? DS.Color.textTertiary : DS.Color.error)
+                    .dsStaggerIn(2)
+            } else if gender == "female" {
                 DSNoteCard(L10n.t("ستُنقل إلى شجرة النساء تحت أبيها، بدون الرقم والصورة.",
                                   "She will move to the women's tree under her father, without phone and photo."),
                            tint: DS.Color.warning)
@@ -391,12 +449,19 @@ struct EditGenderSheet: View {
                 DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
+        .task {
+            checkingLogin = true
+            serverLogin = await memberVM.profileHasLogin(member.id)
+            checkingLogin = false
+        }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     @State private var failure: String?
 
     private func save() {
+        guard femaleBlock == nil else { return }
+        if DebugAdminProbe.dryRun("gender \(gender) \(member.id)") { dismiss(); return }
         isSaving = true
         failure = nil
         Task {
@@ -411,8 +476,14 @@ struct EditGenderSheet: View {
                 if let fatherId = member.fatherId { await memberVM.fetchChildren(for: fatherId) }
                 dismiss()
             } else {
-                await memberVM.updateMemberGender(memberId: member.id, gender: gender)
+                // كان الفشل يُسجَّل فقط ويُغلق المربّع فيبقى الجنس كما هو بصمت — الآن يبقى مفتوحاً برسالة السيرفر (K1)
+                memberVM.errorMessage = nil
+                let saved = await memberVM.updateMemberGender(memberId: member.id, gender: gender)
                 isSaving = false
+                guard saved else {
+                    failure = memberVM.errorMessage ?? FamilyTreeMenOnly.genderFailureMessage(serverMessage: nil)
+                    return
+                }
                 dismiss()
             }
         }
@@ -427,6 +498,8 @@ struct EditDeathDateSheet: View {
     @State private var selectedDate = Date()
     @State private var isSaving = false
     @State private var isUnknown = false
+    /// فشل الحفظ — سطر داخل المربّع (يبقى مفتوحاً)
+    @State private var failure: String?
     /// ما فُتح عليه المربّع (اليوم + «غير معروف») — «إلغاء» يسأل فقط إذا تغيّر (توصية أبل)
     private let startDay: String
     private let startUnknown: Bool
@@ -461,7 +534,7 @@ struct EditDeathDateSheet: View {
         DSComposer(
             title: L10n.t("تاريخ الوفاة", "Death Date"),
             subtitle: member.shortFullName,
-            icon: "calendar.badge.clock",
+            icon: "calendar.badge.minus",
             tint: DS.Color.textSecondary,
             actionTitle: L10n.t("حفظ", "Save"),
             canSubmit: true,
@@ -472,40 +545,48 @@ struct EditDeathDateSheet: View {
         ) {
             StationMemberCard(member: member).dsStaggerIn(0)
 
+            // صفّ التاريخ الموحّد: «بدون تاريخ» = «التاريخ غير معروف» (كان مفتاحاً)، والقلم يفتح المنتقي الموحّد
             DSComposerSection(title: L10n.t("تاريخ الوفاة", "Death Date"),
-                              icon: "calendar.badge.clock", tint: DS.Color.textSecondary, index: 1) {
-                StableWheelDatePicker(selection: $selectedDate, in: ...Date())
-                    .opacity(isUnknown ? DS.Opacity.disabled : 1)
-                    .disabled(isUnknown)
-                    .dsRowBox()
-
-                Toggle(isOn: $isUnknown.animation(DS.Anim.snappy)) {
-                    HStack(spacing: DS.Spacing.sm) {
-                        DSFieldIcon(name: "questionmark.circle.fill", tint: DS.Color.textSecondary)
-                            .accessibilityHidden(true)
-                        Text(L10n.t("التاريخ غير معروف", "Date unknown"))
-                            .dsFont(.rowTitle)
-                            .foregroundColor(DS.Color.textPrimary)
+                              icon: "calendar.badge.minus", tint: DS.Color.textSecondary, index: 1) {
+                DSDateFieldRow(icon: "calendar.badge.minus", title: L10n.t("تاريخ الوفاة", "Death Date"),
+                               hasDate: !isUnknown, dateText: DSDateText.display(selectedDate)) {
+                    // «بدون تاريخ» (= التاريخ غير معروف) داخل المنتقي
+                    dsPresentDatePicker(title: L10n.t("تاريخ الوفاة", "Death Date"),
+                                        initial: isUnknown ? nil : selectedDate, allowClear: !isUnknown) { picked in
+                        if let picked {
+                            selectedDate = picked
+                            withAnimation(DS.Anim.snappy) { isUnknown = false }
+                        } else {
+                            withAnimation(DS.Anim.snappy) { isUnknown = true }
+                        }
                     }
                 }
-                .tint(AppSection.admin.ink)
-                .dsRowBox()
+            }
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
         .environment(\.layoutDirection, LanguageManager.shared.layoutDirection)
     }
 
     private func save() {
+        if DebugAdminProbe.dryRun("death date \(isUnknown ? "unknown" : "set") \(member.id)") { dismiss(); return }
         isSaving = true
+        failure = nil
+        memberVM.errorMessage = nil
         Task {
             if isUnknown {
                 await memberVM.setDeathDateUnknown(memberId: member.id)
                 isSaving = false
+                if let err = memberVM.errorMessage {
+                    withAnimation(DS.Anim.quick) { failure = err }
+                    return
+                }
                 dismiss()
                 return
             }
             let birth = member.birthDate.flatMap { Self.formatter.date(from: $0) }
-            _ = await memberVM.updateMemberData(
+            let saved = await memberVM.updateMemberData(
                 memberId: member.id,
                 fullName: member.fullName,
                 phoneNumber: member.phoneNumber ?? "",
@@ -516,9 +597,15 @@ struct EditDeathDateSheet: View {
                 isPhoneHidden: member.isPhoneHidden ?? false
             )
             isSaving = false
+            guard saved else {
+                withAnimation(DS.Anim.quick) { failure = memberVM.errorMessage ?? Self.saveFailed }
+                return
+            }
             dismiss()
         }
     }
+
+    static let saveFailed = L10n.t("تعذّر الحفظ. تأكد من الاتصال ثم حاول مرة أخرى.", "Couldn't save. Check your connection and try again.")
 }
 
 /// صورة العضو — دائرة الصورة (مثل شعار مربّعات الإضافة) و«لا توجد صورة لهذا العضو»
@@ -529,6 +616,8 @@ struct EditMemberPhotoSheet: View {
     @State private var pickedItem: PhotosPickerItem?
     @State private var pickedImage: UIImage?
     @State private var isSaving = false
+    /// فشل الحفظ — سطر داخل المربّع (يبقى مفتوحاً)
+    @State private var failure: String?
 
     var body: some View {
         DSComposer(
@@ -550,6 +639,9 @@ struct EditMemberPhotoSheet: View {
                               icon: "photo.fill", tint: AppSection.admin.ink, index: 1) {
                 StationPhotoCircle(item: $pickedItem, image: pickedImage)
                 noPhotoButton
+            }
+            if let failure {
+                DSNoteCard(failure, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
             }
         }
         .onChange(of: pickedItem) { item in
@@ -582,20 +674,34 @@ struct EditMemberPhotoSheet: View {
     }
 
     private func markNoPhoto() {
+        if DebugAdminProbe.dryRun("setAvatarUnavailable \(member.id)") { dismiss(); return }
         isSaving = true
+        failure = nil
+        memberVM.errorMessage = nil
         Task {
             await memberVM.setAvatarUnavailable(memberId: member.id)
             isSaving = false
+            if let err = memberVM.errorMessage {
+                withAnimation(DS.Anim.quick) { failure = err }
+                return
+            }
             dismiss()
         }
     }
 
     private func save() {
         guard let img = pickedImage else { return }
+        if DebugAdminProbe.dryRun("uploadAvatar \(member.id)") { dismiss(); return }
         isSaving = true
+        failure = nil
+        memberVM.errorMessage = nil
         Task {
-            _ = await memberVM.uploadAvatar(image: img, for: member.id)
+            let uploaded = await memberVM.uploadAvatar(image: img, for: member.id)
             isSaving = false
+            guard uploaded else {
+                withAnimation(DS.Anim.quick) { failure = memberVM.errorMessage ?? EditDeathDateSheet.saveFailed }
+                return
+            }
             dismiss()
         }
     }
@@ -675,6 +781,7 @@ struct EditNameSheet: View {
     private func saveName() async {
         let trimmed = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        if DebugAdminProbe.dryRun("updateMemberName \(member.id)") { dismiss(); return }
         isSaving = true
         await memberVM.updateMemberName(memberId: member.id, fullName: trimmed)
         isSaving = false
