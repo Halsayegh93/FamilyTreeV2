@@ -378,9 +378,22 @@ nonisolated enum AdminMemberCardLogic {
         case needsServer
     }
 
+    /// طلب «الصلة بالعائلة» لا يُقرَّر من مربّع الكرت (٢٠٢٦-١١-٢٨): «الزوج/الزوجة من العائلة» (`outside_spouse`، يُربط
+    /// بـ`link_outside_spouse` من بطاقته) و«اسم الوالدة مكتوباً» (`outside_typed`، يحتاج اختيار الوالدة `p_mother_id`) —
+    /// `decide_lineage_request` بلا أم يرفضهما (`bad_payload` / `mother_required`)، فالزرّ يفتح بطاقتهما في «الوارد»
+    static func lineageRequestNeedsInboxCard(_ details: String?) -> Bool {
+        guard let data = details?.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let kind = obj["kind"] as? String else { return false }
+        return kind == "outside_spouse" || kind == "outside_typed"
+    }
+
     static func lineageSave(choice: Lineage, current: Lineage?, isProfile: Bool, hasPendingLineageRequest: Bool,
-                            requestInWorkflow: Bool = false, isPendingJoin: Bool, joinInWorkflow: Bool = false,
+                            requestInWorkflow: Bool = false, requestNeedsInboxCard: Bool = false,
+                            isPendingJoin: Bool, joinInWorkflow: Bool = false,
                             isMale: Bool) -> LineageSave {
+        // طلب الزوج/الوالدة المكتوبة: بطاقته في «الوارد» أياً كان الاختيار
+        if hasPendingLineageRequest && requestNeedsInboxCard { return .openInbox }
         if choice == current { return .current }
         switch choice {
         case .family:

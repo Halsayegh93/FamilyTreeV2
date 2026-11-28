@@ -913,6 +913,11 @@ struct AdminMemberLineageBox: View {
 
     private var workflowOn: Bool { adminRequestVM.approvalsWorkflowOn }
 
+    /// طلبه «الزوج/الزوجة من العائلة» أو «اسم الوالدة مكتوباً» — يُقرَّر من بطاقته في «الوارد» لا من هنا
+    private var needsInboxCard: Bool {
+        AdminMemberCardLogic.lineageRequestNeedsInboxCard(pendingRequest?.details)
+    }
+
     private var save: AdminMemberCardLogic.LineageSave {
         guard let choice else { return .current }
         let requestStage = !(pendingRequest?.stage ?? "").trimmingCharacters(in: .whitespaces).isEmpty
@@ -920,6 +925,7 @@ struct AdminMemberLineageBox: View {
         return AdminMemberCardLogic.lineageSave(choice: choice, current: family.lineage, isProfile: isProfile,
                                                 hasPendingLineageRequest: pendingRequest != nil && authVM.canApproveTreeRequests,
                                                 requestInWorkflow: workflowOn || requestStage,
+                                                requestNeedsInboxCard: needsInboxCard,
                                                 isPendingJoin: member.role == .pending, joinInWorkflow: workflowOn || joinStage,
                                                 isMale: !female)
     }
@@ -990,8 +996,11 @@ struct AdminMemberLineageBox: View {
             case .automatic:
                 DSNoteCard(automaticNote, icon: "arrow.triangle.branch", tint: DS.Color.info)
             case .openInbox:
-                DSNoteCard(L10n.t("الطلب في مسار الموافقات — القرار من «الوارد» بمراحله.",
-                                  "The request is in the approvals path — decide it in the inbox."),
+                DSNoteCard(needsInboxCard
+                           ? L10n.t("له طلب «استكمال التسجيل» معلّق — الربط من بطاقته في «الوارد».",
+                                    "A pending registration-completion request — link it from its inbox card.")
+                           : L10n.t("الطلب في مسار الموافقات — القرار من «الوارد» بمراحله.",
+                                    "The request is in the approvals path — decide it in the inbox."),
                            icon: "tray", tint: DS.Color.info)
             default:
                 EmptyView()
@@ -1081,7 +1090,7 @@ struct AdminMemberLineageBox: View {
         } else {
             face
         }
-        if pendingRequest != nil {
+        if pendingRequest != nil && !needsInboxCard {
             Text(L10n.t("له طلب «الصلة بالعائلة» معلّق — الموافقة تُنشئ صلته بأمّه كما في الطلب.",
                         "A pending relation request — approving links him to his mother as requested."))
                 .dsFont(.subtitle)

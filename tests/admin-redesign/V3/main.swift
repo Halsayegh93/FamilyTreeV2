@@ -236,6 +236,25 @@ check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPend
 check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPendingLineageRequest: false,
                     isPendingJoin: true, joinInWorkflow: true, isMale: true), .openInbox,
       "pending join inside the approvals path → open in the inbox")
+// ٢٠٢٦-١١-٢٨: طلب «الزوج/الزوجة من العائلة» (outside_spouse) أو «اسم الوالدة مكتوباً» (outside_typed) — لا يُقرَّر بـ
+// `decide_lineage_request` بلا أم/ربط؛ بطاقة «الوارد» نفسها (OutsideSpouseRequestCard / OutsideLineageRequestCard)
+check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPendingLineageRequest: true,
+                    requestNeedsInboxCard: true, isPendingJoin: false, isMale: true), .openInbox,
+      "spouse/typed request → open its inbox card, never decide_lineage_request from here")
+check(C.lineageSave(choice: .outsideHusband, current: .outsideHusband, isProfile: true, hasPendingLineageRequest: true,
+                    requestNeedsInboxCard: true, isPendingJoin: false, isMale: true), .openInbox,
+      "spouse request: the button opens the inbox even with the choice unchanged")
+check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPendingLineageRequest: false,
+                    requestNeedsInboxCard: true, isPendingJoin: false, isMale: true), .needsServer,
+      "no right to decide tree requests → no inbox shortcut from the lineage box")
+check(C.lineageSave(choice: .daughterSon, current: nil, isProfile: true, hasPendingLineageRequest: true,
+                    requestNeedsInboxCard: false, isPendingJoin: false, isMale: true), .decideRequest,
+      "mother request with its mother (legacy / daughter_daughter) → still decided here")
+check(C.lineageRequestNeedsInboxCard(#"{"kind":"outside_spouse","relation":"wife"}"#), true, "outside_spouse → inbox card")
+check(C.lineageRequestNeedsInboxCard(#"{"kind":"outside_typed","mother_name":"x"}"#), true, "outside_typed → inbox card")
+check(C.lineageRequestNeedsInboxCard(#"{"kind":"daughter_daughter","mother_id":"1"}"#), false, "daughter_daughter → here")
+check(C.lineageRequestNeedsInboxCard(#"{"mother_id":"1","father_name":"x"}"#), false, "legacy daughter's son → here")
+check(C.lineageRequestNeedsInboxCard(nil), false, "no details → here (server answers bad_payload)")
 // ت٥: خيارات لا تنطبق على جنسه مخفية
 check(C.lineageOptions(female: false), [Lin.family, .daughterSon, .outsideHusband], "a man: family · daughter's son · outside husband")
 check(C.lineageOptions(female: true), [Lin.family, .outsideWife], "a woman: family · outside wife")
