@@ -548,20 +548,12 @@ struct ProfileView: View {
         return DSFormCard(L10n.t("البيانات الشخصية", "My info"), icon: "person.text.rectangle.fill",
                           color: DS.Color.primary) {
             // كما كانت (dd34de39) — الاسم وحده تغيّر إلى «رمز العضو»؛ بأحجام إمكانية الوصول بالرمز وحده
-            HStack(spacing: DS.Spacing.sm) {
-                // «الخصوصية» في رأس «البيانات الشخصية» (طلب المالك ٢٠٢٦-١١-١٠، وأُعيدت ٢٠٢٦-١١-٢٨ — كانت قد اختفت
-                // فبقي المربّع بلا مدخل): الرقم · الصورة · الميلاد · الظهور، ولابن البنت ظهور الوالد والأبناء
-                headerChip(L10n.t("الخصوصية", "Privacy"), icon: "lock.fill", tint: DS.Color.primary,
-                           voiceOver: L10n.t("إعدادات الخصوصية", "Privacy settings")) { showPrivacySettings = true }
-                    .fixedSize(horizontal: true, vertical: false)   // الكلمة كاملة — لا «الخصو…»
-                // زرّا الرمز أيقونتان فقط (بجانب «الخصوصية» لا تتّسع ثلاث شرائح بأسمائها — كانت تُقصّ «الخصو…»)
-                if authVM.memberSees(.profileQR) {
-                    DSHeaderButton(symbol: "camera.viewfinder", label: L10n.t("مسح رمز العضو", "Scan member code"),
-                                   context: .surface, size: .toolbar, tint: DS.Color.accent) { showQRScanner = true }
-                    DSHeaderButton(symbol: "qrcode", label: L10n.t("عرض رمز العضو", "Show member code"),
-                                   context: .surface, size: .toolbar, tint: DS.Color.secondary) { showQRCode = true }
-                }
-            }
+            if authVM.memberSees(.profileQR) { HStack(spacing: DS.Spacing.sm) {
+                headerChip(L10n.t("مسح رمز", "Scan"), icon: "camera.viewfinder", tint: DS.Color.accent,
+                           voiceOver: L10n.t("مسح رمز العضو", "Scan member code")) { showQRScanner = true }
+                headerChip(L10n.t("رمز العضو", "Member code"), icon: "qrcode", tint: DS.Color.secondary,
+                           voiceOver: L10n.t("عرض رمز العضو", "Show member code")) { showQRCode = true }
+            } }
         } content: {
             LazyVGrid(columns: columns, spacing: DS.Spacing.md) {
                 ForEach(infoItems, id: \.title) { item in
