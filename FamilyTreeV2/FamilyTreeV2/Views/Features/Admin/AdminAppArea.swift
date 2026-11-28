@@ -113,9 +113,17 @@ struct AdminAppAreaPage: View {
         case .operations:
             fill = DS.Color.slateFill
             if loaded {
-                let word = AdminAppLogic.statusWord(maintenanceOn: s.maintenanceMode)
-                status = word.text + (word.tone == .ok ? " ✓" : "")
-                tone = word.tone == .ok ? .ok : .error
+                // كلمة مربّع «اليوم» نفسها (`AdminTodayLogic.appWord`): «الصيانة مفعّلة» · «الإشعارات موقوفة» · «يعمل للجميع ✓»
+                // — الدخول والأجهزة لهما مربّعاهما هنا
+                let word = AdminTodayLogic.appWord(maintenance: s.maintenanceMode,
+                                                   notificationsPaused: s.notificationsPaused == true).state
+                status = word.text + (word.tone == .good ? " ✓" : "")
+                switch word.tone {
+                case .urgent:    tone = .error
+                case .attention: tone = .warn
+                case .good:      tone = .ok
+                case .neutral:   tone = .plain
+                }
             }
             page = { [model] in AnyView(AdminAppGroupPage(tile: tile, model: model)) }
         case .sms:
