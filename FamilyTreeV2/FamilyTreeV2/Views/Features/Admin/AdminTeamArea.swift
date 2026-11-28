@@ -5,7 +5,7 @@ import SwiftUI
 
 // MARK: - «الفريق والصلاحيات» (كان «الفريق والأمان» — إعادة التصميم ٢٠٢٦-١١-٢٦ spec C.13 الوحدة U16، ثم ترتيب المالك
 // ٢٠٢٦-١١-٢٨: «الفريق» ← «الأعضاء»؛ رسائل رمز الدخول والأجهزة إلى «التطبيق والنظام ← النظام»، و«الاستخدام» إلى
-// «الإحصاءات ← في التطبيق». البطاقات أدناه نفسها؛ `AdminAccessStatusSection` يرسم بطاقة الحال في البيتين)
+// «الإحصاءات ← في التطبيق». منذ ٢٠٢٦-١١-٢٨ المجموعات مربّعات — `AdminGroupTiles.swift`)
 //
 // الرأس الكحلي («‹ الإدارة» · «الفريق والأمان ⌄» · «من يدير، ومن يدخل التطبيق»، وسطر «للاطلاع» للمدير) ثم ثلاث بطاقات:
 //  ١) بطاقة الحالة «الدخول والأمان» (المالك — `team.sms`/`team.registration`/`team.devices`): بدل الحلقات الثلاث ومربّعات
@@ -449,8 +449,13 @@ struct AdminTeamAreaView: View {
             ink = DS.Color.palm
             let matrix = MemberAccessStore.shared.matrix
             let custom = MemberCategory.allCases.filter { MemberAccess.isCustom(category: $0, matrix: matrix) }.count
-            number = AdminNumberText.grouped(MemberCategory.allCases.count)
-            status = custom > 0 ? L10n.t("\(custom) مخصّص", "\(custom) custom") : L10n.t("حسب الفئة", "By category")
+            // بلا رقم كبير (عدد الفئات ثابت لا حيّ): «5 فئات» أو «2 مخصّص»
+            let categories = MemberCategory.allCases.count
+            status = custom > 0
+                ? L10n.t("\(custom) مخصّص", "\(custom) custom")
+                : (L10n.isArabic ? AdminTodayLogic.counted(categories, one: "فئة واحدة", two: "فئتان", few: "فئات",
+                                                           many: "فئة", single: "فئة")
+                                 : "\(categories) categories")
             tone = custom > 0 ? .warn : .plain
             page = { AnyView(AdminTeamGroupPage(tile: .memberAccess)) }
         case .registration:
@@ -482,103 +487,6 @@ struct AdminTeamGroupPage: View {
             AnyView(MemberAccessCategoriesCard())
         }
         .debugStackProbe("AdminTeamGroupPage", limitKB: DebugStackLimit.page)
-    }
-}
-
-// MARK: - بطاقة الحال لبيوت الدخول (مشتركة: «الفريق والصلاحيات» و«التطبيق والنظام»)
-
-/// بطاقة حال بيوت «الدخول»: صفّ لكل بيت بكلمة حاله من مخزنه (رسائل رمز الدخول · محاولات مريبة · التسجيل والمنع · الأجهزة
-/// والإشعارات). كانت كلها في «الفريق والأمان»؛ منذ ٢٠٢٦-١١-٢٨ التسجيل في «الفريق والصلاحيات» والباقي في «التطبيق والنظام ←
-/// النظام». كل صفّ بخانته في جدول الأدوار كما كان (`team.sms`/`team.registration`/`team.devices` — للمالك)، وتجلب البطاقة
-/// مخازنها هي — كل مخزن وحده (فشل واحد لا يوقف الباقي)
-struct AdminAccessStatusSection: View {
-    enum Row: Hashable { case sms, registration, devices }
-
-    let rows: Set<Row>
-    let title: String
-    /// يزيد مع سحب الصفحة للتحديث — البطاقة تعيد جلب مخازنها بالقوة
-    var refreshToken: Int = 0
-
-    static var registrationTitle: String { L10n.t("التسجيل", "Sign-up") }
-    static var systemTitle: String { L10n.t("الدخول والإشعارات", "Sign-in and notifications") }
-
-    @EnvironmentObject var authVM: AuthViewModel
-    @EnvironmentObject var appSettingsVM: AppSettingsViewModel
-    @EnvironmentObject var notificationVM: NotificationViewModel
-    @ObservedObject private var sms = SmsBalanceStore.shared
-    @ObservedObject private var devices = AdminDeviceReachStore.shared
-    /// إعدادات التسجيل (`fetchSettings` لا يُبلغ الفشل — وصلت = `updatedAt`)
-    @State private var settingsHealth: AdminStoreHealth = .idle
-    /// الأرقام الممنوعة (`fetchBannedPhones` لا يُبلغ الفشل — انتهى بلا اتصال = فشل، كصفحة المنع)
-    @State private var bansHealth: AdminStoreHealth = .idle
-
-    private var seesSms: Bool { rows.contains(.sms) && authVM.adminSees(.teamSms) }
-    private var seesRegistration: Bool { rows.contains(.registration) && authVM.adminSees(.teamRegistration) }
-    private var seesDevices: Bool { rows.contains(.devices) && authVM.adminSees(.teamDevices) }
-
-    var body: some View {
-        let facts = self.facts
-        if facts.showsCard {
-            AdminTeamStatusCard(title: title, facts: facts, retry: retryFailed)
-                .task { await reload(force: false) }
-                .onChange(of: refreshToken) { _ in Task { await reload(force: true) } }
-        }
-    }
-
-    private var facts: AdminTeamLogic.Facts {
-        let reach = devices.stats
-        return AdminTeamLogic.Facts(
-            seesSms: seesSms, seesRegistration: seesRegistration, seesDevices: seesDevices,
-            sms: sms.adminHealth, smsLevel: sms.adminLevel, balance: sms.status?.balance,
-            daysLeft: sms.overview?.daysLeft,
-            suspicious: notificationVM.notifications.filter { !$0.read && $0.kind == AdminNotices.smsSuspicious }.count,
-            settings: AdminTeamLogic.seeded(settingsHealth, hasData: appSettingsVM.settings.updatedAt != nil),
-            registrationOpen: appSettingsVM.settings.allowNewRegistrations,
-            bans: AdminTeamLogic.seeded(bansHealth, hasData: !authVM.bannedPhones.isEmpty), bannedCount: authVM.bannedPhones.count,
-            devices: devices.adminHealth, devicesTotal: reach?.total ?? 0, devicesReach: reach?.reach ?? 0,
-            devicesFailed: reach?.invalid ?? 0)
-    }
-
-    private func reload(force: Bool) async {
-        await withTaskGroup(of: Void.self) { group in
-            if seesSms { group.addTask { @MainActor in await loadSms(force: force) } }
-            if seesDevices { group.addTask { @MainActor in await devices.refresh(force: force) } }
-            if seesRegistration {
-                group.addTask { @MainActor in await loadSettings() }
-                group.addTask { @MainActor in await loadBans() }
-            }
-        }
-    }
-
-    /// «تعذّر التحميل ↻» في رأس البطاقة: يعيد جلب ما فشل وحده
-    private func retryFailed() {
-        Task {
-            await withTaskGroup(of: Void.self) { group in
-                if seesSms, sms.adminHealth.canRetry { group.addTask { @MainActor in await loadSms(force: true) } }
-                if seesDevices, devices.adminHealth.canRetry {
-                    group.addTask { @MainActor in await devices.refresh(force: true) }
-                }
-                if seesRegistration, settingsHealth.canRetry { group.addTask { @MainActor in await loadSettings() } }
-                if seesRegistration, bansHealth.canRetry { group.addTask { @MainActor in await loadBans() } }
-            }
-        }
-    }
-
-    private func loadSms(force: Bool) async {
-        await sms.refresh(force: force)
-        if sms.state == .loaded, force || AdminTeamClock.smsLoadedAt == nil { AdminTeamClock.smsLoadedAt = Date() }
-    }
-
-    private func loadSettings() async {
-        settingsHealth = AdminTeamLogic.seeded(settingsHealth, hasData: appSettingsVM.settings.updatedAt != nil).beginning()
-        await appSettingsVM.fetchSettings()
-        settingsHealth = settingsHealth.ending(success: appSettingsVM.settings.updatedAt != nil)
-    }
-
-    private func loadBans() async {
-        bansHealth = AdminTeamLogic.seeded(bansHealth, hasData: !authVM.bannedPhones.isEmpty).beginning()
-        await authVM.fetchBannedPhones()
-        bansHealth = bansHealth.ending(success: NetworkMonitor.shared.isConnected)
     }
 }
 
@@ -614,64 +522,6 @@ struct AdminUsageSection: View {
         } else {
             usageHealth = usageHealth.ending(success: false)
         }
-    }
-}
-
-// MARK: - بطاقة الحالة «الدخول والأمان»
-
-/// رأسها حبّة كلمة بحال مخازنها، وتحتها صفّ لكل بيت — الصفّ كله لمسة واحدة تفتح بيته (الحبّة جزء منه — spec A.7)
-struct AdminTeamStatusCard: View {
-    var title: String = L10n.t("الدخول والأمان", "Sign-in and security")
-    let facts: AdminTeamLogic.Facts
-    /// حبّة الرأس «تعذّر التحميل ↻» تعيد جلب ما فشل
-    let retry: () -> Void
-
-    var body: some View {
-        let head = AdminTeamLogic.headWord(issues: AdminTeamLogic.issueCount(facts))
-        AdminSectionCard(title: title, spacing: 0,
-                         status: AdminStatePill(health: AdminTeamLogic.headHealth(facts), title: head.text,
-                                                tone: head.tone.pill, icon: head.icon, retry: retry)) {
-            AdminRowsCardBody {
-                if facts.seesSms {
-                    row(icon: "ellipsis.message.fill", tint: DS.Hub.securityFill,
-                        title: L10n.t("رسائل رمز الدخول", "Sign-in code messages"),
-                        line: AdminTeamLogic.smsLine(facts),
-                        word: AdminTeamLogic.smsWord(facts.smsLevel), health: facts.sms) { AnyView(AdminSmsView()) }
-                    if facts.suspicious > 0 {
-                        row(icon: "exclamationmark.triangle.fill", tint: DS.Hub.securityFill,
-                            title: L10n.t("محاولات دخول مريبة", "Suspicious sign-in attempts"),
-                            line: L10n.t("5 طلبات للرمز أو أكثر خلال ساعة", "5 or more code requests within an hour"),
-                            word: AdminTeamLogic.suspiciousWord(facts.suspicious), health: nil) {
-                            AnyView(SmsAttemptsListPage())
-                        }
-                    }
-                }
-                if facts.seesRegistration {
-                    row(icon: "person.badge.plus", tint: DS.Color.navyFill,
-                        title: L10n.t("التسجيل والمنع", "Sign-up and blocking"),
-                        line: AdminTeamLogic.registrationLine(facts),
-                        word: AdminTeamLogic.registrationWord(open: facts.registrationOpen), health: facts.settings) {
-                        AnyView(AdminRegistrationBansView())
-                    }
-                }
-                if facts.seesDevices {
-                    row(icon: "iphone", tint: DS.Color.sea,
-                        title: L10n.t("الأجهزة والإشعارات", "Devices and notifications"),
-                        line: AdminTeamLogic.devicesLine(facts),
-                        word: AdminTeamLogic.devicesWord(facts), health: facts.devices) { AnyView(AdminPushHealthView()) }
-                }
-            }
-        }
-    }
-
-    /// صفّ: مربّع الأيقونة + الاسم وسطر رقمه + حبّة الحال + سهم — يفتح بيته (خلف `AdminLazyPage` عبر `AdminTapWrap`)
-    private func row(icon: String, tint: Color, title: String, line: String, word: AdminTeamLogic.Word,
-                     health: AdminStoreHealth?, page: @escaping () -> AnyView) -> some View {
-        let pill = health.map { AdminStatePill(health: $0, title: word.text, tone: word.tone.pill, icon: word.icon) }
-            ?? AdminStatePill(title: word.text, tone: word.tone.pill, icon: word.icon)
-        return AdminTapWrap(tap: .page(page), feel: .row, label: AnyView(
-            AdminListRow(icon: icon, tint: tint, title: title, subtitle: line) { pill.fixedSize() }
-        ))
     }
 }
 

@@ -499,7 +499,6 @@ private struct AdminStatsDepartedSection: View {
     let tap: AdminPageTap
 
     var body: some View {
-        let incomplete = deathDates.incomplete
         AdminStatsSection(anchor: .departed) {
             AdminStatsCard {
                 AdminStatsRow(title: L10n.t("متوسط العمر عند الوفاة", "Average age at death"),
