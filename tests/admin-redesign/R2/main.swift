@@ -195,5 +195,13 @@ for path in sources {
     check(hits, [], "formal source: \((path as NSString).lastPathComponent)")
 }
 
+// ٢٠٢٦-١١-٢٨: طلب تصحيح اسم الزوج/الزوجة — الحقل spouse_name لا يُعرف في MissingField فكان السطر فارغاً
+check(AdminJoinBoxRules.askedList(["spouse_name"], relation: .wife), "اسم الزوجة الرباعي", "spouse ask (wife) → «اسم الزوجة الرباعي»")
+check(AdminJoinBoxRules.askedList(["spouse_name"], relation: .husband), "اسم الزوج الرباعي", "spouse ask (husband) → «اسم الزوج الرباعي»")
+check(AdminJoinBoxRules.askedList([], relation: .wife, isSpouse: true), "اسم الزوجة الرباعي", "spouse ask with no fields → still the spouse name")
+check(AdminJoinBoxRules.askedList(["mother_name"], relation: .wife), "اسم الوالدة", "mother ask unchanged")
+check(AdminJoinBoxRules.askedList(["full_name", "photo"], relation: .wife), "الاسم الرباعي، الصورة الشخصية", "join ask unchanged")
+check(AdminJoinBoxRules.askedList([], relation: .wife), "", "nothing known → empty")
+
 print(failures == 0 ? "ALL PASS" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

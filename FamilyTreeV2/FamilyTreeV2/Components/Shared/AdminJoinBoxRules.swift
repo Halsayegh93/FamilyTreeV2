@@ -158,6 +158,28 @@ enum AdminJoinBoxRules {
     }
 
     /// جهة العضو: الحقول المعروفة بلا تكرار (بترتيب السيرفر)
+    /// سطر «طلبت الإدارة استكمال البيانات التالية: …» عند العضو. `spouse_name` (طلب ربط الزوج/الزوجة، 20261128150000)
+    /// ليس في `MissingField` فكان السطر فارغاً بعد النقطتين (٢٠٢٦-١١-٢٨) — يُكتب «اسم الزوجة/الزوج الرباعي»؛ وطلب الزوج
+    /// بلا حقول معروفة يُكتب الاسم نفسه.
+    static func askedList(_ keys: [String], relation: SignupOriginRules.Relation, isSpouse: Bool = false) -> String {
+        var labels: [String] = []
+        for k in keys {
+            let label: String?
+            if k == "spouse_name" {
+                label = text(SignupOriginRules.Ar.spouseNameLabel(relation),
+                             relation == .wife ? "Wife's four-part name" : "Husband's four-part name")
+            } else {
+                label = MissingField(rawValue: k).map(fieldLabel)
+            }
+            if let label, !labels.contains(label) { labels.append(label) }
+        }
+        if labels.isEmpty && isSpouse {
+            labels.append(text(SignupOriginRules.Ar.spouseNameLabel(relation),
+                               relation == .wife ? "Wife's four-part name" : "Husband's four-part name"))
+        }
+        return labels.joined(separator: text("، ", ", "))
+    }
+
     static func parseFields(_ keys: [String]) -> [MissingField] {
         var out: [MissingField] = []
         for k in keys { if let f = MissingField(rawValue: k), !out.contains(f) { out.append(f) } }

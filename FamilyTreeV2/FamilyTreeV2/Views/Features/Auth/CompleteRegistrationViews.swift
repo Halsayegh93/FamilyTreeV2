@@ -417,8 +417,8 @@ struct CompleteRegistrationPage: View {
                        title: L10n.t(AdminJoinBoxRules.Ar.memberAskTitle, "Please complete your details"),
                        tint: DS.Color.warningFill)
         Text(L10n.t(AdminJoinBoxRules.Ar.memberAskBody, "The admins asked you to complete:")
-             + " " + (ask?.missing.map { AdminJoinBoxRules.fieldLabel($0) }.joined(separator: "، ")
-                      ?? (ask?.isSpouse == true ? T.spouseNameLabel(relation) : "")))
+             + " " + AdminJoinBoxRules.askedList(ask?.fields ?? [], relation: relation,
+                                                 isSpouse: ask?.isSpouse == true))
             .dsFont(.footnote).foregroundColor(DS.Color.textSecondary)
             .fixedSize(horizontal: false, vertical: true)
         if let note = ask?.note, !note.isEmpty {
