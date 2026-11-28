@@ -307,6 +307,24 @@ enum WomenStore {
             .eq("id", value: id.uuidString).execute()
     }
 
+    /// «ظهور الزوج» و«ظهور الأبناء» للبنت التي زوجها من خارج العائلة — الإدارة (قرار المالك ٢٠٢٦-١١-٢٨): كتابة مباشرة
+    /// بسياسة `women_members_update` (مالك، مدير، مراقب). nil = بلا تغيير. بعد النجاح تُحدَّث المجموعتان بالذاكرة
+    static func setVisibilityAsAdmin(id: UUID, spouse: Bool? = nil, children: Bool? = nil) async throws {
+        var payload: [String: AnyEncodable] = [:]
+        if let spouse { payload["spouse_shown"] = AnyEncodable(spouse) }
+        if let children { payload["children_shown"] = AnyEncodable(children) }
+        guard !payload.isEmpty else { return }
+        try await SupabaseConfig.client.from("women_members").update(payload)
+            .eq("id", value: id.uuidString).execute()
+        rememberVisibility(id: id, spouse: spouse, children: children)
+    }
+
+    /// تحديث مجموعتي الظهور بالذاكرة بعد حفظ ناجح (الإدارة، أو ابن البنت لأمّه)
+    static func rememberVisibility(id: UUID, spouse: Bool?, children: Bool?) {
+        if let spouse { if spouse { spouseShownIds.insert(id) } else { spouseShownIds.remove(id) } }
+        if let children { if children { childrenShownIds.insert(id) } else { childrenShownIds.remove(id) } }
+    }
+
     /// تعديل تاريخ الميلاد وحده — يُستخدم في تفاصيل العضو بشجرة النساء.
     static func setBirthDate(id: UUID, _ date: String?) async throws {
         try await SupabaseConfig.client.from("women_members")

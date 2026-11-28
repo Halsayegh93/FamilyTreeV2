@@ -36,6 +36,21 @@ enum DaughterFamilyAPI {
         _ = try await call("women_family_set_visibility", p)
     }
 
+    /// ابن البنت / بنت البنت لأمّه بلا حساب (`set_mother_visibility`، ترحيل 20261128120000): «ظهور الوالد بجانب الوالدة»
+    /// و«ظهور الأبناء تحت الوالدة» — nil = بلا تغيير. الخطأ برسالة عربية من `hint` السيرفر (`MotherVisibilityLogic`)
+    static func setMotherVisibility(motherId: UUID, spouse: Bool? = nil, children: Bool? = nil) async throws {
+        var p: [String: AnyJSON] = [:]
+        p["p_spouse"] = spouse.map { .bool($0) } ?? .null
+        p["p_children"] = children.map { .bool($0) } ?? .null
+        do {
+            _ = try await SupabaseConfig.client.rpc("set_mother_visibility", params: p).execute()
+            WomenStore.rememberVisibility(id: motherId, spouse: spouse, children: children)
+        } catch {
+            Log.warning("[DaughterFamily] set_mother_visibility: \(error.localizedDescription)")
+            throw Failure(message: MotherVisibilityLogic.errorMessage(hint: (error as? PostgrestError)?.hint))
+        }
+    }
+
     static func setChildVisible(_ id: UUID, _ visible: Bool) async throws {
         _ = try await call("women_family_set_child_visible", ["p_child_id": .string(id.uuidString), "p_visible": .bool(visible)])
     }

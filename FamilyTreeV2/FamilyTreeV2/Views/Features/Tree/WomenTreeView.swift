@@ -895,8 +895,17 @@ struct WomanDetailSheet: View {
             familySection
                 .dsStaggerWhen(1, active: open)
 
+            // الإدارة: ظهور زوجها من خارج العائلة وأبنائها منه (قرار المالك ٢٠٢٦-١١-٢٨)
+            if WomenStore.visibilitySupported,
+               MotherVisibilityLogic.adminShowsToggles(canEdit: canEdit, isFemale: woman.isFemale,
+                                                       husbandId: woman.husbandId,
+                                                       outsideIds: WomenStore.outsideFamilyIds) {
+                WomanVisibilityAdminSection(womanId: woman.id, onChanged: onChanged)
+                    .dsStaggerWhen(2, active: open)
+            }
+
             pendingRequestsCard
-                .dsStaggerWhen(2, active: open)
+                .dsStaggerWhen(3, active: open)
         }
         .padding(.horizontal, DS.Spacing.lg)
     }

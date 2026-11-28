@@ -12,16 +12,28 @@ struct ProfilePrivacyBox: View {
     @EnvironmentObject private var memberVM: MemberViewModel
     @Environment(\.dismiss) private var dismiss
 
-    enum Item: CaseIterable { case phone, photo, birth, tree, spouse }
+    /// `motherSpouse`/`motherChildren`: ابن البنت / بنت البنت وأمّه بلا حساب (قرار المالك ٢٠٢٦-١١-٢٨) —
+    /// «ظهور الوالد بجانب الوالدة» و«ظهور الأبناء تحت الوالدة» على عقدة أمّه (`set_mother_visibility`)
+    enum Item: CaseIterable { case phone, photo, birth, tree, spouse, motherSpouse, motherChildren }
 
     @State private var shown: [Item: Bool] = [:]
     @State private var busy: Set<Item> = []
-    @State private var failed = false
+    @State private var failedText: String?
+    /// أمّ صاحب الحساب في شجرة النساء حين تظهر مفاتيحها (بلا حساب، وأبوه من خارج العائلة) — nil = لا مفاتيح
+    @State private var motherId: UUID?
 
     private var items: [Item] {
-        guard let node = treeNode else { return [.phone, .photo, .birth] }
-        return node.husbandId == nil ? [.phone, .photo, .birth, .tree] : Item.allCases
+        var out: [Item] = [.phone, .photo, .birth]
+        if let node = treeNode {
+            out.append(.tree)
+            if node.husbandId != nil { out.append(.spouse) }
+        }
+        if motherId != nil { out += [.motherSpouse, .motherChildren] }
+        return out
     }
+
+    /// الأصل لكل مفتاح قبل القراءة: الخصوصية الشخصية ظاهرة، والزوج والوالدة مخفيّان (null على السيرفر)
+    private func fallback(_ i: Item) -> Bool { ![.spouse, .motherSpouse, .motherChildren].contains(i) }
 
     var body: some View {
         DSComposer(
@@ -45,13 +57,13 @@ struct ProfilePrivacyBox: View {
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
-                if failed {
-                    DSNoteCard(L10n.t("تعذّر الحفظ، يرجى المحاولة مرة أخرى.", "Couldn't save, please try again."),
-                               icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
+                if let failedText {
+                    DSNoteCard(failedText, icon: "exclamationmark.triangle.fill", tint: DS.Color.error)
                 }
             }
         }
         .onAppear(perform: load)
+        .task { await loadMother() }
     }
 
     private func title(_ i: Item) -> String {
@@ -61,6 +73,8 @@ struct ProfilePrivacyBox: View {
         case .birth: return L10n.t("تاريخ الميلاد", "Birth date")
         case .tree: return L10n.t("الظهور في الشجرة", "Shown in the tree")
         case .spouse: return L10n.t("ظهور الزوج", "Husband shown")
+        case .motherSpouse: return MotherVisibilityLogic.childSpouseTitle
+        case .motherChildren: return MotherVisibilityLogic.childChildrenTitle
         }
     }
 
@@ -71,12 +85,14 @@ struct ProfilePrivacyBox: View {
         case .birth: return "calendar"
         case .tree: return "tree.fill"
         case .spouse: return "heart.fill"
+        case .motherSpouse: return "person.fill"
+        case .motherChildren: return "person.2.fill"
         }
     }
 
     /// مربّع بالمنتصف: أيقونة بلون الحالة، الاسم، ثم «ظاهر/مخفي» بعين — الضغط على المربّع كله يبدّل
     private func tile(_ i: Item) -> some View {
-        let on = shown[i] ?? (i != .spouse)
+        let on = shown[i] ?? fallback(i)
         let tint = on ? DS.Color.success : DS.Color.textTertiary
         let status = on ? L10n.t("ظاهر", "Shown") : L10n.t("مخفي", "Hidden")
         return Button { save(i, !on) } label: {
@@ -89,7 +105,9 @@ struct ProfilePrivacyBox: View {
                 Text(title(i))
                     .dsFont(.callout)
                     .foregroundColor(DS.Color.fieldLabel)
-                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .lineLimit(2).minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: DS.Spacing.xxs) {
                     Image(systemName: on ? "eye.fill" : "eye.slash.fill").dsGlyph(DS.Glyph.xs)
                     Text(status).dsFont(.micro)
@@ -121,16 +139,43 @@ struct ProfilePrivacyBox: View {
         shown[.birth] = !(u?.isBirthDateHidden ?? false)
         shown[.tree] = !(treeNode?.isHiddenFromTree ?? false)
         shown[.spouse] = treeNode.map { WomenStore.spouseShownIds.contains($0.id) } ?? false
+        resolveMother()
+    }
+
+    /// عقدة صاحب الحساب وأمّه من آخر جلب لشجرة النساء — الأم بلا حساب وأبوه (أو زوجها) من خارج العائلة
+    private func resolveMother() {
+        guard WomenStore.visibilitySupported, let me = authVM.currentUser?.id else { motherId = nil; return }
+        let rows = WomenStore.cache
+        let mine = treeNode ?? rows.first { $0.id == me } ?? WomenStore.node(forAccount: me)
+        guard let mine, let mid = mine.motherId, let mother = rows.first(where: { $0.id == mid }) else {
+            motherId = nil; return
+        }
+        let show = MotherVisibilityLogic.childShowsToggles(
+            motherId: mid, motherHasAccount: WomenStore.linkedUserByWoman[mid] != nil,
+            fatherId: mine.fatherId, motherHusbandId: mother.husbandId, outsideIds: WomenStore.outsideFamilyIds)
+        motherId = show ? mid : nil
+        if show {
+            shown[.motherSpouse] = WomenStore.spouseShownIds.contains(mid)
+            shown[.motherChildren] = WomenStore.childrenShownIds.contains(mid)
+        }
+    }
+
+    /// شجرة النساء لم تُجلب بعد (حساب الرجل لا يجلبها في «حسابي») — جلب واحد ثم إعادة الحساب
+    private func loadMother() async {
+        guard WomenStore.cache.isEmpty else { return }
+        _ = try? await WomenStore.fetch()
+        resolveMother()
     }
 
     private func save(_ i: Item, _ on: Bool) {
         guard !busy.contains(i), NetworkMonitor.shared.requireOnline() else { return }
-        let before = shown[i] ?? (i != .spouse)
+        let before = shown[i] ?? fallback(i)
         shown[i] = on
         busy.insert(i)
-        failed = false
+        failedText = nil
         Task {
             var ok = true
+            var message: String?
             switch i {
             case .phone: ok = await memberVM.updatePhoneHidden(!on)
             case .photo: ok = await memberVM.updatePhotoHidden(!on)
@@ -143,9 +188,22 @@ struct ProfilePrivacyBox: View {
                         onTreeChanged()
                     } catch { ok = false }
                 }
+            case .motherSpouse, .motherChildren:
+                guard let mid = motherId else { ok = false; break }
+                do {
+                    if i == .motherSpouse { try await DaughterFamilyAPI.setMotherVisibility(motherId: mid, spouse: on) }
+                    else { try await DaughterFamilyAPI.setMotherVisibility(motherId: mid, children: on) }
+                    NotificationCenter.default.post(name: .womenMembersChanged, object: nil)
+                } catch {
+                    ok = false
+                    message = (error as? LocalizedError)?.errorDescription
+                }
             }
             busy.remove(i)
-            if !ok { shown[i] = before; failed = true }
+            if !ok {
+                shown[i] = before
+                failedText = message ?? L10n.t("تعذّر الحفظ، يرجى المحاولة مرة أخرى.", "Couldn't save, please try again.")
+            }
         }
     }
 }
